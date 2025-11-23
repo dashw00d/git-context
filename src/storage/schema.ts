@@ -1,0 +1,77 @@
+export const DATABASE_SCHEMA = `
+-- Main commits table
+CREATE TABLE IF NOT EXISTS commits (
+  sha TEXT PRIMARY KEY,
+  author TEXT NOT NULL,
+  date TEXT NOT NULL,
+  message TEXT NOT NULL,
+  summary_md TEXT,
+  raw_llm_json TEXT,
+  files_changed INTEGER DEFAULT 0,
+  symbols_added INTEGER DEFAULT 0,
+  symbols_removed INTEGER DEFAULT 0,
+  symbols_modified INTEGER DEFAULT 0,
+  edges_added INTEGER DEFAULT 0,
+  edges_removed INTEGER DEFAULT 0,
+  risks TEXT DEFAULT '[]', -- JSON array of risk flags
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Files changed in each commit
+CREATE TABLE IF NOT EXISTS files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  status TEXT NOT NULL, -- A, M, D, R, C, U
+  lang TEXT, -- Detected language
+  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
+  UNIQUE(sha, path)
+);
+
+-- Symbols extracted from files
+CREATE TABLE IF NOT EXISTS symbols (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  symbol_id TEXT NOT NULL, -- Unique identifier for the symbol
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL, -- function, class, method, const, interface, type, variable
+  signature_pre TEXT, -- Signature before change (for modified symbols)
+  signature_post TEXT, -- Signature after change
+  loc_pre TEXT, -- JSON location before change
+  loc_post TEXT, -- JSON location after change
+  change_type TEXT, -- added, removed, modified, signature_changed, body_changed
+  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
+  UNIQUE(sha, symbol_id)
+);
+
+-- Dependency edges between symbols
+CREATE TABLE IF NOT EXISTS edges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  from_symbol_id TEXT NOT NULL,
+  to_symbol_id TEXT NOT NULL,
+  edge_type TEXT NOT NULL, -- imports, calls, extends, implements
+  change_type TEXT, -- added, removed (NULL for current state)
+  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE
+);
+
+-- Full-text search removed due to sql.js limitations
+-- We will use standard LIKE queries on the symbols table instead
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_files_sha ON files(sha);
+CREATE INDEX IF NOT EXISTS idx_symbols_sha ON symbols(sha);
+CREATE INDEX IF NOT EXISTS idx_symbols_path ON symbols(path);
+CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+CREATE INDEX IF NOT EXISTS idx_edges_sha ON edges(sha);
+CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_symbol_id);
+CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_symbol_id);
+`;
+
+export const MIGRATIONS = [
+  // Version 1: Initial schema
+  DATABASE_SCHEMA
+];
+
+export const CURRENT_VERSION = 1;

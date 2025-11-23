@@ -1,0 +1,135 @@
+{
+  "name": "git-context",
+  "displayName": "Git Context",
+  "description": "Analyze git history and context",
+  "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/example/git-context.git"
+  },
+  "engines": {
+    "vscode": "^1.74.0",
+    "node": ">=16.0.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:git-context.analyzeLastCommits",
+    "onCommand:git-context.analyzeStagedChanges",
+    "onCommand:git-context.compareFilesToCommit",
+    "onCommand:git-context.explainSymbolChange",
+    "onView:commitTracker"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "git-context.analyzeLastCommits",
+        "title": "CommitTracker: Analyze Last 5 Commits"
+      },
+      {
+        "command": "git-context.analyzeStagedChanges",
+        "title": "CommitTracker: Analyze Staged Changes"
+      },
+      {
+        "command": "git-context.compareFilesToCommit",
+        "title": "CommitTracker: Compare Files to Commit..."
+      },
+      {
+        "command": "git-context.explainSymbolChange",
+        "title": "CommitTracker: Explain Symbol Change..."
+      },
+      {
+        "command": "git-context.searchSymbols",
+        "title": "Search Symbols",
+        "icon": "$(search)"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "commitTracker",
+          "name": "Commit Tracker",
+          "icon": "$(git-commit)",
+          "contextualTitle": "Commit Tracker"
+        },
+        {
+          "id": "symbolHistory",
+          "name": "Symbol History",
+          "icon": "$(search)",
+          "contextualTitle": "Symbol History"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "git-context.analyzeLastCommits",
+          "when": "view == commitTracker",
+          "group": "navigation"
+        },
+        {
+          "command": "git-context.searchSymbols",
+          "when": "view == symbolHistory",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Git Context",
+      "properties": {
+        "git-context.openRouterApiKey": {
+          "type": "string",
+          "description": "OpenRouter API key for LLM summarization"
+        },
+        "git-context.openRouterModel": {
+          "type": "string",
+          "default": "anthropic/claude-3-haiku:beta",
+          "description": "OpenRouter model to use for summarization"
+        },
+        "git-context.apiEndpoint": {
+          "type": "string",
+          "default": "https://openrouter.ai/api/v1",
+          "description": "API endpoint for LLM requests (OpenRouter or Ollama)"
+        },
+        "git-context.difftasticPath": {
+          "type": "string",
+          "description": "Path to difftastic binary (auto-detected if not set)"
+        },
+        "git-context.defaultCommitCount": {
+          "type": "number",
+          "default": 5,
+          "description": "Default number of commits to analyze"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./ && node copy-wasm.js && node download-wasm.js",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "16.x",
+    "@types/sql.js": "^1.4.9",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.42.0",
+    "@typescript-eslint/parser": "^5.42.0",
+    "eslint": "^8.31.0",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^10.0.0",
+    "openai": "^4.0.0",
+    "sql.js": "^1.13.0",
+    "web-tree-sitter": "^0.25.10"
+  },
+  "bin": {
+    "ct": "./out/cli/index.js"
+  }
+}
