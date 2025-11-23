@@ -1,27 +1,32 @@
 import { SymbolInfo, SymbolDelta, SymbolChangeType, FileChange } from '../types';
 import { getTreeSitterParser, detectLanguage } from './tree-sitter';
 import { GitOperations } from './git';
+import { SemanticChangeDetector } from './semanticChanges';
 
 export class SymbolExtractor {
   private git: GitOperations;
   private parser = getTreeSitterParser();
+  private semanticDetector = new SemanticChangeDetector();
 
   constructor(git: GitOperations) {
     this.git = git;
   }
 
   /**
-   * Extract symbols from all changed files in a commit
+   * Extract symbols from all changed files in a commit with semantic enrichment
    */
   async extractCommitSymbols(sha: string, files: FileChange[]): Promise<{
     added: SymbolInfo[];
     removed: SymbolInfo[];
     modified: SymbolDelta[];
+    renames: Array<{ oldSymbol: SymbolInfo; newSymbol: SymbolInfo; confidence: number }>;
+    moves: Array<{ symbol: SymbolInfo; oldPath: string; newPath: string; confidence: number }>;
   }> {
     const added: SymbolInfo[] = [];
     const removed: SymbolInfo[] = [];
     const modified: SymbolDelta[] = [];
 
+    // Collect symbols from all files
     for (const file of files) {
       if (this.shouldAnalyzeFile(file.path)) {
         const fileSymbols = await this.extractFileSymbols(sha, file);
@@ -31,7 +36,38 @@ export class SymbolExtractor {
       }
     }
 
-    return { added, removed, modified };
+    // Get parent commit for comparison
+    let parentSha: string | undefined;
+    try {
+      const commitInfo = this.git.getCommitInfo(sha);
+      parentSha = commitInfo.parent;
+    } catch (error) {
+      // No parent commit available
+    }
+
+    // Perform semantic analysis for renames and moves
+    const renames = parentSha ?
+      this.semanticDetector.detectRenames(removed, added) : [];
+
+    // For moves, we need symbols from previous commit
+    let previousSymbols: SymbolInfo[] = [];
+    if (parentSha) {
+      try {
+        const previousCommitSymbols = await this.extractCommitSymbols(parentSha, files);
+        previousSymbols = [
+          ...previousCommitSymbols.added,
+          ...previousCommitSymbols.removed,
+          ...previousCommitSymbols.modified.map(m => m.symbol)
+        ];
+      } catch (error) {
+        // Can't get previous symbols
+      }
+    }
+
+    const currentSymbols = [...added, ...modified.map(m => m.symbol)];
+    const moves = this.semanticDetector.detectMoves(previousSymbols, currentSymbols);
+
+    return { added, removed, modified, renames, moves };
   }
 
   /**
@@ -86,6 +122,23 @@ export class SymbolExtractor {
       // Compare and categorize changes
       const changes = this.compareSymbolSets(previousSymbols, currentSymbols, file.path);
 
+      // Enhance modified symbols with semantic information
+      for (const delta of changes.modified) {
+        // Classify modification reason
+        delta.modReason = this.semanticDetector.classifyModificationReason(delta);
+
+        // Capture diff snippets if content available
+        if (previousContent && currentContent) {
+          const snippets = this.semanticDetector.extractDiffSnippets(
+            previousContent,
+            currentContent,
+            delta.symbol
+          );
+          delta.diffSnippetPre = snippets.pre;
+          delta.diffSnippetPost = snippets.post;
+        }
+      }
+
       added.push(...changes.added);
       removed.push(...changes.removed);
       modified.push(...changes.modified);
@@ -116,6 +169,7 @@ export class SymbolExtractor {
     // Add unique IDs and ensure they include file path for uniqueness
     return symbols.map(symbol => ({
       ...symbol,
+      semanticId: symbol.id,
       id: `${filePath}:${symbol.id}`
     }));
   }

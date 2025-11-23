@@ -25,6 +25,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SymbolHistoryProvider = void 0;
 const vscode = __importStar(require("vscode"));
+const treeNodes_1 = require("../contracts/treeNodes");
 class SymbolHistoryProvider {
     constructor(context) {
         this.context = context;
@@ -36,18 +37,7 @@ class SymbolHistoryProvider {
         this._onDidChangeTreeData.fire();
     }
     getTreeItem(element) {
-        return {
-            id: element.id,
-            label: element.label,
-            description: element.description,
-            tooltip: element.tooltip,
-            collapsibleState: element.children
-                ? vscode.TreeItemCollapsibleState.Collapsed
-                : vscode.TreeItemCollapsibleState.None,
-            command: element.command,
-            iconPath: element.icon ? new vscode.ThemeIcon(element.icon) : undefined,
-            contextValue: element.contextValue
-        };
+        return (0, treeNodes_1.toVSCodeTreeItem)(element);
     }
     async getChildren(element) {
         if (!element) {
@@ -58,68 +48,148 @@ class SymbolHistoryProvider {
         return this.getSymbolTimeline(element);
     }
     async getSymbolSearchResults() {
-        if (!this.searchQuery) {
-            return [{
-                    id: 'search-placeholder',
-                    label: 'Search symbols...',
-                    description: 'Type to search symbol history',
-                    icon: 'search'
-                }];
-        }
         try {
-            const { getSearchIndex } = await Promise.resolve().then(() => __importStar(require('../storage/index')));
-            const { ensureDatabaseInitialized } = await Promise.resolve().then(() => __importStar(require('../storage/database')));
+            const { getDatabaseManager, ensureDatabaseInitialized } = await Promise.resolve().then(() => __importStar(require('../storage/database')));
             await ensureDatabaseInitialized();
-            const searchIndex = getSearchIndex();
-            const results = searchIndex.searchSymbols(this.searchQuery, 10);
-            if (results.length === 0) {
-                return [{
-                        id: 'no-results',
-                        label: 'No symbols found',
-                        description: `No matches for "${this.searchQuery}"`,
-                        icon: 'search'
-                    }];
-            }
-            // Group results by symbol name
-            const symbolGroups = new Map();
-            for (const result of results) {
-                if (!symbolGroups.has(result.name)) {
-                    symbolGroups.set(result.name, []);
+            const db = getDatabaseManager().getDatabase();
+            if (this.searchQuery) {
+                // Search mode - show matching symbols
+                const { getSearchIndex } = await Promise.resolve().then(() => __importStar(require('../storage/index')));
+                const searchIndex = getSearchIndex();
+                const results = searchIndex.searchSymbols(this.searchQuery, 20);
+                if (results.length === 0) {
+                    return [{
+                            id: 'no-symbols',
+                            type: 'risk',
+                            label: 'No symbols found',
+                            description: `No matches for "${this.searchQuery}"`,
+                            icon: 'search'
+                        }];
                 }
-                symbolGroups.get(result.name).push(result);
+                // Group by file for search results
+                const fileGroups = new Map();
+                for (const result of results) {
+                    const key = result.path || 'unknown';
+                    if (!fileGroups.has(key)) {
+                        fileGroups.set(key, []);
+                    }
+                    fileGroups.get(key).push(result);
+                }
+                const items = [];
+                for (const [filePath, symbols] of fileGroups) {
+                    items.push({
+                        id: `file-${filePath}`,
+                        type: 'file',
+                        path: filePath,
+                        sha: symbols[0]?.sha || '',
+                        stats: {
+                            added: symbols.filter(s => s.change_type === 'added').length,
+                            modified: symbols.filter(s => s.change_type === 'modified').length,
+                            removed: symbols.filter(s => s.change_type === 'removed').length
+                        },
+                        label: filePath.split('/').pop() || filePath,
+                        description: filePath,
+                        tooltip: `${symbols.length} matching symbols`,
+                        children: symbols.map(s => ({
+                            id: `${filePath}-${s.name}`,
+                            type: 'symbol',
+                            symbolId: s.id || 0,
+                            semanticId: s.symbol_id || '',
+                            name: s.name,
+                            kind: s.kind,
+                            path: filePath,
+                            sha: s.sha,
+                            label: `${s.name} (${s.kind})`,
+                            description: s.change_type,
+                            icon: `symbol-${s.kind}`
+                        })),
+                        icon: 'file'
+                    });
+                }
+                return items;
             }
-            const items = [];
-            for (const [symbolName, occurrences] of symbolGroups) {
-                const latest = occurrences[0]; // Results are ordered by relevance
-                items.push({
-                    id: `symbol-${symbolName}`,
-                    label: symbolName,
-                    description: `${occurrences.length} commits`,
-                    tooltip: `Found in ${occurrences.length} commits\nLatest: ${latest.sha.substring(0, 8)}`,
-                    children: occurrences.map(occ => ({
-                        id: `symbol-${symbolName}-${occ.sha}`,
-                        label: occ.sha.substring(0, 8),
-                        description: occ.path,
-                        tooltip: occ.summary_snippet || 'Symbol occurrence',
-                        icon: 'git-commit'
-                    })),
-                    icon: 'symbol-variable' // Default icon, could be more specific
-                });
+            else {
+                // Default mode - show recent files with their symbols
+                const stmt = db.prepare(`
+          SELECT s.path, s.name, s.kind, s.change_type, c.date, s.sha
+          FROM symbols s
+          JOIN commits c ON s.sha = c.sha
+          ORDER BY c.date DESC, s.path, s.name
+          LIMIT 100
+        `);
+                const results = stmt.all();
+                if (results.length === 0) {
+                    return [{
+                            id: 'no-symbols',
+                            type: 'risk',
+                            label: 'No symbols analyzed yet',
+                            description: 'Run "Analyze Last N Commits" to populate',
+                            icon: 'search'
+                        }];
+                }
+                // Group by file path
+                const fileGroups = new Map();
+                for (const result of results) {
+                    const key = result.path;
+                    if (!fileGroups.has(key)) {
+                        fileGroups.set(key, []);
+                    }
+                    fileGroups.get(key).push(result);
+                }
+                const items = [];
+                for (const [filePath, symbols] of fileGroups) {
+                    const added = symbols.filter(s => s.change_type === 'added').length;
+                    const modified = symbols.filter(s => s.change_type === 'modified' || s.change_type === 'signature_changed').length;
+                    const removed = symbols.filter(s => s.change_type === 'removed').length;
+                    const changeSummary = [];
+                    if (added > 0)
+                        changeSummary.push(`+${added}`);
+                    if (modified > 0)
+                        changeSummary.push(`~${modified}`);
+                    if (removed > 0)
+                        changeSummary.push(`-${removed}`);
+                    items.push({
+                        id: `file-${filePath}`,
+                        type: 'file',
+                        path: filePath,
+                        sha: symbols[0]?.sha || '',
+                        stats: { added, modified, removed },
+                        label: filePath.split('/').pop() || filePath,
+                        description: `${changeSummary.join(' ')} · ${filePath}`,
+                        tooltip: `${symbols.length} total symbols\nAdded: ${added}, Modified: ${modified}, Removed: ${removed}`,
+                        children: symbols.map(s => ({
+                            id: `${filePath}-${s.sha}-${s.name}`,
+                            type: 'symbol',
+                            symbolId: s.id || 0,
+                            semanticId: s.symbol_id || '',
+                            name: s.name,
+                            kind: s.kind,
+                            path: filePath,
+                            sha: s.sha,
+                            label: `${s.change_type === 'added' ? '➕' : s.change_type === 'removed' ? '➖' : '✏️'} ${s.name}`,
+                            description: `${s.kind}`,
+                            tooltip: `${s.change_type} in ${s.sha.substring(0, 8)}`,
+                            icon: `symbol-${s.kind}`
+                        })),
+                        icon: 'file'
+                    });
+                }
+                return items;
             }
-            return items;
         }
         catch (error) {
-            console.error('Failed to search symbols:', error);
+            console.error('Failed to load symbols:', error);
             return [{
                     id: 'search-error',
-                    label: 'Search failed',
-                    description: 'Error searching symbols',
+                    type: 'risk',
+                    label: 'Failed to load symbols',
+                    description: 'Error loading symbol data',
                     icon: 'error'
                 }];
         }
     }
     async getSymbolTimeline(symbol) {
-        // The children are already populated in getSymbolSearchResults
+        // Children are already set in getSymbolSearchResults
         return symbol.children || [];
     }
     setSearchQuery(query) {

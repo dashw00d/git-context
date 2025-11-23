@@ -21,6 +21,36 @@ The extension consists of three main layers:
 2. **Analysis Layer**: Tree-sitter + Difftastic extract symbols and structural changes
 3. **Intelligence Layer**: OpenRouter LLM generates summaries and explanations
 
+## Core Invariants
+
+These architectural invariants ensure stability and prevent common bugs:
+
+### Tree View Invariants
+- **Every tree item ID must be globally unique** and stable across refreshes.
+  - *Rule:* IDs must be derived from primary keys or deterministic hashes, never display names.
+- **Tree children are either pre-populated OR dynamic; never both.**
+  - *Rule:* if `children` is defined, `getChildren()` must not re-fetch for that node type.
+- **Node types use discriminated unions, not regex patterns.**
+  - *Rule:* `node.type` determines collapsibility, not ID patterns.
+
+### Database Invariants
+- **All DB reads must go through statement-wrapper prepare().**
+  - *Rule:* raw sql.js `Statement` is banned outside `database.ts`.
+- **Symbol identity is `symbol_id` (semantic) + `id` (row PK).**
+  - *Rule:* edges reference `symbol_id`; UI uses row `id`.
+
+### Change Semantics Invariants
+- **Change types are normalized to one of:** `added | modified | signature_changed | removed | renamed | moved`.
+  - *Rule:* UI never queries raw types; it queries normalized sets.
+- **Modification reasons are classified as:** `body_changed | signature_changed | doc_changed | visibility_changed | annotation_changed`.
+  - *Rule:* Store `mod_reason` metadata on symbol changes.
+
+### LLM Context Invariants
+- **Reports render Markdown, but source of truth is JSON.**
+  - *Rule:* LLM context contract defines the canonical data structure.
+- **Context budget is tracked and truncated predictably.**
+  - *Rule:* Lowest-priority sections are truncated first when exceeding token limits.
+
 ## Installation
 
 ### Prerequisites

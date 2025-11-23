@@ -28,6 +28,7 @@ const vscode = __importStar(require("vscode"));
 const analyze_1 = require("../cli/analyze");
 const config_1 = require("../utils/config");
 const summarizer_1 = require("../llm/summarizer");
+const report_1 = require("./report");
 function registerCommands(context, commitTracker, symbolHistory) {
     try {
         // Analyze last N commits
@@ -168,7 +169,81 @@ function registerCommands(context, commitTracker, symbolHistory) {
                 symbolHistory.setSearchQuery(query);
             }
         });
-        context.subscriptions.push(analyzeLastCommitsCmd, analyzeStagedCmd, compareFilesCmd, explainSymbolCmd, searchSymbolsCmd);
+        // Open symbol in file
+        const openSymbolCmd = vscode.commands.registerCommand('git-context.openSymbol', async (sha, filePath, range) => {
+            try {
+                const { getGitRoot } = await Promise.resolve().then(() => __importStar(require('../utils/config')));
+                const gitRoot = getGitRoot();
+                if (!gitRoot) {
+                    vscode.window.showErrorMessage('Not in a git repository');
+                    return;
+                }
+                const fullPath = vscode.Uri.file(`${gitRoot}/${filePath}`);
+                const doc = await vscode.workspace.openTextDocument(fullPath);
+                const editor = await vscode.window.showTextDocument(doc);
+                if (range) {
+                    editor.selection = new vscode.Selection(range.start, range.end);
+                    editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+                }
+            }
+            catch (error) {
+                vscode.window.showErrorMessage(`Failed to open file: ${error}`);
+            }
+        });
+        // Generate commit analysis report
+        const generateReportCmd = vscode.commands.registerCommand('git-context.generateReport', async () => {
+            const selectedCount = commitTracker.selectedCommits.size;
+            if (selectedCount > 0) {
+                // Generate report for selected commits
+                const shas = Array.from(commitTracker.selectedCommits);
+                await (0, report_1.generateRefactorBundleReport)(shas);
+                commitTracker.clearSelection();
+            }
+            else {
+                vscode.window.showWarningMessage('Please select commits first (use checkboxes in tree view) to analyze as a refactor bundle.');
+            }
+        });
+        // Toggle commit selection
+        const toggleSelectionCmd = vscode.commands.registerCommand('git-context.toggleCommitSelection', async (item) => {
+            if (item && item.id) {
+                commitTracker.toggleCommitSelection(item.id);
+            }
+        });
+        // Clear selection
+        const clearSelectionCmd = vscode.commands.registerCommand('git-context.clearSelection', () => {
+            commitTracker.clearSelection();
+        });
+        // Export LLM Context
+        const exportContextCmd = vscode.commands.registerCommand('git-context.exportLlmContext', async () => {
+            const selectedShas = Array.from(commitTracker.selectedCommits);
+            if (selectedShas.length === 0) {
+                vscode.window.showErrorMessage('Please select commits first (use checkboxes in tree view)');
+                return;
+            }
+            try {
+                const { ContextExporter } = await Promise.resolve().then(() => __importStar(require('../analysis/contextExporter')));
+                const exporter = new ContextExporter();
+                const filePath = await vscode.window.showSaveDialog({
+                    defaultUri: vscode.Uri.file('.git/commit-tracker/commit-context.json'),
+                    filters: {
+                        'JSON files': ['json'],
+                        'All files': ['*']
+                    }
+                });
+                if (filePath) {
+                    const outputPath = await exporter.exportToFile(selectedShas, filePath.fsPath);
+                    const openFile = await vscode.window.showInformationMessage(`LLM Context exported to ${outputPath}`, 'Open File');
+                    if (openFile === 'Open File') {
+                        const doc = await vscode.workspace.openTextDocument(outputPath);
+                        await vscode.window.showTextDocument(doc);
+                    }
+                }
+            }
+            catch (error) {
+                vscode.window.showErrorMessage(`Failed to export LLM context: ${error}`);
+            }
+        });
+        context.subscriptions.push(analyzeLastCommitsCmd, analyzeStagedCmd, compareFilesCmd, explainSymbolCmd, searchSymbolsCmd, openSymbolCmd, generateReportCmd, toggleSelectionCmd, clearSelectionCmd, exportContextCmd);
         console.log('Git Context commands registered successfully');
     }
     catch (error) {

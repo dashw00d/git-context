@@ -52,4 +52,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
   console.log('Git Context extension is now deactivated!');
+  
+  // Cleanup: Close database connection
+  try {
+    const { closeDatabase } = require('./storage/database');
+    closeDatabase();
+  } catch (error) {
+    console.error('Error closing database:', error);
+  }
 }

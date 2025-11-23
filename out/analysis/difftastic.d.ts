@@ -37,7 +37,10 @@ export declare class DifftasticIntegration {
     /**
      * Run difftastic on a git commit to get structural highlights
      */
-    getCommitStructuralHighlights(sha: string, filePath: string): Promise<DifftasticResult>;
+    /**
+     * Run difftastic on a git commit to get structural highlights
+     */
+    getCommitStructuralHighlights(sha: string, filePath: string, oldPath?: string): Promise<DifftasticResult>;
     /**
      * Check if difftastic is available
      */

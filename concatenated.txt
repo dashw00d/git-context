@@ -1,0 +1,6412 @@
+
+/* ---- File: src/analysis/contextExporter.ts ---- */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { LlmContextReport, CommitContext, FileContext, SymbolContext, EdgeContext, RiskItem } from '../contracts/llmContext';
+import { getDatabaseManager } from '../storage/database';
+import { getGitRoot } from '../utils/config';
+import { MermaidGenerator } from './mermaidGenerator';
+
+/**
+ * Export LLM context in structured JSON format
+ *
+ * Generates versioned, machine-readable reports for LLM consumption
+ * with deterministic truncation and context budgeting.
+ */
+export class ContextExporter {
+  private readonly MAX_TOKEN_BUDGET = 12000; // Rough token estimate
+  private readonly TOKEN_PER_CHAR = 1/4; // Rough approximation
+  private readonly mermaidGenerator = new MermaidGenerator();
+
+  /**
+   * Export full context report for specified commits
+   */
+  async exportContext(shas: string[]): Promise<LlmContextReport> {
+    const gitRoot = getGitRoot();
+    if (!gitRoot) {
+      throw new Error('Not in a git repository');
+    }
+
+    const db = getDatabaseManager().getDatabase();
+    const commits: CommitContext[] = [];
+    const globalRisks: any[] = [];
+
+    for (const sha of shas) {
+      const commit = await this.buildCommitContext(sha);
+      commits.push(commit);
+    }
+
+    const report: LlmContextReport = {
+      version: "1.0.0",
+      generated_at: new Date().toISOString(),
+      repo: {
+        root: gitRoot,
+        head_sha: await this.getHeadSha(),
+        branch: await this.getCurrentBranch()
+      },
+      commits,
+      global_risks: globalRisks,
+      rollups: await this.buildRollups(shas),
+      graphs: await this.generateGraphs(commits, shas)
+    };
+
+    // Apply context budgeting
+    this.applyContextBudget(report);
+
+    return report;
+  }
+
+  /**
+   * Export context to JSON file
+   */
+  async exportToFile(shas: string[], filePath?: string): Promise<string> {
+    const report = await this.exportContext(shas);
+
+    const defaultPath = path.join(getGitRoot()!, '.git', 'commit-tracker', 'commit-context.json');
+    const outputPath = filePath || defaultPath;
+
+    // Ensure directory exists
+    const dir = path.dirname(outputPath);
+    fs.mkdirSync(dir, { recursive: true });
+
+    fs.writeFileSync(outputPath, JSON.stringify(report, null, 2));
+    return outputPath;
+  }
+
+  /**
+   * Build context for a single commit
+   */
+  private async buildCommitContext(sha: string): Promise<CommitContext> {
+    const db = getDatabaseManager().getDatabase();
+
+    // Get commit info
+    const commitStmt = db.prepare(`
+      SELECT * FROM commits WHERE sha = ?
+    `);
+    const commitRow = commitStmt.get(sha) as any;
+
+    if (!commitRow) {
+      throw new Error(`Commit ${sha} not found in database`);
+    }
+
+    // Get files
+    const filesStmt = db.prepare(`
+      SELECT * FROM files WHERE sha = ?
+    `);
+    const fileRows = filesStmt.all(sha) as any[];
+
+    const files: FileContext[] = [];
+    for (const fileRow of fileRows) {
+      files.push(await this.buildFileContext(sha, fileRow));
+    }
+
+    // Get edges
+    const edgesStmt = db.prepare(`
+      SELECT * FROM edges WHERE sha = ?
+    `);
+    const edgeRows = edgesStmt.all(sha) as any[];
+
+    const edges: EdgeContext[] = edgeRows.map(edge => ({
+      from_symbol_id: edge.from_symbol_id,
+      to_symbol_id: edge.to_symbol_id,
+      edge_type: edge.edge_type as any,
+      change_type: edge.change_type as any,
+      confidence: edge.confidence || 1.0,
+      is_resolved: Boolean(edge.is_resolved ?? 1)
+    }));
+
+    // Parse risks
+    const risks = JSON.parse(commitRow.risks || '[]');
+
+    return {
+      sha,
+      parent_sha: commitRow.parent_sha,
+      message: commitRow.message,
+      author: commitRow.author,
+      date: commitRow.date,
+      stats: {
+        files: commitRow.files_changed,
+        added: commitRow.symbols_added,
+        modified: commitRow.symbols_modified,
+        removed: commitRow.symbols_removed
+      },
+      files,
+      risks,
+      edges,
+      llm_summary: commitRow.summary_md
+    };
+  }
+
+  /**
+   * Build context for a single file
+   */
+  private async buildFileContext(sha: string, fileRow: any): Promise<FileContext> {
+    const db = getDatabaseManager().getDatabase();
+
+    // Get symbols for this file
+    const symbolsStmt = db.prepare(`
+      SELECT * FROM symbols WHERE sha = ? AND path = ?
+    `);
+    const symbolRows = symbolsStmt.all(sha, fileRow.path) as any[];
+
+    const symbols: SymbolContext[] = symbolRows.map(row => ({
+      id: row.id,
+      symbol_id: row.symbol_id,
+      name: row.name,
+      kind: row.kind,
+      signature: row.signature_post || row.signature_pre,
+      loc_pre: row.loc_pre ? JSON.parse(row.loc_pre) : undefined,
+      loc_post: row.loc_post ? JSON.parse(row.loc_post) : undefined,
+      mod_reason: row.mod_reason as any,
+      diff_snippet_pre: row.diff_snippet_pre,
+      diff_snippet_post: row.diff_snippet_post
+    }));
+
+    // Group symbols by change type from database
+    const added = symbols.filter(s => symbolRows.find(r => r.id === s.id)?.change_type === 'added');
+    const removed = symbols.filter(s => symbolRows.find(r => r.id === s.id)?.change_type === 'removed');
+    const modified = symbols.filter(s => symbolRows.find(r => r.id === s.id)?.change_type === 'modified' ||
+                                          symbolRows.find(r => r.id === s.id)?.change_type === 'signature_changed');
+    const renamed: any[] = []; // Would need rename detection
+
+    return {
+      path: fileRow.path,
+      language: fileRow.lang || 'unknown',
+      stats: {
+        added: 0, // Would need to calculate
+        modified: 0,
+        removed: 0,
+        renamed: false
+      },
+      symbols: {
+        added,
+        modified,
+        removed,
+        renamed
+      }
+    };
+  }
+
+  /**
+   * Build cross-commit rollups
+   */
+  private async buildRollups(shas: string[]): Promise<LlmContextReport['rollups']> {
+    // Implementation for hotspots, file rollups, dependency deltas
+    // This would analyze patterns across multiple commits
+    return undefined; // Placeholder
+  }
+
+  /**
+   * Apply context budgeting with predictable truncation
+   */
+  private applyContextBudget(report: LlmContextReport): void {
+    const currentTokens = this.estimateTokenCount(report);
+
+    if (currentTokens <= this.MAX_TOKEN_BUDGET) {
+      return; // No truncation needed
+    }
+
+    // Truncate in priority order (lowest priority first)
+    const truncationSteps = [
+      () => this.truncateDiffHunks(report),
+      () => this.truncateLowConfidenceEdges(report),
+      () => this.truncateUnchangedCallers(report),
+      () => this.truncateDocChanges(report)
+    ];
+
+    for (const step of truncationSteps) {
+      step();
+      if (this.estimateTokenCount(report) <= this.MAX_TOKEN_BUDGET) {
+        break;
+      }
+    }
+  }
+
+  /**
+   * Estimate token count (rough approximation)
+   */
+  private estimateTokenCount(report: LlmContextReport): number {
+    const jsonString = JSON.stringify(report);
+    return Math.floor(jsonString.length * this.TOKEN_PER_CHAR);
+  }
+
+  /**
+   * Truncate diff hunks (lowest priority)
+   */
+  private truncateDiffHunks(report: LlmContextReport): void {
+    for (const commit of report.commits) {
+      for (const file of commit.files) {
+        file.hunks = undefined; // Remove diff hunks
+      }
+    }
+  }
+
+  /**
+   * Remove low-confidence edges
+   */
+  private truncateLowConfidenceEdges(report: LlmContextReport): void {
+    for (const commit of report.commits) {
+      commit.edges = commit.edges.filter(edge => edge.confidence >= 0.7);
+    }
+  }
+
+  /**
+   * Remove unchanged callers (would need implementation)
+   */
+  private truncateUnchangedCallers(report: LlmContextReport): void {
+    // Implementation would filter out edges to unchanged symbols
+  }
+
+  /**
+   * Remove documentation changes
+   */
+  private truncateDocChanges(report: LlmContextReport): void {
+    for (const commit of report.commits) {
+      for (const file of commit.files) {
+        file.symbols.modified = file.symbols.modified.filter(
+          symbol => symbol.mod_reason !== 'doc_changed'
+        );
+      }
+    }
+  }
+
+  /**
+   * Get current HEAD SHA
+   */
+  private async getHeadSha(): Promise<string> {
+    try {
+      const { GitOperations } = await import('./git');
+      const git = new GitOperations();
+      return git.getHeadSha();
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Get current branch name
+   */
+  private async getCurrentBranch(): Promise<string> {
+    try {
+      const { execSync } = require('child_process');
+      return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Generate Mermaid graphs for the report
+   */
+  private async generateGraphs(commits: CommitContext[], shas: string[]): Promise<LlmContextReport['graphs']> {
+    try {
+      // Collect all edges and symbols across commits
+      const allEdges: any[] = [];
+      const allSymbols: any[] = [];
+      const changedSymbols: any[] = [];
+
+      for (const commit of commits) {
+        allEdges.push(...commit.edges);
+
+        for (const file of commit.files) {
+          allSymbols.push(...file.symbols.added);
+          allSymbols.push(...file.symbols.modified);
+          changedSymbols.push(...file.symbols.added);
+          changedSymbols.push(...file.symbols.modified.map((s: any) => ({ id: s.symbol_id || s.id, name: s.name })));
+        }
+      }
+
+      // Generate dependency graph
+      const dependencyGraph = this.mermaidGenerator.generateGraph(
+        allEdges,
+        allSymbols,
+        { maxNodes: 30, showConfidence: true }
+      );
+
+      // Generate blast radius graph (simplified)
+      const blastRadiusGraph = this.generateBlastRadiusMermaid(changedSymbols, allEdges);
+
+      return {
+        dependency_graph: dependencyGraph,
+        blast_radius_graph: blastRadiusGraph
+      };
+    } catch (error) {
+      console.warn('Failed to generate graphs:', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Generate blast radius Mermaid graph
+   */
+  private generateBlastRadiusMermaid(changedSymbols: any[], allEdges: any[]): string {
+    // Simplified blast radius visualization
+    let mermaid = 'graph TD\n';
+
+    // Add changed symbols
+    for (let i = 0; i < Math.min(changedSymbols.length, 10); i++) {
+      const symbol = changedSymbols[i];
+      const nodeId = `Changed${i}`;
+      mermaid += `    ${nodeId}["${symbol.name || 'Unknown'}"]:::changed\n`;
+    }
+
+    // Add some connections (simplified)
+    const edgeCount = Math.min(allEdges.length, 15);
+    for (let i = 0; i < edgeCount; i++) {
+      const edge = allEdges[i];
+      const fromId = `From${i}`;
+      const toId = `To${i}`;
+      mermaid += `    ${fromId} --> ${toId}\n`;
+    }
+
+    mermaid += '\n    classDef changed fill:#ff6b6b,stroke:#d63031,color:#fff\n';
+
+    return mermaid;
+  }
+}
+
+
+
+/* ---- File: src/analysis/dependencies.ts ---- */
+
+import { SymbolInfo, EdgeInfo, EdgeDelta } from '../types';
+import { detectLanguage } from './tree-sitter';
+import { getDatabaseManager } from '../storage/database';
+
+export class DependencyExtractor {
+  private readonly MAX_DEPTH = 3; // Prevent infinite recursion
+  private resolvedSymbols = new Map<string, boolean>(); // Cache resolved symbols
+
+  /**
+   * Extract dependency edges from file content with confidence scoring
+   */
+  extractDependencies(content: string, filePath: string, symbols: SymbolInfo[], depth: number = 0): EdgeInfo[] {
+    // Prevent stack overflow from deep recursion
+    if (depth > this.MAX_DEPTH) {
+      console.warn(`Max recursion depth reached for ${filePath}`);
+      return [];
+    }
+
+    const language = detectLanguage(filePath);
+    if (!language) {
+      return [];
+    }
+
+    const edges: EdgeInfo[] = [];
+
+    // Extract imports/requires with high confidence
+    const importEdges = this.extractImports(content, filePath, language, symbols);
+    edges.push(...importEdges);
+
+    // Extract function calls within symbols
+    for (const symbol of symbols) {
+      const callEdges = this.extractCallsFromSymbol(content, filePath, symbol, language, symbols);
+      edges.push(...callEdges);
+    }
+
+    // Mark resolved edges
+    for (const edge of edges) {
+      edge.confidence = edge.confidence ?? this.calculateEdgeConfidence(edge, symbols);
+      edge.isResolved = this.isEdgeResolved(edge);
+    }
+
+    return edges;
+  }
+
+  /**
+   * Extract import/require edges from file content with confidence
+   */
+  private extractImports(content: string, filePath: string, language: string, knownSymbols: SymbolInfo[]): EdgeInfo[] {
+    const edges: EdgeInfo[] = [];
+    const lines = content.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
+      if (language === 'php') {
+        // PHP imports: use, require, include
+        const useMatch = line.match(/^use\s+([^;]+);/);
+        if (useMatch) {
+          const imported = useMatch[1].split('\\').pop() || useMatch[1];
+          edges.push({
+            from: `${filePath}:file`,
+            to: `class_${imported}`,
+            type: 'imports',
+            confidence: this.isSymbolKnown(`class_${imported}`, knownSymbols) ? 0.9 : 0.6,
+            isResolved: this.isSymbolKnown(`class_${imported}`, knownSymbols)
+          });
+        }
+
+        const requireMatch = line.match(/(require|include)(_once)?\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+        if (requireMatch) {
+          const requiredFile = requireMatch[3];
+          edges.push({
+            from: `${filePath}:file`,
+            to: `${requiredFile}:file`,
+            type: 'imports',
+            confidence: 0.8, // File imports are usually reliable
+            isResolved: true
+          });
+        }
+      }
+
+      if (language === 'javascript' || language === 'typescript') {
+        // JS/TS imports
+        const importMatch = line.match(/import\s+.*?\s+from\s+['"]([^'"]+)['"]/);
+        if (importMatch) {
+          const importedModule = importMatch[1];
+          edges.push({
+            from: `${filePath}:file`,
+            to: `${importedModule}:module`,
+            type: 'imports',
+            confidence: 0.9, // ES6 imports are usually reliable
+            isResolved: true
+          });
+        }
+
+        // CommonJS requires
+        const requireMatch = line.match(/const\s+\w+\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+        if (requireMatch) {
+          const requiredModule = requireMatch[1];
+          edges.push({
+            from: `${filePath}:file`,
+            to: `${requiredModule}:module`,
+            type: 'imports',
+            confidence: 0.8, // CommonJS requires are reliable
+            isResolved: true
+          });
+        }
+      }
+    }
+
+    return edges;
+  }
+
+  /**
+   * Extract function calls from a symbol's content with confidence
+   */
+  private extractCallsFromSymbol(
+    content: string,
+    filePath: string,
+    symbol: SymbolInfo,
+    language: string,
+    knownSymbols: SymbolInfo[]
+  ): EdgeInfo[] {
+    const edges: EdgeInfo[] = [];
+
+    // Extract the symbol's code block
+    const lines = content.split('\n');
+    const startLine = symbol.location.start.line - 1; // Convert to 0-based
+    const endLine = symbol.location.end.line - 1;
+
+    const symbolContent = lines.slice(startLine, endLine + 1).join('\n');
+
+    // Extract calls based on language
+    if (language === 'php') {
+      const callMatches = symbolContent.matchAll(/(\w+)\s*\(/g);
+      for (const match of callMatches) {
+        const calledFunction = match[1];
+        // Skip common PHP constructs
+        if (!['if', 'while', 'for', 'foreach', 'echo', 'print', 'isset', 'empty'].includes(calledFunction)) {
+          const targetId = `function_${calledFunction}`;
+          edges.push({
+            from: symbol.id,
+            to: targetId,
+            type: 'calls',
+            confidence: this.isSymbolKnown(targetId, knownSymbols) ? 0.8 : 0.4,
+            isResolved: this.isSymbolKnown(targetId, knownSymbols)
+          });
+        }
+      }
+
+      // Extract method calls ($obj->method())
+      const methodMatches = symbolContent.matchAll(/\$(\w+)\s*->\s*(\w+)\s*\(/g);
+      for (const match of methodMatches) {
+        const variable = match[1];
+        const method = match[2];
+        edges.push({
+          from: symbol.id,
+          to: `method_${method}`,
+          type: 'calls'
+        });
+      }
+    }
+
+    if (language === 'javascript' || language === 'typescript') {
+      // Extract function calls
+      const callMatches = symbolContent.matchAll(/(\w+)\s*\(/g);
+      for (const match of callMatches) {
+        const calledFunction = match[1];
+        // Skip common JS constructs and keywords
+        if (!['if', 'while', 'for', 'console', 'setTimeout', 'setInterval', 'Promise', 'Array', 'Object', 'String'].includes(calledFunction)) {
+          edges.push({
+            from: symbol.id,
+            to: `function_${calledFunction}`,
+            type: 'calls'
+          });
+        }
+      }
+
+      // Extract method calls (obj.method())
+      const methodMatches = symbolContent.matchAll(/(\w+)\.(\w+)\s*\(/g);
+      for (const match of methodMatches) {
+        const object = match[1];
+        const method = match[2];
+        edges.push({
+          from: symbol.id,
+          to: `method_${method}`,
+          type: 'calls'
+        });
+      }
+    }
+
+    return edges;
+  }
+
+  /**
+   * Compare two sets of edges and determine changes
+   */
+  compareEdges(previous: EdgeInfo[], current: EdgeInfo[]): {
+    added: EdgeInfo[];
+    removed: EdgeInfo[];
+  } {
+    const added: EdgeInfo[] = [];
+    const removed: EdgeInfo[] = [];
+
+    // Create maps for efficient lookup
+    const previousMap = new Map(previous.map(e => [`${e.from}:${e.to}:${e.type}`, e]));
+    const currentMap = new Map(current.map(e => [`${e.from}:${e.to}:${e.type}`, e]));
+
+    // Find added edges
+    for (const edge of current) {
+      const key = `${edge.from}:${edge.to}:${edge.type}`;
+      if (!previousMap.has(key)) {
+        added.push(edge);
+      }
+    }
+
+    // Find removed edges
+    for (const edge of previous) {
+      const key = `${edge.from}:${edge.to}:${edge.type}`;
+      if (!currentMap.has(key)) {
+        removed.push(edge);
+      }
+    }
+
+    return { added, removed };
+  }
+
+  /**
+   * Extract edges for an entire commit
+   */
+  extractCommitEdges(
+    sha: string,
+    symbols: { added: SymbolInfo[]; removed: SymbolInfo[]; modified: any[] },
+    fileContents: Map<string, string>
+  ): {
+    added: EdgeInfo[];
+    removed: EdgeInfo[];
+  } {
+    const currentEdges: EdgeInfo[] = [];
+    const previousEdges: EdgeInfo[] = [];
+
+    // Process current symbols
+    for (const [filePath, content] of fileContents) {
+      const fileSymbols = symbols.added.filter(s => s.id.startsWith(`${filePath}:`));
+      const edges = this.extractDependencies(content, filePath, fileSymbols);
+      currentEdges.push(...edges);
+    }
+
+    // For modified symbols, we'd need to compare with previous versions
+    // This is a simplified version - in practice, we'd need to get previous content
+
+    return {
+      added: currentEdges, // Simplified - in real implementation, compare with previous
+      removed: []
+    };
+  }
+
+  /**
+   * Calculate graph metrics
+   */
+  calculateMetrics(edges: EdgeInfo[]): {
+    fanIn: Map<string, number>;
+    fanOut: Map<string, number>;
+  } {
+    const fanIn = new Map<string, number>();
+    const fanOut = new Map<string, number>();
+
+    for (const edge of edges) {
+      // Increment fan-in for the target
+      fanIn.set(edge.to, (fanIn.get(edge.to) || 0) + 1);
+
+      // Increment fan-out for the source
+      fanOut.set(edge.from, (fanOut.get(edge.from) || 0) + 1);
+    }
+
+    return { fanIn, fanOut };
+  }
+
+  /**
+   * Calculate blast radius for changed symbols
+   */
+  calculateBlastRadius(changedSymbols: SymbolInfo[], allEdges: EdgeInfo[]): {
+    downstreamCallers: Map<string, SymbolInfo[]>;
+    upstreamDependencies: Map<string, SymbolInfo[]>;
+    impactScore: Map<string, number>;
+  } {
+    const downstreamCallers = new Map<string, SymbolInfo[]>();
+    const upstreamDependencies = new Map<string, SymbolInfo[]>();
+    const impactScore = new Map<string, number>();
+
+    // Get symbol IDs that changed
+    const changedIds = new Set(changedSymbols.map(s => s.id));
+
+    // Find downstream callers (who calls the changed symbols)
+    for (const edge of allEdges) {
+      if (changedIds.has(edge.to)) {
+        // edge.from calls edge.to (which changed)
+        const callers = downstreamCallers.get(edge.to) || [];
+        // We can't resolve SymbolInfo from edge.from easily, so we'll store edge info
+        // This would need enhancement to resolve actual SymbolInfo objects
+        downstreamCallers.set(edge.to, callers);
+      }
+    }
+
+    // Find upstream dependencies (what the changed symbols call)
+    for (const edge of allEdges) {
+      if (changedIds.has(edge.from)) {
+        // edge.from (which changed) calls edge.to
+        const dependencies = upstreamDependencies.get(edge.from) || [];
+        upstreamDependencies.set(edge.from, dependencies);
+      }
+    }
+
+    // Calculate impact scores (simple metric)
+    for (const symbolId of changedIds) {
+      const downstreamCount = downstreamCallers.get(symbolId)?.length || 0;
+      const upstreamCount = upstreamDependencies.get(symbolId)?.length || 0;
+      impactScore.set(symbolId, downstreamCount + upstreamCount);
+    }
+
+    return { downstreamCallers, upstreamDependencies, impactScore };
+  }
+
+  /**
+   * Check if a symbol ID is known/resolvable
+   */
+  private isSymbolKnown(symbolId: string, knownSymbols: SymbolInfo[]): boolean {
+    return knownSymbols.some(s => s.id === symbolId);
+  }
+
+  /**
+   * Check if an edge target is resolved
+   */
+  private isEdgeResolved(edge: EdgeInfo): boolean {
+    // For now, assume edges are resolved if confidence > 0.5
+    // In a full implementation, this would check against a symbol registry
+    return (edge.confidence ?? 0) > 0.5;
+  }
+
+  /**
+   * Calculate confidence for an edge
+   */
+  private calculateEdgeConfidence(edge: EdgeInfo, knownSymbols: SymbolInfo[]): number {
+    if (edge.type === 'imports') {
+      return 0.9; // Import statements are usually reliable
+    }
+
+    if (edge.type === 'calls') {
+      // Lower confidence for dynamic calls or unknown targets
+      return this.isSymbolKnown(edge.to, knownSymbols) ? 0.7 : 0.3;
+    }
+
+    return 0.5; // Default confidence
+  }
+}
+
+
+
+/* ---- File: src/analysis/difftastic.ts ---- */
+
+import { spawn } from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
+import { getExtensionConfig } from '../utils/config';
+
+export interface DifftasticResult {
+  highlights: string[];
+  morphs: MorphHighlight[];
+  hasStructuralChanges: boolean;
+}
+
+export interface MorphHighlight {
+  type: 'signature_change' | 'moved_block' | 'refactor' | 'rename';
+  description: string;
+  location?: {
+    file: string;
+    line: number;
+  };
+}
+
+export class DifftasticIntegration {
+  private difftasticPath: string;
+
+  constructor() {
+    this.difftasticPath = this.findDifftasticPath();
+  }
+
+  /**
+   * Find difftastic binary path
+   */
+  private findDifftasticPath(): string {
+    const config = getExtensionConfig();
+
+    // Check configured path first
+    if (config.difftasticPath && fs.existsSync(config.difftasticPath)) {
+      return config.difftasticPath;
+    }
+
+    // Check common installation paths
+    const commonPaths = [
+      '/usr/local/bin/difftastic',
+      '/usr/bin/difftastic',
+      '/opt/homebrew/bin/difftastic', // macOS Homebrew
+      '/home/linuxbrew/.linuxbrew/bin/difftastic', // Linux Homebrew
+      'difftastic' // In PATH
+    ];
+
+    for (const binPath of commonPaths) {
+      if (this.isValidDifftasticPath(binPath)) {
+        return binPath;
+      }
+    }
+
+    throw new Error('Difftastic binary not found. Please install difftastic or configure the path in settings.');
+  }
+
+  /**
+   * Check if a path points to a valid difftastic binary
+   */
+  private isValidDifftasticPath(binPath: string): boolean {
+    try {
+      const result = spawn(binPath, ['--version'], { stdio: 'pipe' });
+      return result.pid !== undefined;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Run difftastic on two file versions
+   */
+  async runDifftastic(
+    oldContent: string,
+    newContent: string,
+    oldFilePath: string,
+    newFilePath: string
+  ): Promise<DifftasticResult> {
+    return new Promise((resolve, reject) => {
+      // Create temporary files
+      const tempDir = require('os').tmpdir();
+      const oldFile = path.join(tempDir, `old_${Date.now()}_${path.basename(oldFilePath)}`);
+      const newFile = path.join(tempDir, `new_${Date.now()}_${path.basename(newFilePath)}`);
+
+      try {
+        fs.writeFileSync(oldFile, oldContent);
+        fs.writeFileSync(newFile, newContent);
+
+        // Run difftastic
+        const difft = spawn(this.difftasticPath, [
+          '--color=never', // No ANSI colors for parsing
+          '--exit-code',   // Exit with code based on differences
+          oldFile,
+          newFile
+        ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+        let stdout = '';
+        let stderr = '';
+
+        difft.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        difft.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        difft.on('close', (code) => {
+          // Clean up temp files
+          try {
+            fs.unlinkSync(oldFile);
+            fs.unlinkSync(newFile);
+          } catch {
+            // Ignore cleanup errors
+          }
+
+          if (code !== null && code > 1) { // 1 is success with differences, >1 is error
+            reject(new Error(`Difftastic failed: ${stderr}`));
+            return;
+          }
+
+          const result = this.parseDifftasticOutput(stdout, code === 1);
+          resolve(result);
+        });
+
+        difft.on('error', (error) => {
+          // Clean up temp files
+          try {
+            fs.unlinkSync(oldFile);
+            fs.unlinkSync(newFile);
+          } catch {
+            // Ignore cleanup errors
+          }
+          reject(error);
+        });
+
+      } catch (error) {
+        // Clean up temp files
+        try {
+          fs.unlinkSync(oldFile);
+          fs.unlinkSync(newFile);
+        } catch {
+          // Ignore cleanup errors
+        }
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Parse difftastic output to extract structural highlights
+   */
+  private parseDifftasticOutput(output: string, hasDifferences: boolean): DifftasticResult {
+    const highlights: string[] = [];
+    const morphs: MorphHighlight[] = [];
+
+    if (!hasDifferences) {
+      return {
+        highlights: [],
+        morphs: [],
+        hasStructuralChanges: false
+      };
+    }
+
+    const lines = output.split('\n');
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Look for structural change indicators
+      if (line.includes('function') && (line.includes('->') || line.includes('changed'))) {
+        highlights.push(`Function signature change: ${line.trim()}`);
+        morphs.push({
+          type: 'signature_change',
+          description: `Function modified: ${line.trim()}`,
+          location: this.extractLocationFromLine(line)
+        });
+      }
+
+      if (line.includes('class') && (line.includes('->') || line.includes('changed'))) {
+        highlights.push(`Class structure change: ${line.trim()}`);
+        morphs.push({
+          type: 'refactor',
+          description: `Class modified: ${line.trim()}`,
+          location: this.extractLocationFromLine(line)
+        });
+      }
+
+      // Look for moved blocks
+      if (line.includes('moved') || line.includes('relocated')) {
+        highlights.push(`Code block moved: ${line.trim()}`);
+        morphs.push({
+          type: 'moved_block',
+          description: `Block relocated: ${line.trim()}`,
+          location: this.extractLocationFromLine(line)
+        });
+      }
+
+      // Look for renames
+      if (line.includes('renamed') || (line.includes('->') && !line.includes('function') && !line.includes('class'))) {
+        highlights.push(`Symbol renamed: ${line.trim()}`);
+        morphs.push({
+          type: 'rename',
+          description: `Symbol renamed: ${line.trim()}`,
+          location: this.extractLocationFromLine(line)
+        });
+      }
+    }
+
+    return {
+      highlights,
+      morphs,
+      hasStructuralChanges: highlights.length > 0
+    };
+  }
+
+  /**
+   * Extract location information from a difftastic output line
+   */
+  private extractLocationFromLine(line: string): { file: string; line: number } | undefined {
+    // Difftastic doesn't always include location info in basic output
+    // This would need enhancement based on actual difftastic output format
+    return undefined;
+  }
+
+  /**
+   * Run difftastic on a git commit to get structural highlights
+   */
+  async getCommitStructuralHighlights(sha: string, filePath: string): Promise<DifftasticResult> {
+    try {
+      // Get file content at commit and its parent
+      const git = new (require('./git').GitOperations)();
+      const commitInfo = git.getCommitInfo(sha);
+
+      if (!commitInfo.parent) {
+        // First commit, no parent to compare
+        return {
+          highlights: [],
+          morphs: [],
+          hasStructuralChanges: false
+        };
+      }
+
+      const newContent = git.getFileContent(sha, filePath);
+      const oldContent = git.getFileContent(commitInfo.parent, filePath);
+
+      return await this.runDifftastic(oldContent, newContent, filePath, filePath);
+    } catch (error) {
+      console.warn(`Failed to get structural highlights for ${filePath} at ${sha}:`, error);
+      return {
+        highlights: [],
+        morphs: [],
+        hasStructuralChanges: false
+      };
+    }
+  }
+
+  /**
+   * Check if difftastic is available
+   */
+  isAvailable(): boolean {
+    try {
+      return this.isValidDifftasticPath(this.difftasticPath);
+    } catch {
+      return false;
+    }
+  }
+}
+
+// Singleton instance
+let difftasticInstance: DifftasticIntegration | null = null;
+
+export function getDifftasticIntegration(): DifftasticIntegration {
+  if (!difftasticInstance) {
+    difftasticInstance = new DifftasticIntegration();
+  }
+  return difftasticInstance;
+}
+
+
+
+/* ---- File: src/analysis/git.ts ---- */
+
+import { execSync, spawn } from 'child_process';
+import * as path from 'path';
+import { CommitInfo, FileChange } from '../types';
+import { getGitRoot } from '../utils/config';
+
+export class GitOperations {
+  private gitRoot: string;
+
+  constructor() {
+    const root = getGitRoot();
+    if (!root) {
+      throw new Error('Not in a git repository');
+    }
+    this.gitRoot = root;
+  }
+
+  /**
+   * Execute a git command and return the output
+   */
+  private execGit(args: string[]): string {
+    try {
+      return execSync(`git ${args.join(' ')}`, {
+        cwd: this.gitRoot,
+        encoding: 'utf8',
+        maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+      }).trim();
+    } catch (error: any) {
+      throw new Error(`Git command failed: git ${args.join(' ')}\n${error.message}`);
+    }
+  }
+
+  /**
+   * Get basic commit information
+   */
+  getCommitInfo(sha: string): CommitInfo {
+    const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
+    const output = this.execGit(['show', '--no-patch', '--date=iso', format, sha]);
+
+    const lines = output.split('\n');
+    if (lines.length < 4) {
+      throw new Error(`Invalid commit format for SHA: ${sha}`);
+    }
+
+    return {
+      sha: lines[0],
+      author: lines[1],
+      date: lines[2],
+      message: lines[3],
+      parent: lines[4] || undefined
+    };
+  }
+
+  /**
+   * Get list of commits (newest first)
+   */
+  getRecentCommits(count: number = 5): CommitInfo[] {
+    const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
+    const output = this.execGit(['log', '--no-merges', `-${count}`, '--date=iso', format]);
+
+    const commits: CommitInfo[] = [];
+    const lines = output.split('\n');
+
+    for (let i = 0; i < lines.length; i += 5) {
+      if (lines[i]) {
+        commits.push({
+          sha: lines[i],
+          author: lines[i + 1],
+          date: lines[i + 2],
+          message: lines[i + 3],
+          parent: lines[i + 4] || undefined
+        });
+      }
+    }
+
+    return commits;
+  }
+
+  /**
+   * Get file changes for a commit
+   */
+  getFileChanges(sha: string): FileChange[] {
+    const output = this.execGit(['show', '--name-status', '--pretty=format:', sha]);
+
+    const changes: FileChange[] = [];
+    const lines = output.split('\n').filter(line => line.trim());
+
+    for (const line of lines) {
+      const parts = line.split('\t');
+      if (parts.length >= 2) {
+        const status = parts[0];
+        const filePath = parts[1];
+        let oldPath: string | undefined;
+
+        // Handle renamed files
+        if (status.startsWith('R')) {
+          oldPath = parts[2];
+        }
+
+        changes.push({
+          path: filePath,
+          status: status.charAt(0) as FileChange['status'],
+          oldPath
+        });
+      }
+    }
+
+    return changes;
+  }
+
+  /**
+   * Get raw diff for a commit
+   */
+  getCommitDiff(sha: string): string {
+    return this.execGit(['show', '--pretty=format:', sha]);
+  }
+
+  /**
+   * Get staged changes diff
+   */
+  getStagedDiff(): string {
+    return this.execGit(['diff', '--cached']);
+  }
+
+  /**
+   * Get file content at specific commit
+   */
+  getFileContent(sha: string, filePath: string): string {
+    return this.execGit(['show', `${sha}:${filePath}`]);
+  }
+
+  /**
+   * Get current HEAD SHA
+   */
+  getHeadSha(): string {
+    return this.execGit(['rev-parse', 'HEAD']);
+  }
+
+  /**
+   * Check if repository is clean (no uncommitted changes)
+   */
+  isClean(): boolean {
+    try {
+      this.execGit(['diff', '--quiet']);
+      this.execGit(['diff', '--cached', '--quiet']);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get list of changed files in working directory
+   */
+  getWorkingDirectoryChanges(): FileChange[] {
+    const output = this.execGit(['status', '--porcelain']);
+
+    const changes: FileChange[] = [];
+    const lines = output.split('\n').filter(line => line.trim());
+
+    for (const line of lines) {
+      const status = line.substring(0, 2).trim();
+      const filePath = line.substring(3);
+
+      // Map git status codes to our status types
+      let changeStatus: FileChange['status'];
+      if (status.includes('A')) {
+        changeStatus = 'A';
+      } else if (status.includes('M')) {
+        changeStatus = 'M';
+      } else if (status.includes('D')) {
+        changeStatus = 'D';
+      } else if (status.includes('R')) {
+        changeStatus = 'R';
+      } else if (status.includes('C')) {
+        changeStatus = 'C';
+      } else if (status.includes('U')) {
+        changeStatus = 'U';
+      } else {
+        changeStatus = 'M'; // Default to modified
+      }
+
+      changes.push({
+        path: filePath,
+        status: changeStatus
+      });
+    }
+
+    return changes;
+  }
+
+  /**
+   * Spawn a git command asynchronously
+   */
+  async spawnGit(args: string[]): Promise<{ stdout: string; stderr: string }> {
+    return new Promise((resolve, reject) => {
+      const git = spawn('git', args, {
+        cwd: this.gitRoot,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      git.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
+      git.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      git.on('close', (code) => {
+        if (code === 0) {
+          resolve({ stdout, stderr });
+        } else {
+          reject(new Error(`Git command failed with code ${code}: ${stderr}`));
+        }
+      });
+
+      git.on('error', (error) => {
+        reject(error);
+      });
+    });
+  }
+}
+
+
+
+/* ---- File: src/analysis/heuristics.ts ---- */
+
+import { RiskFlag, SymbolDelta, FileChange, EdgeInfo } from '../types';
+
+export class RiskDetector {
+  /**
+   * Analyze a commit and detect risk flags
+   */
+  detectRisks(
+    files: FileChange[],
+    symbols: {
+      added: any[];
+      removed: any[];
+      modified: SymbolDelta[];
+    },
+    edges: {
+      added: EdgeInfo[];
+      removed: EdgeInfo[];
+    }
+  ): RiskFlag[] {
+    const risks: RiskFlag[] = [];
+
+    // Check for breaking changes
+    if (this.hasBreakingChanges(symbols.modified)) {
+      risks.push('breaking-api');
+    }
+
+    // Check for migrations
+    if (this.hasMigrations(files)) {
+      risks.push('schema-migration');
+    }
+
+    // Check for refactors
+    if (this.hasRefactor(files, symbols)) {
+      risks.push('refactor');
+    }
+
+    // Check for security-related changes
+    if (this.hasSecurityChanges(files, symbols)) {
+      risks.push('security');
+    }
+
+    // Check for performance-related changes
+    if (this.hasPerformanceChanges(files, symbols)) {
+      risks.push('performance');
+    }
+
+    // Check for authentication changes
+    if (this.hasAuthChanges(files, symbols)) {
+      risks.push('auth');
+    }
+
+    // Check for payment-related changes
+    if (this.hasPaymentChanges(files, symbols)) {
+      risks.push('payment');
+    }
+
+    return risks;
+  }
+
+  /**
+   * Check for breaking API changes
+   */
+  private hasBreakingChanges(modifiedSymbols: SymbolDelta[]): boolean {
+    for (const delta of modifiedSymbols) {
+      // Public function/method signature changes
+      if ((delta.symbol.kind === 'function' || delta.symbol.kind === 'method') &&
+          delta.changeType === 'signature_changed' &&
+          this.isPublicSymbol(delta.symbol)) {
+        return true;
+      }
+
+      // Removed public exports
+      if (delta.changeType === 'removed' && this.isPublicSymbol(delta.symbol)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check for database/schema migrations
+   */
+  private hasMigrations(files: FileChange[]): boolean {
+    const migrationPatterns = [
+      /migration/i,
+      /schema/i,
+      /database/i,
+      /db/i,
+      /\.sql$/,
+      /alter\s+table/i,
+      /create\s+table/i,
+      /drop\s+table/i,
+      /migration\.php$/,
+      /migration\.js$/,
+      /migration\.ts$/
+    ];
+
+    return files.some(file => {
+      const fileName = file.path.toLowerCase();
+      return migrationPatterns.some(pattern => pattern.test(fileName));
+    });
+  }
+
+  /**
+   * Check for large refactoring operations
+   */
+  private hasRefactor(
+    files: FileChange[],
+    symbols: { added: any[]; removed: any[]; modified: SymbolDelta[] }
+  ): boolean {
+    // Many files changed
+    if (files.length > 10) {
+      return true;
+    }
+
+    // Many symbols renamed or moved
+    const renamedSymbols = symbols.modified.filter(delta =>
+      delta.changeType === 'signature_changed' &&
+      this.isRename(delta.symbol, delta.previousSymbol)
+    );
+
+    if (renamedSymbols.length > 5) {
+      return true;
+    }
+
+    // Large number of symbol changes
+    const totalSymbolChanges = symbols.added.length + symbols.removed.length + symbols.modified.length;
+    if (totalSymbolChanges > 20) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check for security-related changes
+   */
+  private hasSecurityChanges(
+    files: FileChange[],
+    symbols: { added: any[]; removed: any[]; modified: SymbolDelta[] }
+  ): boolean {
+    const securityPatterns = [
+      /password/i,
+      /secret/i,
+      /token/i,
+      /auth/i,
+      /security/i,
+      /encrypt/i,
+      /decrypt/i,
+      /hash/i,
+      /ssl/i,
+      /tls/i,
+      /certificate/i,
+      /vulnerability/i,
+      /exploit/i
+    ];
+
+    // Check file names
+    if (files.some(file => securityPatterns.some(pattern => pattern.test(file.path)))) {
+      return true;
+    }
+
+    // Check symbol names
+    const allSymbols = [...symbols.added, ...symbols.modified.map(s => s.symbol)];
+    if (allSymbols.some(symbol => securityPatterns.some(pattern => pattern.test(symbol.name)))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check for performance-related changes
+   */
+  private hasPerformanceChanges(
+    files: FileChange[],
+    symbols: { added: any[]; removed: any[]; modified: SymbolDelta[] }
+  ): boolean {
+    const performancePatterns = [
+      /performance/i,
+      /optimize/i,
+      /cache/i,
+      /memory/i,
+      /speed/i,
+      /latency/i,
+      /throughput/i,
+      /bottleneck/i,
+      /slow/i,
+      /fast/i
+    ];
+
+    // Check file names
+    if (files.some(file => performancePatterns.some(pattern => pattern.test(file.path)))) {
+      return true;
+    }
+
+    // Check symbol names
+    const allSymbols = [...symbols.added, ...symbols.modified.map(s => s.symbol)];
+    if (allSymbols.some(symbol => performancePatterns.some(pattern => pattern.test(symbol.name)))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check for authentication-related changes
+   */
+  private hasAuthChanges(
+    files: FileChange[],
+    symbols: { added: any[]; removed: any[]; modified: SymbolDelta[] }
+  ): boolean {
+    const authPatterns = [
+      /auth/i,
+      /login/i,
+      /logout/i,
+      /session/i,
+      /user/i,
+      /permission/i,
+      /role/i,
+      /access/i,
+      /authenticate/i,
+      /authorization/i
+    ];
+
+    // Check file names
+    if (files.some(file => authPatterns.some(pattern => pattern.test(file.path)))) {
+      return true;
+    }
+
+    // Check symbol names
+    const allSymbols = [...symbols.added, ...symbols.modified.map(s => s.symbol)];
+    if (allSymbols.some(symbol => authPatterns.some(pattern => pattern.test(symbol.name)))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check for payment-related changes
+   */
+  private hasPaymentChanges(
+    files: FileChange[],
+    symbols: { added: any[]; removed: any[]; modified: SymbolDelta[] }
+  ): boolean {
+    const paymentPatterns = [
+      /payment/i,
+      /billing/i,
+      /invoice/i,
+      /charge/i,
+      /refund/i,
+      /stripe/i,
+      /paypal/i,
+      /checkout/i,
+      /transaction/i,
+      /money/i,
+      /currency/i
+    ];
+
+    // Check file names
+    if (files.some(file => paymentPatterns.some(pattern => pattern.test(file.path)))) {
+      return true;
+    }
+
+    // Check symbol names
+    const allSymbols = [...symbols.added, ...symbols.modified.map(s => s.symbol)];
+    if (allSymbols.some(symbol => paymentPatterns.some(pattern => pattern.test(symbol.name)))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if a symbol is public (not private)
+   */
+  private isPublicSymbol(symbol: any): boolean {
+    // Symbols starting with underscore are typically private
+    return !symbol.name.startsWith('_');
+  }
+
+  /**
+   * Check if a symbol change represents a rename
+   */
+  private isRename(current: any, previous: any): boolean {
+    // Same signature structure but different name
+    return current.name !== previous.name &&
+           current.signature.replace(current.name, 'X') === previous.signature.replace(previous.name, 'X');
+  }
+}
+
+
+
+/* ---- File: src/analysis/mermaidGenerator.ts ---- */
+
+import { EdgeInfo, SymbolInfo } from '../types';
+
+/**
+ * Generate Mermaid graph visualizations for dependency graphs
+ */
+export class MermaidGenerator {
+  /**
+   * Generate Mermaid graph from edges and symbols
+   */
+  generateGraph(edges: EdgeInfo[], symbols: SymbolInfo[], options: {
+    maxNodes?: number;
+    showConfidence?: boolean;
+    highlightChanged?: string[];
+  } = {}): string {
+    const { maxNodes = 50, showConfidence = false, highlightChanged = [] } = options;
+
+    // Filter to most relevant edges
+    const filteredEdges = this.filterRelevantEdges(edges, maxNodes);
+
+    // Build node and edge definitions
+    const nodes = new Set<string>();
+    const edgeDefinitions: string[] = [];
+
+    for (const edge of filteredEdges) {
+      nodes.add(this.formatNodeId(edge.from));
+      nodes.add(this.formatNodeId(edge.to));
+
+      const style = this.getEdgeStyle(edge, showConfidence);
+      const label = this.getEdgeLabel(edge, showConfidence);
+
+      edgeDefinitions.push(`${this.formatNodeId(edge.from)} -->|"${label}"| ${this.formatNodeId(edge.to)}`);
+    }
+
+    // Generate Mermaid code
+    let mermaid = 'graph TD\n';
+
+    // Add node styling for changed symbols
+    const changedNodeIds = highlightChanged.map(id => this.formatNodeId(id));
+    for (const nodeId of changedNodeIds) {
+      if (nodes.has(nodeId)) {
+        mermaid += `    ${nodeId}:::changed\n`;
+      }
+    }
+
+    // Add edges
+    for (const edgeDef of edgeDefinitions) {
+      mermaid += `    ${edgeDef}\n`;
+    }
+
+    // Add styling
+    mermaid += '\n    classDef changed fill:#ff6b6b,stroke:#d63031,color:#fff\n';
+
+    return mermaid;
+  }
+
+  /**
+   * Generate blast radius visualization
+   */
+  generateBlastRadiusGraph(
+    changedSymbols: SymbolInfo[],
+    blastRadius: {
+      downstreamCallers: Map<string, any[]>;
+      upstreamDependencies: Map<string, any[]>;
+      impactScore: Map<string, number>;
+    }
+  ): string {
+    let mermaid = 'graph TD\n';
+
+    // Add changed symbols as central nodes
+    for (const symbol of changedSymbols) {
+      const nodeId = this.formatNodeId(symbol.id);
+      const impact = blastRadius.impactScore.get(symbol.id) || 0;
+      mermaid += `    ${nodeId}["${symbol.name}<br/>Impact: ${impact}"]:::changed\n`;
+    }
+
+    // Add downstream callers
+    for (const [symbolId, callers] of blastRadius.downstreamCallers) {
+      const sourceId = this.formatNodeId(symbolId);
+      // Note: In a full implementation, we'd resolve caller names
+      mermaid += `    Caller${callers.length} --> ${sourceId}\n`;
+    }
+
+    // Add upstream dependencies
+    for (const [symbolId, dependencies] of blastRadius.upstreamDependencies) {
+      const targetId = this.formatNodeId(symbolId);
+      // Note: In a full implementation, we'd resolve dependency names
+      mermaid += `    ${targetId} --> Dep${dependencies.length}\n`;
+    }
+
+    mermaid += '\n    classDef changed fill:#ff6b6b,stroke:#d63031,color:#fff\n';
+
+    return mermaid;
+  }
+
+  /**
+   * Filter edges to most relevant ones for visualization
+   */
+  private filterRelevantEdges(edges: EdgeInfo[], maxNodes: number): EdgeInfo[] {
+    // Sort by confidence and keep only high-confidence edges
+    const sortedEdges = edges
+      .filter(edge => (edge.confidence || 0) > 0.5)
+      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+
+    // Limit to prevent overwhelming graphs
+    return sortedEdges.slice(0, maxNodes * 2); // Allow ~2 edges per node
+  }
+
+  /**
+   * Format symbol ID for Mermaid node ID
+   */
+  private formatNodeId(symbolId: string): string {
+    // Mermaid node IDs must start with letters, no special chars
+    return 'N' + symbolId.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
+  }
+
+  /**
+   * Get edge styling based on type and confidence
+   */
+  private getEdgeStyle(edge: EdgeInfo, showConfidence: boolean): string {
+    let style = '';
+
+    // Different line styles for different edge types
+    switch (edge.type) {
+      case 'imports':
+        style = 'stroke:#2ecc71,stroke-width:2px';
+        break;
+      case 'calls':
+        style = 'stroke:#3498db,stroke-width:2px';
+        break;
+      case 'extends':
+        style = 'stroke:#e74c3c,stroke-width:3px';
+        break;
+      case 'implements':
+        style = 'stroke:#f39c12,stroke-width:3px,stroke-dasharray:5,5';
+        break;
+      default:
+        style = 'stroke:#95a5a6,stroke-width:1px';
+    }
+
+    return style;
+  }
+
+  /**
+   * Get edge label
+   */
+  private getEdgeLabel(edge: EdgeInfo, showConfidence: boolean): string {
+    let label = edge.type;
+
+    if (showConfidence && edge.confidence !== undefined) {
+      label += ` (${Math.round(edge.confidence * 100)}%)`;
+    }
+
+    if (!edge.isResolved) {
+      label += ' (?)';
+    }
+
+    return label;
+  }
+}
+
+
+
+/* ---- File: src/analysis/semanticChanges.ts ---- */
+
+import { SymbolInfo, SymbolDelta, ChangeType, ModReason } from '../types';
+import { detectLanguage } from './tree-sitter';
+
+/**
+ * Semantic change detection for enhanced LLM context
+ *
+ * Detects renames, moves, and classifies modification reasons
+ * beyond basic added/modified/removed.
+ */
+export class SemanticChangeDetector {
+  /**
+   * Detect renames by comparing removed and added symbols
+   */
+  detectRenames(
+    removed: SymbolInfo[],
+    added: SymbolInfo[],
+    threshold: number = 0.8
+  ): Array<{
+    oldSymbol: SymbolInfo;
+    newSymbol: SymbolInfo;
+    confidence: number;
+  }> {
+    const renames: Array<{
+      oldSymbol: SymbolInfo;
+      newSymbol: SymbolInfo;
+      confidence: number;
+    }> = [];
+
+    for (const removedSymbol of removed) {
+      let bestMatch: SymbolInfo | null = null;
+      let bestConfidence = 0;
+
+      for (const addedSymbol of added) {
+        const confidence = this.calculateRenameConfidence(removedSymbol, addedSymbol);
+        if (confidence > bestConfidence && confidence >= threshold) {
+          bestMatch = addedSymbol;
+          bestConfidence = confidence;
+        }
+      }
+
+      if (bestMatch) {
+        renames.push({
+          oldSymbol: removedSymbol,
+          newSymbol: bestMatch,
+          confidence: bestConfidence
+        });
+      }
+    }
+
+    return renames;
+  }
+
+  /**
+   * Calculate confidence that two symbols represent a rename
+   */
+  private calculateRenameConfidence(oldSymbol: SymbolInfo, newSymbol: SymbolInfo): number {
+    let confidence = 0;
+
+    // Same kind (function->function, class->class)
+    if (oldSymbol.kind === newSymbol.kind) {
+      confidence += 0.3;
+    } else {
+      return 0; // Different kinds can't be renames
+    }
+
+    // Similar signature structure (ignoring name)
+    if (this.signaturesSimilar(oldSymbol.signature, newSymbol.signature, oldSymbol.name, newSymbol.name)) {
+      confidence += 0.4;
+    }
+
+    // Name similarity (but not identical - that would be same symbol)
+    if (oldSymbol.name !== newSymbol.name) {
+      const nameSimilarity = this.nameSimilarity(oldSymbol.name, newSymbol.name);
+      confidence += nameSimilarity * 0.3;
+    }
+
+    return Math.min(confidence, 1.0);
+  }
+
+  /**
+   * Check if signatures are similar when ignoring symbol names
+   */
+  private signaturesSimilar(sig1: string, sig2: string, name1: string, name2: string): boolean {
+    // Remove symbol names and compare structure
+    const normalized1 = sig1.replace(name1, 'SYMBOL').replace(/\s+/g, ' ').trim();
+    const normalized2 = sig2.replace(name2, 'SYMBOL').replace(/\s+/g, ' ').trim();
+
+    return normalized1 === normalized2;
+  }
+
+  /**
+   * Calculate name similarity using Jaro-Winkler distance approximation
+   */
+  private nameSimilarity(name1: string, name2: string): number {
+    if (name1 === name2) return 1.0;
+
+    // Simple prefix/suffix matching for common rename patterns
+    const prefixes = ['get', 'set', 'is', 'has', 'can', 'should', 'validate'];
+    const suffixes = ['Handler', 'Service', 'Controller', 'Manager', 'Util', 'Helper'];
+
+    for (const prefix of prefixes) {
+      if (name1.startsWith(prefix) && name2.startsWith(prefix)) {
+        const rest1 = name1.slice(prefix.length);
+        const rest2 = name2.slice(prefix.length);
+        if (rest1 === rest2) return 0.9;
+      }
+    }
+
+    for (const suffix of suffixes) {
+      if (name1.endsWith(suffix) && name2.endsWith(suffix)) {
+        const rest1 = name1.slice(0, -suffix.length);
+        const rest2 = name2.slice(0, -suffix.length);
+        if (rest1 === rest2) return 0.9;
+      }
+    }
+
+    // Levenshtein distance approximation
+    return this.levenshteinSimilarity(name1, name2);
+  }
+
+  /**
+   * Simple Levenshtein distance approximation for name similarity
+   */
+  private levenshteinSimilarity(s1: string, s2: string): number {
+    const len1 = s1.length;
+    const len2 = s2.length;
+    const maxLen = Math.max(len1, len2);
+
+    if (maxLen === 0) return 1.0;
+
+    const distance = this.levenshteinDistance(s1, s2);
+    return 1.0 - (distance / maxLen);
+  }
+
+  private levenshteinDistance(s1: string, s2: string): number {
+    const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
+
+    for (let i = 0; i <= s1.length; i++) matrix[0][i] = i;
+    for (let j = 0; j <= s2.length; j++) matrix[j][0] = j;
+
+    for (let j = 1; j <= s2.length; j++) {
+      for (let i = 1; i <= s1.length; i++) {
+        const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1,
+          matrix[j - 1][i] + 1,
+          matrix[j - 1][i - 1] + indicator
+        );
+      }
+    }
+
+    return matrix[s2.length][s1.length];
+  }
+
+  /**
+   * Detect moves by comparing symbols with same name but different paths
+   */
+  detectMoves(
+    previousSymbols: SymbolInfo[],
+    currentSymbols: SymbolInfo[]
+  ): Array<{
+    symbol: SymbolInfo;
+    oldPath: string;
+    newPath: string;
+    confidence: number;
+  }> {
+    const moves: Array<{
+      symbol: SymbolInfo;
+      oldPath: string;
+      newPath: string;
+      confidence: number;
+    }> = [];
+
+    // Group by name and kind
+    const prevByName = new Map<string, SymbolInfo[]>();
+    const currByName = new Map<string, SymbolInfo[]>();
+
+    for (const symbol of previousSymbols) {
+      const key = `${symbol.name}:${symbol.kind}`;
+      if (!prevByName.has(key)) prevByName.set(key, []);
+      prevByName.get(key)!.push(symbol);
+    }
+
+    for (const symbol of currentSymbols) {
+      const key = `${symbol.name}:${symbol.kind}`;
+      if (!currByName.has(key)) currByName.set(key, []);
+      currByName.get(key)!.push(symbol);
+    }
+
+    // Find symbols with same name/kind but different paths
+    for (const [key, prevGroup] of prevByName) {
+      const currGroup = currByName.get(key);
+      if (!currGroup) continue;
+
+      for (const prevSymbol of prevGroup) {
+        for (const currSymbol of currGroup) {
+          if (prevSymbol.id.split(':')[0] !== currSymbol.id.split(':')[0]) {
+            // Different paths - potential move
+            const confidence = this.calculateMoveConfidence(prevSymbol, currSymbol);
+            if (confidence > 0.7) {
+              moves.push({
+                symbol: currSymbol,
+                oldPath: prevSymbol.id.split(':')[0],
+                newPath: currSymbol.id.split(':')[0],
+                confidence
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return moves;
+  }
+
+  /**
+   * Calculate confidence that a symbol was moved
+   */
+  private calculateMoveConfidence(oldSymbol: SymbolInfo, newSymbol: SymbolInfo): number {
+    let confidence = 0;
+
+    // Same name and kind (required)
+    if (oldSymbol.name === newSymbol.name && oldSymbol.kind === newSymbol.kind) {
+      confidence += 0.5;
+    } else {
+      return 0;
+    }
+
+    // Similar signature
+    if (oldSymbol.signature === newSymbol.signature) {
+      confidence += 0.4;
+    } else if (this.signaturesSimilar(oldSymbol.signature, newSymbol.signature, oldSymbol.name, newSymbol.name)) {
+      confidence += 0.3;
+    }
+
+    // Same language (file extension)
+    const oldLang = detectLanguage(oldSymbol.id.split(':')[0]);
+    const newLang = detectLanguage(newSymbol.id.split(':')[0]);
+    if (oldLang === newLang) {
+      confidence += 0.1;
+    }
+
+    return Math.min(confidence, 1.0);
+  }
+
+  /**
+   * Classify the reason for a symbol modification
+   */
+  classifyModificationReason(delta: SymbolDelta): ModReason {
+    if (!delta.previousSymbol) return 'body_changed';
+
+    const prev = delta.previousSymbol;
+    const curr = delta.symbol;
+
+    // Signature changed (function parameters, return type, etc.)
+    if (prev.signature !== curr.signature) {
+      // Check if it's just parameter names vs types
+      const prevNormalized = this.normalizeSignature(prev.signature);
+      const currNormalized = this.normalizeSignature(curr.signature);
+
+      if (prevNormalized !== currNormalized) {
+        return 'signature_changed';
+      }
+    }
+
+    // Location significantly changed (likely moved within file)
+    const prevLines = prev.location.end.line - prev.location.start.line;
+    const currLines = curr.location.end.line - curr.location.start.line;
+
+    if (Math.abs(prevLines - currLines) > prevLines * 0.5) {
+      return 'body_changed';
+    }
+
+    // Default to body changed
+    return 'body_changed';
+  }
+
+  /**
+   * Normalize signature for comparison (remove variable names, focus on types)
+   */
+  private normalizeSignature(signature: string): string {
+    // Simple normalization - could be enhanced for specific languages
+    return signature.replace(/\b\w+\s+(\w+)/g, '$1').replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * Extract diff snippets for context (truncated to reasonable size)
+   */
+  extractDiffSnippets(
+    previousContent: string,
+    currentContent: string,
+    symbol: SymbolInfo,
+    maxLines: number = 10
+  ): { pre: string; post: string } {
+    const extractSnippet = (content: string, location: typeof symbol.location): string => {
+      const lines = content.split('\n');
+      const startLine = Math.max(0, location.start.line - 3);
+      const endLine = Math.min(lines.length, location.end.line + 3);
+
+      return lines.slice(startLine, endLine).join('\n');
+    };
+
+    return {
+      pre: extractSnippet(previousContent, symbol.location),
+      post: extractSnippet(currentContent, symbol.location)
+    };
+  }
+}
+
+
+
+/* ---- File: src/analysis/symbols.ts ---- */
+
+import { SymbolInfo, SymbolDelta, SymbolChangeType, FileChange } from '../types';
+import { getTreeSitterParser, detectLanguage } from './tree-sitter';
+import { GitOperations } from './git';
+import { SemanticChangeDetector } from './semanticChanges';
+
+export class SymbolExtractor {
+  private git: GitOperations;
+  private parser = getTreeSitterParser();
+  private semanticDetector = new SemanticChangeDetector();
+
+  constructor(git: GitOperations) {
+    this.git = git;
+  }
+
+  /**
+   * Extract symbols from all changed files in a commit with semantic enrichment
+   */
+  async extractCommitSymbols(sha: string, files: FileChange[]): Promise<{
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+    renames: Array<{oldSymbol: SymbolInfo; newSymbol: SymbolInfo; confidence: number}>;
+    moves: Array<{symbol: SymbolInfo; oldPath: string; newPath: string; confidence: number}>;
+  }> {
+    const added: SymbolInfo[] = [];
+    const removed: SymbolInfo[] = [];
+    const modified: SymbolDelta[] = [];
+
+    // Collect symbols from all files
+    for (const file of files) {
+      if (this.shouldAnalyzeFile(file.path)) {
+        const fileSymbols = await this.extractFileSymbols(sha, file);
+        added.push(...fileSymbols.added);
+        removed.push(...fileSymbols.removed);
+        modified.push(...fileSymbols.modified);
+      }
+    }
+
+    // Get parent commit for comparison
+    let parentSha: string | undefined;
+    try {
+      const commitInfo = this.git.getCommitInfo(sha);
+      parentSha = commitInfo.parent;
+    } catch (error) {
+      // No parent commit available
+    }
+
+    // Perform semantic analysis for renames and moves
+    const renames = parentSha ?
+      this.semanticDetector.detectRenames(removed, added) : [];
+
+    // For moves, we need symbols from previous commit
+    let previousSymbols: SymbolInfo[] = [];
+    if (parentSha) {
+      try {
+        const previousCommitSymbols = await this.extractCommitSymbols(parentSha, files);
+        previousSymbols = [
+          ...previousCommitSymbols.added,
+          ...previousCommitSymbols.removed,
+          ...previousCommitSymbols.modified.map(m => m.symbol)
+        ];
+      } catch (error) {
+        // Can't get previous symbols
+      }
+    }
+
+    const currentSymbols = [...added, ...modified.map(m => m.symbol)];
+    const moves = this.semanticDetector.detectMoves(previousSymbols, currentSymbols);
+
+    return { added, removed, modified, renames, moves };
+  }
+
+  /**
+   * Extract symbols from a single file in a commit
+   */
+  private async extractFileSymbols(sha: string, file: FileChange): Promise<{
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  }> {
+    const added: SymbolInfo[] = [];
+    const removed: SymbolInfo[] = [];
+    const modified: SymbolDelta[] = [];
+
+    try {
+      // Skip deleted files - they don't exist in the commit
+      if (file.status === 'D') {
+        return { added, removed, modified };
+      }
+
+      // Get current file content
+      const currentContent = this.git.getFileContent(sha, file.path);
+
+      // Get previous file content (if it exists)
+      let previousContent: string | null = null;
+      if (file.status !== 'A' && file.oldPath) {
+        try {
+          const parentSha = this.git.getCommitInfo(sha).parent;
+          if (parentSha) {
+            previousContent = this.git.getFileContent(parentSha, file.oldPath);
+          }
+        } catch {
+          // File didn't exist in parent, treat as new
+        }
+      } else if (file.status !== 'A') {
+        try {
+          const parentSha = this.git.getCommitInfo(sha).parent;
+          if (parentSha) {
+            previousContent = this.git.getFileContent(parentSha, file.path);
+          }
+        } catch {
+          // File didn't exist in parent, treat as new
+        }
+      }
+
+      // Extract symbols from both versions
+      const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
+      const previousSymbols = previousContent
+        ? await this.extractSymbolsFromContent(previousContent, file.oldPath || file.path)
+        : [];
+
+      // Compare and categorize changes
+      const changes = this.compareSymbolSets(previousSymbols, currentSymbols, file.path);
+
+      // Enhance modified symbols with semantic information
+      for (const delta of changes.modified) {
+        // Classify modification reason
+        delta.modReason = this.semanticDetector.classifyModificationReason(delta);
+
+        // Capture diff snippets if content available
+        if (previousContent && currentContent) {
+          const snippets = this.semanticDetector.extractDiffSnippets(
+            previousContent,
+            currentContent,
+            delta.symbol
+          );
+          delta.diffSnippetPre = snippets.pre;
+          delta.diffSnippetPost = snippets.post;
+        }
+      }
+
+      added.push(...changes.added);
+      removed.push(...changes.removed);
+      modified.push(...changes.modified);
+
+    } catch (error) {
+      console.warn(`Failed to extract symbols from ${file.path}:`, error);
+    }
+
+    return { added, removed, modified };
+  }
+
+  /**
+   * Extract symbols from file content
+   */
+  private async extractSymbolsFromContent(content: string, filePath: string): Promise<SymbolInfo[]> {
+    const language = detectLanguage(filePath);
+    if (!language) {
+      return [];
+    }
+
+    const tree = await this.parser.parseFile(content, language);
+    if (!tree) {
+      return [];
+    }
+
+    const symbols = this.parser.extractSymbols(tree, filePath, language);
+
+    // Add unique IDs and ensure they include file path for uniqueness
+    return symbols.map(symbol => ({
+      ...symbol,
+      id: `${filePath}:${symbol.id}`
+    }));
+  }
+
+  /**
+   * Compare two sets of symbols and determine changes
+   */
+  private compareSymbolSets(
+    previous: SymbolInfo[],
+    current: SymbolInfo[],
+    filePath: string
+  ): {
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  } {
+    const added: SymbolInfo[] = [];
+    const removed: SymbolInfo[] = [];
+    const modified: SymbolDelta[] = [];
+
+    // Create maps for efficient lookup
+    const previousMap = new Map(previous.map(s => [s.id, s]));
+    const currentMap = new Map(current.map(s => [s.id, s]));
+
+    // Find added symbols
+    for (const symbol of current) {
+      if (!previousMap.has(symbol.id)) {
+        added.push(symbol);
+      }
+    }
+
+    // Find removed symbols
+    for (const symbol of previous) {
+      if (!currentMap.has(symbol.id)) {
+        removed.push(symbol);
+      }
+    }
+
+    // Find modified symbols
+    for (const currentSymbol of current) {
+      const previousSymbol = previousMap.get(currentSymbol.id);
+      if (previousSymbol) {
+        const changeType = this.determineSymbolChange(previousSymbol, currentSymbol);
+        if (changeType !== 'body_changed') { // Only report significant changes
+          modified.push({
+            symbol: currentSymbol,
+            changeType,
+            previousSymbol
+          });
+        }
+      }
+    }
+
+    return { added, removed, modified };
+  }
+
+  /**
+   * Determine the type of change between two symbol versions
+   */
+  private determineSymbolChange(previous: SymbolInfo, current: SymbolInfo): SymbolChangeType {
+    // Check if signature changed
+    if (previous.signature !== current.signature) {
+      // Check if it's a breaking change (public API change)
+      if (this.isPublicSymbol(previous) && this.isPublicSymbol(current)) {
+        return 'signature_changed';
+      }
+    }
+
+    // Check if location changed significantly (might indicate move/refactor)
+    const prevLines = previous.location.end.line - previous.location.start.line;
+    const currLines = current.location.end.line - current.location.start.line;
+
+    if (Math.abs(prevLines - currLines) > 10) { // Arbitrary threshold
+      return 'body_changed';
+    }
+
+    // Default to body change
+    return 'body_changed';
+  }
+
+  /**
+   * Check if a symbol is public (exported)
+   */
+  private isPublicSymbol(symbol: SymbolInfo): boolean {
+    // Simple heuristic: symbols starting with underscore are private
+    return !symbol.name.startsWith('_');
+  }
+
+  /**
+   * Check if a file should be analyzed for symbols
+   */
+  private shouldAnalyzeFile(filePath: string): boolean {
+    const language = detectLanguage(filePath);
+    if (!language) return false;
+
+    // Skip certain directories and files
+    const skipPatterns = [
+      /node_modules/,
+      /\.git/,
+      /dist/,
+      /build/,
+      /vendor/,
+      /\.min\./,
+      /test.*\.(js|ts|php)$/,
+      /spec.*\.(js|ts|php)$/,
+      /\.(test|spec)\.(js|ts|php)$/
+    ];
+
+    return !skipPatterns.some(pattern => pattern.test(filePath));
+  }
+
+  /**
+   * Extract symbols from staged changes
+   */
+  async extractStagedSymbols(): Promise<{
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  }> {
+    const stagedChanges = this.git.getWorkingDirectoryChanges();
+    const added: SymbolInfo[] = [];
+    const removed: SymbolInfo[] = [];
+    const modified: SymbolDelta[] = [];
+
+    for (const file of stagedChanges) {
+      if (file.status === 'M' && this.shouldAnalyzeFile(file.path)) {
+        try {
+          // Get staged content
+          const stagedContent = this.git.getStagedDiff();
+          // This is complex - we'd need to parse the diff to extract staged content
+          // For now, just mark as modified
+          console.log(`Staged changes in ${file.path} - would extract symbols`);
+        } catch (error) {
+          console.warn(`Failed to extract staged symbols from ${file.path}:`, error);
+        }
+      }
+    }
+
+    return { added, removed, modified };
+  }
+}
+
+
+
+/* ---- File: src/analysis/tree-sitter.ts ---- */
+
+import * as path from 'path';
+import * as fs from 'fs';
+import { SymbolInfo } from '../types';
+
+// Use require to avoid type issues with web-tree-sitter
+const { Parser, Language } = require('web-tree-sitter');
+
+// Language detection based on file extension
+export function detectLanguage(filePath: string): string | null {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+
+  switch (ext) {
+    case 'php':
+      return 'php';
+    case 'ts':
+    case 'tsx':
+      return 'typescript';
+    case 'js':
+    case 'jsx':
+      return 'javascript';
+    default:
+      return null;
+  }
+}
+
+export class TreeSitterParser {
+  private parsers: Map<string, any> = new Map();
+  private initialized = false;
+
+  async initializeParsers(): Promise<void> {
+    if (this.initialized) return;
+
+    try {
+      await Parser.init();
+
+      // Load languages
+      const languages = ['typescript', 'javascript', 'php'];
+
+      for (const lang of languages) {
+        // Look for WASM in the out directory (where it's copied/downloaded to)
+        const wasmPath = path.join(__dirname, '..', '..', 'out', `tree-sitter-${lang}.wasm`);
+        if (fs.existsSync(wasmPath)) {
+          const language = await Language.load(wasmPath);
+          const parser = new Parser();
+          parser.setLanguage(language);
+          this.parsers.set(lang, parser);
+          console.log(`✓ Loaded tree-sitter parser for ${lang}`);
+        } else {
+          // Fallback to checking root if not in out yet (dev mode)
+          const rootWasmPath = path.join(__dirname, '..', '..', `tree-sitter-${lang}.wasm`);
+          if (fs.existsSync(rootWasmPath)) {
+            const language = await Language.load(rootWasmPath);
+            const parser = new Parser();
+            parser.setLanguage(language);
+            this.parsers.set(lang, parser);
+            console.log(`✓ Loaded tree-sitter parser for ${lang} (dev mode)`);
+          } else {
+            console.warn(`✗ Language WASM not found for ${lang}: ${wasmPath}`);
+          }
+        }
+      }
+
+      this.initialized = true;
+      console.log(`Tree-sitter initialized with ${this.parsers.size} parsers`);
+    } catch (error) {
+      console.error('Failed to initialize tree-sitter parsers:', error);
+      // Don't throw, just log. This allows the extension to work without tree-sitter
+    }
+  }
+
+  getParser(languageId: string): any | undefined {
+    // Map VS Code language IDs to tree-sitter languages
+    const map: Record<string, string> = {
+      'typescript': 'typescript',
+      'typescriptreact': 'typescript',
+      'javascript': 'javascript',
+      'javascriptreact': 'javascript',
+      'php': 'php'
+    };
+
+    const lang = map[languageId] || languageId;
+    return this.parsers.get(lang);
+  }
+
+  async parse(content: string, languageId: string): Promise<any | undefined> {
+    if (!this.initialized) {
+      await this.initializeParsers();
+    }
+
+    const parser = this.getParser(languageId);
+    if (!parser) return undefined;
+
+    return parser.parse(content);
+  }
+
+  // Compatibility method for symbols.ts
+  async parseFile(content: string, languageId: string): Promise<any | null> {
+    const tree = await this.parse(content, languageId);
+    return tree || null;
+  }
+
+  extractSymbols(tree: any, filePath: string, language: string): SymbolInfo[] {
+    const symbols: SymbolInfo[] = [];
+
+    // Walk the tree and extract symbols
+    const cursor = tree.walk();
+
+    while (true) {
+      const node = cursor.currentNode;
+
+      // Extract symbols based on node type and language
+      const symbol = this.extractSymbolFromNode(node, filePath, language);
+      if (symbol) {
+        symbols.push(symbol);
+      }
+
+      // Move to next node
+      if (cursor.gotoFirstChild()) {
+        continue;
+      }
+
+      while (!cursor.gotoNextSibling()) {
+        if (!cursor.gotoParent()) {
+          return symbols; // Done walking
+        }
+      }
+    }
+  }
+
+  private extractSymbolFromNode(node: any, filePath: string, language: string): SymbolInfo | null {
+    switch (language) {
+      case 'php':
+        return this.extractPHPSymbol(node, filePath);
+      case 'typescript':
+      case 'javascript':
+        return this.extractJSSymbol(node, filePath, language);
+      default:
+        return null;
+    }
+  }
+
+  private extractPHPSymbol(node: any, filePath: string): SymbolInfo | null {
+    // PHP symbol extraction - simplified version
+    if (node.type === 'function_definition') {
+      // Find name in child nodes
+      for (const child of node.children) {
+        if (child.type === 'name') {
+          const name = child.text;
+          const signature = this.extractPHPSignature(node);
+          return {
+            id: `function_${name}`,
+            name,
+            kind: 'function',
+            signature,
+            location: {
+              start: { line: node.startPosition.row + 1, column: node.startPosition.column },
+              end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+            }
+          };
+        }
+      }
+    }
+
+    if (node.type === 'class_declaration') {
+      for (const child of node.children) {
+        if (child.type === 'name') {
+          const name = child.text;
+          return {
+            id: `class_${name}`,
+            name,
+            kind: 'class',
+            signature: `class ${name}`,
+            location: {
+              start: { line: node.startPosition.row + 1, column: node.startPosition.column },
+              end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+            }
+          };
+        }
+      }
+    }
+
+    if (node.type === 'method_declaration') {
+      for (const child of node.children) {
+        if (child.type === 'name') {
+          const name = child.text;
+          const signature = this.extractPHPSignature(node);
+          return {
+            id: `method_${name}`,
+            name,
+            kind: 'method',
+            signature,
+            location: {
+              start: { line: node.startPosition.row + 1, column: node.startPosition.column },
+              end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+            }
+          };
+        }
+      }
+    }
+
+    if (node.type === 'const_declaration') {
+      for (const child of node.children) {
+        if (child.type === 'name') {
+          const name = child.text;
+          return {
+            id: `const_${name}`,
+            name,
+            kind: 'const',
+            signature: `const ${name}`,
+            location: {
+              start: { line: node.startPosition.row + 1, column: node.startPosition.column },
+              end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+            }
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private extractJSSymbol(node: any, filePath: string, language: string): SymbolInfo | null {
+    // JavaScript/TypeScript symbol extraction - simplified version
+    if (node.type === 'function_declaration') {
+      for (const child of node.children) {
+        if (child.type === 'identifier') {
+          const name = child.text;
+          const signature = this.extractJSSignature(node, language);
+          return {
+            id: `function_${name}`,
+            name,
+            kind: 'function',
+            signature,
+            location: {
+              start: { line: node.startPosition.row + 1, column: node.startPosition.column },
+              end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+            }
+          };
+        }
+      }
+    }
+
+    if (node.type === 'class_declaration') {
+      for (const child of node.children) {
+        if (child.type === 'identifier') {
+          const name = child.text;
+          return {
+            id: `class_${name}`,
+            name,
+            kind: 'class',
+            signature: `class ${name}`,
+            location: {
+              start: { line: node.startPosition.row + 1, column: node.startPosition.column },
+              end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+            }
+          };
+        }
+      }
+    }
+
+    if (node.type === 'method_definition') {
+      for (const child of node.children) {
+        if (child.type === 'property_identifier') {
+          const name = child.text;
+          const signature = this.extractJSSignature(node, language);
+          return {
+            id: `method_${name}`,
+            name,
+            kind: 'method',
+            signature,
+            location: {
+              start: { line: node.startPosition.row + 1, column: node.startPosition.column },
+              end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+            }
+          };
+        }
+      }
+    }
+
+    if (node.type === 'variable_declaration' || node.type === 'lexical_declaration') {
+      // Look for const declarations
+      for (const child of node.children) {
+        if (child.type === 'variable_declarator') {
+          for (const subChild of child.children) {
+            if (subChild.type === 'identifier' && node.text.startsWith('const')) {
+              const name = subChild.text;
+              return {
+                id: `const_${name}`,
+                name,
+                kind: 'const',
+                signature: `const ${name}`,
+                location: {
+                  start: { line: node.startPosition.row + 1, column: node.startPosition.column },
+                  end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+                }
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private extractPHPSignature(node: any): string {
+    // Extract function/method signature from PHP node - simplified
+    return node.text.split('{')[0].trim(); // Take everything before the body
+  }
+
+  private extractJSSignature(node: any, language: string): string {
+    // Extract function/method signature from JS/TS node - simplified
+    return node.text.split('{')[0].trim(); // Take everything before the body
+  }
+
+  dispose(): void {
+    // Clean up parsers
+    this.parsers.clear();
+  }
+}
+
+// Singleton instance
+let parserInstance: TreeSitterParser | null = null;
+
+export function getTreeSitterParser(): TreeSitterParser {
+  if (!parserInstance) {
+    parserInstance = new TreeSitterParser();
+  }
+  return parserInstance;
+}
+
+
+
+/* ---- File: src/cli/analyze.ts ---- */
+
+import { getGitRoot } from '../utils/config';
+import { GitOperations } from '../analysis/git';
+import { SymbolExtractor } from '../analysis/symbols';
+import { DependencyExtractor } from '../analysis/dependencies';
+import { RiskDetector } from '../analysis/heuristics';
+import { LLMSummarizer } from '../llm/summarizer';
+import { getDifftasticIntegration } from '../analysis/difftastic';
+import { getDatabaseManager, ensureDatabaseInitialized } from '../storage/database';
+import { AnalysisResult, SymbolInfo, SymbolDelta } from '../types';
+
+export async function analyzeLastCommits(count: number): Promise<void> {
+  await ensureDatabaseInitialized();
+  const db = getDatabaseManager().getDatabase();
+  const gitRoot = getGitRoot();
+  if (!gitRoot) {
+    throw new Error('Not in a git repository');
+  }
+
+  const git = new GitOperations();
+  const commits = git.getRecentCommits(count);
+
+  console.log(`Analyzing ${commits.length} commits...`);
+
+  for (const commit of commits) {
+    try {
+      console.log(`Processing commit ${commit.sha}...`);
+      await analyzeCommit(commit.sha);
+      console.log(`✓ Completed ${commit.sha}`);
+    } catch (error) {
+      console.error(`✗ Failed to analyze ${commit.sha}:`, error);
+    }
+  }
+
+  console.log('Analysis complete!');
+}
+
+export async function analyzeStagedChanges(): Promise<void> {
+  await ensureDatabaseInitialized();
+  const db = getDatabaseManager().getDatabase();
+  const gitRoot = getGitRoot();
+  if (!gitRoot) {
+    throw new Error('Not in a git repository');
+  }
+
+  // For staged changes, we create a temporary analysis
+  // This is more complex and would require comparing staged vs HEAD
+  console.log('Staged changes analysis not yet implemented');
+  console.log('Use "ct analyze" to analyze committed changes');
+}
+
+export async function analyzeCommit(sha: string): Promise<void> {
+  const git = new GitOperations();
+
+  // Get commit information
+  const commitInfo = git.getCommitInfo(sha);
+  const files = git.getFileChanges(sha);
+
+  console.log(`Analyzing commit ${sha}: ${commitInfo.message.substring(0, 50)}...`);
+
+  // Initialize analyzers
+  const symbolExtractor = new SymbolExtractor(git);
+  const dependencyExtractor = new DependencyExtractor();
+  const riskDetector = new RiskDetector();
+  const llmSummarizer = new LLMSummarizer();
+  const difftastic = getDifftasticIntegration();
+
+  // Extract symbols with semantic enrichment
+  console.log(`Extracting symbols from ${files.length} files...`);
+  const symbols = await symbolExtractor.extractCommitSymbols(sha, files);
+
+  console.log(`Found ${symbols.added.length} added, ${symbols.removed.length} removed, ${symbols.modified.length} modified symbols`);
+  if (symbols.renames.length > 0) {
+    console.log(`Detected ${symbols.renames.length} renames`);
+  }
+  if (symbols.moves.length > 0) {
+    console.log(`Detected ${symbols.moves.length} moves`);
+  }
+  console.log(`Extracted symbols: +${symbols.added.length} -${symbols.removed.length} ~${symbols.modified.length}`);
+
+  // Extract dependencies and compare
+  const fileContents = new Map<string, string>();
+  for (const file of files) {
+    // Skip deleted files
+    if (file.status === 'D') {
+      continue;
+    }
+    try {
+      fileContents.set(file.path, git.getFileContent(sha, file.path));
+    } catch {
+      // Skip files that can't be read
+    }
+  }
+
+  const edges = dependencyExtractor.extractCommitEdges(sha, symbols, fileContents);
+  console.log(`Extracted edges: +${edges.added.length} -${edges.removed.length}`);
+
+  // Calculate blast radius for changed symbols
+  const changedSymbols = [...symbols.added, ...symbols.modified.map(m => m.symbol)];
+  const blastRadius = dependencyExtractor.calculateBlastRadius(changedSymbols, edges.added);
+  const totalImpact = Array.from(blastRadius.impactScore.values()).reduce((a, b) => a + b, 0);
+  console.log(`Blast radius calculated: ${totalImpact} total impacts across ${changedSymbols.length} changed symbols`);
+
+  // Get difftastic highlights
+  const difftasticHighlights: string[] = [];
+  for (const file of files) {
+    if (file.status === 'M') {
+      try {
+        const highlights = await difftastic.getCommitStructuralHighlights(sha, file.path);
+        difftasticHighlights.push(...highlights.highlights);
+      } catch {
+        // Skip difftastic failures
+      }
+    }
+  }
+
+  // Detect risks
+  const risks = riskDetector.detectRisks(files, symbols, edges);
+
+  // Create analysis result
+  const analysis: AnalysisResult = {
+    commit: commitInfo,
+    files,
+    symbols,
+    edges,
+    risks,
+    difftasticHighlights,
+    llmSummary: undefined
+  };
+
+  // Generate LLM summary
+  try {
+    analysis.llmSummary = await llmSummarizer.summarizeCommit(analysis);
+  } catch (error) {
+    console.warn(`LLM summarization failed for ${sha}:`, error);
+  }
+
+  // Store in database
+  await storeAnalysisResult(analysis, symbols);
+
+  console.log(`Stored analysis for ${sha}`);
+}
+
+async function storeAnalysisResult(
+  analysis: AnalysisResult,
+  symbols: {
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+    renames: Array<{oldSymbol: SymbolInfo; newSymbol: SymbolInfo; confidence: number}>;
+    moves: Array<{symbol: SymbolInfo; oldPath: string; newPath: string; confidence: number}>;
+  }
+): Promise<void> {
+  const db = getDatabaseManager().getDatabase();
+
+  // Insert commit
+  const commitStmt = db.prepare(`
+    INSERT OR REPLACE INTO commits
+    (sha, author, date, message, summary_md, raw_llm_json, files_changed, symbols_added, symbols_removed, symbols_modified, edges_added, edges_removed, risks)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const llmJson = analysis.llmSummary ? JSON.stringify(analysis.llmSummary) : null;
+  const risksJson = JSON.stringify(analysis.risks);
+
+  commitStmt.run(
+    analysis.commit.sha,
+    analysis.commit.author,
+    analysis.commit.date,
+    analysis.commit.message,
+    analysis.llmSummary?.summary_md || '',
+    llmJson,
+    analysis.files.length,
+    analysis.symbols.added.length,
+    analysis.symbols.removed.length,
+    analysis.symbols.modified.length,
+    analysis.edges.added.length,
+    analysis.edges.removed.length,
+    risksJson
+  );
+
+  // Insert files
+  const fileStmt = db.prepare(`
+    INSERT OR REPLACE INTO files (sha, path, status, lang)
+    VALUES (?, ?, ?, ?)
+  `);
+
+  for (const file of analysis.files) {
+    fileStmt.run(analysis.commit.sha, file.path, file.status, null); // TODO: detect language
+  }
+
+  // Insert symbols with enhanced semantic information
+  const symbolStmt = db.prepare(`
+    INSERT OR REPLACE INTO symbols
+    (sha, path, symbol_id, name, kind, signature_pre, signature_post, loc_pre, loc_post, change_type, mod_reason, diff_snippet_pre, diff_snippet_post, confidence)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  // Added symbols
+  for (const symbol of symbols.added) {
+    symbolStmt.run(
+      analysis.commit.sha,
+      symbol.id.split(':')[0], // Extract path from ID
+      symbol.id,
+      symbol.name,
+      symbol.kind,
+      null,
+      symbol.signature,
+      null,
+      JSON.stringify(symbol.location),
+      'added',
+      null,
+      null,
+      null,
+      1.0
+    );
+  }
+
+  // Removed symbols
+  for (const symbol of symbols.removed) {
+    symbolStmt.run(
+      analysis.commit.sha,
+      symbol.id.split(':')[0],
+      symbol.id,
+      symbol.name,
+      symbol.kind,
+      symbol.signature,
+      null,
+      JSON.stringify(symbol.location),
+      null,
+      'removed',
+      null,
+      null,
+      null,
+      1.0
+    );
+  }
+
+  // Modified symbols with semantic enhancement
+  for (const delta of symbols.modified) {
+    symbolStmt.run(
+      analysis.commit.sha,
+      delta.symbol.id.split(':')[0],
+      delta.symbol.id,
+      delta.symbol.name,
+      delta.symbol.kind,
+      delta.previousSymbol?.signature || null,
+      delta.symbol.signature,
+      delta.previousSymbol ? JSON.stringify(delta.previousSymbol.location) : null,
+      JSON.stringify(delta.symbol.location),
+      delta.changeType,
+      delta.modReason || null,
+      delta.diffSnippetPre || null,
+      delta.diffSnippetPost || null,
+      1.0
+    );
+  }
+
+  // Store renames as special symbol entries
+  for (const rename of symbols.renames) {
+    // Store the new symbol with rename metadata
+    symbolStmt.run(
+      analysis.commit.sha,
+      rename.newSymbol.id.split(':')[0],
+      rename.newSymbol.id,
+      rename.newSymbol.name,
+      rename.newSymbol.kind,
+      rename.oldSymbol.signature,
+      rename.newSymbol.signature,
+      JSON.stringify(rename.oldSymbol.location),
+      JSON.stringify(rename.newSymbol.location),
+      'renamed',
+      null,
+      null,
+      null,
+      rename.confidence
+    );
+  }
+
+  // Store moves as special symbol entries
+  for (const move of symbols.moves) {
+    symbolStmt.run(
+      analysis.commit.sha,
+      move.newPath,
+      move.symbol.id,
+      move.symbol.name,
+      move.symbol.kind,
+      null,
+      move.symbol.signature,
+      null,
+      JSON.stringify(move.symbol.location),
+      'moved',
+      null,
+      null,
+      null,
+      move.confidence
+    );
+  }
+
+  // Insert edges
+  const edgeStmt = db.prepare(`
+    INSERT OR REPLACE INTO edges (sha, from_symbol_id, to_symbol_id, edge_type, change_type)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  for (const edge of [...analysis.edges.added, ...analysis.edges.removed]) {
+    const changeType = analysis.edges.added.includes(edge) ? 'added' : 'removed';
+    edgeStmt.run(
+      analysis.commit.sha,
+      edge.from,
+      edge.to,
+      edge.type,
+      changeType
+    );
+  }
+}
+
+
+
+/* ---- File: src/cli/hooks.ts ---- */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { getGitRoot } from '../utils/config';
+
+export async function installHooks(): Promise<void> {
+  const gitRoot = getGitRoot();
+  if (!gitRoot) {
+    throw new Error('Not in a git repository');
+  }
+
+  const hooksDir = path.join(gitRoot, '.git', 'hooks');
+  const postCommitHook = path.join(hooksDir, 'post-commit');
+
+  // Create post-commit hook
+  const hookContent = `#!/bin/sh
+# Git Context post-commit hook
+# Automatically analyze new commits
+
+# Get the path to the CLI tool
+CLI_PATH="$(dirname "$0")/../../node_modules/.bin/ct"
+
+if [ -x "$CLI_PATH" ]; then
+  "$CLI_PATH" analyze --count 1 >/dev/null 2>&1 &
+fi
+`;
+
+  // Write hook file
+  fs.writeFileSync(postCommitHook, hookContent, { mode: 0o755 });
+  console.log(`Installed post-commit hook at: ${postCommitHook}`);
+
+  // TODO: Optionally install post-checkout and post-merge hooks
+}
+
+export async function uninstallHooks(): Promise<void> {
+  const gitRoot = getGitRoot();
+  if (!gitRoot) {
+    throw new Error('Not in a git repository');
+  }
+
+  const hooksDir = path.join(gitRoot, '.git', 'hooks');
+  const postCommitHook = path.join(hooksDir, 'post-commit');
+
+  if (fs.existsSync(postCommitHook)) {
+    fs.unlinkSync(postCommitHook);
+    console.log('Uninstalled post-commit hook');
+  }
+}
+
+
+
+/* ---- File: src/cli/index.ts ---- */
+
+#!/usr/bin/env node
+
+import { Command } from 'commander';
+import { analyzeLastCommits, analyzeStagedChanges } from './analyze';
+import { showCommit, searchSymbol, showLastCommits } from './queries';
+import { installHooks } from './hooks';
+import chalk from 'chalk';
+
+const program = new Command();
+
+program
+  .name('ct')
+  .description('Commit Tracker CLI')
+  .version('0.1.0');
+
+program
+  .command('analyze')
+  .description('Analyze commits')
+  .option('-c, --count <number>', 'number of commits to analyze', '5')
+  .action(async (options) => {
+    const count = parseInt(options.count);
+    console.log(chalk.blue(`Analyzing last ${count} commits...`));
+
+    try {
+      await analyzeLastCommits(count);
+      console.log(chalk.green('Analysis complete!'));
+    } catch (error) {
+      console.error(chalk.red(`Analysis failed: ${error}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('staged')
+  .description('Analyze staged changes')
+  .action(async () => {
+    console.log(chalk.blue('Analyzing staged changes...'));
+
+    try {
+      await analyzeStagedChanges();
+      console.log(chalk.green('Staged analysis complete!'));
+    } catch (error) {
+      console.error(chalk.red(`Staged analysis failed: ${error}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('show <sha>')
+  .description('Show commit analysis')
+  .action(async (sha) => {
+    try {
+      await showCommit(sha);
+    } catch (error) {
+      console.error(chalk.red(`Failed to show commit: ${error}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('symbol <name>')
+  .description('Search symbol history')
+  .action(async (name) => {
+    try {
+      await searchSymbol(name);
+    } catch (error) {
+      console.error(chalk.red(`Symbol search failed: ${error}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('last [count]')
+  .description('Show last analyzed commits')
+  .option('-n, --count <number>', 'number of commits to show', '5')
+  .action(async (options) => {
+    try {
+      await showLastCommits(parseInt(options.count));
+    } catch (error) {
+      console.error(chalk.red(`Failed to show commits: ${error}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('install-hooks')
+  .description('Install git hooks')
+  .action(async () => {
+    console.log(chalk.blue('Installing git hooks...'));
+
+    try {
+      await installHooks();
+      console.log(chalk.green('Hooks installed successfully!'));
+    } catch (error) {
+      console.error(chalk.red(`Failed to install hooks: ${error}`));
+      process.exit(1);
+    }
+  });
+
+program.parse();
+
+
+
+/* ---- File: src/cli/queries.ts ---- */
+
+import chalk from 'chalk';
+import { getDatabaseManager, ensureDatabaseInitialized } from '../storage/database';
+import { getSearchIndex } from '../storage/index';
+
+export async function showCommit(sha: string): Promise<void> {
+  await ensureDatabaseInitialized();
+  const db = getDatabaseManager().getDatabase();
+
+  // Get commit data
+  const commitStmt = db.prepare(`
+    SELECT * FROM commits WHERE sha = ?
+  `);
+
+  const commit = commitStmt.get(sha) as any;
+
+  if (!commit) {
+    console.log(chalk.red(`Commit ${sha} not found in database. Run 'ct analyze' first.`));
+    return;
+  }
+
+  console.log(chalk.blue(`Commit: ${commit.sha}`));
+  console.log(chalk.gray(`Author: ${commit.author}`));
+  console.log(chalk.gray(`Date: ${commit.date}`));
+  console.log(chalk.yellow(`Message: ${commit.message}`));
+  console.log('');
+
+  // Display summary
+  if (commit.summary_md) {
+    console.log(chalk.green('Summary:'));
+    console.log(commit.summary_md);
+    console.log('');
+  }
+
+  // Display stats
+  console.log(chalk.cyan('Statistics:'));
+  console.log(`Files changed: ${commit.files_changed}`);
+  console.log(`Symbols: +${commit.symbols_added} -${commit.symbols_removed} ~${commit.symbols_modified}`);
+  console.log(`Edges: +${commit.edges_added} -${commit.edges_removed}`);
+
+  // Display risks
+  if (commit.risks) {
+    const risks = JSON.parse(commit.risks);
+    if (risks.length > 0) {
+      console.log('');
+      console.log(chalk.red('Risk flags:'));
+      risks.forEach((risk: string) => console.log(`• ${risk}`));
+    }
+  }
+
+  // Display symbol changes
+  const symbolsStmt = db.prepare(`
+    SELECT name, kind, change_type FROM symbols
+    WHERE sha = ? ORDER BY kind, name
+  `);
+
+  const symbols = symbolsStmt.all(sha) as any[];
+  if (symbols.length > 0) {
+    console.log('');
+    console.log(chalk.cyan('Symbol changes:'));
+
+    const added = symbols.filter(s => s.change_type === 'added');
+    const removed = symbols.filter(s => s.change_type === 'removed');
+    const modified = symbols.filter(s => s.change_type !== 'added' && s.change_type !== 'removed');
+
+    if (added.length > 0) {
+      console.log(chalk.green('Added:'));
+      added.forEach(s => console.log(`  + ${s.kind} ${s.name}`));
+    }
+
+    if (removed.length > 0) {
+      console.log(chalk.red('Removed:'));
+      removed.forEach(s => console.log(`  - ${s.kind} ${s.name}`));
+    }
+
+    if (modified.length > 0) {
+      console.log(chalk.yellow('Modified:'));
+      modified.forEach(s => console.log(`  ~ ${s.kind} ${s.name} (${s.change_type})`));
+    }
+  }
+}
+
+export async function searchSymbol(name: string): Promise<void> {
+  const searchIndex = getSearchIndex();
+
+  console.log(chalk.blue(`Searching for symbol: ${name}`));
+
+  const results = searchIndex.searchSymbolsByName(name, 20);
+
+  if (results.length === 0) {
+    console.log('No symbols found matching that name.');
+    return;
+  }
+
+  console.log(chalk.cyan(`Found ${results.length} matches:`));
+  console.log('');
+
+  for (const result of results) {
+    console.log(chalk.yellow(`${result.name}`));
+    console.log(`  Path: ${result.path}`);
+    console.log(`  Commit: ${result.sha}`);
+    if (result.summary_snippet) {
+      console.log(`  Context: ${result.summary_snippet}`);
+    }
+    console.log('');
+  }
+}
+
+export async function showLastCommits(count: number): Promise<void> {
+  await ensureDatabaseInitialized();
+  const db = getDatabaseManager().getDatabase();
+
+  const commitsStmt = db.prepare(`
+    SELECT sha, author, date, message, files_changed, symbols_added, symbols_modified, symbols_removed
+    FROM commits
+    ORDER BY date DESC
+    LIMIT ?
+  `);
+
+  const commits = commitsStmt.all(count) as any[];
+
+  if (commits.length === 0) {
+    console.log(chalk.yellow('No analyzed commits found. Run "ct analyze" first.'));
+    return;
+  }
+
+  console.log(chalk.blue(`Last ${commits.length} analyzed commits:`));
+  console.log('');
+
+  for (const commit of commits) {
+    console.log(chalk.green(commit.sha.substring(0, 8)));
+    console.log(`  ${commit.message.split('\n')[0]}`);
+    console.log(chalk.gray(`  ${commit.author} on ${commit.date}`));
+    console.log(`  ${commit.files_changed} files, +${commit.symbols_added} -${commit.symbols_removed} ~${commit.symbols_modified} symbols`);
+    console.log('');
+  }
+}
+
+
+
+/* ---- File: src/contracts/llmContext.ts ---- */
+
+export type LlmContextVersion = "1.0.0";
+
+export type ChangeType = "added" | "modified" | "signature_changed" | "removed" | "renamed" | "moved";
+export type EdgeType = "calls" | "imports" | "uses" | "extends" | "implements";
+export type ModReason = "body_changed" | "signature_changed" | "doc_changed" | "visibility_changed" | "annotation_changed";
+
+export interface Loc {
+  start: { line: number; column: number };
+  end: { line: number; column: number };
+}
+
+export interface LlmContextReport {
+  version: LlmContextVersion;
+  generated_at: string; // ISO
+  repo: { root: string; head_sha: string; branch: string };
+
+  commits: CommitContext[];
+  global_risks: RiskItem[];
+
+  // optional: cross-commit rollups
+  rollups?: {
+    hotspots: Hotspot[];
+    top_changed_files: FileRollup[];
+    dependency_deltas: DependencyDelta[];
+  };
+
+  // optional: graph visualizations
+  graphs?: {
+    dependency_graph?: string; // Mermaid graph
+    blast_radius_graph?: string; // Mermaid graph
+  };
+}
+
+export interface CommitContext {
+  sha: string;
+  parent_sha?: string;
+  message: string;
+  author: string;
+  date: string;
+
+  stats: { files: number; added: number; modified: number; removed: number };
+
+  files: FileContext[];
+  risks: RiskItem[];
+  edges: EdgeContext[];
+  llm_summary?: string; // your model output
+}
+
+export interface FileContext {
+  path: string;
+  language: string;
+  stats: { added: number; modified: number; removed: number; renamed?: boolean };
+
+  hunks?: DiffHunk[]; // optional, truncated
+  symbols: {
+    added: SymbolContext[];
+    modified: SymbolContext[];
+    removed: SymbolContext[];
+    renamed?: RenameContext[];
+  };
+}
+
+export interface SymbolContext {
+  id: number;          // row pk
+  symbol_id: string;   // semantic id for edges
+  name: string;
+  kind: string;        // "class" | "method" | "function" | ...
+  signature?: string;
+  loc_pre?: Loc;
+  loc_post?: Loc;
+  mod_reason?: ModReason;
+  diff_snippet_pre?: string;
+  diff_snippet_post?: string;
+}
+
+export interface EdgeContext {
+  from_symbol_id: string;
+  to_symbol_id: string;
+  edge_type: EdgeType;
+  change_type: ChangeType;
+  confidence: number; // 0.0 to 1.0
+  is_resolved: boolean;
+}
+
+export interface RenameContext {
+  old_symbol_id: string;
+  new_symbol_id: string;
+  old_name: string;
+  new_name: string;
+  confidence: number;
+}
+
+export interface RiskItem {
+  type: string; // "breaking-api" | "schema-migration" | "refactor" | "security" | "performance" | "auth" | "payment"
+  description: string;
+  severity: "low" | "medium" | "high" | "critical";
+  symbols?: string[]; // affected symbol_ids
+}
+
+export interface DiffHunk {
+  old_start: number;
+  old_lines: number;
+  new_start: number;
+  new_lines: number;
+  content: string; // truncated diff content
+}
+
+export interface Hotspot {
+  symbol_id: string;
+  change_count: number;
+  last_changed: string;
+  risk_score: number;
+}
+
+export interface FileRollup {
+  path: string;
+  total_changes: number;
+  last_commit: string;
+  languages: string[];
+}
+
+export interface DependencyDelta {
+  from_symbol_id: string;
+  to_symbol_id: string;
+  change_type: ChangeType;
+  confidence: number;
+}
+
+
+/* ---- File: src/contracts/treeNodes.ts ---- */
+
+/**
+ * Tree Node Type System
+ * 
+ * Discriminated unions for tree view nodes to eliminate regex-based
+ * collapsibility logic and make node handling type-safe.
+ * 
+ * INVARIANT: Every node type explicitly declares its collapsibility behavior.
+ */
+
+import * as vscode from 'vscode';
+
+export type NodeType = "commit" | "file" | "category" | "symbol" | "risk";
+
+/**
+ * Base interface for all tree nodes
+ */
+export interface TreeNodeBase {
+    id: string;
+    type: NodeType;
+    label: string;
+    description?: string;
+    tooltip?: string | vscode.MarkdownString;
+    icon?: string;
+    contextValue?: string;
+    // Optional properties for tree hierarchy
+    children?: TreeNode[];
+    command?: vscode.Command;
+}
+
+
+/**
+ * Commit node - always expandable, shows files and risks
+ */
+export interface CommitNode extends TreeNodeBase {
+    type: "commit";
+    sha: string;
+    message: string;
+    author: string;
+    date: string;
+    isSelected?: boolean; // For multi-select
+}
+
+/**
+ * File node - expandable, shows symbol categories
+ */
+export interface FileNode extends TreeNodeBase {
+    type: "file";
+    path: string;
+    sha: string;
+    stats: {
+        added: number;
+        modified: number;
+        removed: number;
+    };
+}
+
+/**
+ * Category node - expandable, shows symbols within a change type
+ */
+export interface CategoryNode extends TreeNodeBase {
+    type: "category";
+    categoryType: "added" | "modified" | "removed" | "risks";
+    parentId: string; // SHA or file ID
+    count: number;
+}
+
+/**
+ * Symbol node - NOT expandable, clickable to navigate
+ */
+export interface SymbolNode extends TreeNodeBase {
+    type: "symbol";
+    symbolId: number; // Database row ID
+    semanticId: string; // symbol_id for edges
+    name: string;
+    kind: string;
+    path: string;
+    sha: string;
+    loc?: {
+        line: number;
+        column: number;
+        end_line?: number;
+        end_column?: number;
+    };
+}
+
+/**
+ * Risk node - NOT expandable, informational
+ */
+export interface RiskNode extends TreeNodeBase {
+    type: "risk";
+    severity?: string;
+    category?: string;
+}
+
+/**
+ * Union of all node types
+ */
+export type TreeNode = CommitNode | FileNode | CategoryNode | SymbolNode | RiskNode;
+
+/**
+ * Type guards
+ */
+export function isCommitNode(node: TreeNode): node is CommitNode {
+    return node.type === "commit";
+}
+
+export function isFileNode(node: TreeNode): node is FileNode {
+    return node.type === "file";
+}
+
+export function isCategoryNode(node: TreeNode): node is CategoryNode {
+    return node.type === "category";
+}
+
+export function isSymbolNode(node: TreeNode): node is SymbolNode {
+    return node.type === "symbol";
+}
+
+export function isRiskNode(node: TreeNode): node is RiskNode {
+    return node.type === "risk";
+}
+
+/**
+ * Get collapsibility for a node type
+ * 
+ * INVARIANT: Collapsibility is determined by node type, not ID patterns
+ */
+export function getCollapsibleState(node: TreeNode): vscode.TreeItemCollapsibleState {
+    switch (node.type) {
+        case "commit":
+        case "file":
+        case "category":
+            return vscode.TreeItemCollapsibleState.Collapsed;
+        case "symbol":
+        case "risk":
+            return vscode.TreeItemCollapsibleState.None;
+    }
+}
+
+/**
+ * Convert TreeNode to VS Code TreeItem
+ */
+export function toVSCodeTreeItem(node: TreeNode, command?: vscode.Command): vscode.TreeItem {
+    return {
+        id: node.id,
+        label: node.label,
+        description: node.description,
+        tooltip: node.tooltip,
+        collapsibleState: getCollapsibleState(node),
+        iconPath: node.icon ? new vscode.ThemeIcon(node.icon) : undefined,
+        command: command,
+        contextValue: node.contextValue || node.type
+    };
+}
+
+
+
+/* ---- File: src/export/jsonExporter.ts ---- */
+
+/**
+ * JSON Context Exporter
+ * 
+ * Generates machine-readable LLM context in the versioned JSON schema.
+ * This is the SOURCE OF TRUTH - Markdown reports render FROM this data.
+ */
+
+import * as vscode from 'vscode';
+import {
+    LlmContextReport,
+    CommitContext,
+    FileContext,
+    SymbolContext,
+    EdgeContext,
+    RiskItem
+} from '../contracts/llmContext';
+import { execSync } from 'child_process';
+
+export async function exportCommitContext(commitShas?: string[]): Promise<LlmContextReport> {
+    const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+    const { getGitRoot } = await import('../utils/config');
+
+    await ensureDatabaseInitialized();
+    const db = getDatabaseManager().getDatabase();
+    const gitRoot = getGitRoot();
+
+    // Get repo context
+    let headSha = '';
+    let branch = '';
+    try {
+        headSha = execSync('git rev-parse HEAD', { cwd: gitRoot, encoding: 'utf8' }).trim();
+        branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: gitRoot, encoding: 'utf8' }).trim();
+    } catch (error) {
+        console.error('Failed to get git info:', error);
+    }
+
+    // Fetch commits
+    let commits: any[];
+    if (commitShas && commitShas.length > 0) {
+        const placeholders = commitShas.map(() => '?').join(',');
+        const stmt = db.prepare(`
+      SELECT sha, author, date, message, summary_md, files_changed,
+             symbols_added, symbols_modified, symbols_removed, risks
+      FROM commits
+      WHERE sha IN (${placeholders})
+      ORDER BY date DESC
+    `);
+        commits = stmt.all(...commitShas) as any[];
+    } else {
+        const stmt = db.prepare(`
+      SELECT sha, author, date, message, summary_md, files_changed,
+             symbols_added, symbols_modified, symbols_removed, risks
+      FROM commits
+      ORDER BY date DESC
+      LIMIT 20
+    `);
+        commits = stmt.all() as any[];
+    }
+
+    // Build context for each commit
+    const commitContexts: CommitContext[] = [];
+    const globalRisks: RiskItem[] = [];
+
+    for (const commit of commits) {
+        const risks = JSON.parse(commit.risks || '[]') as string[];
+        const commitRisks: RiskItem[] = risks.map(r => ({
+            type: r,
+            severity: classifyRiskSeverity(r),
+            description: r
+        }));
+
+        globalRisks.push(...commitRisks);
+
+        // Get files and symbols
+        const filesMap = new Map<string, FileContext>();
+        const symbolsStmt = db.prepare(`
+      SELECT id, symbol_id, name, kind, path, change_type, loc_pre, loc_post
+      FROM symbols
+      WHERE sha = ?
+      ORDER BY path, change_type, name
+    `);
+        const symbols = symbolsStmt.all(commit.sha) as any[];
+
+        // Group symbols by file
+        for (const symbol of symbols) {
+            if (!filesMap.has(symbol.path)) {
+                filesMap.set(symbol.path, {
+                    path: symbol.path,
+                    language: detectLanguage(symbol.path),
+                    stats: { added: 0, modified: 0, removed: 0 },
+                    symbols: { added: [], modified: [], removed: [] }
+                });
+            }
+
+            const file = filesMap.get(symbol.path)!;
+            const symbolContext: SymbolContext = {
+                id: symbol.id,
+                symbol_id: symbol.symbol_id,
+                name: symbol.name,
+                kind: symbol.kind,
+                loc_pre: symbol.loc_pre ? JSON.parse(symbol.loc_pre) : undefined,
+                loc_post: symbol.loc_post ? JSON.parse(symbol.loc_post) : undefined
+            };
+
+            if (symbol.change_type === 'added') {
+                file.symbols.added.push(symbolContext);
+                file.stats.added++;
+            } else if (symbol.change_type === 'modified' || symbol.change_type === 'signature_changed') {
+                file.symbols.modified.push(symbolContext);
+                file.stats.modified++;
+            } else if (symbol.change_type === 'removed') {
+                file.symbols.removed.push(symbolContext);
+                file.stats.removed++;
+            }
+        }
+
+        // Get edges
+        const edgesStmt = db.prepare(`
+      SELECT from_symbol_id, to_symbol_id, edge_type, change_type
+      FROM edges
+      WHERE sha = ?
+    `);
+        const edges = edgesStmt.all(commit.sha) as EdgeContext[];
+
+        commitContexts.push({
+            sha: commit.sha,
+            message: commit.message,
+            author: commit.author,
+            date: commit.date,
+            stats: {
+                files: commit.files_changed,
+                added: commit.symbols_added,
+                modified: commit.symbols_modified,
+                removed: commit.symbols_removed
+            },
+            files: Array.from(filesMap.values()),
+            risks: commitRisks,
+            edges: edges,
+            llm_summary: commit.summary_md
+        });
+    }
+
+    return {
+        version: "1.0.0",
+        generated_at: new Date().toISOString(),
+        repo: {
+            root: gitRoot || '',
+            head_sha: headSha,
+            branch: branch
+        },
+        commits: commitContexts,
+        global_risks: globalRisks
+    };
+}
+
+/**
+ * Export and save JSON context to file
+ */
+export async function exportAndSaveContext(commitShas?: string[]): Promise<string> {
+    const context = await exportCommitContext(commitShas);
+    const { getGitRoot } = await import('../utils/config');
+    const gitRoot = getGitRoot();
+
+    if (!gitRoot) {
+        throw new Error('Not in a git repository');
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+    const contextDir = path.join(gitRoot, '.git', 'commit-tracker');
+    const contextPath = path.join(contextDir, 'commit-context.json');
+
+    if (!fs.existsSync(contextDir)) {
+        fs.mkdirSync(contextDir, { recursive: true });
+    }
+
+    fs.writeFileSync(contextPath, JSON.stringify(context, null, 2), 'utf8');
+
+    return contextPath;
+}
+
+/**
+ * Generate prompt pack for LLM consumption
+ */
+export function generatePromptPack(context: LlmContextReport): string {
+    let prompt = `You are a senior software engineer reviewing code changes.\n\n`;
+
+    prompt += `Here is the commit-context JSON for recent commits: ${JSON.stringify(context, null, 2)}\n\n`;
+
+    // Add Mermaid graphs if available
+    if (context.graphs?.dependency_graph) {
+      prompt += `## Dependency Graph\n\`\`\`mermaid\n${context.graphs.dependency_graph}\n\`\`\`\n\n`;
+    }
+
+    if (context.graphs?.blast_radius_graph) {
+      prompt += `## Blast Radius Analysis\n\`\`\`mermaid\n${context.graphs.blast_radius_graph}\n\`\`\`\n\n`;
+    }
+
+    prompt += `## Analysis Questions\n`;
+    prompt += `1. What changed semantically, not just line-by-line?\n`;
+    prompt += `2. Any breaking API changes?\n`;
+    prompt += `3. What tests should be added or updated?\n`;
+    prompt += `4. Are there any security or performance concerns?\n`;
+    prompt += `5. What is the blast radius of these changes?\n`;
+    prompt += `6. Are there any risky dependency changes?\n`;
+
+    return prompt;
+}
+
+// Helper functions
+function classifyRiskSeverity(risk: string): "low" | "medium" | "high" | "critical" {
+    const lower = risk.toLowerCase();
+    if (lower.includes('breaking') || lower.includes('security')) return 'critical';
+    if (lower.includes('schema') || lower.includes('migration')) return 'high';
+    if (lower.includes('performance') || lower.includes('refactor')) return 'medium';
+    return 'low';
+}
+
+function detectLanguage(filePath: string): string {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    const langMap: Record<string, string> = {
+        'ts': 'typescript',
+        'js': 'javascript',
+        'tsx': 'typescript-react',
+        'jsx': 'javascript-react',
+        'py': 'python',
+        'php': 'php',
+        'java': 'java',
+        'go': 'go',
+        'rs': 'rust',
+        'cpp': 'c++',
+        'c': 'c',
+        'cs': 'c#'
+    };
+    return langMap[ext || ''] || 'unknown';
+}
+
+
+
+/* ---- File: src/extension.ts ---- */
+
+import * as vscode from 'vscode';
+import type { CommitTrackerProvider } from './ui/commitTracker';
+import type { SymbolHistoryProvider } from './ui/symbolHistory';
+
+let commitTrackerProvider: CommitTrackerProvider;
+let symbolHistoryProvider: SymbolHistoryProvider;
+
+export async function activate(context: vscode.ExtensionContext) {
+  try {
+    console.log('Git Context extension is activating...');
+
+    // Dynamically import providers and commands to prevent load-time errors
+    // from native dependencies or ESM issues
+    const { CommitTrackerProvider } = await import('./ui/commitTracker');
+    const { SymbolHistoryProvider } = await import('./ui/symbolHistory');
+    const { registerCommands } = await import('./ui/commands');
+
+    console.log('Modules loaded successfully');
+
+    // Initialize providers
+    commitTrackerProvider = new CommitTrackerProvider(context);
+    symbolHistoryProvider = new SymbolHistoryProvider(context);
+
+    // Register tree data providers
+    vscode.window.registerTreeDataProvider('commitTracker', commitTrackerProvider);
+    vscode.window.registerTreeDataProvider('symbolHistory', symbolHistoryProvider);
+
+    // Register commands
+    registerCommands(context, commitTrackerProvider, symbolHistoryProvider);
+
+    // Refresh providers when workspace changes
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        if (commitTrackerProvider) {
+          commitTrackerProvider.refresh();
+        }
+        if (symbolHistoryProvider) {
+          symbolHistoryProvider.refresh();
+        }
+      })
+    );
+
+    console.log('Git Context extension activated successfully');
+  } catch (error) {
+    console.error('Failed to activate Git Context extension:', error);
+    // This is the critical part: show the error to the user!
+    vscode.window.showErrorMessage(
+      `Git Context extension failed to activate. Error: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+export function deactivate() {
+  console.log('Git Context extension is now deactivated!');
+  
+  // Cleanup: Close database connection
+  try {
+    const { closeDatabase } = require('./storage/database');
+    closeDatabase();
+  } catch (error) {
+    console.error('Error closing database:', error);
+  }
+}
+
+
+
+/* ---- File: src/llm/openrouter.ts ---- */
+
+import OpenAI from 'openai';
+import { getExtensionConfig } from '../utils/config';
+
+export class LLMClient {
+  private client: OpenAI;
+  private model: string;
+  private endpoint: string;
+
+  constructor() {
+    const config = getExtensionConfig();
+
+    // Check if API key is required (OpenRouter needs it, Ollama doesn't)
+    const isOpenRouter = config.apiEndpoint.includes('openrouter.ai');
+    if (isOpenRouter && !config.openRouterApiKey) {
+      throw new Error('OpenRouter API key not configured. Please set OPENROUTER_API_KEY environment variable or configure it in VS Code settings.');
+    }
+
+    this.client = new OpenAI({
+      apiKey: config.openRouterApiKey || 'not-needed-for-ollama', // Ollama doesn't need API keys
+      baseURL: config.apiEndpoint
+    });
+
+    this.model = config.openRouterModel;
+    this.endpoint = config.apiEndpoint;
+  }
+
+  /**
+   * Send a completion request to the configured API endpoint
+   */
+  async complete(messages: OpenAI.Chat.ChatCompletionMessageParam[], options: {
+    temperature?: number;
+    maxTokens?: number;
+    jsonMode?: boolean;
+  } = {}): Promise<string> {
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages,
+        temperature: options.temperature ?? 0.1,
+        max_tokens: options.maxTokens ?? 2000,
+        response_format: options.jsonMode ? { type: 'json_object' } : undefined
+      });
+
+      return response.choices[0]?.message?.content || '';
+    } catch (error: any) {
+      const endpointName = this.endpoint.includes('openrouter.ai') ? 'OpenRouter' : 'API endpoint';
+      throw new Error(`${endpointName} API error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Check if the client is properly configured
+   */
+  async validateConnection(): Promise<boolean> {
+    try {
+      await this.complete([{
+        role: 'user',
+        content: 'Hello'
+      }], { maxTokens: 10 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+// Singleton instance
+let llmClient: LLMClient | null = null;
+
+export function getLLMClient(): LLMClient {
+  if (!llmClient) {
+    llmClient = new LLMClient();
+  }
+  return llmClient;
+}
+
+// Backward compatibility
+export const getOpenRouterClient = getLLMClient;
+export type OpenRouterClient = LLMClient;
+
+
+
+/* ---- File: src/llm/prompts.ts ---- */
+
+// Stage 1 prompt: Compress diff and symbol data for efficient processing
+export const STAGE_1_COMPRESSION_PROMPT = `You are analyzing a git commit to create a compact summary of changes.
+
+INPUT DATA:
+- Files changed: {file_count} files
+- Raw diff stats: {diff_stats}
+- Symbols added: {symbols_added}
+- Symbols modified: {symbols_modified}
+- Symbols removed: {symbols_removed}
+- Edges added: {edges_added}
+- Edges removed: {edges_removed}
+- Difftastic morph highlights: {morph_highlights}
+
+TASK: Create a compact JSON summary of the key semantic changes. Focus on:
+- What functionality was added, changed, or removed
+- Breaking changes or API modifications
+- Significant structural changes
+- Risk indicators
+
+OUTPUT FORMAT (strict JSON):
+{
+  "summary_points": ["brief description of change 1", "brief description of change 2"],
+  "breaking_changes": ["breaking change 1", "breaking change 2"],
+  "key_symbols": ["important symbol 1", "important symbol 2"],
+  "risk_indicators": ["risk 1", "risk 2"],
+  "change_patterns": ["pattern 1", "pattern 2"]
+}`;
+
+// Stage 2 prompt: Generate final structured commit summary
+export const STAGE_2_SUMMARY_PROMPT = `You are a senior software engineer analyzing a git commit for a code review.
+
+COMPRESSED ANALYSIS:
+{stage_1_json}
+
+RAW DIFF SAMPLE:
+{diff_sample}
+
+COMMIT MESSAGE: {commit_message}
+
+TASK: Generate a comprehensive commit analysis with the following structure:
+
+OUTPUT FORMAT (strict JSON):
+{
+  "summary_md": "5-10 bullet points describing what changed, written in Markdown",
+  "breaking_changes": ["List of breaking API changes, public method signatures, removed exports"],
+  "migration_notes": ["Database migrations, schema changes, data transformations needed"],
+  "refactor_clusters": ["Groups of related changes, renames, moved code"],
+  "tests_needed": ["New tests required, existing tests that might break"],
+  "questions_for_author": ["Clarifying questions about the changes, potential issues"]
+}
+
+GUIDELINES:
+- Focus on semantic changes, not line-by-line diffs
+- Identify breaking changes that affect external consumers
+- Note testing implications and migration requirements
+- Be concise but comprehensive
+- Use technical language appropriate for senior developers`;
+
+// Symbol change explanation prompt
+export const SYMBOL_EXPLANATION_PROMPT = `You are explaining how a specific symbol changed between two commits.
+
+SYMBOL: {symbol_name}
+CHANGE TYPE: {change_type}
+LOCATION: {file_path}:{line_number}
+
+BEFORE:
+{previous_code}
+
+AFTER:
+{current_code}
+
+CONTEXT: This change is part of commit {commit_sha}: {commit_message}
+
+TASK: Explain the semantic impact of this symbol change:
+- What functionality changed?
+- Is this a breaking change?
+- What tests might need updating?
+- Are there related changes in other files?
+
+Provide a clear, technical explanation suitable for code review.`;
+
+// File comparison prompt
+export const FILE_COMPARISON_PROMPT = `Compare these files between two commits and explain the semantic changes.
+
+COMMIT A: {commit_a_sha} - {commit_a_message}
+COMMIT B: {commit_b_sha} - {commit_b_message}
+
+FILES TO COMPARE:
+{file_list}
+
+DIFF SUMMARY:
+{diff_summary}
+
+SYMBOL CHANGES:
+{symbol_changes}
+
+TASK: Provide a focused comparison explaining:
+- What changed semantically (not just line-by-line)
+- Breaking changes for external consumers
+- Testing implications
+- Related changes that might affect these files
+
+Focus on the most important changes and their impact.`;
+
+
+
+/* ---- File: src/llm/summarizer.ts ---- */
+
+import { LLMResponse, AnalysisResult } from '../types';
+import { getLLMClient } from './openrouter';
+import {
+  STAGE_1_COMPRESSION_PROMPT,
+  STAGE_2_SUMMARY_PROMPT,
+  SYMBOL_EXPLANATION_PROMPT,
+  FILE_COMPARISON_PROMPT
+} from './prompts';
+
+export class LLMSummarizer {
+  private _client: ReturnType<typeof getLLMClient> | null = null;
+  
+  private get client() {
+    if (!this._client) {
+      this._client = getLLMClient();
+    }
+    return this._client;
+  }
+
+  /**
+   * Generate commit summary using two-stage LLM process
+   */
+  async summarizeCommit(analysis: AnalysisResult): Promise<LLMResponse> {
+    try {
+      // Stage 1: Compress the analysis data
+      const stage1Data = await this.stage1Compression(analysis);
+
+      // Stage 2: Generate final structured summary
+      const summary = await this.stage2Summary(analysis, stage1Data);
+
+      return summary;
+    } catch (error) {
+      console.error('LLM summarization failed:', error);
+      // Return minimal fallback response
+      return {
+        summary_md: `- Commit analysis failed: ${error}\n- Files changed: ${analysis.files.length}\n- Symbols modified: ${analysis.symbols.modified.length}`,
+        breaking_changes: [],
+        migration_notes: [],
+        refactor_clusters: [],
+        tests_needed: ['Verify changes manually'],
+        questions_for_author: ['LLM analysis failed - manual review required']
+      };
+    }
+  }
+
+  /**
+   * Stage 1: Compress analysis data for efficient processing
+   */
+  private async stage1Compression(analysis: AnalysisResult): Promise<any> {
+    const symbolsAdded = analysis.symbols.added.map(s => ({
+      name: s.name,
+      type: s.kind,
+      signature: s.signature.substring(0, 100) // Truncate long signatures
+    }));
+
+    const symbolsModified = analysis.symbols.modified.map(s => ({
+      name: s.symbol.name,
+      type: s.symbol.kind,
+      change: s.changeType
+    }));
+
+    const symbolsRemoved = analysis.symbols.removed.map(s => ({
+      name: s.name,
+      type: s.kind
+    }));
+
+    const edgesAdded = analysis.edges.added.map(e => `${e.from} -> ${e.to} (${e.type})`);
+    const edgesRemoved = analysis.edges.removed.map(e => `${e.from} -> ${e.to} (${e.type})`);
+
+    const prompt = STAGE_1_COMPRESSION_PROMPT
+      .replace('{file_count}', analysis.files.length.toString())
+      .replace('{diff_stats}', `Files: ${analysis.files.length}, Symbols: ${analysis.symbols.added.length + analysis.symbols.modified.length + analysis.symbols.removed.length}`)
+      .replace('{symbols_added}', JSON.stringify(symbolsAdded.slice(0, 10))) // Limit for token efficiency
+      .replace('{symbols_modified}', JSON.stringify(symbolsModified.slice(0, 10)))
+      .replace('{symbols_removed}', JSON.stringify(symbolsRemoved.slice(0, 10)))
+      .replace('{edges_added}', JSON.stringify(edgesAdded.slice(0, 5)))
+      .replace('{edges_removed}', JSON.stringify(edgesRemoved.slice(0, 5)))
+      .replace('{morph_highlights}', JSON.stringify(analysis.difftasticHighlights.slice(0, 5)));
+
+    const response = await this.client.complete([{
+      role: 'user',
+      content: prompt
+    }], {
+      temperature: 0.1,
+      jsonMode: true,
+      maxTokens: 1000
+    });
+
+    try {
+      return JSON.parse(response);
+    } catch {
+      // Fallback if JSON parsing fails
+      return {
+        summary_points: ['Analysis compression failed'],
+        breaking_changes: [],
+        key_symbols: [],
+        risk_indicators: [],
+        change_patterns: []
+      };
+    }
+  }
+
+  /**
+   * Stage 2: Generate final structured summary
+   */
+  private async stage2Summary(analysis: AnalysisResult, stage1Data: any): Promise<LLMResponse> {
+    // Extract a small sample of the raw diff for context
+    const diffSample = this.extractDiffSample(analysis);
+
+    const prompt = STAGE_2_SUMMARY_PROMPT
+      .replace('{stage_1_json}', JSON.stringify(stage1Data, null, 2))
+      .replace('{diff_sample}', diffSample)
+      .replace('{commit_message}', analysis.commit.message);
+
+    const response = await this.client.complete([{
+      role: 'user',
+      content: prompt
+    }], {
+      temperature: 0.2,
+      jsonMode: true,
+      maxTokens: 2000
+    });
+
+    try {
+      return JSON.parse(response) as LLMResponse;
+    } catch (error) {
+      throw new Error(`Failed to parse LLM response: ${error}`);
+    }
+  }
+
+  /**
+   * Extract a representative sample from the commit diff
+   */
+  private extractDiffSample(analysis: AnalysisResult): string {
+    // In a real implementation, we'd get the actual diff
+    // For now, create a summary based on the analysis
+    const lines: string[] = [];
+
+    lines.push(`Files changed: ${analysis.files.length}`);
+    lines.push(`Symbols added: ${analysis.symbols.added.length}`);
+    lines.push(`Symbols modified: ${analysis.symbols.modified.length}`);
+    lines.push(`Symbols removed: ${analysis.symbols.removed.length}`);
+
+    if (analysis.symbols.added.length > 0) {
+      lines.push(`Added: ${analysis.symbols.added.slice(0, 3).map(s => s.name).join(', ')}`);
+    }
+
+    if (analysis.symbols.modified.length > 0) {
+      lines.push(`Modified: ${analysis.symbols.modified.slice(0, 3).map(s => s.symbol.name).join(', ')}`);
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Explain changes to a specific symbol
+   */
+  async explainSymbolChange(
+    symbolName: string,
+    changeType: string,
+    filePath: string,
+    lineNumber: number,
+    previousCode: string,
+    currentCode: string,
+    commitSha: string,
+    commitMessage: string
+  ): Promise<string> {
+    const prompt = SYMBOL_EXPLANATION_PROMPT
+      .replace('{symbol_name}', symbolName)
+      .replace('{change_type}', changeType)
+      .replace('{file_path}', filePath)
+      .replace('{line_number}', lineNumber.toString())
+      .replace('{previous_code}', previousCode)
+      .replace('{current_code}', currentCode)
+      .replace('{commit_sha}', commitSha)
+      .replace('{commit_message}', commitMessage);
+
+    return await this.client.complete([{
+      role: 'user',
+      content: prompt
+    }], {
+      temperature: 0.3,
+      maxTokens: 1000
+    });
+  }
+
+  /**
+   * Compare files between commits
+   */
+  async compareFiles(
+    commitASha: string,
+    commitAMessage: string,
+    commitBSha: string,
+    commitBMessage: string,
+    fileList: string[],
+    diffSummary: string,
+    symbolChanges: string[]
+  ): Promise<string> {
+    const prompt = FILE_COMPARISON_PROMPT
+      .replace('{commit_a_sha}', commitASha)
+      .replace('{commit_a_message}', commitAMessage)
+      .replace('{commit_b_sha}', commitBSha)
+      .replace('{commit_b_message}', commitBMessage)
+      .replace('{file_list}', fileList.join('\n'))
+      .replace('{diff_summary}', diffSummary)
+      .replace('{symbol_changes}', symbolChanges.join('\n'));
+
+    return await this.client.complete([{
+      role: 'user',
+      content: prompt
+    }], {
+      temperature: 0.2,
+      maxTokens: 1500
+    });
+  }
+}
+
+
+
+/* ---- File: src/storage/database.ts ---- */
+
+import * as path from 'path';
+import * as fs from 'fs';
+import initSqlJs, { Database, Statement } from 'sql.js';
+import { DATABASE_SCHEMA, CURRENT_VERSION } from './schema';
+import { getGitRoot } from '../utils/config';
+
+// Wrapper to mimic better-sqlite3 API
+class StatementWrapper {
+  constructor(private stmt: Statement, private dbManager: DatabaseManager) { }
+
+  run(...params: any[]): { changes: number; lastInsertRowid: number } {
+    try {
+      this.stmt.bind(params);
+      this.stmt.step();
+      this.stmt.reset(); // CRITICAL: Reset statement for reuse
+      this.dbManager.save();
+      return { changes: 0, lastInsertRowid: 0 }; // sql.js doesn't easily provide these
+    } catch (error) {
+      console.error('StatementWrapper.run() error:', error);
+      console.error('Params:', params);
+      throw error;
+    }
+  }
+
+  get(...params: any[]): any {
+    try {
+      this.stmt.bind(params);
+      if (this.stmt.step()) {
+        const result = this.stmt.getAsObject();
+        this.stmt.reset();
+        return result;
+      }
+      this.stmt.reset();
+      return undefined;
+    } catch (error) {
+      console.error('StatementWrapper.get() error:', error);
+      throw error;
+    }
+  }
+
+  all(...params: any[]): any[] {
+    try {
+      this.stmt.bind(params);
+      const results: any[] = [];
+      while (this.stmt.step()) {
+        results.push(this.stmt.getAsObject());
+      }
+      this.stmt.reset();
+      return results;
+    } catch (error) {
+      console.error('StatementWrapper.all() error:', error);
+      throw error;
+    }
+  }
+}
+
+export class DatabaseManager {
+  private db: Database | null = null;
+  private dbPath: string;
+
+  constructor() {
+    const gitRoot = getGitRoot();
+    if (!gitRoot) {
+      throw new Error('Not in a git repository');
+    }
+
+    this.dbPath = path.join(gitRoot, '.git', 'commit-tracker', 'commit_tracker.sqlite');
+    console.log(`DatabaseManager initialized with path: ${this.dbPath}`);
+  }
+
+  getDatabase(): any {
+    if (!this.db) {
+      throw new Error('Database not initialized. Call initialize() first.');
+    }
+
+    // Return a proxy to intercept prepare calls and wrap statements
+    return {
+      prepare: (sql: string) => {
+        // Return a wrapper that creates a fresh statement for each operation
+        // This is necessary because sql.js statements can't be reused
+        return {
+          run: (...params: any[]) => {
+            try {
+              const stmt = this.db!.prepare(sql);
+              stmt.bind(params);
+              stmt.step();
+              stmt.free(); // Free the statement immediately
+              this.save();
+              return { changes: 0, lastInsertRowid: 0 };
+            } catch (error) {
+              console.error('Statement.run() error:', error);
+              console.error('SQL:', sql);
+              console.error('Params:', params);
+              throw error;
+            }
+          },
+          get: (...params: any[]) => {
+            try {
+              const stmt = this.db!.prepare(sql);
+              stmt.bind(params);
+              if (stmt.step()) {
+                const result = stmt.getAsObject();
+                stmt.free();
+                return result;
+              }
+              stmt.free();
+              return undefined;
+            } catch (error) {
+              console.error('Statement.get() error:', error);
+              throw error;
+            }
+          },
+          all: (...params: any[]) => {
+            try {
+              const stmt = this.db!.prepare(sql);
+              stmt.bind(params);
+              const results: any[] = [];
+              while (stmt.step()) {
+                results.push(stmt.getAsObject());
+              }
+              stmt.free();
+              return results;
+            } catch (error) {
+              console.error('Statement.all() error:', error);
+              throw error;
+            }
+          }
+        };
+      },
+      exec: (sql: string) => {
+        this.db!.exec(sql);
+        this.save();
+      },
+      pragma: (sql: string) => {
+        // sql.js might not support all pragmas, but we can try
+        try {
+          this.db!.exec(`PRAGMA ${sql}`);
+        } catch (e) {
+          console.warn('PRAGMA failed:', e);
+        }
+      },
+      transaction: (fn: () => any) => {
+        return () => {
+          this.db!.exec('BEGIN TRANSACTION');
+          try {
+            const result = fn();
+            this.db!.exec('COMMIT');
+            this.save();
+            return result;
+          } catch (e) {
+            this.db!.exec('ROLLBACK');
+            throw e;
+          }
+        };
+      }
+    };
+  }
+
+  async initialize(): Promise<void> {
+    if (this.db) return;
+
+    // Ensure directory exists
+    const dir = path.dirname(this.dbPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    try {
+      // Load WASM
+      // In production (out/storage/database.js), __dirname is .../out/storage
+      // We want .../out/sql-wasm.wasm
+      const wasmPath = path.join(__dirname, '..', 'sql-wasm.wasm');
+      const SQL = await initSqlJs({
+        locateFile: () => wasmPath
+      });
+
+      // Load existing DB if it exists
+      if (fs.existsSync(this.dbPath)) {
+        const filebuffer = fs.readFileSync(this.dbPath);
+        this.db = new SQL.Database(filebuffer);
+      } else {
+        this.db = new SQL.Database();
+      }
+
+      this.initializeSchema();
+    } catch (error) {
+      console.error('Failed to initialize sql.js:', error);
+      throw new Error(`Failed to initialize database: ${error}`);
+    }
+  }
+
+  private initializeSchema(): void {
+    if (!this.db) return;
+
+    // Run schema
+    this.db.exec(DATABASE_SCHEMA);
+    this.save();
+  }
+
+  save(): void {
+    if (this.db) {
+      const data = this.db.export();
+      const buffer = Buffer.from(data);
+      fs.writeFileSync(this.dbPath, buffer);
+    }
+  }
+
+  close(): void {
+    if (this.db) {
+      this.save();
+      this.db.close();
+      this.db = null;
+    }
+  }
+}
+
+// Singleton instance
+let dbManager: DatabaseManager | null = null;
+
+export function getDatabaseManager(): DatabaseManager {
+  if (!dbManager) {
+    dbManager = new DatabaseManager();
+  }
+  return dbManager;
+}
+
+// Helper to ensure initialization
+export async function ensureDatabaseInitialized(): Promise<void> {
+  const manager = getDatabaseManager();
+  await manager.initialize();
+}
+
+export function getDatabase(): any {
+  return getDatabaseManager().getDatabase();
+}
+
+/**
+ * Close database connection and cleanup resources.
+ * Should be called on extension deactivation.
+ */
+export function closeDatabase(): void {
+  if (dbManager) {
+    dbManager.close();
+    dbManager = null;
+  }
+}
+
+
+
+/* ---- File: src/storage/index.ts ---- */
+
+import { getDatabase } from './database';
+import { SymbolContext, EdgeContext } from '../contracts/llmContext';
+
+export interface SearchResult {
+  name: string;
+  path: string;
+  sha: string;
+  summary_snippet: string;
+  rank: number;
+}
+
+export interface SymbolContextForLLM {
+  symbol: SymbolContext;
+  history: Array<{
+    sha: string;
+    commit_message: string;
+    date: string;
+    change_type: string;
+    mod_reason?: string;
+  }>;
+  related: {
+    calls: string[];      // Symbols this calls
+    called_by: string[];  // Symbols that call this
+    imports: string[];    // Symbols this imports
+  };
+  diff_snippets?: {
+    pre?: string;
+    post?: string;
+  };
+}
+
+export class SearchIndex {
+  searchSymbols(query: string, limit: number = 50): SearchResult[] {
+    const db = getDatabase();
+
+    // Simple LIKE search
+    // Note: This is less powerful than FTS but works with standard sql.js
+    const stmt = db.prepare(`
+      SELECT name, path, sha, '' as summary_snippet, 0 as rank
+      FROM symbols
+      WHERE name LIKE ? OR path LIKE ?
+      ORDER BY name
+      LIMIT ?
+    `);
+
+    const likeQuery = `%${query}%`;
+    return stmt.all(likeQuery, likeQuery, limit) as SearchResult[];
+  }
+
+  searchSymbolsByName(name: string, limit: number = 20): SearchResult[] {
+    const db = getDatabase();
+    const stmt = db.prepare(`
+      SELECT name, path, sha, '' as summary_snippet, 0 as rank
+      FROM symbols
+      WHERE name LIKE ?
+      ORDER BY name
+      LIMIT ?
+    `);
+    return stmt.all(`%${name}%`, limit) as SearchResult[];
+  }
+
+  searchSymbolsByPath(path: string, limit: number = 20): SearchResult[] {
+    const db = getDatabase();
+    const stmt = db.prepare(`
+      SELECT name, path, sha, '' as summary_snippet, 0 as rank
+      FROM symbols
+      WHERE path LIKE ?
+      ORDER BY path
+      LIMIT ?
+    `);
+    return stmt.all(`%${path}%`, limit) as SearchResult[];
+  }
+
+  // Update summary snippets - no-op for now as we removed the FTS table
+  updateSummarySnippet(symbolId: number, snippet: string): void {
+    // No-op
+  }
+
+  // Rebuild FTS index - no-op
+  rebuildIndex(): void {
+    // No-op
+  }
+
+  /**
+   * Get full context for a symbol (for LLM queries)
+   * Returns symbol information, history, and related symbols
+   */
+  getSymbolContext(symbolId: string, limitHistory: number = 10): SymbolContextForLLM | null {
+    const db = getDatabase();
+
+    // Get latest symbol information
+    const symbolStmt = db.prepare(`
+      SELECT id, symbol_id, name, kind, path, signature_pre, signature_post,
+             loc_pre, loc_post, change_type, mod_reason, diff_snippet_pre, diff_snippet_post
+      FROM symbols
+      WHERE symbol_id = ?
+      ORDER BY sha DESC
+      LIMIT 1
+    `);
+    const symbol = symbolStmt.get(symbolId) as any;
+
+    if (!symbol) {
+      return null;
+    }
+
+    // Get commit history for this symbol
+    const historyStmt = db.prepare(`
+      SELECT s.sha, c.message, c.date, s.change_type, s.mod_reason
+      FROM symbols s
+      JOIN commits c ON s.sha = c.sha
+      WHERE s.symbol_id = ?
+      ORDER BY c.date DESC
+      LIMIT ?
+    `);
+    const history = historyStmt.all(symbolId, limitHistory) as any[];
+
+    // Get related symbols (edges)
+    const callsStmt = db.prepare(`
+      SELECT DISTINCT to_symbol_id
+      FROM edges
+      WHERE from_symbol_id = ? AND edge_type = 'calls'
+      LIMIT 20
+    `);
+    const calls = callsStmt.all(symbolId) as any[];
+
+    const calledByStmt = db.prepare(`
+      SELECT DISTINCT from_symbol_id
+      FROM edges
+      WHERE to_symbol_id = ? AND edge_type = 'calls'
+      LIMIT 20
+    `);
+    const calledBy = calledByStmt.all(symbolId) as any[];
+
+    const importsStmt = db.prepare(`
+      SELECT DISTINCT to_symbol_id
+      FROM edges
+      WHERE from_symbol_id = ? AND edge_type = 'imports'
+      LIMIT 20
+    `);
+    const imports = importsStmt.all(symbolId) as any[];
+
+    return {
+      symbol: {
+        id: symbol.id,
+        symbol_id: symbol.symbol_id,
+        name: symbol.name,
+        kind: symbol.kind,
+        signature: symbol.signature_post || symbol.signature_pre,
+        loc_pre: symbol.loc_pre ? JSON.parse(symbol.loc_pre) : undefined,
+        loc_post: symbol.loc_post ? JSON.parse(symbol.loc_post) : undefined,
+        mod_reason: symbol.mod_reason as any,
+        diff_snippet_pre: symbol.diff_snippet_pre,
+        diff_snippet_post: symbol.diff_snippet_post
+      },
+      history: history.map(h => ({
+        sha: h.sha,
+        commit_message: h.message,
+        date: h.date,
+        change_type: h.change_type,
+        mod_reason: h.mod_reason
+      })),
+      related: {
+        calls: calls.map(c => c.to_symbol_id),
+        called_by: calledBy.map(c => c.from_symbol_id),
+        imports: imports.map(i => i.to_symbol_id)
+      },
+      diff_snippets: symbol.diff_snippet_pre || symbol.diff_snippet_post ? {
+        pre: symbol.diff_snippet_pre,
+        post: symbol.diff_snippet_post
+      } : undefined
+    };
+  }
+
+  /**
+   * Get symbol history across commits
+   */
+  getSymbolHistory(symbolId: string, limit: number = 20): Array<{
+    sha: string;
+    commit_message: string;
+    date: string;
+    change_type: string;
+    mod_reason?: string;
+    path: string;
+  }> {
+    const db = getDatabase();
+    const stmt = db.prepare(`
+      SELECT s.sha, c.message, c.date, s.change_type, s.mod_reason, s.path
+      FROM symbols s
+      JOIN commits c ON s.sha = c.sha
+      WHERE s.symbol_id = ?
+      ORDER BY c.date DESC
+      LIMIT ?
+    `);
+    return stmt.all(symbolId, limit) as any[];
+  }
+
+  /**
+   * Get related symbols (calls, called by, imports)
+   */
+  getRelatedSymbols(symbolId: string): {
+    calls: string[];
+    called_by: string[];
+    imports: string[];
+  } {
+    const db = getDatabase();
+
+    const callsStmt = db.prepare(`
+      SELECT DISTINCT to_symbol_id
+      FROM edges
+      WHERE from_symbol_id = ? AND edge_type = 'calls'
+      LIMIT 50
+    `);
+    const calls = callsStmt.all(symbolId) as any[];
+
+    const calledByStmt = db.prepare(`
+      SELECT DISTINCT from_symbol_id
+      FROM edges
+      WHERE to_symbol_id = ? AND edge_type = 'calls'
+      LIMIT 50
+    `);
+    const calledBy = calledByStmt.all(symbolId) as any[];
+
+    const importsStmt = db.prepare(`
+      SELECT DISTINCT to_symbol_id
+      FROM edges
+      WHERE from_symbol_id = ? AND edge_type = 'imports'
+      LIMIT 50
+    `);
+    const imports = importsStmt.all(symbolId) as any[];
+
+    return {
+      calls: calls.map(c => c.to_symbol_id),
+      called_by: calledBy.map(c => c.from_symbol_id),
+      imports: imports.map(i => i.to_symbol_id)
+    };
+  }
+
+  /**
+   * Get symbols formatted for LLM consumption
+   * Returns a compact representation suitable for prompt injection
+   */
+  getSymbolsForLLM(symbolIds: string[]): Array<{
+    id: string;
+    name: string;
+    kind: string;
+    path: string;
+    signature?: string;
+    recent_changes: number;
+  }> {
+    const db = getDatabase();
+    if (symbolIds.length === 0) {
+      return [];
+    }
+
+    const placeholders = symbolIds.map(() => '?').join(',');
+    const stmt = db.prepare(`
+      SELECT symbol_id, name, kind, path, signature_post, signature_pre,
+             COUNT(*) as recent_changes
+      FROM symbols
+      WHERE symbol_id IN (${placeholders})
+      GROUP BY symbol_id
+      ORDER BY recent_changes DESC
+    `);
+    const results = stmt.all(...symbolIds) as any[];
+
+    return results.map(r => ({
+      id: r.symbol_id,
+      name: r.name,
+      kind: r.kind,
+      path: r.path,
+      signature: r.signature_post || r.signature_pre,
+      recent_changes: r.recent_changes
+    }));
+  }
+}
+
+// Singleton instance
+let searchIndex: SearchIndex | null = null;
+
+export function getSearchIndex(): SearchIndex {
+  if (!searchIndex) {
+    searchIndex = new SearchIndex();
+  }
+  return searchIndex;
+}
+
+
+
+/* ---- File: src/storage/schema.ts ---- */
+
+export const DATABASE_SCHEMA = `
+-- Main commits table
+CREATE TABLE IF NOT EXISTS commits (
+  sha TEXT PRIMARY KEY,
+  author TEXT NOT NULL,
+  date TEXT NOT NULL,
+  message TEXT NOT NULL,
+  summary_md TEXT,
+  raw_llm_json TEXT,
+  files_changed INTEGER DEFAULT 0,
+  symbols_added INTEGER DEFAULT 0,
+  symbols_removed INTEGER DEFAULT 0,
+  symbols_modified INTEGER DEFAULT 0,
+  edges_added INTEGER DEFAULT 0,
+  edges_removed INTEGER DEFAULT 0,
+  risks TEXT DEFAULT '[]', -- JSON array of risk flags
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Files changed in each commit
+CREATE TABLE IF NOT EXISTS files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  status TEXT NOT NULL, -- A, M, D, R, C, U
+  lang TEXT, -- Detected language
+  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
+  UNIQUE(sha, path)
+);
+
+-- Symbols extracted from files
+CREATE TABLE IF NOT EXISTS symbols (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  symbol_id TEXT NOT NULL, -- Unique identifier for the symbol
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL, -- function, class, method, const, interface, type, variable
+  signature_pre TEXT, -- Signature before change (for modified symbols)
+  signature_post TEXT, -- Signature after change
+  loc_pre TEXT, -- JSON location before change
+  loc_post TEXT, -- JSON location after change
+  change_type TEXT, -- added, removed, modified, signature_changed, body_changed, renamed, moved
+  mod_reason TEXT, -- body_changed, signature_changed, doc_changed, visibility_changed, annotation_changed
+  diff_snippet_pre TEXT, -- Before diff snippet (truncated)
+  diff_snippet_post TEXT, -- After diff snippet (truncated)
+  confidence REAL DEFAULT 1.0, -- Confidence in change detection (0.0-1.0)
+  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
+  UNIQUE(sha, symbol_id)
+);
+
+-- Dependency edges between symbols
+CREATE TABLE IF NOT EXISTS edges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  from_symbol_id TEXT NOT NULL,
+  to_symbol_id TEXT NOT NULL,
+  edge_type TEXT NOT NULL, -- imports, calls, extends, implements, uses
+  change_type TEXT, -- added, removed, modified (NULL for current state)
+  confidence REAL DEFAULT 1.0, -- Confidence in edge detection (0.0-1.0)
+  is_resolved INTEGER DEFAULT 1, -- Whether target symbol was resolved
+  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE
+);
+
+-- Full-text search removed due to sql.js limitations
+-- We will use standard LIKE queries on the symbols table instead
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_files_sha ON files(sha);
+CREATE INDEX IF NOT EXISTS idx_symbols_sha ON symbols(sha);
+CREATE INDEX IF NOT EXISTS idx_symbols_path ON symbols(path);
+CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+CREATE INDEX IF NOT EXISTS idx_edges_sha ON edges(sha);
+CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_symbol_id);
+CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_symbol_id);
+`;
+
+export const MIGRATIONS = [
+  // Version 1: Initial schema
+  DATABASE_SCHEMA
+];
+
+export const CURRENT_VERSION = 1;
+
+
+
+/* ---- File: src/types/index.ts ---- */
+
+// Git commit information
+export interface CommitInfo {
+  sha: string;
+  author: string;
+  date: string;
+  message: string;
+  parent?: string;
+}
+
+// File change information
+export interface FileChange {
+  path: string;
+  status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U'; // Added, Modified, Deleted, Renamed, Copied, Unmerged
+  oldPath?: string;
+}
+
+// Symbol information extracted from code
+export interface SymbolInfo {
+  id: string;
+  name: string;
+  kind: 'function' | 'class' | 'method' | 'const' | 'interface' | 'type' | 'variable';
+  signature: string;
+  location: {
+    start: { line: number; column: number };
+    end: { line: number; column: number };
+  };
+  docstring?: string;
+}
+
+// Symbol change types
+export type SymbolChangeType = 'added' | 'removed' | 'modified' | 'signature_changed' | 'body_changed';
+
+// Symbol delta between commits
+export interface SymbolDelta {
+  symbol: SymbolInfo;
+  changeType: SymbolChangeType;
+  previousSymbol?: SymbolInfo;
+  modReason?: ModReason;
+  diffSnippetPre?: string;
+  diffSnippetPost?: string;
+}
+
+// Dependency edge types
+export interface EdgeInfo {
+  from: string; // symbol ID
+  to: string;   // symbol ID
+  type: 'imports' | 'calls' | 'extends' | 'implements' | 'uses';
+  confidence?: number; // 0.0 to 1.0
+  isResolved?: boolean;
+}
+
+// Edge delta between commits
+export interface EdgeDelta {
+  edge: EdgeInfo;
+  changeType: 'added' | 'removed';
+}
+
+// Risk flags for commits
+export type RiskFlag =
+  | 'breaking-api'
+  | 'schema-migration'
+  | 'refactor'
+  | 'security'
+  | 'performance'
+  | 'auth'
+  | 'payment';
+
+// LLM response structure
+export interface LLMResponse {
+  summary_md: string;
+  breaking_changes: string[];
+  migration_notes: string[];
+  refactor_clusters: string[];
+  tests_needed: string[];
+  questions_for_author: string[];
+}
+
+// Complete commit analysis result
+export interface AnalysisResult {
+  commit: CommitInfo;
+  files: FileChange[];
+  symbols: {
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  };
+  edges: {
+    added: EdgeInfo[];
+    removed: EdgeInfo[];
+  };
+  risks: RiskFlag[];
+  difftasticHighlights: string[];
+  llmSummary?: LLMResponse;
+}
+
+// Database commit summary
+export interface CommitSummary {
+  sha: string;
+  author: string;
+  date: string;
+  message: string;
+  summary_md: string;
+  raw_llm_json: string;
+  files_changed: number;
+  symbols_added: number;
+  symbols_removed: number;
+  symbols_modified: number;
+  edges_added: number;
+  edges_removed: number;
+  risks: string[]; // JSON string array
+}
+
+// Tree node types for discriminated union
+export type NodeType = "commit" | "file" | "category" | "symbol" | "risk";
+
+// Tree view item for VS Code UI
+export interface TreeItem extends TreeNodeBase {
+  label: string;
+  description?: string;
+  tooltip?: string;
+  children?: TreeItem[];
+  command?: any; // VS Code Command
+  icon?: string;
+  contextValue?: string;
+}
+
+// Base interface for tree nodes with discriminated union
+export interface TreeNodeBase {
+  id: string;
+  type: NodeType;
+}
+
+// Configuration interface
+export type ChangeType = "added" | "modified" | "signature_changed" | "removed" | "renamed" | "moved";
+export type ModReason = "body_changed" | "signature_changed" | "doc_changed" | "visibility_changed" | "annotation_changed";
+
+export interface ExtensionConfig {
+  openRouterApiKey?: string;
+  openRouterModel: string;
+  apiEndpoint: string;
+  difftasticPath?: string;
+  defaultCommitCount: number;
+}
+
+
+
+/* ---- File: src/ui/commands.ts ---- */
+
+import * as vscode from 'vscode';
+import { CommitTrackerProvider } from './commitTracker';
+import { SymbolHistoryProvider } from './symbolHistory';
+import { analyzeLastCommits, analyzeStagedChanges, analyzeCommit } from '../cli/analyze';
+import { showCommit, searchSymbol } from '../cli/queries';
+import { getExtensionConfig } from '../utils/config';
+import { LLMSummarizer } from '../llm/summarizer';
+import { generateCommitReport } from './report';
+
+export function registerCommands(
+  context: vscode.ExtensionContext,
+  commitTracker: CommitTrackerProvider,
+  symbolHistory: SymbolHistoryProvider
+) {
+  try {
+    // Analyze last N commits
+    const analyzeLastCommitsCmd = vscode.commands.registerCommand(
+      'git-context.analyzeLastCommits',
+      async () => {
+        const config = getExtensionConfig();
+        const count = await vscode.window.showInputBox({
+          prompt: 'Number of commits to analyze',
+          value: config.defaultCommitCount.toString(),
+          validateInput: (value) => {
+            const num = parseInt(value);
+            if (isNaN(num) || num <= 0) {
+              return 'Please enter a positive number';
+            }
+            return undefined;
+          }
+        });
+
+        if (count) {
+          vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Analyzing commits...',
+            cancellable: false
+          }, async (progress) => {
+            try {
+              await analyzeLastCommits(parseInt(count));
+              commitTracker.refresh();
+              vscode.window.showInformationMessage(`Analyzed last ${count} commits`);
+            } catch (error) {
+              vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
+            }
+          });
+        }
+      }
+    );
+
+    // Analyze staged changes
+    const analyzeStagedCmd = vscode.commands.registerCommand(
+      'git-context.analyzeStagedChanges',
+      async () => {
+        vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: 'Analyzing staged changes...',
+          cancellable: false
+        }, async (progress) => {
+          try {
+            await analyzeStagedChanges();
+            commitTracker.refresh();
+            vscode.window.showInformationMessage('Analyzed staged changes');
+          } catch (error) {
+            vscode.window.showErrorMessage(`Failed to analyze staged changes: ${error}`);
+          }
+        });
+      }
+    );
+
+    // Compare files to commit
+    const compareFilesCmd = vscode.commands.registerCommand(
+      'git-context.compareFilesToCommit',
+      async () => {
+        // Pick commit
+        const commit = await vscode.window.showQuickPick(
+          await getRecentCommits(),
+          {
+            placeHolder: 'Select commit to compare against'
+          }
+        );
+
+        if (!commit) return;
+
+        // Pick files
+        const files = await vscode.window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: false,
+          canSelectMany: true,
+          openLabel: 'Compare Selected Files'
+        });
+
+        if (!files || files.length === 0) return;
+
+        // Get current commit
+        const currentCommit = await getCurrentCommit();
+        if (!currentCommit) {
+          vscode.window.showErrorMessage('Could not determine current commit');
+          return;
+        }
+
+        // Compare files
+        vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: 'Comparing files...',
+          cancellable: false
+        }, async (progress) => {
+          try {
+            const llm = new LLMSummarizer();
+            const filePaths = files.map(f => vscode.workspace.asRelativePath(f.fsPath));
+
+            const explanation = await llm.compareFiles(
+              currentCommit,
+              'HEAD',
+              commit.detail || commit.label,
+              commit.description || 'Selected commit',
+              filePaths,
+              'File comparison requested',
+              []
+            );
+
+            // Show result in new document
+            const doc = await vscode.workspace.openTextDocument({
+              content: `# File Comparison: HEAD vs ${commit.label}\n\n${explanation}`,
+              language: 'markdown'
+            });
+            await vscode.window.showTextDocument(doc);
+
+          } catch (error) {
+            vscode.window.showErrorMessage(`Failed to compare files: ${error}`);
+          }
+        });
+      }
+    );
+
+    // Explain symbol change
+    const explainSymbolCmd = vscode.commands.registerCommand(
+      'git-context.explainSymbolChange',
+      async () => {
+        // Get symbol from current cursor position or selection
+        const symbol = await getSymbolAtCursor();
+        if (!symbol) {
+          vscode.window.showErrorMessage('No symbol found at cursor position');
+          return;
+        }
+
+        // Get commit to compare against
+        const commit = await vscode.window.showQuickPick(
+          await getRecentCommits(),
+          {
+            placeHolder: 'Select commit to compare symbol against'
+          }
+        );
+
+        if (!commit) return;
+
+        vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: 'Explaining symbol changes...',
+          cancellable: false
+        }, async (progress) => {
+          try {
+            const llm = new LLMSummarizer();
+
+            // TODO: Get actual symbol code before/after
+            const explanation = await llm.explainSymbolChange(
+              symbol.name,
+              'modified',
+              symbol.file,
+              symbol.line,
+              '// Previous code',
+              '// Current code',
+              commit.detail || commit.label,
+              commit.description || 'Selected commit'
+            );
+
+            // Show result in new document
+            const doc = await vscode.workspace.openTextDocument({
+              content: `# Symbol Change: ${symbol.name}\n\n${explanation}`,
+              language: 'markdown'
+            });
+            await vscode.window.showTextDocument(doc);
+
+          } catch (error) {
+            vscode.window.showErrorMessage(`Failed to explain symbol: ${error}`);
+          }
+        });
+      }
+    );
+
+    // Search symbols
+    const searchSymbolsCmd = vscode.commands.registerCommand(
+      'git-context.searchSymbols',
+      async () => {
+        const query = await vscode.window.showInputBox({
+          placeHolder: 'Search for a symbol (e.g. function name, class name)',
+          prompt: 'Enter symbol name to search history'
+        });
+
+        if (query !== undefined) {
+          symbolHistory.setSearchQuery(query);
+        }
+      }
+    );
+
+    // Open symbol in file
+    const openSymbolCmd = vscode.commands.registerCommand(
+      'git-context.openSymbol',
+      async (sha: string, filePath: string, range?: vscode.Range) => {
+        try {
+          const { getGitRoot } = await import('../utils/config');
+          const gitRoot = getGitRoot();
+          if (!gitRoot) {
+            vscode.window.showErrorMessage('Not in a git repository');
+            return;
+          }
+
+          const fullPath = vscode.Uri.file(`${gitRoot}/${filePath}`);
+          const doc = await vscode.workspace.openTextDocument(fullPath);
+          const editor = await vscode.window.showTextDocument(doc);
+
+          if (range) {
+            editor.selection = new vscode.Selection(range.start, range.end);
+            editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to open file: ${error}`);
+        }
+      }
+    );
+
+    // Generate commit analysis report
+    const generateReportCmd = vscode.commands.registerCommand(
+      'git-context.generateReport',
+      async () => {
+        const selectedCount = commitTracker.selectedCommits.size;
+        if (selectedCount > 0) {
+          // Generate report for selected commits
+          const shas = Array.from(commitTracker.selectedCommits) as string[];
+          await generateCommitReport(shas);
+          commitTracker.clearSelection();
+        } else {
+          // Generate report for all commits
+          await generateCommitReport();
+        }
+      }
+    );
+
+    // Toggle commit selection
+    const toggleSelectionCmd = vscode.commands.registerCommand(
+      'git-context.toggleCommitSelection',
+      async (item: any) => {
+        if (item && item.id) {
+          commitTracker.toggleCommitSelection(item.id);
+        }
+      }
+    );
+
+    // Clear selection
+    const clearSelectionCmd = vscode.commands.registerCommand(
+      'git-context.clearSelection',
+      () => {
+        commitTracker.clearSelection();
+      }
+    );
+
+    // Export LLM Context
+    const exportContextCmd = vscode.commands.registerCommand(
+      'git-context.exportLlmContext',
+      async () => {
+        const selectedShas = Array.from(commitTracker.selectedCommits);
+        if (selectedShas.length === 0) {
+          vscode.window.showErrorMessage('Please select commits first (use checkboxes in tree view)');
+          return;
+        }
+
+        try {
+          const { ContextExporter } = await import('../analysis/contextExporter');
+          const exporter = new ContextExporter();
+
+          const filePath = await vscode.window.showSaveDialog({
+            defaultUri: vscode.Uri.file('.git/commit-tracker/commit-context.json'),
+            filters: {
+              'JSON files': ['json'],
+              'All files': ['*']
+            }
+          });
+
+          if (filePath) {
+            const outputPath = await exporter.exportToFile(selectedShas, filePath.fsPath);
+            const openFile = await vscode.window.showInformationMessage(
+              `LLM Context exported to ${outputPath}`,
+              'Open File'
+            );
+
+            if (openFile === 'Open File') {
+              const doc = await vscode.workspace.openTextDocument(outputPath);
+              await vscode.window.showTextDocument(doc);
+            }
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to export LLM context: ${error}`);
+        }
+      }
+    );
+
+    context.subscriptions.push(
+      analyzeLastCommitsCmd,
+      analyzeStagedCmd,
+      compareFilesCmd,
+      explainSymbolCmd,
+      searchSymbolsCmd,
+      openSymbolCmd,
+      generateReportCmd,
+      toggleSelectionCmd,
+      clearSelectionCmd,
+      exportContextCmd
+    );
+
+    console.log('Git Context commands registered successfully');
+  } catch (error) {
+    console.error('Failed to register Git Context commands:', error);
+    vscode.window.showErrorMessage(`Failed to register Git Context commands: ${error}`);
+  }
+}
+
+async function getRecentCommits(): Promise<vscode.QuickPickItem[]> {
+  // TODO: Get commits from database
+  // For now, return dummy data
+  return [
+    {
+      label: 'HEAD',
+      description: 'Current commit',
+      detail: 'Most recent commit'
+    },
+    {
+      label: 'HEAD~1',
+      description: 'Previous commit',
+      detail: 'One commit back'
+    }
+  ];
+}
+
+
+
+async function getCurrentCommit(): Promise<string | undefined> {
+  try {
+    const { GitOperations } = await import('../analysis/git');
+    const git = new GitOperations();
+    return git.getHeadSha();
+  } catch {
+    return 'HEAD';
+  }
+}
+
+async function getSymbolAtCursor(): Promise<{ name: string, file: string, line: number } | undefined> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) return undefined;
+
+  const document = editor.document;
+  const position = editor.selection.active;
+
+  // Get word at cursor
+  const range = document.getWordRangeAtPosition(position);
+  if (!range) return undefined;
+
+  const symbolName = document.getText(range);
+  const filePath = vscode.workspace.asRelativePath(document.uri);
+  const line = position.line + 1;
+
+  return {
+    name: symbolName,
+    file: filePath,
+    line
+  };
+}
+
+
+
+/* ---- File: src/ui/commitTracker.ts ---- */
+
+import * as vscode from 'vscode';
+import { TreeNode, isCommitNode, isFileNode, isCategoryNode, isSymbolNode, getCollapsibleState, toVSCodeTreeItem } from '../contracts/treeNodes';
+
+export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> {
+  private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | null | void> =
+    new vscode.EventEmitter<TreeNode | undefined | null | void>();
+  readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | null | void> =
+    this._onDidChangeTreeData.event;
+
+  // Track selected commits for multi-report generation
+  public selectedCommits = new Set<string>();
+
+  toggleCommitSelection(sha: string): void {
+    if (this.selectedCommits.has(sha)) {
+      this.selectedCommits.delete(sha);
+    } else {
+      this.selectedCommits.add(sha);
+    }
+    this.refresh();
+  }
+
+  clearSelection(): void {
+    this.selectedCommits.clear();
+    this.refresh();
+  }
+
+  constructor(private context: vscode.ExtensionContext) { }
+
+  refresh(): void {
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(element: TreeNode): vscode.TreeItem {
+    // Determine if this element should be expandable
+    let collapsibleState = vscode.TreeItemCollapsibleState.None;
+
+    if (element.contextValue === 'commit') {
+      // Commits are always expandable
+      collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+    } else if (element.children && element.children.length > 0) {
+      // Items with pre-populated children (like risks, file groups)
+      collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+    } else if (element.id && !element.command) {
+      // Categories without commands (like "Added Symbols") are expandable
+      // Individual symbols have commands so they won't be expandable
+      if (element.id.match(/-(added|modified|removed|files)$/)) {
+        collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+      }
+    }
+
+    return {
+      id: element.id,
+      label: element.label,
+      description: element.description,
+      tooltip: element.tooltip,
+      collapsibleState,
+      iconPath: element.icon ? new vscode.ThemeIcon(element.icon) : undefined,
+      command: element.command,
+      contextValue: element.contextValue
+    };
+  }
+
+  async getChildren(element?: TreeNode): Promise<TreeNode[]> {
+    if (!element) {
+      // Root level - show recent commits
+      return this.getRecentCommits();
+    }
+
+    // Child level - show commit details
+    return this.getCommitDetails(element);
+  }
+
+  private async getRecentCommits(): Promise<TreeNode[]> {
+    try {
+      const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+      await ensureDatabaseInitialized();
+      const db = getDatabaseManager().getDatabase();
+
+      const stmt = db.prepare(`
+        SELECT sha, author, date, message, files_changed, symbols_added, symbols_modified, symbols_removed, risks
+        FROM commits
+        ORDER BY date DESC
+        LIMIT 20
+      `);
+
+      const commits = stmt.all() as any[];
+
+      return commits.map(commit => {
+        const shortSha = commit.sha.substring(0, 8);
+        const isSelected = this.selectedCommits.has(commit.sha);
+        const checkbox = isSelected ? '☑ ' : '☐ ';
+
+        return {
+          id: commit.sha,
+          type: 'commit' as const,
+          sha: commit.sha,
+          message: commit.message,
+          author: commit.author,
+          date: commit.date,
+          isSelected,
+          label: `${checkbox}${shortSha} - ${commit.message.split('\n')[0]}`,
+          description: `${commit.author} · ${new Date(commit.date).toLocaleDateString()}`,
+          tooltip: `${commit.message}\n\nClick to expand\nRight-click to toggle selection for report`,
+          contextValue: 'commit'
+        };
+      });
+    } catch (error) {
+      console.error('Failed to load commits:', error);
+      // @ts-ignore
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return [{
+        id: 'error',
+        type: 'risk' as const,
+        label: 'Error loading commits',
+        description: errorMessage,
+        icon: 'error'
+      }];
+    }
+  }
+
+  private async getCommitChildren(commit: any): Promise<TreeNode[]> {
+    const children: TreeNode[] = [];
+
+    // Add summary if available
+    if (commit.summary_md) {
+      children.push({
+        id: `${commit.sha}-summary`,
+        type: 'risk' as const,
+        label: '📝 Summary',
+        description: commit.summary_md.split('\n')[0].substring(0, 50) + '...',
+        tooltip: commit.summary_md,
+        icon: 'note'
+      });
+    }
+
+    // Add files changed
+    if (commit.files_changed > 0) {
+      children.push({
+        id: `${commit.sha}-files`,
+        type: 'category' as const,
+        categoryType: 'added' as const, // Using 'added' as a placeholder since files can be added/modified/removed
+        parentId: commit.sha,
+        count: commit.files_changed,
+        label: `📁 Files Changed (${commit.files_changed})`,
+        icon: 'files'
+      });
+    }
+
+    // Add symbol changes
+    if (commit.symbols_added > 0) {
+      children.push({
+        id: `${commit.sha}-added`,
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: commit.sha,
+        count: commit.symbols_added,
+        label: `➕ Added Symbols (${commit.symbols_added})`,
+        children: [], // Will be populated in getCommitDetails
+        icon: 'add'
+      });
+    }
+
+    if (commit.symbols_modified > 0) {
+      children.push({
+        id: `${commit.sha}-modified`,
+        type: 'category' as const,
+        categoryType: 'modified' as const,
+        parentId: commit.sha,
+        count: commit.symbols_modified,
+        label: `✏️ Modified Symbols (${commit.symbols_modified})`,
+        children: [], // Will be populated in getCommitDetails
+        icon: 'edit'
+      });
+    }
+
+    if (commit.symbols_removed > 0) {
+      children.push({
+        id: `${commit.sha}-removed`,
+        type: 'category' as const,
+        categoryType: 'removed' as const,
+        parentId: commit.sha,
+        count: commit.symbols_removed,
+        label: `➖ Removed Symbols (${commit.symbols_removed})`,
+        children: [], // Will be populated in getCommitDetails
+        icon: 'remove'
+      });
+    }
+
+    // Note: Semantic categories (renames, moves) will be loaded dynamically in getChildren
+    // when the commit node is expanded to avoid async issues here
+
+    // Add risks if any
+    const risks = JSON.parse(commit.risks || '[]');
+    if (risks.length > 0) {
+      children.push({
+        id: `${commit.sha}-risks`,
+        type: 'category' as const,
+        categoryType: 'risks' as const,
+        parentId: commit.sha,
+        count: risks.length,
+        label: `⚠️ Risks (${risks.length})`,
+        children: risks.map((risk: string, idx: number) => ({
+          id: `${commit.sha}-risk-${idx}`,
+          type: 'risk' as const,
+          label: risk,
+          icon: 'warning'
+        })),
+        icon: 'warning'
+      });
+    }
+
+    return children;
+  }
+
+  private async getCommitDetails(element: TreeNode): Promise<TreeNode[]> {
+    try {
+      const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+      await ensureDatabaseInitialized();
+      const db = getDatabaseManager().getDatabase();
+
+      // Check if this is a commit (SHA only) or a category
+      const parts = element.id.split('-');
+
+      if (parts.length === 1) {
+        // This is a commit - fetch and return its children grouped by file
+        const sha = element.id;
+
+        // Get all symbols for this commit
+        const symbolsStmt = db.prepare(`
+          SELECT name, kind, path, change_type, loc_post, id
+          FROM symbols
+          WHERE sha = ?
+          ORDER BY path, change_type, name
+        `);
+        const allSymbols = symbolsStmt.all(sha) as any[];
+
+        if (allSymbols.length === 0) {
+          return [{
+            id: `${sha}-no-symbols`,
+            type: 'risk' as const,
+            label: 'No symbols found',
+            icon: 'info'
+          }];
+        }
+
+        // Group by file path
+        const fileGroups = new Map<string, any[]>();
+        for (const symbol of allSymbols) {
+          if (!fileGroups.has(symbol.path)) {
+            fileGroups.set(symbol.path, []);
+          }
+          fileGroups.get(symbol.path)!.push(symbol);
+        }
+
+        const children: TreeNode[] = [];
+
+        for (const [filePath, symbols] of fileGroups) {
+          const added = symbols.filter(s => s.change_type === 'added');
+          const modified = symbols.filter(s => s.change_type === 'modified' || s.change_type === 'signature_changed');
+          const removed = symbols.filter(s => s.change_type === 'removed');
+
+          const fileName = filePath.split('/').pop() || filePath;
+          const changeDesc = [];
+          if (added.length > 0) changeDesc.push(`+${added.length}`);
+          if (modified.length > 0) changeDesc.push(`~${modified.length}`);
+          if (removed.length > 0) changeDesc.push(`-${removed.length}`);
+
+          const fileChildren: TreeNode[] = [];
+
+          // Add "Added" category if any
+          if (added.length > 0) {
+            fileChildren.push({
+              id: `${sha}-${filePath}-added`,
+              type: 'category' as const,
+              categoryType: 'added' as const,
+              parentId: `${sha}-${filePath}`,
+              count: added.length,
+              label: `➕ Added (${added.length})`,
+              children: added.map(s => this.createSymbolItem(sha, s)),
+              icon: 'add'
+            });
+          }
+
+          // Add "Modified" category if any
+          if (modified.length > 0) {
+            fileChildren.push({
+              id: `${sha}-${filePath}-modified`,
+              type: 'category' as const,
+              categoryType: 'modified' as const,
+              parentId: `${sha}-${filePath}`,
+              count: modified.length,
+              label: `✏️ Modified (${modified.length})`,
+              children: modified.map(s => this.createSymbolItem(sha, s)),
+              icon: 'edit'
+            });
+          }
+
+          // Add "Removed" category if any
+          if (removed.length > 0) {
+            fileChildren.push({
+              id: `${sha}-${filePath}-removed`,
+              type: 'category' as const,
+              categoryType: 'removed' as const,
+              parentId: `${sha}-${filePath}`,
+              count: removed.length,
+              label: `➖ Removed (${removed.length})`,
+              children: removed.map(s => this.createSymbolItem(sha, s)),
+              icon: 'remove'
+            });
+          }
+
+          children.push({
+            id: `${sha}-file-${filePath}`,
+            type: 'file' as const,
+            path: filePath,
+            sha: sha,
+            stats: {
+              added: added.length,
+              modified: modified.length,
+              removed: removed.length
+            },
+            label: fileName,
+            description: `${changeDesc.join(' ')} · ${filePath}`,
+            tooltip: filePath,
+            children: fileChildren,
+            icon: 'file'
+          });
+        }
+
+        // Add risks at the end
+        const commitStmt = db.prepare(`SELECT risks FROM commits WHERE sha = ?`);
+        const commit = commitStmt.get(sha) as any;
+        const risks = JSON.parse(commit?.risks || '[]');
+
+        if (risks.length > 0) {
+          children.push({
+            id: `${sha}-risks`,
+            type: 'category' as const,
+            categoryType: 'risks' as const,
+            parentId: sha,
+            count: risks.length,
+            label: `⚠️ Risks (${risks.length})`,
+            children: risks.map((risk: string, idx: number) => ({
+              id: `${sha}-risk-${idx}`,
+              type: 'risk' as const,
+              label: risk,
+              icon: 'warning'
+            })),
+            icon: 'warning'
+          });
+        }
+
+        return children;
+      } else if (parts.length >= 2 && (parts[1] === 'added' || parts[1] === 'modified' || parts[1] === 'removed')) {
+        // Handle symbol categories (added, modified, removed)
+        const sha = parts[0];
+        const categoryType = parts[1];
+
+        const symbolsStmt = db.prepare(`
+          SELECT id, name, kind, path, change_type, mod_reason, confidence
+          FROM symbols
+          WHERE sha = ? AND change_type = ?
+          ORDER BY path, name
+        `);
+        const symbols = symbolsStmt.all(sha, categoryType) as any[];
+
+        return symbols.map(symbol => this.createSymbolItem(sha, symbol));
+      } else if (parts.length >= 2 && (parts[1] === 'renames' || parts[1] === 'moves')) {
+        // Handle renames or moves category
+        const sha = parts[0];
+        const changeType = parts[1] === 'renames' ? 'renamed' : 'moved';
+
+        const symbolsStmt = db.prepare(`
+          SELECT id, name, kind, path, confidence
+          FROM symbols
+          WHERE sha = ? AND change_type = ?
+          ORDER BY confidence DESC, name
+        `);
+        const symbols = symbolsStmt.all(sha, changeType) as any[];
+
+        return symbols.map(symbol => ({
+          id: `${sha}-${changeType}-symbol-${symbol.id}`,
+          type: 'symbol' as const,
+          symbolId: symbol.id,
+          semanticId: symbol.id, // For renames/moves, this is the semantic ID
+          name: symbol.name,
+          kind: symbol.kind,
+          path: symbol.path,
+          sha: sha,
+          label: `${symbol.name} (${symbol.kind}) - ${Math.round(symbol.confidence * 100)}%`,
+          icon: changeType === 'renamed' ? 'arrow-right' : 'arrow-right',
+          tooltip: `${changeType === 'renamed' ? 'Renamed' : 'Moved'} symbol with ${Math.round(symbol.confidence * 100)}% confidence`
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to load commit details:', error);
+      return [{
+        id: `${element.id}-error`,
+        type: 'risk' as const,
+        label: 'Error loading details',
+        description: String(error),
+        icon: 'error'
+      }];
+    }
+
+    return [];
+  }
+
+  private createSymbolItem(sha: string, symbol: any): TreeNode {
+    // Parse location if available
+    let range: vscode.Range | undefined;
+    try {
+      const loc = symbol.loc_post ? JSON.parse(symbol.loc_post) : null;
+      if (loc && loc.start) {
+        range = new vscode.Range(
+          new vscode.Position(loc.start.line - 1, loc.start.column || 0),
+          new vscode.Position(loc.end?.line - 1 || loc.start.line - 1, loc.end?.column || 0)
+        );
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+
+    return {
+      id: `${sha}-symbol-${symbol.id}`,
+      type: 'symbol' as const,
+      symbolId: symbol.id,
+      semanticId: symbol.symbol_id,
+      name: symbol.name,
+      kind: symbol.kind,
+      path: symbol.path,
+      sha: sha,
+      loc: symbol.loc_post ? JSON.parse(symbol.loc_post) : undefined,
+      label: `${symbol.kind} ${symbol.name}`,
+      icon: `symbol-${symbol.kind}`,
+      command: symbol.path ? {
+        command: 'git-context.openSymbol',
+        title: 'Open Symbol',
+        arguments: [sha, symbol.path, range]
+      } : undefined
+    };
+  }
+}
+
+
+
+/* ---- File: src/ui/report.ts ---- */
+
+import * as vscode from 'vscode';
+
+export async function generateCommitReport(commitShas?: string[]): Promise<void> {
+    try {
+        const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+        await ensureDatabaseInitialized();
+        const db = getDatabaseManager().getDatabase();
+
+        // Fetch commits
+        let commits: any[];
+
+        if (commitShas && commitShas.length > 0) {
+            // Generate report for specific commits
+            const placeholders = commitShas.map(() => '?').join(',');
+            const commitsStmt = db.prepare(`
+            SELECT sha, author, date, message, summary_md, files_changed,
+    symbols_added, symbols_modified, symbols_removed, risks
+            FROM commits
+            WHERE sha IN(${placeholders})
+            ORDER BY date DESC
+    `);
+            commits = commitsStmt.all(...commitShas) as any[];
+        } else {
+            // Fetch all commits
+            const commitsStmt = db.prepare(`
+            SELECT sha, author, date, message, summary_md, files_changed,
+    symbols_added, symbols_modified, symbols_removed, risks
+            FROM commits
+            ORDER BY date DESC
+            LIMIT 20
+          `);
+            commits = commitsStmt.all() as any[];
+        }
+
+        if (commits.length === 0) {
+            vscode.window.showInformationMessage('No commits analyzed yet. Run "Analyze Last N Commits" first.');
+            return;
+        }
+
+        // Build markdown report
+        let markdown = `# Git Commit Analysis Report\n\n`;
+        markdown += `Generated: ${new Date().toLocaleString()} \n\n`;
+        if (commitShas && commitShas.length > 0) {
+            markdown += `Report for ${commits.length} selected commit${commits.length > 1 ? 's' : ''} \n\n`;
+        } else {
+            markdown += `Total commits analyzed: ${commits.length} \n\n`;
+        }
+        markdown += `-- -\n\n`;
+
+        for (const commit of commits) {
+            const shortSha = commit.sha.substring(0, 8);
+            const risks = JSON.parse(commit.risks || '[]');
+
+            markdown += `## 📝 ${shortSha} - ${commit.message.split('\n')[0]} \n\n`;
+            markdown += `** Author:** ${commit.author} \n`;
+            markdown += `** Date:** ${commit.date} \n`;
+            markdown += `** Files Changed:** ${commit.files_changed} \n`;
+            markdown += `** Symbols:** +${commit.symbols_added} ~${commit.symbols_modified} -${commit.symbols_removed} \n\n`;
+
+            // Add risks if any
+            if (risks.length > 0) {
+                markdown += `### ⚠️ Risks\n\n`;
+                for (const risk of risks) {
+                    markdown += `- ${risk} \n`;
+                }
+                markdown += `\n`;
+            }
+
+            // Add AI summary if available
+            if (commit.summary_md) {
+                markdown += `### Summary\n\n${commit.summary_md} \n\n`;
+            }
+
+            // Fetch and display symbols
+            if (commit.symbols_added > 0) {
+                const symbolsStmt = db.prepare(`
+          SELECT name, kind, path, symbol_id FROM symbols
+          WHERE sha = ? AND change_type = 'added'
+          ORDER BY kind, name
+    `);
+                const symbols = symbolsStmt.all(commit.sha) as any[];
+
+                if (symbols.length > 0) {
+                    markdown += `### ➕ Added Symbols(${symbols.length}) \n\n`;
+                    const grouped = groupByKind(symbols);
+                    for (const [kind, items] of Object.entries(grouped)) {
+                        markdown += `** ${kind}:**\n`;
+                        for (const item of items) {
+                            markdown += `- \`${item.name}\` (${item.path})\n`;
+
+                            // Show what this new symbol calls
+                            const callsStmt = db.prepare(`
+                SELECT to_symbol_id, edge_type FROM edges
+                WHERE sha = ? AND from_symbol_id = ? AND change_type = 'added'
+                LIMIT 5
+              `);
+                            const calls = callsStmt.all(commit.sha, item.symbol_id) as any[];
+                            if (calls.length > 0) {
+                                markdown += `  - Calls: ${calls.map(c => `\`${extractSymbolName(c.to_symbol_id)}\``).join(', ')}${calls.length === 5 ? '...' : ''}\n`;
+                            }
+                        }
+                        markdown += `\n`;
+                    }
+                }
+            }
+
+            if (commit.symbols_modified > 0) {
+                const symbolsStmt = db.prepare(`
+          SELECT name, kind, path, symbol_id FROM symbols
+          WHERE sha = ? AND change_type IN ('modified', 'signature_changed')
+          ORDER BY kind, name
+        `);
+                const symbols = symbolsStmt.all(commit.sha) as any[];
+
+                if (symbols.length > 0) {
+                    markdown += `### ✏️ Modified Symbols (${symbols.length})\n\n`;
+                    const grouped = groupByKind(symbols);
+                    for (const [kind, items] of Object.entries(grouped)) {
+                        markdown += `**${kind}:**\n`;
+                        for (const item of items) {
+                            markdown += `- \`${item.name}\` (${item.path})\n`;
+                        }
+                        markdown += `\n`;
+                    }
+                }
+            }
+
+            if (commit.symbols_removed > 0) {
+                const symbolsStmt = db.prepare(`
+          SELECT name, kind, path, symbol_id FROM symbols
+          WHERE sha = ? AND change_type = 'removed'
+          ORDER BY kind, name
+        `);
+                const symbols = symbolsStmt.all(commit.sha) as any[];
+
+                if (symbols.length > 0) {
+                    markdown += `### ➖ Removed Symbols (${symbols.length})\n\n`;
+                    const grouped = groupByKind(symbols);
+                    for (const [kind, items] of Object.entries(grouped)) {
+                        markdown += `**${kind}:**\n`;
+                        for (const item of items) {
+                            markdown += `- \`${item.name}\` (${item.path})\n`;
+
+                            // Show what used to call this removed symbol
+                            const calledByStmt = db.prepare(`
+                SELECT from_symbol_id, edge_type FROM edges
+                WHERE sha = ? AND to_symbol_id = ? AND change_type = 'removed'
+                LIMIT 5
+              `);
+                            const calledBy = calledByStmt.all(commit.sha, item.symbol_id) as any[];
+                            if (calledBy.length > 0) {
+                                markdown += `  - Was called by: ${calledBy.map(c => `\`${extractSymbolName(c.from_symbol_id)}\``).join(', ')}${calledBy.length === 5 ? '...' : ''}\n`;
+                            }
+                        }
+                        markdown += `\n`;
+                    }
+                }
+            }
+
+            // Add dependency graph section
+            const edgesStmt = db.prepare(`
+        SELECT COUNT(*) as count FROM edges WHERE sha = ?
+      `);
+            const edgeCount = edgesStmt.get(commit.sha) as any;
+
+            if (edgeCount && edgeCount.count > 0) {
+                markdown += `### 🔗 Function Call Graph (${edgeCount.count} connections)\n\n`;
+                markdown += `This commit creates ${edgeCount.count} new function call relationships.\n\n`;
+
+                // Show top call patterns
+                const topCallersStmt = db.prepare(`
+          SELECT from_symbol_id, COUNT(*) as call_count
+          FROM edges
+          WHERE sha = ? AND change_type = 'added'
+          GROUP BY from_symbol_id
+          ORDER BY call_count DESC
+          LIMIT 5
+        `);
+                const topCallers = topCallersStmt.all(commit.sha) as any[];
+
+                if (topCallers.length > 0) {
+                    markdown += `**Most Connected New Functions:**\n`;
+                    for (const caller of topCallers) {
+                        const symbolName = extractSymbolName(caller.from_symbol_id);
+                        markdown += `- \`${symbolName}\` makes ${caller.call_count} calls\n`;
+
+                        // Show what it calls
+                        const callsStmt = db.prepare(`
+              SELECT to_symbol_id FROM edges
+              WHERE sha = ? AND from_symbol_id = ? AND change_type = 'added'
+              LIMIT 3
+            `);
+                        const calls = callsStmt.all(commit.sha, caller.from_symbol_id) as any[];
+                        if (calls.length > 0) {
+                            markdown += `  → ${calls.map(c => `\`${extractSymbolName(c.to_symbol_id)}\``).join(', ')}${calls.length === 3 ? '...' : ''}\n`;
+                        }
+                    }
+                    markdown += `\n`;
+                }
+            }
+
+            markdown += `---\n\n`;
+        }
+
+        // Create and show document
+        const { getGitRoot } = await import('../utils/config');
+        const gitRoot = getGitRoot();
+
+        if (gitRoot) {
+            // Save to .git/commit-tracker/report.md
+            const fs = require('fs');
+            const path = require('path');
+            const reportDir = path.join(gitRoot, '.git', 'commit-tracker');
+            const reportPath = path.join(reportDir, 'commit-report.md');
+
+            // Ensure directory exists
+            if (!fs.existsSync(reportDir)) {
+                fs.mkdirSync(reportDir, { recursive: true });
+            }
+
+            // Write file
+            fs.writeFileSync(reportPath, markdown, 'utf8');
+
+            // Open the file
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(reportPath));
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+            vscode.window.showInformationMessage(`Report saved to ${reportPath}`);
+        } else {
+            // Fallback to untitled document if not in git repo
+            const doc = await vscode.workspace.openTextDocument({
+                content: markdown,
+                language: 'markdown'
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+        }
+
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to generate report: ${error}`);
+        console.error('Report generation error:', error);
+    }
+}
+
+function groupByKind(symbols: any[]): Record<string, any[]> {
+    const grouped: Record<string, any[]> = {};
+    for (const symbol of symbols) {
+        if (!grouped[symbol.kind]) {
+            grouped[symbol.kind] = [];
+        }
+        grouped[symbol.kind].push(symbol);
+    }
+    return grouped;
+}
+
+function extractSymbolName(symbolId: string): string {
+    // symbol_id format is typically "path:class_name" or "path:function_name"
+    const parts = symbolId.split(':');
+    if (parts.length > 1) {
+        return parts[parts.length - 1].replace(/^(class_|function_)/, '');
+    }
+    return symbolId;
+}
+
+
+
+/* ---- File: src/ui/symbolHistory.ts ---- */
+
+import * as vscode from 'vscode';
+import { TreeNode, toVSCodeTreeItem } from '../contracts/treeNodes';
+
+export class SymbolHistoryProvider implements vscode.TreeDataProvider<TreeNode> {
+  private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | null | void> =
+    new vscode.EventEmitter<TreeNode | undefined | null | void>();
+  readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | null | void> =
+    this._onDidChangeTreeData.event;
+
+  private searchQuery: string = '';
+
+  constructor(private context: vscode.ExtensionContext) { }
+
+  refresh(): void {
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(element: TreeNode): vscode.TreeItem {
+    return toVSCodeTreeItem(element);
+  }
+
+  async getChildren(element?: TreeNode): Promise<TreeNode[]> {
+    if (!element) {
+      // Root level - show search input and recent symbols
+      return this.getSymbolSearchResults();
+    }
+
+    // Child level - show symbol history timeline
+    return this.getSymbolTimeline(element);
+  }
+
+  private async getSymbolSearchResults(): Promise<TreeNode[]> {
+    try {
+      const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+      await ensureDatabaseInitialized();
+      const db = getDatabaseManager().getDatabase();
+
+      if (this.searchQuery) {
+        // Search mode - show matching symbols
+        const { getSearchIndex } = await import('../storage/index');
+        const searchIndex = getSearchIndex();
+        const results = searchIndex.searchSymbols(this.searchQuery, 20);
+
+        if (results.length === 0) {
+          return [{
+            id: 'no-symbols',
+            type: 'risk' as const,
+            label: 'No symbols found',
+            description: `No matches for "${this.searchQuery}"`,
+            icon: 'search'
+          }];
+        }
+
+        // Group by file for search results
+        const fileGroups = new Map<string, any[]>();
+        for (const result of results) {
+          const key = result.path || 'unknown';
+          if (!fileGroups.has(key)) {
+            fileGroups.set(key, []);
+          }
+          fileGroups.get(key)!.push(result);
+        }
+
+        const items: TreeNode[] = [];
+        for (const [filePath, symbols] of fileGroups) {
+          items.push({
+            id: `file-${filePath}`,
+            type: 'file' as const,
+            path: filePath,
+            sha: symbols[0]?.sha || '',
+            stats: {
+              added: symbols.filter(s => s.change_type === 'added').length,
+              modified: symbols.filter(s => s.change_type === 'modified').length,
+              removed: symbols.filter(s => s.change_type === 'removed').length
+            },
+            label: filePath.split('/').pop() || filePath,
+            description: filePath,
+            tooltip: `${symbols.length} matching symbols`,
+            children: symbols.map(s => ({
+              id: `${filePath}-${s.name}`,
+              type: 'symbol' as const,
+              symbolId: s.id || 0,
+              semanticId: s.symbol_id || '',
+              name: s.name,
+              kind: s.kind,
+              path: filePath,
+              sha: s.sha,
+              label: `${s.name} (${s.kind})`,
+              description: s.change_type,
+              icon: `symbol-${s.kind}`
+            })),
+            icon: 'file'
+          });
+        }
+        return items;
+      } else {
+        // Default mode - show recent files with their symbols
+        const stmt = db.prepare(`
+          SELECT s.path, s.name, s.kind, s.change_type, c.date, s.sha
+          FROM symbols s
+          JOIN commits c ON s.sha = c.sha
+          ORDER BY c.date DESC, s.path, s.name
+          LIMIT 100
+        `);
+        const results = stmt.all() as any[];
+
+        if (results.length === 0) {
+          return [{
+            id: 'no-symbols',
+            type: 'risk' as const,
+            label: 'No symbols analyzed yet',
+            description: 'Run "Analyze Last N Commits" to populate',
+            icon: 'search'
+          }];
+        }
+
+        // Group by file path
+        const fileGroups = new Map<string, any[]>();
+        for (const result of results) {
+          const key = result.path;
+          if (!fileGroups.has(key)) {
+            fileGroups.set(key, []);
+          }
+          fileGroups.get(key)!.push(result);
+        }
+
+        const items: TreeNode[] = [];
+        for (const [filePath, symbols] of fileGroups) {
+          const added = symbols.filter(s => s.change_type === 'added').length;
+          const modified = symbols.filter(s => s.change_type === 'modified' || s.change_type === 'signature_changed').length;
+          const removed = symbols.filter(s => s.change_type === 'removed').length;
+
+          const changeSummary = [];
+          if (added > 0) changeSummary.push(`+${added}`);
+          if (modified > 0) changeSummary.push(`~${modified}`);
+          if (removed > 0) changeSummary.push(`-${removed}`);
+
+          items.push({
+            id: `file-${filePath}`,
+            type: 'file' as const,
+            path: filePath,
+            sha: symbols[0]?.sha || '',
+            stats: { added, modified, removed },
+            label: filePath.split('/').pop() || filePath,
+            description: `${changeSummary.join(' ')} · ${filePath}`,
+            tooltip: `${symbols.length} total symbols\nAdded: ${added}, Modified: ${modified}, Removed: ${removed}`,
+            children: symbols.map(s => ({
+              id: `${filePath}-${s.sha}-${s.name}`,
+              type: 'symbol' as const,
+              symbolId: s.id || 0,
+              semanticId: s.symbol_id || '',
+              name: s.name,
+              kind: s.kind,
+              path: filePath,
+              sha: s.sha,
+              label: `${s.change_type === 'added' ? '➕' : s.change_type === 'removed' ? '➖' : '✏️'} ${s.name}`,
+              description: `${s.kind}`,
+              tooltip: `${s.change_type} in ${s.sha.substring(0, 8)}`,
+              icon: `symbol-${s.kind}`
+            })),
+            icon: 'file'
+          });
+        }
+        return items;
+      }
+    } catch (error) {
+      console.error('Failed to load symbols:', error);
+      return [{
+        id: 'search-error',
+        type: 'risk' as const,
+        label: 'Failed to load symbols',
+        description: 'Error loading symbol data',
+        icon: 'error'
+      }];
+    }
+  }
+
+  private async getSymbolTimeline(symbol: TreeNode): Promise<TreeNode[]> {
+    // Children are already set in getSymbolSearchResults
+    return symbol.children || [];
+  }
+
+  setSearchQuery(query: string): void {
+    this.searchQuery = query;
+    this.refresh();
+  }
+}
+
+
+
+/* ---- File: src/utils/config.ts ---- */
+
+import { ExtensionConfig } from '../types';
+
+let vscode: any;
+try {
+  vscode = require('vscode');
+} catch {
+  // Ignore, running in CLI
+}
+
+export function getExtensionConfig(): ExtensionConfig {
+  if (vscode) {
+    const config = vscode.workspace.getConfiguration('git-context');
+    return {
+      openRouterApiKey: config.get('openRouterApiKey') || process.env.OPENROUTER_API_KEY,
+      openRouterModel: config.get('openRouterModel', 'anthropic/claude-3-haiku:beta'),
+      apiEndpoint: config.get('apiEndpoint', 'https://openrouter.ai/api/v1'),
+      difftasticPath: config.get('difftasticPath'),
+      defaultCommitCount: config.get('defaultCommitCount', 5)
+    };
+  } else {
+    // CLI fallback
+    return {
+      openRouterApiKey: process.env.OPENROUTER_API_KEY,
+      openRouterModel: process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku:beta',
+      apiEndpoint: process.env.API_ENDPOINT || 'https://openrouter.ai/api/v1',
+      difftasticPath: process.env.DIFFTASTIC_PATH,
+      defaultCommitCount: parseInt(process.env.DEFAULT_COMMIT_COUNT || '5')
+    };
+  }
+}
+
+export function getWorkspaceRoot(): string | undefined {
+  if (vscode) {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    return workspaceFolders?.[0]?.uri?.fsPath;
+  } else {
+    return process.cwd();
+  }
+}
+
+export function getGitRoot(): string | undefined {
+  const workspaceRoot = getWorkspaceRoot();
+  if (!workspaceRoot) return undefined;
+
+  // TODO: Find .git directory by walking up from workspace root
+  return workspaceRoot;
+}
+
+

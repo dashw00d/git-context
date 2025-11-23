@@ -110,6 +110,24 @@ class GitOperations {
         return this.execGit(['show', `${sha}:${filePath}`]);
     }
     /**
+     * Safely get file content, returning empty string if file doesn't exist
+     */
+    safeGetFileContent(sha, filePath) {
+        try {
+            return this.getFileContent(sha, filePath);
+        }
+        catch (error) {
+            const msg = error.message || String(error);
+            // Check for common git errors indicating file doesn't exist
+            if (msg.includes('exists on disk, but not in') ||
+                msg.includes('did not match any file') ||
+                msg.includes('does not exist in')) {
+                return '';
+            }
+            throw error;
+        }
+    }
+    /**
      * Get current HEAD SHA
      */
     getHeadSha() {

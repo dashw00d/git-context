@@ -57,8 +57,17 @@ async function analyzeCommit(sha) {
     const riskDetector = new heuristics_1.RiskDetector();
     const llmSummarizer = new summarizer_1.LLMSummarizer();
     const difftastic = (0, difftastic_1.getDifftasticIntegration)();
-    // Extract symbols
+    // Extract symbols with semantic enrichment
+    console.log(`Extracting symbols from ${files.length} files...`);
     const symbols = await symbolExtractor.extractCommitSymbols(sha, files);
+    console.log(`Found ${symbols.added.length} added, ${symbols.removed.length} removed, ${symbols.modified.length} modified symbols`);
+    if (symbols.renames.length > 0) {
+        console.log(`Detected ${symbols.renames.length} renames`);
+    }
+    if (symbols.moves.length > 0) {
+        console.log(`Detected ${symbols.moves.length} moves`);
+    }
+    console.log(`Extracted symbols: +${symbols.added.length} -${symbols.removed.length} ~${symbols.modified.length}`);
     // Extract dependencies and compare
     const fileContents = new Map();
     for (const file of files) {
@@ -67,19 +76,25 @@ async function analyzeCommit(sha) {
             continue;
         }
         try {
-            fileContents.set(file.path, git.getFileContent(sha, file.path));
+            fileContents.set(file.path, git.safeGetFileContent(sha, file.path));
         }
         catch {
             // Skip files that can't be read
         }
     }
-    const edges = dependencyExtractor.extractCommitEdges(sha, symbols, fileContents);
+    const edges = await dependencyExtractor.extractCommitEdges(sha, symbols, fileContents, files, git);
+    console.log(`Extracted edges: +${edges.added.length} -${edges.removed.length}`);
+    // Calculate blast radius for changed symbols
+    const changedSymbols = [...symbols.added, ...symbols.modified.map(m => m.symbol)];
+    const blastRadius = dependencyExtractor.calculateBlastRadius(changedSymbols, edges.added);
+    const totalImpact = Array.from(blastRadius.impactScore.values()).reduce((a, b) => a + b, 0);
+    console.log(`Blast radius calculated: ${totalImpact} total impacts across ${changedSymbols.length} changed symbols`);
     // Get difftastic highlights
     const difftasticHighlights = [];
     for (const file of files) {
         if (file.status === 'M') {
             try {
-                const highlights = await difftastic.getCommitStructuralHighlights(sha, file.path);
+                const highlights = await difftastic.getCommitStructuralHighlights(sha, file.path, file.oldPath);
                 difftasticHighlights.push(...highlights.highlights);
             }
             catch {
@@ -107,11 +122,11 @@ async function analyzeCommit(sha) {
         console.warn(`LLM summarization failed for ${sha}:`, error);
     }
     // Store in database
-    await storeAnalysisResult(analysis);
+    await storeAnalysisResult(analysis, symbols);
     console.log(`Stored analysis for ${sha}`);
 }
 exports.analyzeCommit = analyzeCommit;
-async function storeAnalysisResult(analysis) {
+async function storeAnalysisResult(analysis, symbols) {
     const db = (0, database_1.getDatabaseManager)().getDatabase();
     // Insert commit
     const commitStmt = db.prepare(`
@@ -130,24 +145,42 @@ async function storeAnalysisResult(analysis) {
     for (const file of analysis.files) {
         fileStmt.run(analysis.commit.sha, file.path, file.status, null); // TODO: detect language
     }
-    // Insert symbols
+    // Insert symbols with enhanced semantic information
     const symbolStmt = db.prepare(`
     INSERT OR REPLACE INTO symbols
-    (sha, path, symbol_id, name, kind, signature_pre, signature_post, loc_pre, loc_post, change_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (sha, path, symbol_id, name, kind, signature_pre, signature_post, loc_pre, loc_post, change_type, mod_reason, diff_snippet_pre, diff_snippet_post, confidence)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
     // Added symbols
-    for (const symbol of analysis.symbols.added) {
+    for (const symbol of symbols.added) {
         symbolStmt.run(analysis.commit.sha, symbol.id.split(':')[0], // Extract path from ID
-        symbol.id, symbol.name, symbol.kind, null, symbol.signature, null, JSON.stringify(symbol.location), 'added');
+        symbol.id, symbol.name, symbol.kind, null, symbol.signature, null, JSON.stringify(symbol.location), 'added', null, null, null, 1.0);
     }
     // Removed symbols
-    for (const symbol of analysis.symbols.removed) {
-        symbolStmt.run(analysis.commit.sha, symbol.id.split(':')[0], symbol.id, symbol.name, symbol.kind, symbol.signature, null, JSON.stringify(symbol.location), null, 'removed');
+    for (const symbol of symbols.removed) {
+        symbolStmt.run(analysis.commit.sha, symbol.id.split(':')[0], symbol.id, symbol.name, symbol.kind, symbol.signature, null, JSON.stringify(symbol.location), null, 'removed', null, null, null, 1.0);
     }
-    // Modified symbols
-    for (const delta of analysis.symbols.modified) {
-        symbolStmt.run(analysis.commit.sha, delta.symbol.id.split(':')[0], delta.symbol.id, delta.symbol.name, delta.symbol.kind, delta.previousSymbol?.signature || null, delta.symbol.signature, delta.previousSymbol ? JSON.stringify(delta.previousSymbol.location) : null, JSON.stringify(delta.symbol.location), delta.changeType);
+    // Modified symbols with semantic enhancement
+    for (const delta of symbols.modified) {
+        symbolStmt.run(analysis.commit.sha, delta.symbol.id.split(':')[0], delta.symbol.id, delta.symbol.name, delta.symbol.kind, delta.previousSymbol?.signature || null, delta.symbol.signature, delta.previousSymbol ? JSON.stringify(delta.previousSymbol.location) : null, JSON.stringify(delta.symbol.location), delta.changeType, delta.modReason || null, delta.diffSnippetPre || null, delta.diffSnippetPost || null, 1.0);
+    }
+    // Store renames as special symbol entries
+    for (const rename of symbols.renames) {
+        // Store the new symbol with rename metadata
+        symbolStmt.run(analysis.commit.sha, rename.newSymbol.id.split(':')[0], rename.newSymbol.id, rename.newSymbol.name, rename.newSymbol.kind, rename.oldSymbol.signature, rename.newSymbol.signature, JSON.stringify(rename.oldSymbol.location), JSON.stringify(rename.newSymbol.location), 'renamed', null, null, null, rename.confidence);
+    }
+    // Insert into renames table
+    const renamesStmt = db.prepare(`
+    INSERT OR REPLACE INTO renames
+    (sha, path, old_symbol_id, new_symbol_id, old_name, new_name, confidence)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+    for (const rename of symbols.renames) {
+        renamesStmt.run(analysis.commit.sha, rename.newSymbol.id.split(':')[0], rename.oldSymbol.id, rename.newSymbol.id, rename.oldSymbol.name, rename.newSymbol.name, rename.confidence);
+    }
+    // Store moves as special symbol entries
+    for (const move of symbols.moves) {
+        symbolStmt.run(analysis.commit.sha, move.newPath, move.symbol.id, move.symbol.name, move.symbol.kind, null, move.symbol.signature, null, JSON.stringify(move.symbol.location), 'moved', null, null, null, move.confidence);
     }
     // Insert edges
     const edgeStmt = db.prepare(`

@@ -2,18 +2,21 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SymbolExtractor = void 0;
 const tree_sitter_1 = require("./tree-sitter");
+const semanticChanges_1 = require("./semanticChanges");
 class SymbolExtractor {
     constructor(git) {
         this.parser = (0, tree_sitter_1.getTreeSitterParser)();
+        this.semanticDetector = new semanticChanges_1.SemanticChangeDetector();
         this.git = git;
     }
     /**
-     * Extract symbols from all changed files in a commit
+     * Extract symbols from all changed files in a commit with semantic enrichment
      */
     async extractCommitSymbols(sha, files) {
         const added = [];
         const removed = [];
         const modified = [];
+        // Collect symbols from all files
         for (const file of files) {
             if (this.shouldAnalyzeFile(file.path)) {
                 const fileSymbols = await this.extractFileSymbols(sha, file);
@@ -22,7 +25,36 @@ class SymbolExtractor {
                 modified.push(...fileSymbols.modified);
             }
         }
-        return { added, removed, modified };
+        // Get parent commit for comparison
+        let parentSha;
+        try {
+            const commitInfo = this.git.getCommitInfo(sha);
+            parentSha = commitInfo.parent;
+        }
+        catch (error) {
+            // No parent commit available
+        }
+        // Perform semantic analysis for renames and moves
+        const renames = parentSha ?
+            this.semanticDetector.detectRenames(removed, added) : [];
+        // For moves, we need symbols from previous commit
+        let previousSymbols = [];
+        if (parentSha) {
+            try {
+                const previousCommitSymbols = await this.extractCommitSymbols(parentSha, files);
+                previousSymbols = [
+                    ...previousCommitSymbols.added,
+                    ...previousCommitSymbols.removed,
+                    ...previousCommitSymbols.modified.map(m => m.symbol)
+                ];
+            }
+            catch (error) {
+                // Can't get previous symbols
+            }
+        }
+        const currentSymbols = [...added, ...modified.map(m => m.symbol)];
+        const moves = this.semanticDetector.detectMoves(previousSymbols, currentSymbols);
+        return { added, removed, modified, renames, moves };
     }
     /**
      * Extract symbols from a single file in a commit
@@ -69,6 +101,17 @@ class SymbolExtractor {
                 : [];
             // Compare and categorize changes
             const changes = this.compareSymbolSets(previousSymbols, currentSymbols, file.path);
+            // Enhance modified symbols with semantic information
+            for (const delta of changes.modified) {
+                // Classify modification reason
+                delta.modReason = this.semanticDetector.classifyModificationReason(delta);
+                // Capture diff snippets if content available
+                if (previousContent && currentContent) {
+                    const snippets = this.semanticDetector.extractDiffSnippets(previousContent, currentContent, delta.symbol);
+                    delta.diffSnippetPre = snippets.pre;
+                    delta.diffSnippetPost = snippets.post;
+                }
+            }
             added.push(...changes.added);
             removed.push(...changes.removed);
             modified.push(...changes.modified);
@@ -94,6 +137,7 @@ class SymbolExtractor {
         // Add unique IDs and ensure they include file path for uniqueness
         return symbols.map(symbol => ({
             ...symbol,
+            semanticId: symbol.id,
             id: `${filePath}:${symbol.id}`
         }));
     }

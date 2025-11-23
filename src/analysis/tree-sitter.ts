@@ -44,6 +44,7 @@ export class TreeSitterParser {
           const parser = new Parser();
           parser.setLanguage(language);
           this.parsers.set(lang, parser);
+          console.log(`✓ Loaded tree-sitter parser for ${lang}`);
         } else {
           // Fallback to checking root if not in out yet (dev mode)
           const rootWasmPath = path.join(__dirname, '..', '..', `tree-sitter-${lang}.wasm`);
@@ -52,13 +53,15 @@ export class TreeSitterParser {
             const parser = new Parser();
             parser.setLanguage(language);
             this.parsers.set(lang, parser);
+            console.log(`✓ Loaded tree-sitter parser for ${lang} (dev mode)`);
           } else {
-            console.warn(`Language WASM not found: ${wasmPath}`);
+            console.warn(`✗ Language WASM not found for ${lang}: ${wasmPath}`);
           }
         }
       }
 
       this.initialized = true;
+      console.log(`Tree-sitter initialized with ${this.parsers.size} parsers`);
     } catch (error) {
       console.error('Failed to initialize tree-sitter parsers:', error);
       // Don't throw, just log. This allows the extension to work without tree-sitter

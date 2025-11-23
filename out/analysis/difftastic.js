@@ -149,49 +149,18 @@ class DifftasticIntegration {
                 hasStructuralChanges: false
             };
         }
+        // Simple parsing: just capture relevant lines without overfitting
         const lines = output.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            // Look for structural change indicators
-            if (line.includes('function') && (line.includes('->') || line.includes('changed'))) {
-                highlights.push(`Function signature change: ${line.trim()}`);
-                morphs.push({
-                    type: 'signature_change',
-                    description: `Function modified: ${line.trim()}`,
-                    location: this.extractLocationFromLine(line)
-                });
-            }
-            if (line.includes('class') && (line.includes('->') || line.includes('changed'))) {
-                highlights.push(`Class structure change: ${line.trim()}`);
-                morphs.push({
-                    type: 'refactor',
-                    description: `Class modified: ${line.trim()}`,
-                    location: this.extractLocationFromLine(line)
-                });
-            }
-            // Look for moved blocks
-            if (line.includes('moved') || line.includes('relocated')) {
-                highlights.push(`Code block moved: ${line.trim()}`);
-                morphs.push({
-                    type: 'moved_block',
-                    description: `Block relocated: ${line.trim()}`,
-                    location: this.extractLocationFromLine(line)
-                });
-            }
-            // Look for renames
-            if (line.includes('renamed') || (line.includes('->') && !line.includes('function') && !line.includes('class'))) {
-                highlights.push(`Symbol renamed: ${line.trim()}`);
-                morphs.push({
-                    type: 'rename',
-                    description: `Symbol renamed: ${line.trim()}`,
-                    location: this.extractLocationFromLine(line)
-                });
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed && !trimmed.startsWith('File ')) {
+                highlights.push(trimmed);
             }
         }
         return {
             highlights,
             morphs,
-            hasStructuralChanges: highlights.length > 0
+            hasStructuralChanges: true
         };
     }
     /**
@@ -205,7 +174,10 @@ class DifftasticIntegration {
     /**
      * Run difftastic on a git commit to get structural highlights
      */
-    async getCommitStructuralHighlights(sha, filePath) {
+    /**
+     * Run difftastic on a git commit to get structural highlights
+     */
+    async getCommitStructuralHighlights(sha, filePath, oldPath) {
         try {
             // Get file content at commit and its parent
             const git = new (require('./git').GitOperations)();
@@ -218,9 +190,17 @@ class DifftasticIntegration {
                     hasStructuralChanges: false
                 };
             }
-            const newContent = git.getFileContent(sha, filePath);
-            const oldContent = git.getFileContent(commitInfo.parent, filePath);
-            return await this.runDifftastic(oldContent, newContent, filePath, filePath);
+            const newContent = git.safeGetFileContent(sha, filePath);
+            const parentPath = oldPath || filePath;
+            const oldContent = git.safeGetFileContent(commitInfo.parent, parentPath);
+            if (!newContent && !oldContent) {
+                return {
+                    highlights: [],
+                    morphs: [],
+                    hasStructuralChanges: false
+                };
+            }
+            return await this.runDifftastic(oldContent, newContent, parentPath, filePath);
         }
         catch (error) {
             console.warn(`Failed to get structural highlights for ${filePath} at ${sha}:`, error);

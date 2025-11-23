@@ -31,6 +31,10 @@ export declare class GitOperations {
      */
     getFileContent(sha: string, filePath: string): string;
     /**
+     * Safely get file content, returning empty string if file doesn't exist
+     */
+    safeGetFileContent(sha: string, filePath: string): string;
+    /**
      * Get current HEAD SHA
      */
     getHeadSha(): string;

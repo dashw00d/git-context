@@ -1,11 +1,28 @@
 import * as vscode from 'vscode';
-import { TreeItem } from '../types';
+import { TreeNode, isCommitNode, isFileNode, isCategoryNode, isSymbolNode, getCollapsibleState, toVSCodeTreeItem } from '../contracts/treeNodes';
 
-export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeItem> {
-  private _onDidChangeTreeData: vscode.EventEmitter<TreeItem | undefined | null | void> =
-    new vscode.EventEmitter<TreeItem | undefined | null | void>();
-  readonly onDidChangeTreeData: vscode.Event<TreeItem | undefined | null | void> =
+export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> {
+  private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | null | void> =
+    new vscode.EventEmitter<TreeNode | undefined | null | void>();
+  readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | null | void> =
     this._onDidChangeTreeData.event;
+
+  // Track selected commits for multi-report generation
+  public selectedCommits = new Set<string>();
+
+  toggleCommitSelection(sha: string): void {
+    if (this.selectedCommits.has(sha)) {
+      this.selectedCommits.delete(sha);
+    } else {
+      this.selectedCommits.add(sha);
+    }
+    this.refresh();
+  }
+
+  clearSelection(): void {
+    this.selectedCommits.clear();
+    this.refresh();
+  }
 
   constructor(private context: vscode.ExtensionContext) { }
 
@@ -13,24 +30,37 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeItem> 
     this._onDidChangeTreeData.fire();
   }
 
-  getTreeItem(element: TreeItem): vscode.TreeItem {
-    const hasChildren = element.children && element.children.length > 0;
+  getTreeItem(element: TreeNode): vscode.TreeItem {
+    // Determine if this element should be expandable
+    let collapsibleState = vscode.TreeItemCollapsibleState.None;
+
+    if (element.contextValue === 'commit') {
+      // Commits are always expandable
+      collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+    } else if (element.children && element.children.length > 0) {
+      // Items with pre-populated children (like risks, file groups)
+      collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+    } else if (element.id && !element.command) {
+      // Categories without commands (like "Added Symbols") are expandable
+      // Individual symbols have commands so they won't be expandable
+      if (element.id.match(/-(added|modified|removed|files)$/)) {
+        collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+      }
+    }
 
     return {
       id: element.id,
       label: element.label,
       description: element.description,
       tooltip: element.tooltip,
-      collapsibleState: hasChildren
-        ? vscode.TreeItemCollapsibleState.Collapsed
-        : vscode.TreeItemCollapsibleState.None,
+      collapsibleState,
       iconPath: element.icon ? new vscode.ThemeIcon(element.icon) : undefined,
       command: element.command,
       contextValue: element.contextValue
     };
   }
 
-  async getChildren(element?: TreeItem): Promise<TreeItem[]> {
+  async getChildren(element?: TreeNode): Promise<TreeNode[]> {
     if (!element) {
       // Root level - show recent commits
       return this.getRecentCommits();
@@ -40,7 +70,7 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeItem> 
     return this.getCommitDetails(element);
   }
 
-  private async getRecentCommits(): Promise<TreeItem[]> {
+  private async getRecentCommits(): Promise<TreeNode[]> {
     try {
       const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
       await ensureDatabaseInitialized();
@@ -56,16 +86,21 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeItem> 
       const commits = stmt.all() as any[];
 
       return commits.map(commit => {
-        const risks = JSON.parse(commit.risks || '[]');
-        const riskIndicator = risks.length > 0 ? ' ⚠️' : '';
+        const shortSha = commit.sha.substring(0, 8);
+        const isSelected = this.selectedCommits.has(commit.sha);
+        const checkbox = isSelected ? '☑ ' : '☐ ';
 
         return {
           id: commit.sha,
-          label: commit.sha.substring(0, 8),
-          description: commit.message.split('\n')[0] + riskIndicator,
-          tooltip: `Author: ${commit.author}\nDate: ${commit.date}\nFiles: ${commit.files_changed}, Symbols: +${commit.symbols_added} -${commit.symbols_removed} ~${commit.symbols_modified}`,
-          children: this.getCommitChildren(commit),
-          icon: 'git-commit',
+          type: 'commit' as const,
+          sha: commit.sha,
+          message: commit.message,
+          author: commit.author,
+          date: commit.date,
+          isSelected,
+          label: `${checkbox}${shortSha} - ${commit.message.split('\n')[0]}`,
+          description: `${commit.author} · ${new Date(commit.date).toLocaleDateString()}`,
+          tooltip: `${commit.message}\n\nClick to expand\nRight-click to toggle selection for report`,
           contextValue: 'commit'
         };
       });
@@ -75,6 +110,7 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeItem> 
       const errorMessage = error instanceof Error ? error.message : String(error);
       return [{
         id: 'error',
+        type: 'risk' as const,
         label: 'Error loading commits',
         description: errorMessage,
         icon: 'error'
@@ -82,84 +118,326 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeItem> 
     }
   }
 
-  private getCommitChildren(commit: any): TreeItem[] {
-    const children: TreeItem[] = [];
+  private async getCommitChildren(commit: any): Promise<TreeNode[]> {
+    const children: TreeNode[] = [];
 
+    // Add summary if available
+    if (commit.summary_md) {
+      children.push({
+        id: `${commit.sha}-summary`,
+        type: 'risk' as const,
+        label: '📝 Summary',
+        description: commit.summary_md.split('\n')[0].substring(0, 50) + '...',
+        tooltip: commit.summary_md,
+        icon: 'note'
+      });
+    }
+
+    // Add files changed
+    if (commit.files_changed > 0) {
+      children.push({
+        id: `${commit.sha}-files`,
+        type: 'category' as const,
+        categoryType: 'added' as const, // Using 'added' as a placeholder since files can be added/modified/removed
+        parentId: commit.sha,
+        count: commit.files_changed,
+        label: `📁 Files Changed (${commit.files_changed})`,
+        icon: 'files'
+      });
+    }
+
+    // Add symbol changes
     if (commit.symbols_added > 0) {
       children.push({
         id: `${commit.sha}-added`,
-        label: `Symbols Added (${commit.symbols_added})`,
-        icon: 'add',
-        children: [] // Will be populated when expanded
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: commit.sha,
+        count: commit.symbols_added,
+        label: `➕ Added Symbols (${commit.symbols_added})`,
+        children: [], // Will be populated in getCommitDetails
+        icon: 'add'
       });
     }
 
     if (commit.symbols_modified > 0) {
       children.push({
         id: `${commit.sha}-modified`,
-        label: `Symbols Modified (${commit.symbols_modified})`,
-        icon: 'edit',
-        children: []
+        type: 'category' as const,
+        categoryType: 'modified' as const,
+        parentId: commit.sha,
+        count: commit.symbols_modified,
+        label: `✏️ Modified Symbols (${commit.symbols_modified})`,
+        children: [], // Will be populated in getCommitDetails
+        icon: 'edit'
       });
     }
 
     if (commit.symbols_removed > 0) {
       children.push({
         id: `${commit.sha}-removed`,
-        label: `Symbols Removed (${commit.symbols_removed})`,
-        icon: 'remove',
-        children: []
+        type: 'category' as const,
+        categoryType: 'removed' as const,
+        parentId: commit.sha,
+        count: commit.symbols_removed,
+        label: `➖ Removed Symbols (${commit.symbols_removed})`,
+        children: [], // Will be populated in getCommitDetails
+        icon: 'remove'
       });
     }
 
+    // Note: Semantic categories (renames, moves) will be loaded dynamically in getChildren
+    // when the commit node is expanded to avoid async issues here
+
+    // Add risks if any
     const risks = JSON.parse(commit.risks || '[]');
     if (risks.length > 0) {
       children.push({
         id: `${commit.sha}-risks`,
-        label: `Risks (${risks.length})`,
-        icon: 'warning',
-        children: risks.map((risk: string) => ({
-          id: `${commit.sha}-risk-${risk}`,
+        type: 'category' as const,
+        categoryType: 'risks' as const,
+        parentId: commit.sha,
+        count: risks.length,
+        label: `⚠️ Risks (${risks.length})`,
+        children: risks.map((risk: string, idx: number) => ({
+          id: `${commit.sha}-risk-${idx}`,
+          type: 'risk' as const,
           label: risk,
-          icon: 'issue-opened'
-        }))
+          icon: 'warning'
+        })),
+        icon: 'warning'
       });
     }
 
     return children;
   }
 
-  private async getCommitDetails(element: TreeItem): Promise<TreeItem[]> {
-    const [sha, type] = element.id.split('-');
-
+  private async getCommitDetails(element: TreeNode): Promise<TreeNode[]> {
     try {
       const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
       await ensureDatabaseInitialized();
       const db = getDatabaseManager().getDatabase();
 
-      if (type === 'added' || type === 'modified' || type === 'removed') {
-        const stmt = db.prepare(`
-          SELECT name, kind FROM symbols
-          WHERE sha = ? AND change_type = ?
-          ORDER BY kind, name
-        `);
+      // Check if this is a commit (SHA only) or a category
+      const parts = element.id.split('-');
 
-        const symbols = stmt.all(sha, type) as any[];
-        return symbols.map(symbol => ({
-          id: `${element.id}-${symbol.name}`,
-          label: `${symbol.kind} ${symbol.name}`,
-          icon: `symbol-${symbol.kind}`,
-          command: {
-            command: 'vscode.open',
-            title: 'Open file',
-            arguments: [] // TODO: Add file opening logic
+      if (parts.length === 1) {
+        // This is a commit - fetch and return its children grouped by file
+        const sha = element.id;
+
+        // Get all symbols for this commit
+        const symbolsStmt = db.prepare(`
+          SELECT name, kind, path, change_type, loc_post, id
+          FROM symbols
+          WHERE sha = ?
+          ORDER BY path, change_type, name
+        `);
+        const allSymbols = symbolsStmt.all(sha) as any[];
+
+        if (allSymbols.length === 0) {
+          return [{
+            id: `${sha}-no-symbols`,
+            type: 'risk' as const,
+            label: 'No symbols found',
+            icon: 'info'
+          }];
+        }
+
+        // Group by file path
+        const fileGroups = new Map<string, any[]>();
+        for (const symbol of allSymbols) {
+          if (!fileGroups.has(symbol.path)) {
+            fileGroups.set(symbol.path, []);
           }
+          fileGroups.get(symbol.path)!.push(symbol);
+        }
+
+        const children: TreeNode[] = [];
+
+        for (const [filePath, symbols] of fileGroups) {
+          const added = symbols.filter(s => s.change_type === 'added');
+          const modified = symbols.filter(s => s.change_type === 'modified' || s.change_type === 'signature_changed');
+          const removed = symbols.filter(s => s.change_type === 'removed');
+
+          const fileName = filePath.split('/').pop() || filePath;
+          const changeDesc = [];
+          if (added.length > 0) changeDesc.push(`+${added.length}`);
+          if (modified.length > 0) changeDesc.push(`~${modified.length}`);
+          if (removed.length > 0) changeDesc.push(`-${removed.length}`);
+
+          const fileChildren: TreeNode[] = [];
+
+          // Add "Added" category if any
+          if (added.length > 0) {
+            fileChildren.push({
+              id: `${sha}-${filePath}-added`,
+              type: 'category' as const,
+              categoryType: 'added' as const,
+              parentId: `${sha}-${filePath}`,
+              count: added.length,
+              label: `➕ Added (${added.length})`,
+              children: added.map(s => this.createSymbolItem(sha, s)),
+              icon: 'add'
+            });
+          }
+
+          // Add "Modified" category if any
+          if (modified.length > 0) {
+            fileChildren.push({
+              id: `${sha}-${filePath}-modified`,
+              type: 'category' as const,
+              categoryType: 'modified' as const,
+              parentId: `${sha}-${filePath}`,
+              count: modified.length,
+              label: `✏️ Modified (${modified.length})`,
+              children: modified.map(s => this.createSymbolItem(sha, s)),
+              icon: 'edit'
+            });
+          }
+
+          // Add "Removed" category if any
+          if (removed.length > 0) {
+            fileChildren.push({
+              id: `${sha}-${filePath}-removed`,
+              type: 'category' as const,
+              categoryType: 'removed' as const,
+              parentId: `${sha}-${filePath}`,
+              count: removed.length,
+              label: `➖ Removed (${removed.length})`,
+              children: removed.map(s => this.createSymbolItem(sha, s)),
+              icon: 'remove'
+            });
+          }
+
+          children.push({
+            id: `${sha}-file-${filePath}`,
+            type: 'file' as const,
+            path: filePath,
+            sha: sha,
+            stats: {
+              added: added.length,
+              modified: modified.length,
+              removed: removed.length
+            },
+            label: fileName,
+            description: `${changeDesc.join(' ')} · ${filePath}`,
+            tooltip: filePath,
+            children: fileChildren,
+            icon: 'file'
+          });
+        }
+
+        // Add risks at the end
+        const commitStmt = db.prepare(`SELECT risks FROM commits WHERE sha = ?`);
+        const commit = commitStmt.get(sha) as any;
+        const risks = JSON.parse(commit?.risks || '[]');
+
+        if (risks.length > 0) {
+          children.push({
+            id: `${sha}-risks`,
+            type: 'category' as const,
+            categoryType: 'risks' as const,
+            parentId: sha,
+            count: risks.length,
+            label: `⚠️ Risks (${risks.length})`,
+            children: risks.map((risk: string, idx: number) => ({
+              id: `${sha}-risk-${idx}`,
+              type: 'risk' as const,
+              label: risk,
+              icon: 'warning'
+            })),
+            icon: 'warning'
+          });
+        }
+
+        return children;
+      } else if (parts.length >= 2 && (parts[1] === 'added' || parts[1] === 'modified' || parts[1] === 'removed')) {
+        // Handle symbol categories (added, modified, removed)
+        const sha = parts[0];
+        const categoryType = parts[1];
+
+        const symbolsStmt = db.prepare(`
+          SELECT id, name, kind, path, change_type, mod_reason, confidence
+          FROM symbols
+          WHERE sha = ? AND change_type = ?
+          ORDER BY path, name
+        `);
+        const symbols = symbolsStmt.all(sha, categoryType) as any[];
+
+        return symbols.map(symbol => this.createSymbolItem(sha, symbol));
+      } else if (parts.length >= 2 && (parts[1] === 'renames' || parts[1] === 'moves')) {
+        // Handle renames or moves category
+        const sha = parts[0];
+        const changeType = parts[1] === 'renames' ? 'renamed' : 'moved';
+
+        const symbolsStmt = db.prepare(`
+          SELECT id, name, kind, path, confidence
+          FROM symbols
+          WHERE sha = ? AND change_type = ?
+          ORDER BY confidence DESC, name
+        `);
+        const symbols = symbolsStmt.all(sha, changeType) as any[];
+
+        return symbols.map(symbol => ({
+          id: `${sha}-${changeType}-symbol-${symbol.id}`,
+          type: 'symbol' as const,
+          symbolId: symbol.id,
+          semanticId: symbol.id, // For renames/moves, this is the semantic ID
+          name: symbol.name,
+          kind: symbol.kind,
+          path: symbol.path,
+          sha: sha,
+          label: `${symbol.name} (${symbol.kind}) - ${Math.round(symbol.confidence * 100)}%`,
+          icon: changeType === 'renamed' ? 'arrow-right' : 'arrow-right',
+          tooltip: `${changeType === 'renamed' ? 'Renamed' : 'Moved'} symbol with ${Math.round(symbol.confidence * 100)}% confidence`
         }));
       }
     } catch (error) {
       console.error('Failed to load commit details:', error);
+      return [{
+        id: `${element.id}-error`,
+        type: 'risk' as const,
+        label: 'Error loading details',
+        description: String(error),
+        icon: 'error'
+      }];
     }
 
     return [];
+  }
+
+  private createSymbolItem(sha: string, symbol: any): TreeNode {
+    // Parse location if available
+    let range: vscode.Range | undefined;
+    try {
+      const loc = symbol.loc_post ? JSON.parse(symbol.loc_post) : null;
+      if (loc && loc.start) {
+        range = new vscode.Range(
+          new vscode.Position(loc.start.line - 1, loc.start.column || 0),
+          new vscode.Position(loc.end?.line - 1 || loc.start.line - 1, loc.end?.column || 0)
+        );
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+
+    return {
+      id: `${sha}-symbol-${symbol.id}`,
+      type: 'symbol' as const,
+      symbolId: symbol.id,
+      semanticId: symbol.symbol_id,
+      name: symbol.name,
+      kind: symbol.kind,
+      path: symbol.path,
+      sha: sha,
+      loc: symbol.loc_post ? JSON.parse(symbol.loc_post) : undefined,
+      label: `${symbol.kind} ${symbol.name}`,
+      icon: `symbol-${symbol.kind}`,
+      command: symbol.path ? {
+        command: 'git-context.openSymbol',
+        title: 'Open Symbol',
+        arguments: [sha, symbol.path, range]
+      } : undefined
+    };
   }
 }

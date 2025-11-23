@@ -2,7 +2,7 @@
   "name": "git-context",
   "displayName": "Git Context",
   "description": "Analyze git history and context",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/example/git-context.git"
@@ -26,24 +26,40 @@
     "commands": [
       {
         "command": "git-context.analyzeLastCommits",
-        "title": "CommitTracker: Analyze Last 5 Commits"
+        "title": "Analyze Last N Commits",
+        "category": "Git Context"
       },
       {
         "command": "git-context.analyzeStagedChanges",
-        "title": "CommitTracker: Analyze Staged Changes"
-      },
-      {
-        "command": "git-context.compareFilesToCommit",
-        "title": "CommitTracker: Compare Files to Commit..."
-      },
-      {
-        "command": "git-context.explainSymbolChange",
-        "title": "CommitTracker: Explain Symbol Change..."
+        "title": "Analyze Staged Changes",
+        "category": "Git Context"
       },
       {
         "command": "git-context.searchSymbols",
         "title": "Search Symbols",
-        "icon": "$(search)"
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.generateReport",
+        "title": "Generate Commit Analysis Report",
+        "category": "Git Context",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "git-context.exportLlmContext",
+        "title": "Export LLM Context (JSON)",
+        "category": "Git Context",
+        "icon": "$(export)"
+      },
+      {
+        "command": "git-context.toggleCommitSelection",
+        "title": "Toggle Selection",
+        "icon": "$(check)"
+      },
+      {
+        "command": "git-context.clearSelection",
+        "title": "Clear Selection",
+        "category": "Git Context"
       }
     ],
     "views": {
@@ -70,9 +86,21 @@
           "group": "navigation"
         },
         {
+          "command": "git-context.generateReport",
+          "when": "view == commitTracker",
+          "group": "navigation"
+        },
+        {
           "command": "git-context.searchSymbols",
           "when": "view == symbolHistory",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "git-context.toggleCommitSelection",
+          "when": "view == commitTracker && viewItem == commit",
+          "group": "inline"
         }
       ]
     },

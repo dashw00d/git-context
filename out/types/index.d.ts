@@ -12,6 +12,7 @@ export interface FileChange {
 }
 export interface SymbolInfo {
     id: string;
+    semanticId?: string;
     name: string;
     kind: 'function' | 'class' | 'method' | 'const' | 'interface' | 'type' | 'variable';
     signature: string;
@@ -32,11 +33,16 @@ export interface SymbolDelta {
     symbol: SymbolInfo;
     changeType: SymbolChangeType;
     previousSymbol?: SymbolInfo;
+    modReason?: ModReason;
+    diffSnippetPre?: string;
+    diffSnippetPost?: string;
 }
 export interface EdgeInfo {
     from: string;
     to: string;
-    type: 'imports' | 'calls' | 'extends' | 'implements';
+    type: 'imports' | 'calls' | 'extends' | 'implements' | 'uses';
+    confidence?: number;
+    isResolved?: boolean;
 }
 export interface EdgeDelta {
     edge: EdgeInfo;
@@ -82,8 +88,8 @@ export interface CommitSummary {
     edges_removed: number;
     risks: string[];
 }
-export interface TreeItem {
-    id: string;
+export type NodeType = "commit" | "file" | "category" | "symbol" | "risk";
+export interface TreeItem extends TreeNodeBase {
     label: string;
     description?: string;
     tooltip?: string;
@@ -92,6 +98,12 @@ export interface TreeItem {
     icon?: string;
     contextValue?: string;
 }
+export interface TreeNodeBase {
+    id: string;
+    type: NodeType;
+}
+export type ChangeType = "added" | "modified" | "signature_changed" | "removed" | "renamed" | "moved";
+export type ModReason = "body_changed" | "signature_changed" | "doc_changed" | "visibility_changed" | "annotation_changed";
 export interface ExtensionConfig {
     openRouterApiKey?: string;
     openRouterModel: string;

@@ -3,14 +3,26 @@ import { GitOperations } from './git';
 export declare class SymbolExtractor {
     private git;
     private parser;
+    private semanticDetector;
     constructor(git: GitOperations);
     /**
-     * Extract symbols from all changed files in a commit
+     * Extract symbols from all changed files in a commit with semantic enrichment
      */
     extractCommitSymbols(sha: string, files: FileChange[]): Promise<{
         added: SymbolInfo[];
         removed: SymbolInfo[];
         modified: SymbolDelta[];
+        renames: Array<{
+            oldSymbol: SymbolInfo;
+            newSymbol: SymbolInfo;
+            confidence: number;
+        }>;
+        moves: Array<{
+            symbol: SymbolInfo;
+            oldPath: string;
+            newPath: string;
+            confidence: number;
+        }>;
     }>;
     /**
      * Extract symbols from a single file in a commit
