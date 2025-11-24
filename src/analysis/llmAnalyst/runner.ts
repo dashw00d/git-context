@@ -55,6 +55,9 @@ export class LlmAnalyst {
       const summary = this.generateSummary(blocks, facts);
       const markdown = this.generateMarkdown(blocks, facts);
 
+      // Calculate health score
+      const healthScore = this.calculateHealthScore(facts);
+
       return {
         summary,
         blocks,
@@ -63,7 +66,8 @@ export class LlmAnalyst {
           totalCalls,
           totalTokens,
           model: getExtensionConfig().openRouterModel,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          healthScore
         }
       };
 
@@ -90,6 +94,9 @@ export class LlmAnalyst {
         }]
       );
 
+      // Calculate health score even for error case
+      const healthScore = this.calculateHealthScore(facts);
+
       return {
         summary: `Analysis failed: ${error}`,
         blocks: [fallbackBlock],
@@ -98,7 +105,8 @@ export class LlmAnalyst {
           totalCalls: 1,
           totalTokens: 0,
           model: 'unknown',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          healthScore
         }
       };
     }
@@ -521,7 +529,81 @@ export class LlmAnalyst {
   }
 
   /**
-   * Generate overall summary
+   * Extract top N claims by severity and confidence
+   */
+  private extractTopClaims(blocks: AnalysisBlock[], limit: number = 3): Claim[] {
+    const allClaims: Claim[] = [];
+    blocks.forEach(block => {
+      allClaims.push(...block.claims);
+    });
+
+    // Filter to critical/high severity or high confidence (>=0.8)
+    const valuableClaims = allClaims.filter(c => 
+      c.severity === 'critical' || 
+      c.severity === 'high' || 
+      c.confidence >= 0.8
+    );
+
+    // Sort by severity (critical > high > medium > low) then confidence
+    const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+    valuableClaims.sort((a, b) => {
+      const severityDiff = severityOrder[b.severity] - severityOrder[a.severity];
+      if (severityDiff !== 0) return severityDiff;
+      return b.confidence - a.confidence;
+    });
+
+    return valuableClaims.slice(0, limit);
+  }
+
+  /**
+   * Extract top N actions by priority/effort ratio
+   */
+  private extractTopActions(blocks: AnalysisBlock[], limit: number = 5): Action[] {
+    const allActions: Action[] = [];
+    blocks.forEach(block => {
+      allActions.push(...block.actions);
+    });
+
+    // Calculate value score for each action
+    const priorityWeight = { urgent: 10, high: 5, medium: 2, low: 1 };
+    const effortWeight = { xs: 5, s: 4, m: 3, l: 2, xl: 1 };
+    
+    const scoredActions = allActions.map(action => ({
+      action,
+      score: priorityWeight[action.priority] * effortWeight[action.effort] * 
+             (action.risk === 'low' ? 1.5 : action.risk === 'medium' ? 1.0 : 0.7)
+    }));
+
+    // Sort by score (descending)
+    scoredActions.sort((a, b) => b.score - a.score);
+
+    return scoredActions.slice(0, limit).map(item => item.action);
+  }
+
+  /**
+   * Calculate refactor health score (0-100)
+   */
+  private calculateHealthScore(facts: RefactorBundleFacts): number {
+    const totalIssues = 
+      facts.findings.incompleteness.missing +
+      facts.findings.incompleteness.zombies +
+      facts.findings.legacyAudit.dead;
+    
+    const totalSymbols = facts.working.symbols;
+    const issueRate = totalSymbols > 0 ? totalIssues / totalSymbols : 0;
+    
+    // Base score: 100 = perfect, 0 = terrible
+    const baseScore = Math.max(0, 100 - (issueRate * 100));
+    
+    // Penalties for critical issues
+    const criticalPenalty = facts.findings.incompleteness.missing * 2;
+    const zombiePenalty = facts.findings.incompleteness.zombies * 0.5;
+    
+    return Math.max(0, Math.min(100, baseScore - criticalPenalty - zombiePenalty));
+  }
+
+  /**
+   * Generate enhanced executive summary with key insights
    */
   private generateSummary(blocks: AnalysisBlock[], facts: RefactorBundleFacts): string {
     const totalIssues = facts.findings.incompleteness.missing +
@@ -529,16 +611,48 @@ export class LlmAnalyst {
       facts.findings.incompleteness.divergent +
       facts.findings.legacyAudit.dead;
 
-    let summary = `Analysis of ${facts.bundle.shas.length} commits affecting ${facts.working.symbols} symbols. `;
+    // Extract top insights
+    const topClaims = this.extractTopClaims(blocks, 3);
+    const topActions = this.extractTopActions(blocks, 5);
+    const healthScore = this.calculateHealthScore(facts);
+    
+    // Calculate high-priority action count
+    const highPriorityActions = blocks.reduce((sum, block) =>
+      sum + block.actions.filter(a => a.priority === 'high' || a.priority === 'urgent').length, 0);
 
-    if (totalIssues === 0) {
-      summary += 'Refactor appears complete with no remaining issues.';
-    } else {
-      summary += `Found ${totalIssues} issues requiring attention: ` +
-        `${facts.findings.incompleteness.missing} missing, ` +
-        `${facts.findings.incompleteness.zombies} zombies, ` +
-        `${facts.findings.legacyAudit.dead} dead code.`;
+    let summary = `## Key Insights\n\n`;
+
+    // Most critical finding
+    if (topClaims.length > 0) {
+      const criticalClaim = topClaims[0];
+      summary += `**Most Critical:** ${criticalClaim.text} `;
+      summary += `(${criticalClaim.severity} severity, ${(criticalClaim.confidence * 100).toFixed(0)}% confidence)\n\n`;
     }
+
+    // Top actionable items
+    if (topActions.length > 0) {
+      summary += `**Immediate Actions:**\n`;
+      topActions.forEach((action, i) => {
+        summary += `${i + 1}. ${action.description} `;
+        summary += `[${action.priority} priority, ${action.effort} effort]\n`;
+      });
+      summary += `\n`;
+    }
+
+    // Refactor health score
+    const healthIndicator = healthScore >= 80 ? '✅' : healthScore >= 60 ? '⚠️' : '🔴';
+    summary += `**Refactor Health:** ${healthScore.toFixed(0)}/100 ${healthIndicator}\n\n`;
+
+    // Quick stats
+    summary += `**Quick Stats:** `;
+    summary += `${facts.bundle.shas.length} commits, `;
+    summary += `${facts.working.symbols} symbols analyzed, `;
+    if (totalIssues === 0) {
+      summary += `no issues found`;
+    } else {
+      summary += `${totalIssues} issues (${highPriorityActions} high-priority actions)`;
+    }
+    summary += `\n`;
 
     return summary;
   }

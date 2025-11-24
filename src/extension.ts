@@ -62,18 +62,23 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.workspace.registerTextDocumentContentProvider('evidence', evidenceProvider)
     );
 
-    // Initialize debt meter
+    // Initialize debt meter and wire it to commit tracker
     const debtMeter = getDebtMeter();
+    debtMeter.setCommitTracker(commitTrackerProvider);
     context.subscriptions.push({
       dispose: () => disposeDebtMeter()
     });
 
     // Set up file watcher for database auto-refresh
     const { getGitRoot } = await import('./utils/config');
-    const gitRoot = getGitRoot();
-    if (gitRoot) {
-      const dbPath = vscode.Uri.file(`${gitRoot}/.git/commit-tracker/commit_tracker.db`);
-      const dbWatcher = vscode.workspace.createFileSystemWatcher(dbPath.fsPath);
+    const initialGitRoot = getGitRoot();
+    if (initialGitRoot) {
+      // Use dynamic gitRoot path pattern to handle workspace changes
+      const dbPathPattern = new vscode.RelativePattern(
+        vscode.Uri.file(initialGitRoot),
+        '.git/commit-tracker/commit_tracker.db'
+      );
+      const dbWatcher = vscode.workspace.createFileSystemWatcher(dbPathPattern);
 
       // Debounce rapid file changes to avoid excessive refreshes
       // This prevents SQLITE_IOERR from concurrent access
@@ -81,6 +86,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
       // Refresh UI when database changes (with defensive checks)
       const refreshUI = () => {
+        // Get gitRoot dynamically in case workspace changed
+        const gitRoot = getGitRoot();
+        if (!gitRoot) {
+          return; // No git root available
+        }
+        
+        const dbPath = vscode.Uri.file(`${gitRoot}/.git/commit-tracker/commit_tracker.db`);
+        
         // Check if database file actually exists before refreshing
         const fs = require('fs');
         if (!fs.existsSync(dbPath.fsPath)) {
@@ -135,6 +148,66 @@ export async function activate(context: vscode.ExtensionContext) {
           if (refreshTimeout) {
             clearTimeout(refreshTimeout);
             refreshTimeout = null;
+          }
+        }
+      });
+
+      // Set up file watcher for facts file to auto-refresh tree
+      const factsPathPattern = new vscode.RelativePattern(
+        vscode.Uri.file(initialGitRoot),
+        '.git/commit-tracker/last-bundle-facts.json'
+      );
+      const factsWatcher = vscode.workspace.createFileSystemWatcher(factsPathPattern);
+      
+      let factsRefreshTimeout: NodeJS.Timeout | null = null;
+      
+      const refreshTreeOnFactsUpdate = () => {
+        // Debounce rapid changes
+        if (factsRefreshTimeout) {
+          clearTimeout(factsRefreshTimeout);
+        }
+        
+        factsRefreshTimeout = setTimeout(() => {
+          try {
+            // Get gitRoot dynamically in case workspace changed
+            const gitRoot = getGitRoot();
+            if (!gitRoot) {
+              return; // No git root available
+            }
+            
+            const factsPath = vscode.Uri.file(`${gitRoot}/.git/commit-tracker/last-bundle-facts.json`);
+            
+            // Refresh commit tracker to pick up latest facts
+            if (commitTrackerProvider) {
+              // Load latest facts into tracker
+              const fs = require('fs');
+              if (fs.existsSync(factsPath.fsPath)) {
+                try {
+                  const factsContent = fs.readFileSync(factsPath.fsPath, 'utf8');
+                  const facts = JSON.parse(factsContent);
+                  commitTrackerProvider.lastBundleFacts = facts;
+                } catch (err) {
+                  console.debug('Failed to load facts for tree refresh:', err);
+                }
+              }
+              commitTrackerProvider.refresh();
+            }
+          } catch (error) {
+            console.warn('Error refreshing tree after facts update:', error);
+          }
+          factsRefreshTimeout = null;
+        }, 200); // 200ms debounce for facts updates
+      };
+      
+      factsWatcher.onDidChange(refreshTreeOnFactsUpdate);
+      factsWatcher.onDidCreate(refreshTreeOnFactsUpdate);
+      
+      context.subscriptions.push(factsWatcher);
+      context.subscriptions.push({
+        dispose: () => {
+          if (factsRefreshTimeout) {
+            clearTimeout(factsRefreshTimeout);
+            factsRefreshTimeout = null;
           }
         }
       });

@@ -96,7 +96,7 @@ export async function generateRefactorBundleReport(
             // Phase 1: Compute scoped analysis set
             console.log('[REPORT] Phase 1: Computing scope...');
             const scopeStartTime = Date.now();
-            const scope = await computeScope(commitShas);
+            const scope = await computeScope(commitShas, commitTracker?.workspaceParts);
             console.log(`[REPORT] Scope computed in ${Date.now() - scopeStartTime}ms`);
             console.log(`[REPORT] Scope - commit files: ${scope.commitFiles.size}, working changed: ${scope.workingChanged.size}, blast radius: ${scope.blastRadius.size}, total: ${scope.allPaths.size}`);
 
@@ -191,6 +191,14 @@ export async function generateRefactorBundleReport(
             console.log(`[REPORT] Facts assembled in ${Date.now() - factsStartTime}ms`);
             console.log(`[REPORT] Facts saved to: ${factsPath}`);
             console.log(`[REPORT] Facts keys: ${Object.keys(facts).join(', ')}`);
+
+            // Update commit tracker with latest facts (triggers tree refresh)
+            if (commitTracker) {
+                commitTracker.lastBundleFacts = facts;
+                commitTracker.clearCaches(); // Clear caches when facts update
+                commitTracker.refresh();
+                console.log('[REPORT] Commit tracker refreshed with latest facts');
+            }
 
             // Guard: Check if facts are empty
             const hasData = facts && (

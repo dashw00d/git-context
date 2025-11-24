@@ -245,6 +245,103 @@ export class GitOperations {
   }
 
   /**
+   * Get staged files only
+   */
+  getStagedFiles(): FileChange[] {
+    const output = this.execGit(['status', '--porcelain']);
+
+    const staged: FileChange[] = [];
+    const lines = output.split('\n').filter(line => line.trim());
+
+    for (const line of lines) {
+      const status = line.substring(0, 2);
+      const filePath = line.substring(3);
+
+      // First character indicates staged status (not space, not ?)
+      if (status.charAt(0) !== ' ' && status.charAt(0) !== '?') {
+        let changeStatus: FileChange['status'];
+        if (status.charAt(0) === 'A') {
+          changeStatus = 'A';
+        } else if (status.charAt(0) === 'M') {
+          changeStatus = 'M';
+        } else if (status.charAt(0) === 'D') {
+          changeStatus = 'D';
+        } else if (status.charAt(0) === 'R') {
+          changeStatus = 'R';
+        } else {
+          changeStatus = 'M';
+        }
+
+        staged.push({
+          path: filePath,
+          status: changeStatus
+        });
+      }
+    }
+
+    return staged;
+  }
+
+  /**
+   * Get unstaged files only (including untracked files)
+   */
+  getUnstagedFiles(): FileChange[] {
+    const output = this.execGit(['status', '--porcelain']);
+
+    const unstaged: FileChange[] = [];
+    const lines = output.split('\n').filter(line => line.trim());
+
+    for (const line of lines) {
+      const status = line.substring(0, 2);
+      const filePath = line.substring(3);
+
+      // Second character indicates unstaged status (not space)
+      // Include untracked files (?) as unstaged
+      if (status.charAt(1) !== ' ') {
+        let changeStatus: FileChange['status'];
+        if (status.charAt(1) === 'A') {
+          changeStatus = 'A';
+        } else if (status.charAt(1) === 'M') {
+          changeStatus = 'M';
+        } else if (status.charAt(1) === 'D') {
+          changeStatus = 'D';
+        } else if (status.charAt(1) === 'R') {
+          changeStatus = 'R';
+        } else if (status.charAt(1) === '?') {
+          // Untracked files are considered unstaged
+          changeStatus = 'U';
+        } else {
+          changeStatus = 'M';
+        }
+
+        unstaged.push({
+          path: filePath,
+          status: changeStatus
+        });
+      }
+    }
+
+    // Also include untracked files from ls-files
+    try {
+      const untrackedOutput = this.execGit(['ls-files', '--others', '--exclude-standard']);
+      const untrackedLines = untrackedOutput.split('\n').filter(f => f.trim());
+      for (const filePath of untrackedLines) {
+        // Only add if not already in unstaged (avoid duplicates)
+        if (!unstaged.some(f => f.path === filePath)) {
+          unstaged.push({
+            path: filePath,
+            status: 'U' // U = untracked
+          });
+        }
+      }
+    } catch (error) {
+      // Silently ignore if ls-files fails (e.g., no untracked files)
+    }
+
+    return unstaged;
+  }
+
+  /**
    * Spawn a git command asynchronously
    */
   async spawnGit(args: string[]): Promise<{ stdout: string; stderr: string }> {

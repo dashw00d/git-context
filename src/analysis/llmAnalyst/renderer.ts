@@ -94,8 +94,14 @@ export class AnalysisRenderer {
   renderAnalysis(analysis: LlmAnalysis, facts: RefactorBundleFacts): string {
     let markdown = this.renderHeader(analysis, facts);
 
-    // Sort blocks by type priority
-    const sortedBlocks = this.sortBlocks(analysis.blocks);
+    // Add findings sections with stable anchors for navigation
+    markdown += this.renderFindingsSections(facts);
+
+    // Filter low-value content before sorting
+    const filteredBlocks = this.filterLowValueContent(analysis.blocks);
+
+    // Sort blocks by value score (high-value first)
+    const sortedBlocks = this.sortBlocks(filteredBlocks);
 
     for (const block of sortedBlocks) {
       markdown += this.renderBlock(block, facts);
@@ -106,18 +112,147 @@ export class AnalysisRenderer {
   }
 
   /**
-   * Render analysis header
+   * Filter out low-value content from blocks
+   */
+  private filterLowValueContent(blocks: AnalysisBlock[]): AnalysisBlock[] {
+    return blocks.map(block => ({
+      ...block,
+      claims: block.claims.filter(c => 
+        c.severity !== 'low' || c.confidence >= 0.8
+      ),
+      actions: block.actions.filter(a =>
+        a.priority !== 'low' || (a.effort === 'xs' && a.risk === 'low')
+      )
+    })).filter(block => 
+      block.claims.length > 0 || block.actions.length > 0
+    );
+  }
+
+  /**
+   * Render findings sections with stable anchors for tree navigation
+   * These anchors correspond to bundle category nodes in the tree view
+   */
+  private renderFindingsSections(facts: RefactorBundleFacts): string {
+    let content = `## 🔍 Findings Overview\n\n`;
+    content += `This section provides structured findings data for navigation from the Commit Tracker sidebar.\n\n`;
+
+    // Incompleteness section
+    if (facts.findings.incompleteness.missing > 0 || facts.findings.incompleteness.zombies > 0) {
+      content += `### {#incompleteness} Incompleteness Analysis\n\n`;
+      
+      if (facts.findings.incompleteness.missing > 0) {
+        content += `#### {#incompleteness-missing} Missing Additions (${facts.findings.incompleteness.missing})\n\n`;
+        content += `Symbols added in commits but not found in working tree.\n\n`;
+        const missing = facts.evidence?.['findings.incompleteness.missing'] || [];
+        if (missing.length > 0) {
+          content += `**Top ${Math.min(10, missing.length)} missing symbols:**\n\n`;
+          missing.slice(0, 10).forEach((item: any, idx: number) => {
+            const symbolName = item.symbol_id?.split(':')[1] || item.symbol_id;
+            content += `${idx + 1}. \`${symbolName}\` - Expected: ${item.expected?.expect || 'present'}\n`;
+          });
+          content += `\n`;
+        }
+      }
+
+      if (facts.findings.incompleteness.zombies > 0) {
+        content += `#### {#incompleteness-zombies} Zombie Removals (${facts.findings.incompleteness.zombies})\n\n`;
+        content += `Symbols removed in commits but still exist in working tree.\n\n`;
+        const zombies = facts.evidence?.['findings.incompleteness.zombies'] || [];
+        if (zombies.length > 0) {
+          content += `**Top ${Math.min(10, zombies.length)} zombie symbols:**\n\n`;
+          zombies.slice(0, 10).forEach((item: any, idx: number) => {
+            const symbolName = item.found?.name || item.symbol_id?.split(':')[1] || item.symbol_id;
+            content += `${idx + 1}. \`${symbolName}\` - Should be removed\n`;
+          });
+          content += `\n`;
+        }
+      }
+      content += `\n`;
+    }
+
+    // Drift section
+    if (facts.findings.patternDrift.mixedTargets > 0 || facts.findings.patternDrift.oldNamespaces > 0) {
+      content += `### {#drift} Pattern Drift Analysis\n\n`;
+      
+      const hotspots = facts.evidence?.['findings.drift.hotspots'] || [];
+      if (hotspots.length > 0) {
+        content += `#### {#drift-hotspots} Drift Hotspots (${hotspots.length})\n\n`;
+        content += `Files with multiple drift issues.\n\n`;
+        hotspots.slice(0, 10).forEach((h: any, idx: number) => {
+          content += `${idx + 1}. \`${h.path}\` - ${h.drift_count} drift issues\n`;
+        });
+        content += `\n`;
+      }
+
+      if (facts.findings.patternDrift.mixedTargets > 0) {
+        content += `#### Mixed Targets (${facts.findings.patternDrift.mixedTargets})\n\n`;
+        content += `Inconsistent target usage patterns detected.\n\n`;
+      }
+
+      if (facts.findings.patternDrift.oldNamespaces > 0) {
+        content += `#### Old Namespaces (${facts.findings.patternDrift.oldNamespaces})\n\n`;
+        content += `Using outdated namespace patterns.\n\n`;
+      }
+      content += `\n`;
+    }
+
+    // Legacy section
+    if (facts.findings.legacyAudit.dead > 0 || facts.findings.legacyAudit.replacedLeftovers.length > 0) {
+      content += `### {#legacy} Legacy Audit\n\n`;
+      
+      if (facts.findings.legacyAudit.dead > 0) {
+        content += `#### {#legacy-dead} Dead Code (${facts.findings.legacyAudit.dead})\n\n`;
+        content += `Symbols no longer used.\n\n`;
+        const dead = facts.evidence?.['findings.legacyAudit.dead'] || [];
+        if (dead.length > 0) {
+          content += `**Top ${Math.min(20, dead.length)} dead symbols:**\n\n`;
+          dead.slice(0, 20).forEach((item: any, idx: number) => {
+            const symbolName = item.name || item.symbol_id?.split(':')[1] || item.symbol_id;
+            content += `${idx + 1}. \`${symbolName}\` - ${item.kind || 'unknown'}\n`;
+          });
+          content += `\n`;
+        }
+      }
+
+      if (facts.findings.legacyAudit.replacedLeftovers.length > 0) {
+        content += `#### Replaced Leftovers (${facts.findings.legacyAudit.replacedLeftovers.length})\n\n`;
+        content += `Old symbols that should have been removed.\n\n`;
+      }
+      content += `\n`;
+    }
+
+    // Timeline section (if we have commit data)
+    if (facts.bundle.shas.length > 0) {
+      content += `### {#timeline} Timeline Rewind\n\n`;
+      content += `Evolution of changes across ${facts.bundle.shas.length} commit(s).\n\n`;
+      content += `**Commits in bundle:**\n\n`;
+      facts.bundle.shas.forEach((sha: string, idx: number) => {
+        content += `${idx + 1}. \`${sha.substring(0, 8)}\`\n`;
+      });
+      content += `\n`;
+    }
+
+    content += `---\n\n`;
+    return content;
+  }
+
+  /**
+   * Render analysis header with health score
    */
   private renderHeader(analysis: LlmAnalysis, facts: RefactorBundleFacts): string {
+    const healthScore = this.calculateHealthScore(facts);
+    const healthIndicator = healthScore >= 80 ? '✅' : healthScore >= 60 ? '⚠️' : '🔴';
+    
     let header = `# 🤖 LLM Analysis Report\n\n`;
     header += `**Generated:** ${new Date(analysis.metadata.timestamp).toLocaleString()}\n`;
     header += `**Bundle:** ${facts.bundle.shas.length} commits (${facts.bundle.oldestSha.substring(0, 8)}...)\n`;
     header += `**Symbols:** ${facts.working.symbols} analyzed, ${facts.working.edges} relationships\n`;
+    header += `**Refactor Health:** ${healthScore.toFixed(0)}/100 ${healthIndicator}\n`;
     header += `**Model:** ${analysis.metadata.model}\n`;
     header += `**Analysis Time:** ${this.formatDuration(analysis.metadata.totalCalls)}\n\n`;
 
     if (analysis.summary) {
-      header += `## 📋 Executive Summary\n\n${analysis.summary}\n\n`;
+      header += `${analysis.summary}\n\n`;
     }
 
     return header;
@@ -130,39 +265,150 @@ export class AnalysisRenderer {
     let footer = `---\n\n`;
     footer += `**Analysis Details:** ${analysis.metadata.totalCalls} LLM calls, `;
     footer += `~${analysis.metadata.totalTokens.toLocaleString()} tokens\n`;
+    
+    // Include health score in footer if available
+    if (analysis.metadata.healthScore !== undefined) {
+      const healthIndicator = analysis.metadata.healthScore >= 80 ? '✅' : 
+                             analysis.metadata.healthScore >= 60 ? '⚠️' : '🔴';
+      footer += `**Refactor Health:** ${analysis.metadata.healthScore.toFixed(0)}/100 ${healthIndicator}\n`;
+    }
+    
     footer += `*Generated by Git Context v2 LLM Analyst*\n`;
 
     return footer;
   }
 
   /**
-   * Sort blocks by priority and type
+   * Calculate value score for a block based on claims and actions
+   * Higher score = higher value/importance
+   */
+  private calculateBlockValue(block: AnalysisBlock): number {
+    let score = 0;
+
+    // Claims value: severity-weighted by confidence
+    const severityWeight = { critical: 10, high: 5, medium: 2, low: 1 };
+    block.claims.forEach(claim => {
+      score += severityWeight[claim.severity] * claim.confidence;
+    });
+
+    // Actions value: priority + impact/effort ratio
+    const priorityWeight = { urgent: 10, high: 5, medium: 2, low: 1 };
+    const effortWeight = { xs: 5, s: 4, m: 3, l: 2, xl: 1 };
+    
+    block.actions.forEach(action => {
+      const impactScore = priorityWeight[action.priority] * effortWeight[action.effort];
+      // Prefer low-risk actions (multiply by 1.5 for low risk)
+      const riskMultiplier = action.risk === 'low' ? 1.5 : action.risk === 'medium' ? 1.0 : 0.7;
+      score += impactScore * riskMultiplier;
+    });
+
+    // Bonus for actionable items (has evidence paths)
+    const hasActionableClaims = block.claims.some(c => c.evidence.length > 0);
+    const hasActionableActions = block.actions.some(a => a.evidence.length > 0);
+    if (hasActionableClaims || hasActionableActions) {
+      score *= 1.2;
+    }
+
+    return score;
+  }
+
+  /**
+   * Calculate refactor health score (0-100)
+   * Higher score = healthier refactor (fewer issues)
+   */
+  private calculateHealthScore(facts: RefactorBundleFacts): number {
+    const totalIssues = 
+      facts.findings.incompleteness.missing +
+      facts.findings.incompleteness.zombies +
+      facts.findings.legacyAudit.dead;
+    
+    const totalSymbols = facts.working.symbols;
+    const issueRate = totalSymbols > 0 ? totalIssues / totalSymbols : 0;
+    
+    // Base score: 100 = perfect, 0 = terrible
+    // Lower issue rate = higher score
+    const baseScore = Math.max(0, 100 - (issueRate * 100));
+    
+    // Penalties for critical issues (missing symbols are most critical)
+    const criticalPenalty = facts.findings.incompleteness.missing * 2;
+    
+    // Additional penalty for high zombie count (indicates incomplete cleanup)
+    const zombiePenalty = facts.findings.incompleteness.zombies * 0.5;
+    
+    return Math.max(0, Math.min(100, baseScore - criticalPenalty - zombiePenalty));
+  }
+
+  /**
+   * Sort blocks by value score (descending)
+   * High-value blocks appear first
    */
   private sortBlocks(blocks: AnalysisBlock[]): AnalysisBlock[] {
-    const typePriority = { intent: 0, discovery: 1, drift: 2, cleanup: 3, summary: 4 };
-
     return blocks.sort((a, b) => {
-      const typeDiff = typePriority[a.type] - typePriority[b.type];
-      if (typeDiff !== 0) return typeDiff;
-
-      // Within same type, sort by confidence
+      const valueA = this.calculateBlockValue(a);
+      const valueB = this.calculateBlockValue(b);
+      
+      // Sort by value score (descending)
+      if (valueB !== valueA) {
+        return valueB - valueA;
+      }
+      
+      // Fallback to confidence within same value tier
       return b.confidence - a.confidence;
     });
   }
 
   /**
-   * Render a single analysis block
+   * Render a single analysis block with value-based prioritization
    */
   private renderBlock(block: AnalysisBlock, facts: RefactorBundleFacts): string {
     const icon = this.getBlockIcon(block.type);
-    let content = `## ${icon} ${block.title}\n\n`;
+    const valueScore = this.calculateBlockValue(block);
+    
+    // Show value indicator for high-value blocks
+    let content = `## ${icon} ${block.title}`;
+    if (valueScore > 20) {
+      content += ` ⭐ High Value`;
+    }
+    content += `\n\n`;
 
-    if (block.claims.length > 0) {
-      content += this.renderClaims(block.claims, facts);
+    // Separate critical/high claims from others
+    const criticalClaims = block.claims.filter(c => 
+      c.severity === 'critical' || c.severity === 'high'
+    );
+    const otherClaims = block.claims.filter(c => 
+      c.severity !== 'critical' && c.severity !== 'high'
+    );
+
+    // Render critical findings first
+    if (criticalClaims.length > 0) {
+      content += `### 🚨 Critical Findings\n\n`;
+      content += this.renderClaims(criticalClaims, facts);
     }
 
-    if (block.actions.length > 0) {
-      content += this.renderActions(block.actions, facts);
+    // Render other findings
+    if (otherClaims.length > 0) {
+      content += `### Other Findings\n\n`;
+      content += this.renderClaims(otherClaims, facts);
+    }
+
+    // Separate urgent/high actions from others
+    const urgentActions = block.actions.filter(a => 
+      a.priority === 'urgent' || a.priority === 'high'
+    );
+    const otherActions = block.actions.filter(a => 
+      a.priority !== 'urgent' && a.priority !== 'high'
+    );
+
+    // Render immediate actions first
+    if (urgentActions.length > 0) {
+      content += `### ⚡ Immediate Actions\n\n`;
+      content += this.renderActions(urgentActions, facts);
+    }
+
+    // Render additional actions
+    if (otherActions.length > 0) {
+      content += `### 📋 Additional Actions\n\n`;
+      content += this.renderActions(otherActions, facts);
     }
 
     // Add confidence indicator
@@ -189,12 +435,20 @@ export class AnalysisRenderer {
   }
 
   /**
-   * Render claims section
+   * Render claims section (sorted by severity, limited evidence)
    */
   private renderClaims(claims: any[], facts: RefactorBundleFacts): string {
-    let content = `### Findings\n\n`;
+    // Sort by severity (critical > high > medium > low) then confidence
+    const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+    const sortedClaims = [...claims].sort((a, b) => {
+      const severityDiff = severityOrder[b.severity] - severityOrder[a.severity];
+      if (severityDiff !== 0) return severityDiff;
+      return b.confidence - a.confidence;
+    });
 
-    for (const claim of claims) {
+    let content = '';
+
+    for (const claim of sortedClaims) {
       const severityIcon = this.getSeverityIcon(claim.severity);
       content += `- ${severityIcon} **${claim.severity.toUpperCase()}:** ${claim.text}\n`;
 
@@ -202,11 +456,15 @@ export class AnalysisRenderer {
         content += `  *(confidence: ${(claim.confidence * 100).toFixed(0)}%)*\n`;
       }
 
-      // Render evidence links
+      // Render evidence links (limit to top 5)
       if (claim.evidence && claim.evidence.length > 0) {
+        const evidenceToShow = claim.evidence.slice(0, 5);
         content += `  **Evidence:**\n`;
-        for (const evidence of claim.evidence) {
+        for (const evidence of evidenceToShow) {
           content += `  - ${this.renderEvidenceLink(evidence, facts)}\n`;
+        }
+        if (claim.evidence.length > 5) {
+          content += `  - *...and ${claim.evidence.length - 5} more*\n`;
         }
       }
 
@@ -217,13 +475,13 @@ export class AnalysisRenderer {
   }
 
   /**
-   * Render actions section
+   * Render actions section (sorted by priority, limited evidence)
    */
   private renderActions(actions: any[], facts: RefactorBundleFacts): string {
-    let content = `### Recommended Actions\n\n`;
-
-    // Sort actions by priority
+    // Sort actions by priority (already sorted by AnalysisBlockUtils.sortActions)
     const sortedActions = AnalysisBlockUtils.sortActions(actions);
+
+    let content = '';
 
     for (const action of sortedActions) {
       const priorityIcon = this.getPriorityIcon(action.priority);
@@ -241,11 +499,15 @@ export class AnalysisRenderer {
         content += `  ⏳ **Depends on:** ${action.dependsOn.join(', ')}\n`;
       }
 
-      // Render evidence links
+      // Render evidence links (limit to top 5)
       if (action.evidence && action.evidence.length > 0) {
+        const evidenceToShow = action.evidence.slice(0, 5);
         content += `  **Evidence:**\n`;
-        for (const evidence of action.evidence) {
+        for (const evidence of evidenceToShow) {
           content += `  - ${this.renderEvidenceLink(evidence, facts)}\n`;
+        }
+        if (action.evidence.length > 5) {
+          content += `  - *...and ${action.evidence.length - 5} more*\n`;
         }
       }
 

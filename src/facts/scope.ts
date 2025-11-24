@@ -82,7 +82,10 @@ async function computeBlastRadiusNeighbors(
 /**
  * Compute scoped analysis set for refactor bundle
  */
-export async function computeScope(commitShas: string[]): Promise<ScopeSet> {
+export async function computeScope(
+  commitShas: string[],
+  workspaceParts?: Set<'staged' | 'unstaged'>
+): Promise<ScopeSet> {
   const { ensureDatabaseInitialized } = await import('../storage/database');
 
   await ensureDatabaseInitialized();
@@ -101,9 +104,28 @@ export async function computeScope(commitShas: string[]): Promise<ScopeSet> {
     commitFiles.forEach(f => scope.commitFiles.add(f.path));
   }
 
-  // 2. Files changed in working tree
+  // 2. Files changed in working tree (filtered by workspaceParts)
   const workingChanges = git.getWorkingDirectoryChanges();
+  
+  if (workspaceParts) {
+    const includeStaged = workspaceParts.has('staged');
+    const includeUnstaged = workspaceParts.has('unstaged');
+    
+    // Get staged and unstaged files separately
+    const stagedFiles = git.getStagedFiles();
+    const unstagedFiles = git.getUnstagedFiles();
+    
+    if (includeStaged) {
+      stagedFiles.forEach(f => scope.workingChanged.add(f.path));
+    }
+    
+    if (includeUnstaged) {
+      unstagedFiles.forEach(f => scope.workingChanged.add(f.path));
+    }
+  } else {
+    // Default: include all working changes
   workingChanges.forEach(f => scope.workingChanged.add(f.path));
+  }
 
   // 3. Blast-radius neighbors (top N by confidence)
   const blastRadiusFiles = await computeBlastRadiusNeighbors(commitShas, scope.commitFiles, 20); // Max 20 extra files

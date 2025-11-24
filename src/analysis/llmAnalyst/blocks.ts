@@ -74,6 +74,8 @@ export interface LlmAnalysis {
     model: string;
     /** Generation timestamp */
     timestamp: string;
+    /** Refactor health score (0-100) */
+    healthScore?: number;
   };
   /** Rendered markdown version */
   markdown: string;

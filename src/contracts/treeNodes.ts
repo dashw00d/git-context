@@ -21,6 +21,15 @@ export interface TreeNodeBase {
     description?: string;
     tooltip?: string | vscode.MarkdownString;
     icon?: string;
+    /**
+     * Context value for VS Code tree item context menus and commands.
+     * Common values include:
+     * - 'workspace-group' | 'workspace-staged' | 'workspace-unstaged' | 'workspace-full'
+     * - 'bundle-file' | 'bundle-hotspot-file' | 'bundle-symbol'
+     * - 'commit' | 'commit head' | 'commit inRefactorBundle'
+     * - 'refactor-finding' | 'refactor-bundle-item' | 'refactor-bundle-grouping-item'
+     * - 'load-more' | 'timeline-item'
+     */
     contextValue?: string;
     // Optional properties for tree hierarchy
     children?: TreeNode[];

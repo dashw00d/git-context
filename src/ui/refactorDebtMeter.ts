@@ -11,13 +11,14 @@ export class RefactorDebtMeter {
   private statusBarItem: vscode.StatusBarItem;
   private factsPath: string | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
+  private commitTrackerProvider: any = null; // Will be set via setCommitTracker
 
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
       100
     );
-    this.statusBarItem.command = 'git-context.showRefactorReport';
+    this.statusBarItem.command = 'git-context.refreshDebtMeterAndReveal';
 
     // Don't update immediately - just show placeholder to avoid file I/O on activation
     this.statusBarItem.text = '$(git-commit) Refactor';
@@ -228,6 +229,36 @@ export class RefactorDebtMeter {
    */
   public getFactsPath(): string | null {
     return this.factsPath;
+  }
+
+  /**
+   * Set the commit tracker provider for tree refresh/reveal
+   */
+  public setCommitTracker(commitTracker: any): void {
+    this.commitTrackerProvider = commitTracker;
+  }
+
+  /**
+   * Refresh tree and reveal bundle (called when debt meter is clicked)
+   */
+  public async refreshTreeAndRevealBundle(): Promise<void> {
+    if (this.commitTrackerProvider) {
+      // Refresh the tree to pick up latest facts
+      this.commitTrackerProvider.refresh();
+      
+      // Show info toast
+      vscode.window.showInformationMessage('Sidebar updated with latest refactor bundle data');
+      
+      // Try to reveal the bundle node
+      try {
+        // The bundle node will be revealed when tree refreshes if it exists
+        // VS Code will automatically expand it if it was previously expanded
+        await vscode.commands.executeCommand('commitTracker.focus');
+      } catch (error) {
+        // Ignore if command doesn't exist or fails
+        console.debug('Could not focus commit tracker:', error);
+      }
+    }
   }
 }
 
