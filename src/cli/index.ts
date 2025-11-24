@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { analyzeLastCommits, analyzeStagedChanges } from './analyze';
+import { analyzeLastCommits, analyzeStagedChanges, analyzeCommit } from './analyze';
 import { showCommit, searchSymbol, showLastCommits } from './queries';
 import { installHooks } from './hooks';
 import chalk from 'chalk';
@@ -41,6 +41,21 @@ program
       console.log(chalk.green('Staged analysis complete!'));
     } catch (error) {
       console.error(chalk.red(`Staged analysis failed: ${error}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('analyze-commit <sha>')
+  .description('Analyze a specific commit')
+  .action(async (sha) => {
+    console.log(chalk.blue(`Analyzing commit ${sha}...`));
+
+    try {
+      await analyzeCommit(sha);
+      console.log(chalk.green(`Commit ${sha} analysis complete!`));
+    } catch (error) {
+      console.error(chalk.red(`Commit analysis failed: ${error}`));
       process.exit(1);
     }
   });

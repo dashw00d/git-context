@@ -1,0 +1,196 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { getGitRoot } from '../utils/config';
+import { ScopeSet } from './scope';
+import { IntendedState } from './intendedMap';
+import { WorkingSnapshot } from './workingSnapshot';
+import { DriftFindings } from './driftDetector';
+import { LegacyAuditResult } from './legacyAudit';
+import { RefactorBundleFacts } from './types';
+
+// Re-export for backward compatibility
+export type { RefactorBundleFacts } from './types';
+
+/**
+ * Assemble all facts into v2 JSON schema
+ */
+export async function assembleFacts(
+  commitShas: string[],
+  scope: ScopeSet,
+  intended: Map<string, IntendedState>,
+  working: WorkingSnapshot,
+  drift: DriftFindings,
+  legacy: LegacyAuditResult
+): Promise<RefactorBundleFacts> {
+
+  // Calculate counts and lists
+  const intendedCounts = calculateIntendedCounts(intended);
+  const intendedLists = getIntendedLists(intended);
+  const workingLists = getWorkingLists(working);
+  const oldestSha = commitShas.length > 0 ? commitShas[0] : 'unknown';
+
+  const newestSha = commitShas.length > 0 ? commitShas[commitShas.length - 1] : 'unknown';
+
+  const facts: RefactorBundleFacts = {
+    version: "2.0",
+    generated_at: new Date().toISOString(),
+    bundle: {
+      oldestSha,
+      newestSha,
+      shas: commitShas
+    },
+    scope: {
+      files: scope.commitFiles.size,
+      blastRadius: scope.blastRadius.size
+    },
+    intended: intendedCounts,
+    working: {
+      symbols: working.symbolsById.size,
+      edges: working.edges.length
+    },
+    findings: {
+      incompleteness: {
+        missing: drift.missing_symbols.length,
+        zombies: drift.zombie_symbols.length,
+        divergent: drift.divergent_symbols.length
+      },
+      patternDrift: {
+        mixedTargets: 0, // TODO: Implement pattern drift detection
+        oldNamespaces: 0  // TODO: Implement pattern drift detection
+      },
+      legacyAudit: {
+        dead: legacy.dead.length,
+        legacyUsed: legacy.legacyUsed.length,
+        replacedLeftovers: legacy.replacedLeftovers.map(item => ({
+          old: item.old.symbol_id,
+          new: item.new.symbol_id,
+          confidence: item.confidence
+        }))
+      }
+    },
+    evidence: {
+      // Scope evidence
+      "bundle.shas": commitShas,
+      "scope.files": Array.from(scope.commitFiles),
+      "scope.blastRadius": Array.from(scope.blastRadius),
+
+      // Intended state evidence
+      "intended.present": intendedLists.present,
+      "intended.absent": intendedLists.absent,
+      "intended.renamed": intendedLists.renamed,
+
+      // Working state evidence
+      "working.symbols": workingLists.symbols,
+      "working.edges": workingLists.edges,
+
+      // Findings evidence
+      "findings.incompleteness": {
+        missing: drift.missing_symbols.map(m => ({ symbol_id: m.symbol_id, expected: m.expected })),
+        zombies: drift.zombie_symbols.map(z => ({ symbol_id: z.symbol_id, found: { name: z.found.name, kind: z.found.kind } })),
+        divergent: drift.divergent_symbols
+      },
+      "findings.incompleteness.missing": drift.missing_symbols.map(m => ({ symbol_id: m.symbol_id, expected: m.expected })),
+      "findings.incompleteness.zombies": drift.zombie_symbols.map(z => ({ symbol_id: z.symbol_id, found: { name: z.found.name, kind: z.found.kind } })),
+
+      "findings.legacyAudit": {
+        dead: legacy.dead.map(d => ({ symbol_id: d.symbol_id, name: d.name, kind: d.kind })),
+        legacyUsed: legacy.legacyUsed.map(l => ({ symbol_id: l.symbol_id, name: l.name, kind: l.kind })),
+        replacedLeftovers: legacy.replacedLeftovers.map(r => ({
+          old: r.old.symbol_id,
+          new: r.new.symbol_id,
+          confidence: r.confidence
+        }))
+      },
+
+      // Legacy fields for backward compatibility
+      missing: drift.missing_symbols.map(m => ({ symbol_id: m.symbol_id, expected: m.expected })),
+      zombies: drift.zombie_symbols.map(z => ({ symbol_id: z.symbol_id, found: { name: z.found.name, kind: z.found.kind } })),
+      dead: legacy.dead.map(d => ({ symbol_id: d.symbol_id, name: d.name, kind: d.kind })),
+      legacyUsed: legacy.legacyUsed.map(l => ({ symbol_id: l.symbol_id, name: l.name, kind: l.kind })),
+      replacedLeftovers: legacy.replacedLeftovers.map(r => ({
+        old: r.old.symbol_id,
+        new: r.new.symbol_id,
+        confidence: r.confidence
+      }))
+    }
+  };
+
+  return facts;
+}
+
+/**
+ * Save facts to .git/commit-tracker/last-bundle-facts.json
+ */
+export async function saveFacts(facts: RefactorBundleFacts): Promise<string> {
+  const gitRoot = getGitRoot();
+  if (!gitRoot) {
+    throw new Error('Not in a git repository');
+  }
+
+  const factsDir = path.join(gitRoot, '.git', 'commit-tracker');
+  const factsPath = path.join(factsDir, 'last-bundle-facts.json');
+
+  // Ensure directory exists
+  if (!fs.existsSync(factsDir)) {
+    fs.mkdirSync(factsDir, { recursive: true });
+  }
+
+  // Write facts JSON
+  fs.writeFileSync(factsPath, JSON.stringify(facts, null, 2), 'utf8');
+
+  return factsPath;
+}
+
+/**
+ * Calculate counts for intended state summary
+ */
+function calculateIntendedCounts(intended: Map<string, IntendedState>): { present: number; absent: number; renamed: number } {
+  let present = 0;
+  let absent = 0;
+  let renamed = 0;
+
+  for (const [symbolId, state] of intended) {
+    if (state.expect === 'present') {
+      present++;
+      if (state.isRenamed) {
+        renamed++;
+      }
+    } else if (state.expect === 'absent') {
+      absent++;
+    }
+  }
+
+  return { present, absent, renamed };
+}
+
+/**
+ * Get detailed lists for intended state
+ */
+function getIntendedLists(intended: Map<string, IntendedState>): { present: string[]; absent: string[]; renamed: string[] } {
+  const present: string[] = [];
+  const absent: string[] = [];
+  const renamed: string[] = [];
+
+  for (const [symbolId, state] of intended) {
+    if (state.expect === 'present') {
+      present.push(symbolId);
+      if (state.isRenamed) {
+        renamed.push(symbolId);
+      }
+    } else if (state.expect === 'absent') {
+      absent.push(symbolId);
+    }
+  }
+
+  return { present, absent, renamed };
+}
+
+/**
+ * Get detailed lists for working state
+ */
+function getWorkingLists(working: WorkingSnapshot): { symbols: string[]; edges: string[] } {
+  return {
+    symbols: Array.from(working.symbolsById.keys()),
+    edges: working.edges.map(e => `${e.from_symbol_id} -> ${e.to_symbol_id} (${e.edge_type})`)
+  };
+}

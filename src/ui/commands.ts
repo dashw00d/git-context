@@ -6,11 +6,15 @@ import { showCommit, searchSymbol } from '../cli/queries';
 import { getExtensionConfig } from '../utils/config';
 import { LLMSummarizer } from '../llm/summarizer';
 import { generateRefactorBundleReport } from './report';
+import { RefactorReportProvider } from '../webview/refactorReportProvider';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export function registerCommands(
   context: vscode.ExtensionContext,
   commitTracker: CommitTrackerProvider,
-  symbolHistory: SymbolHistoryProvider
+  symbolHistory: SymbolHistoryProvider,
+  refactorReportProvider?: RefactorReportProvider
 ) {
   try {
     // Analyze last N commits
@@ -37,6 +41,8 @@ export function registerCommands(
             cancellable: false
           }, async (progress) => {
             try {
+              // Ensure database is initialized before analyzing
+              await commitTracker.initializeDatabase();
               await analyzeLastCommits(parseInt(count));
               commitTracker.refresh();
               vscode.window.showInformationMessage(`Analyzed last ${count} commits`);
@@ -58,6 +64,8 @@ export function registerCommands(
           cancellable: false
         }, async (progress) => {
           try {
+            // Ensure database is initialized before analyzing
+            await commitTracker.initializeDatabase();
             await analyzeStagedChanges();
             commitTracker.refresh();
             vscode.window.showInformationMessage('Analyzed staged changes');
@@ -203,6 +211,25 @@ export function registerCommands(
       }
     );
 
+    // Initialize database (lazy initialization)
+    const initializeDatabaseCmd = vscode.commands.registerCommand(
+      'git-context.initializeDatabase',
+      async () => {
+        await vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: 'Initializing database...',
+          cancellable: false
+        }, async (progress) => {
+          try {
+            await commitTracker.initializeDatabase();
+            vscode.window.showInformationMessage('Database initialized successfully');
+          } catch (error) {
+            vscode.window.showErrorMessage(`Failed to initialize database: ${error}`);
+          }
+        });
+      }
+    );
+
     // Open symbol in file
     const openSymbolCmd = vscode.commands.registerCommand(
       'git-context.openSymbol',
@@ -233,11 +260,24 @@ export function registerCommands(
     const generateReportCmd = vscode.commands.registerCommand(
       'git-context.generateReport',
       async () => {
+        if (commitTracker.runningTask) {
+          vscode.window.showWarningMessage('Analysis already running');
+          return;
+        }
+
         const selectedCount = commitTracker.selectedCommits.size;
         if (selectedCount > 0) {
           // Generate report for selected commits
           const shas = Array.from(commitTracker.selectedCommits) as string[];
-          await generateRefactorBundleReport(shas);
+          const cancellationTokenSource = new vscode.CancellationTokenSource();
+          commitTracker.runningTask = { cancel: () => cancellationTokenSource.cancel(), token: cancellationTokenSource.token };
+
+          try {
+            await generateRefactorBundleReport(shas, refactorReportProvider, cancellationTokenSource.token, commitTracker);
+          } finally {
+            commitTracker.runningTask = null;
+            commitTracker.refresh();
+          }
           // Selection persists after bundle generation for iterative workflow
         } else {
           vscode.window.showWarningMessage('Please select commits first (use checkboxes in tree view) to analyze as a refactor bundle.');
@@ -303,17 +343,200 @@ export function registerCommands(
       }
     );
 
+    // Show refactor report command
+    const showRefactorReportCmd = vscode.commands.registerCommand(
+      'git-context.showRefactorReport',
+      async () => {
+        try {
+          const { getGitRoot } = await import('../utils/config');
+          const gitRoot = getGitRoot();
+          if (!gitRoot) return;
+
+          const fs = await import('fs');
+          const path = await import('path');
+
+          // Try to load cached analysis and facts
+          const analysisPath = path.join(gitRoot, '.git', 'commit-tracker', 'last-bundle-analysis.json');
+          const factsPath = path.join(gitRoot, '.git', 'commit-tracker', 'last-bundle-facts.json');
+
+          if (fs.existsSync(analysisPath) && fs.existsSync(factsPath)) {
+            const analysis = JSON.parse(fs.readFileSync(analysisPath, 'utf8'));
+            const facts = JSON.parse(fs.readFileSync(factsPath, 'utf8'));
+
+            const { AnalysisRenderer } = await import('../analysis/llmAnalyst/renderer');
+            const renderer = new AnalysisRenderer();
+            const markdown = renderer.renderAnalysis(analysis, facts);
+
+            const doc = await vscode.workspace.openTextDocument({
+              content: markdown,
+              language: 'markdown'
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+          } else {
+            // If no cached report, check if commits are selected to generate one
+            if (commitTracker.selectedCommits.size >= 2) {
+              vscode.commands.executeCommand('git-context.generateReport');
+            } else {
+              vscode.window.showInformationMessage('No report available. Select commits in the sidebar and click "Generate Report".');
+            }
+          }
+        } catch (error) {
+          console.error('Failed to show refactor report:', error);
+          vscode.window.showErrorMessage(`Failed to show report: ${error}`);
+        }
+      }
+    );
+
+    // Regenerate bundle command
+    const regenerateBundleCmd = vscode.commands.registerCommand(
+      'commit-tracker.regenerateBundle',
+      async () => {
+        if (commitTracker.runningTask) {
+          vscode.window.showWarningMessage('Analysis already running');
+          return;
+        }
+
+        const selectedCount = commitTracker.selectedCommits.size;
+        if (selectedCount >= 2) {
+          const shas = Array.from(commitTracker.selectedCommits) as string[];
+          const cancellationTokenSource = new vscode.CancellationTokenSource();
+          commitTracker.runningTask = { cancel: () => cancellationTokenSource.cancel(), token: cancellationTokenSource.token };
+
+          try {
+            await generateRefactorBundleReport(shas, refactorReportProvider, cancellationTokenSource.token, commitTracker);
+          } finally {
+            commitTracker.runningTask = null;
+            commitTracker.refresh();
+          }
+        } else {
+          vscode.window.showWarningMessage('Select at least 2 commits to regenerate bundle analysis.');
+        }
+      }
+    );
+
+    // Clear bundle command
+    const clearBundleCmd = vscode.commands.registerCommand(
+      'commit-tracker.clearBundle',
+      () => {
+        commitTracker.selectedCommits.clear();
+        commitTracker.lastBundleFacts = null;
+        commitTracker.runningTask = null;
+        commitTracker.persistState();
+        commitTracker.refresh();
+        vscode.window.showInformationMessage('Refactor bundle cleared');
+      }
+    );
+
+    // Cancel analysis command
+    const cancelAnalysisCmd = vscode.commands.registerCommand(
+      'commit-tracker.cancelAnalysis',
+      () => {
+        if (commitTracker.runningTask) {
+          commitTracker.runningTask.cancel();
+          commitTracker.runningTask = null;
+          commitTracker.refresh();
+          vscode.window.showInformationMessage('Analysis cancelled');
+        } else {
+          vscode.window.showInformationMessage('No analysis currently running');
+        }
+      }
+    );
+
+    // Add to bundle command
+    const addToBundleCmd = vscode.commands.registerCommand(
+      'commit-tracker.addToBundle',
+      async (item: any) => {
+        if (item && item.id) {
+          commitTracker.toggleCommitSelection(item.id);
+          vscode.window.showInformationMessage(`Added commit to bundle (${commitTracker.selectedCommits.size} selected)`);
+        }
+      }
+    );
+
+    // Remove from bundle command
+    const removeFromBundleCmd = vscode.commands.registerCommand(
+      'commit-tracker.removeFromBundle',
+      async (item: any) => {
+        if (item && item.id) {
+          commitTracker.toggleCommitSelection(item.id);
+          vscode.window.showInformationMessage(`Removed commit from bundle (${commitTracker.selectedCommits.size} remaining)`);
+        }
+      }
+    );
+
+    // Open evidence command
+    const openEvidenceCmd = vscode.commands.registerCommand(
+      'git-context.openEvidence',
+      async (args: any) => {
+        try {
+          // VS Code passes the arguments directly if they were JSON encoded in the command URI
+          // If we wrapped them in an array in renderer.ts, we might get the first element
+          // But let's handle both cases or just assume the object structure
+
+          // If args is an array (from our previous fix attempt), extract the first item
+          if (Array.isArray(args) && args.length > 0) {
+            args = args[0];
+          }
+
+          const { filePath, lineNumber, description, path: jsonPath } = args;
+
+          if (filePath) {
+            const { getGitRoot } = await import('../utils/config');
+            const gitRoot = getGitRoot();
+            if (!gitRoot) return;
+
+            // If filePath is just a filename, try to find it in workspace or use as is if absolute
+            let fullPath = filePath;
+            if (!path.isAbsolute(filePath)) {
+              fullPath = path.join(gitRoot, filePath);
+            }
+
+            if (fs.existsSync(fullPath)) {
+              const doc = await vscode.workspace.openTextDocument(fullPath);
+              const editor = await vscode.window.showTextDocument(doc);
+
+              if (lineNumber) {
+                const line = lineNumber - 1; // VS Code is 0-indexed
+                const range = new vscode.Range(line, 0, line, 0);
+                editor.selection = new vscode.Selection(range.start, range.end);
+                editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+              }
+            } else {
+              // If file doesn't exist, maybe it's a deleted file or abstract path
+              vscode.window.showInformationMessage(`Evidence refers to ${filePath} (not found on disk)`);
+            }
+          } else {
+            // If no file path, show the raw evidence data
+            // We can reuse the evidence provider logic or just show a quick pick/message
+            const uri = vscode.Uri.parse(`evidence:${jsonPath}`);
+            const doc = await vscode.workspace.openTextDocument(uri);
+            await vscode.window.showTextDocument(doc, { preview: true });
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to open evidence: ${error}`);
+        }
+      }
+    );
+
     context.subscriptions.push(
       analyzeLastCommitsCmd,
       analyzeStagedCmd,
       compareFilesCmd,
       explainSymbolCmd,
       searchSymbolsCmd,
+      initializeDatabaseCmd,
       openSymbolCmd,
       generateReportCmd,
       toggleSelectionCmd,
       clearSelectionCmd,
-      exportContextCmd
+      exportContextCmd,
+      showRefactorReportCmd,
+      regenerateBundleCmd,
+      clearBundleCmd,
+      cancelAnalysisCmd,
+      addToBundleCmd,
+      removeFromBundleCmd,
+      openEvidenceCmd
     );
 
     console.log('Git Context commands registered successfully');
@@ -339,8 +562,6 @@ async function getRecentCommits(): Promise<vscode.QuickPickItem[]> {
     }
   ];
 }
-
-
 
 async function getCurrentCommit(): Promise<string | undefined> {
   try {
@@ -373,3 +594,4 @@ async function getSymbolAtCursor(): Promise<{ name: string, file: string, line: 
     line
   };
 }
+

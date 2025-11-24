@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { TreeNode, isCommitNode, isFileNode, isCategoryNode, isSymbolNode, getCollapsibleState, toVSCodeTreeItem } from '../contracts/treeNodes';
+import { RefactorBundleFacts } from '../facts/types';
 
 export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> {
   private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | null | void> =
@@ -10,24 +11,371 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
   // Track selected commits for multi-report generation
   public selectedCommits = new Set<string>();
 
+  // Store last bundle facts for bundle node display
+  public lastBundleFacts: RefactorBundleFacts | null = null;
+
+  // Track running analysis task
+  public runningTask: { cancel: () => void; token: vscode.CancellationToken } | null = null;
+
+  // Track database initialization state
+  private isInitialized: boolean = false;
+
   toggleCommitSelection(sha: string): void {
     if (this.selectedCommits.has(sha)) {
       this.selectedCommits.delete(sha);
     } else {
       this.selectedCommits.add(sha);
     }
+    this.persistState();
     this.refresh();
   }
 
   clearSelection(): void {
     this.selectedCommits.clear();
+    this.persistState();
     this.refresh();
   }
 
-  constructor(private context: vscode.ExtensionContext) { }
+  private getRefactorBundleDetails(): TreeNode[] {
+    const selectedCount = this.selectedCommits.size;
+    const children: TreeNode[] = [];
+
+    // Show progress indicator if analysis is running
+    if (this.runningTask) {
+      children.push({
+        id: 'refactor-bundle-progress',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'refactor-bundle',
+        count: 1,
+        label: '🔄 Analyzing...',
+        description: 'Analysis in progress',
+        tooltip: 'Cancel analysis if needed',
+        contextValue: 'refactor-bundle-progress'
+      });
+      return children; // Don't show other children while analyzing
+    }
+
+    // Net Effect vs Working Tree
+    children.push({
+      id: 'refactor-bundle-net-effect',
+      type: 'category' as const,
+      categoryType: 'added' as const,
+      parentId: 'refactor-bundle',
+      count: selectedCount,
+      label: 'Net Effect vs Working Tree',
+      description: 'Combined changes from bundle',
+      tooltip: 'Shows the net result of all commits in the bundle compared to working tree',
+      contextValue: 'refactor-bundle-item'
+    });
+
+    // Incompleteness Analysis
+    const incompletenessCount = this.lastBundleFacts
+      ? this.lastBundleFacts.findings.incompleteness.missing + this.lastBundleFacts.findings.incompleteness.zombies
+      : 0;
+    children.push({
+      id: 'refactor-bundle-incompleteness',
+      type: 'category' as const,
+      categoryType: 'modified' as const,
+      parentId: 'refactor-bundle',
+      count: incompletenessCount,
+      label: `Incompleteness${incompletenessCount > 0 ? ` ${incompletenessCount} issues` : ''}`,
+      description: this.lastBundleFacts
+        ? `${this.lastBundleFacts.findings.incompleteness.missing} missing · ${this.lastBundleFacts.findings.incompleteness.zombies} zombies`
+        : 'Missing additions and zombie removals',
+      tooltip: 'Analyze what parts of the refactor are incomplete',
+      contextValue: 'refactor-bundle-item'
+    });
+
+    // Pattern Drift
+    const driftCount = this.lastBundleFacts
+      ? this.lastBundleFacts.findings.patternDrift.mixedTargets + this.lastBundleFacts.findings.patternDrift.oldNamespaces
+      : 0;
+    children.push({
+      id: 'refactor-bundle-drift',
+      type: 'category' as const,
+      categoryType: 'modified' as const,
+      parentId: 'refactor-bundle',
+      count: driftCount,
+      label: `Pattern Drift${driftCount > 0 ? ` ${driftCount} issues` : ''}`,
+      description: driftCount > 0 ? `${driftCount} mixed/old patterns` : 'Pattern consistency analysis',
+      tooltip: 'Identify where patterns have drifted during the refactor',
+      contextValue: 'refactor-bundle-item'
+    });
+
+    // Legacy / Dead
+    const legacyCount = this.lastBundleFacts
+      ? this.lastBundleFacts.findings.legacyAudit.dead + this.lastBundleFacts.findings.legacyAudit.replacedLeftovers.length
+      : 0;
+    children.push({
+      id: 'refactor-bundle-legacy',
+      type: 'category' as const,
+      categoryType: 'removed' as const,
+      parentId: 'refactor-bundle',
+      count: legacyCount,
+      label: `Legacy / Dead${legacyCount > 0 ? ` ${legacyCount} issues` : ''}`,
+      description: this.lastBundleFacts
+        ? `${this.lastBundleFacts.findings.legacyAudit.dead} dead · ${this.lastBundleFacts.findings.legacyAudit.replacedLeftovers.length} replaced`
+        : 'Dead code and technical debt',
+      tooltip: 'Identify dead code, legacy usage, and cleanup opportunities',
+      contextValue: 'refactor-bundle-item'
+    });
+
+    // Timeline Rewind
+    children.push({
+      id: 'refactor-bundle-timeline',
+      type: 'category' as const,
+      categoryType: 'added' as const,
+      parentId: 'refactor-bundle',
+      count: selectedCount,
+      label: 'Timeline Rewind',
+      description: 'Evolution of changes over time',
+      tooltip: 'See how the refactor evolved across commits',
+      contextValue: 'refactor-bundle-item'
+    });
+
+    return children;
+  }
+
+  private async getBundleChildDetails(element: TreeNode): Promise<TreeNode[]> {
+    const children: TreeNode[] = [];
+
+    if (!this.lastBundleFacts) {
+      children.push({
+        id: `${element.id}-no-data`,
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: element.id,
+        count: 1,
+        label: 'No data available',
+        description: 'Generate report first',
+        tooltip: 'Run analysis to see detailed findings',
+        contextValue: 'refactor-bundle-item'
+      });
+      return children;
+    }
+
+    switch (element.id) {
+      case 'refactor-bundle-timeline':
+        // Show working state first, then commits in reverse chronological order
+        children.push({
+          id: 'timeline-working-state',
+          type: 'category' as const,
+          categoryType: 'added' as const,
+          parentId: element.id,
+          count: 1,
+          label: 'Working State',
+          description: 'Current state of the code',
+          tooltip: 'The current working directory state',
+          contextValue: 'timeline-item'
+        });
+
+        // Add commits in reverse order (newest first) with actual commit messages
+        const selectedShas = Array.from(this.selectedCommits);
+        try {
+          const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+          await ensureDatabaseInitialized();
+          const db = getDatabaseManager().getDatabase();
+
+          for (let i = selectedShas.length - 1; i >= 0; i--) {
+            const sha = selectedShas[i];
+            const stmt = db.prepare(`SELECT message, author, date FROM commits WHERE sha = ?`);
+            const commit = stmt.get(sha) as any;
+            const commitMessage = commit?.message ? commit.message.split('\n')[0] : sha.substring(0, 8);
+
+            children.push({
+              id: `timeline-commit-${sha}`,
+              type: 'category' as const,
+              categoryType: 'added' as const,
+              parentId: element.id,
+              count: 1,
+              label: `${sha.substring(0, 8)} → ${commitMessage}`,
+              description: commit?.author ? `${commit.author} · ${new Date(commit.date).toLocaleDateString()}` : 'Commit in refactor sequence',
+              tooltip: commit?.message ? `${commit.message}\n\nCommit ${sha} in the refactor timeline` : `Commit ${sha} in the refactor timeline`,
+              contextValue: 'timeline-item'
+            });
+          }
+        } catch (error) {
+          console.error('Failed to load timeline commits:', error);
+          // Fallback: show just SHAs
+          for (let i = selectedShas.length - 1; i >= 0; i--) {
+            const sha = selectedShas[i];
+            children.push({
+              id: `timeline-commit-${sha}`,
+              type: 'category' as const,
+              categoryType: 'added' as const,
+              parentId: element.id,
+              count: 1,
+              label: `${sha.substring(0, 8)} → Commit`,
+              description: 'Commit in refactor sequence',
+              tooltip: `Commit ${sha} in the refactor timeline`,
+              contextValue: 'timeline-item'
+            });
+          }
+        }
+        break;
+
+      case 'refactor-bundle-incompleteness':
+        if (this.lastBundleFacts.findings.incompleteness.missing > 0) {
+          children.push({
+            id: 'incompleteness-missing',
+            type: 'category' as const,
+            categoryType: 'modified' as const,
+            parentId: element.id,
+            count: this.lastBundleFacts.findings.incompleteness.missing,
+            label: `Missing Additions (${this.lastBundleFacts.findings.incompleteness.missing})`,
+            description: 'Symbols added but not found in working tree',
+            tooltip: 'These additions may have been lost or reverted',
+            contextValue: 'refactor-finding'
+          });
+        }
+        if (this.lastBundleFacts.findings.incompleteness.zombies > 0) {
+          children.push({
+            id: 'incompleteness-zombies',
+            type: 'category' as const,
+            categoryType: 'removed' as const,
+            parentId: element.id,
+            count: this.lastBundleFacts.findings.incompleteness.zombies,
+            label: `Zombie Removals (${this.lastBundleFacts.findings.incompleteness.zombies})`,
+            description: 'Symbols removed but still exist in working tree',
+            tooltip: 'These removals may not have been completed',
+            contextValue: 'refactor-finding'
+          });
+        }
+        break;
+
+      // Add similar handling for drift and legacy categories
+      case 'refactor-bundle-drift':
+        children.push({
+          id: 'drift-mixed-targets',
+          type: 'category' as const,
+          categoryType: 'modified' as const,
+          parentId: element.id,
+          count: this.lastBundleFacts.findings.patternDrift.mixedTargets,
+          label: `Mixed Targets (${this.lastBundleFacts.findings.patternDrift.mixedTargets})`,
+          description: 'Inconsistent target usage',
+          tooltip: 'Symbols using different patterns than expected',
+          contextValue: 'refactor-finding'
+        });
+        children.push({
+          id: 'drift-old-namespaces',
+          type: 'category' as const,
+          categoryType: 'modified' as const,
+          parentId: element.id,
+          count: this.lastBundleFacts.findings.patternDrift.oldNamespaces,
+          label: `Old Namespaces (${this.lastBundleFacts.findings.patternDrift.oldNamespaces})`,
+          description: 'Using outdated namespace patterns',
+          tooltip: 'Symbols still using old namespace conventions',
+          contextValue: 'refactor-finding'
+        });
+        break;
+
+      case 'refactor-bundle-legacy':
+        if (this.lastBundleFacts.findings.legacyAudit.dead > 0) {
+          children.push({
+            id: 'legacy-dead',
+            type: 'category' as const,
+            categoryType: 'removed' as const,
+            parentId: element.id,
+            count: this.lastBundleFacts.findings.legacyAudit.dead,
+            label: `Dead Code (${this.lastBundleFacts.findings.legacyAudit.dead})`,
+            description: 'Symbols no longer used',
+            tooltip: 'These symbols appear to be dead code',
+            contextValue: 'refactor-finding'
+          });
+        }
+        if (this.lastBundleFacts.findings.legacyAudit.replacedLeftovers.length > 0) {
+          children.push({
+            id: 'legacy-replaced',
+            type: 'category' as const,
+            categoryType: 'removed' as const,
+            parentId: element.id,
+            count: this.lastBundleFacts.findings.legacyAudit.replacedLeftovers.length,
+            label: `Replaced Leftovers (${this.lastBundleFacts.findings.legacyAudit.replacedLeftovers.length})`,
+            description: 'Old symbols that should have been removed',
+            tooltip: 'These symbols were replaced but not cleaned up',
+            contextValue: 'refactor-finding'
+          });
+        }
+        break;
+    }
+
+    return children;
+  }
+
+  private async getCommitSummary(sha: string): Promise<string> {
+    try {
+      const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+      await ensureDatabaseInitialized();
+      const db = getDatabaseManager().getDatabase();
+
+      const stmt = db.prepare(`SELECT message FROM commits WHERE sha = ?`);
+      const result = stmt.get(sha) as any;
+      if (result && result.message) {
+        return result.message.split('\n')[0]; // First line of commit message
+      }
+    } catch (error) {
+      console.error('Failed to get commit summary:', error);
+    }
+    return sha.substring(0, 8); // Fallback to short SHA
+  }
+
+  constructor(private context: vscode.ExtensionContext) {
+    this.restoreState();
+  }
+
+  /**
+   * Initialize the database (lazy initialization)
+   */
+  async initializeDatabase(): Promise<void> {
+    if (this.isInitialized) {
+      return;
+    }
+
+    const startTime = Date.now();
+    console.log('[COMMIT-TRACKER] Starting database initialization...');
+
+    try {
+      const { ensureDatabaseInitialized } = await import('../storage/database');
+      await ensureDatabaseInitialized();
+      this.isInitialized = true;
+      console.log(`[COMMIT-TRACKER] Database initialized in ${Date.now() - startTime}ms`);
+      console.log('[COMMIT-TRACKER] Refreshing tree view...');
+      const refreshStartTime = Date.now();
+      this.refresh();
+      console.log(`[COMMIT-TRACKER] Tree view refresh triggered in ${Date.now() - refreshStartTime}ms`);
+    } catch (error) {
+      console.error('Failed to initialize database:', error);
+      vscode.window.showErrorMessage(
+        `Failed to initialize database: ${error instanceof Error ? error.message : String(error)}`
+      );
+      throw error;
+    }
+  }
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
+  }
+
+  /**
+   * Persist current selection state to workspace storage
+   */
+  public persistState(): void {
+    const selectedShas = Array.from(this.selectedCommits);
+    this.context.workspaceState.update('commit-tracker.selectedShas', selectedShas);
+
+    // Also persist last bundle SHAs for regenerate fallback
+    if (selectedShas.length >= 2) {
+      this.context.workspaceState.update('commit-tracker.lastBundleShas', selectedShas);
+    }
+  }
+
+  /**
+   * Restore selection state from workspace storage
+   */
+  private restoreState(): void {
+    const selectedShas = this.context.workspaceState.get<string[]>('commit-tracker.selectedShas', []);
+    this.selectedCommits = new Set(selectedShas);
   }
 
   getTreeItem(element: TreeNode): vscode.TreeItem {
@@ -36,6 +384,12 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
 
     if (element.contextValue === 'commit') {
       // Commits are always expandable
+      collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+    } else if (element.id === 'refactor-bundle') {
+      // Bundle node is always expandable
+      collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+    } else if (element.contextValue === 'refactor-bundle-item' || element.contextValue === 'timeline-item' || element.contextValue === 'refactor-finding') {
+      // Bundle child items are expandable
       collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
     } else if (element.children && element.children.length > 0) {
       // Items with pre-populated children (like risks, file groups)
@@ -48,16 +402,23 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       }
     }
 
-    return {
-      id: element.id,
-      label: element.label,
-      description: element.description,
-      tooltip: element.tooltip,
-      collapsibleState,
-      iconPath: element.icon ? new vscode.ThemeIcon(element.icon) : undefined,
-      command: element.command,
-      contextValue: element.contextValue
-    };
+    const treeItem = new vscode.TreeItem(element.label || '', collapsibleState);
+    treeItem.id = element.id;
+    treeItem.description = element.description;
+    treeItem.tooltip = element.tooltip;
+    treeItem.iconPath = element.icon ? new vscode.ThemeIcon(element.icon) : undefined;
+    treeItem.command = element.command;
+    treeItem.contextValue = element.contextValue;
+
+    // Add buttons for bundle node
+    if (element.id === 'refactor-bundle') {
+      (treeItem as any).buttons = [
+        { iconPath: new vscode.ThemeIcon('refresh'), tooltip: 'Regenerate', command: 'commit-tracker.regenerateBundle' },
+        { iconPath: new vscode.ThemeIcon('clear-all'), tooltip: 'Clear Bundle', command: 'commit-tracker.clearBundle' }
+      ];
+    }
+
+    return treeItem;
   }
 
   async getChildren(element?: TreeNode): Promise<TreeNode[]> {
@@ -66,14 +427,48 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       return this.getRecentCommits();
     }
 
+    // Handle refactor bundle node
+    if (element.id === 'refactor-bundle') {
+      return this.getRefactorBundleDetails();
+    }
+
+    // Handle bundle child nodes
+    if (element.id?.startsWith('refactor-bundle-')) {
+      return await this.getBundleChildDetails(element);
+    }
+
     // Child level - show commit details
     return this.getCommitDetails(element);
   }
 
   private async getRecentCommits(): Promise<TreeNode[]> {
+    const startTime = Date.now();
+    console.log('[COMMIT-TRACKER] getRecentCommits() called');
+
+    // If database is not initialized, show placeholder
+    if (!this.isInitialized) {
+      console.log('[COMMIT-TRACKER] Database not initialized, showing placeholder');
+      return [{
+        id: 'initialize-placeholder',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'root',
+        count: 0,
+        label: '📦 Click to Load Commits',
+        description: 'Database not initialized',
+        tooltip: 'Click to initialize the database and load commit history',
+        contextValue: 'initialize-placeholder',
+        command: {
+          command: 'git-context.initializeDatabase',
+          title: 'Initialize Database'
+        }
+      }];
+    }
+
     try {
-      const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
-      await ensureDatabaseInitialized();
+      console.log('[COMMIT-TRACKER] Querying database for recent commits...');
+      const queryStartTime = Date.now();
+      const { getDatabaseManager } = await import('../storage/database');
       const db = getDatabaseManager().getDatabase();
 
       const stmt = db.prepare(`
@@ -84,8 +479,8 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       `);
 
       const commits = stmt.all() as any[];
-
-      return commits.map(commit => {
+      console.log(`[COMMIT-TRACKER] Query returned ${commits.length} commits in ${Date.now() - queryStartTime}ms`);
+      const commitNodes = commits.map(commit => {
         const shortSha = commit.sha.substring(0, 8);
         const isSelected = this.selectedCommits.has(commit.sha);
         const checkbox = isSelected ? '☑ ' : '☐ ';
@@ -101,9 +496,34 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
           label: `${checkbox}${shortSha} - ${commit.message.split('\n')[0]}`,
           description: `${commit.author} · ${new Date(commit.date).toLocaleDateString()}`,
           tooltip: `${commit.message}\n\nClick to expand\nRight-click to toggle selection for report`,
-          contextValue: 'commit'
+          contextValue: isSelected ? 'commit inRefactorBundle' : 'commit'
         };
       });
+
+      // Add refactor bundle node if 2+ commits selected
+      const result: TreeNode[] = [];
+      if (this.selectedCommits.size >= 2) {
+        const selectedCount = this.selectedCommits.size;
+        result.push({
+          id: 'refactor-bundle',
+          type: 'category' as const,
+          categoryType: 'added' as const, // Using a valid categoryType
+          parentId: 'root',
+          count: selectedCount,
+          label: `Refactor Bundle (${selectedCount} commits)`,
+          description: 'vs working tree',
+          tooltip: `Generate comprehensive refactor analysis for ${selectedCount} selected commits\n\nIncludes intent analysis, drift detection, and cleanup recommendations`,
+          contextValue: 'activeBundle',
+          command: {
+            command: 'git-context.generateReport',
+            title: 'Generate Refactor Bundle Report'
+          }
+        });
+      }
+
+      result.push(...commitNodes);
+      console.log(`[COMMIT-TRACKER] getRecentCommits() completed in ${Date.now() - startTime}ms`);
+      return result;
     } catch (error) {
       console.error('Failed to load commits:', error);
       // @ts-ignore

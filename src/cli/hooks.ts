@@ -20,7 +20,8 @@ export async function installHooks(): Promise<void> {
 CLI_PATH="$(dirname "$0")/../../node_modules/.bin/ct"
 
 if [ -x "$CLI_PATH" ]; then
-  "$CLI_PATH" analyze --count 1 >/dev/null 2>&1 &
+  # Analyze the current HEAD commit
+  "$CLI_PATH" analyze-commit HEAD >/dev/null 2>&1 &
 fi
 `;
 

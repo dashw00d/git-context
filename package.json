@@ -2,7 +2,8 @@
   "name": "git-context",
   "displayName": "Git Context",
   "description": "Analyze git history and context",
-  "version": "0.1.1",
+  "version": "0.1.2",
+  "publisher": "git-context",
   "repository": {
     "type": "git",
     "url": "https://github.com/example/git-context.git"
@@ -15,10 +16,6 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:git-context.analyzeLastCommits",
-    "onCommand:git-context.analyzeStagedChanges",
-    "onCommand:git-context.compareFilesToCommit",
-    "onCommand:git-context.explainSymbolChange",
     "onView:commitTracker"
   ],
   "main": "./out/extension.js",
@@ -32,6 +29,11 @@
       {
         "command": "git-context.analyzeStagedChanges",
         "title": "Analyze Staged Changes",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.compareFilesToCommit",
+        "title": "Compare Files to Commit",
         "category": "Git Context"
       },
       {
@@ -60,21 +62,58 @@
         "command": "git-context.clearSelection",
         "title": "Clear Selection",
         "category": "Git Context"
+      },
+      {
+        "command": "commit-tracker.regenerateBundle",
+        "title": "Regenerate Bundle",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "commit-tracker.clearBundle",
+        "title": "Clear Bundle",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "commit-tracker.cancelAnalysis",
+        "title": "Cancel Analysis",
+        "icon": "$(stop)"
+      },
+      {
+        "command": "commit-tracker.addToBundle",
+        "title": "Add to Current Bundle",
+        "icon": "$(add)"
+      },
+      {
+        "command": "commit-tracker.removeFromBundle",
+        "title": "Remove from Bundle",
+        "icon": "$(remove)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "commit-tracker",
+          "title": "Commit Tracker",
+          "icon": "$(git-commit)"
+        }
+      ]
+    },
     "views": {
       "explorer": [
-        {
-          "id": "commitTracker",
-          "name": "Commit Tracker",
-          "icon": "$(git-commit)",
-          "contextualTitle": "Commit Tracker"
-        },
         {
           "id": "symbolHistory",
           "name": "Symbol History",
           "icon": "$(search)",
-          "contextualTitle": "Symbol History"
+          "contextualTitle": "Symbol History",
+          "visibility": "visible"
+        }
+      ],
+      "commit-tracker": [
+        {
+          "id": "commitTracker",
+          "name": "Refactor Intelligence",
+          "type": "tree",
+          "showCollapseAll": true
         }
       ]
     },
@@ -91,6 +130,11 @@
           "group": "navigation"
         },
         {
+          "command": "git-context.clearSelection",
+          "when": "view == commitTracker",
+          "group": "navigation"
+        },
+        {
           "command": "git-context.searchSymbols",
           "when": "view == symbolHistory",
           "group": "navigation"
@@ -101,6 +145,36 @@
           "command": "git-context.toggleCommitSelection",
           "when": "view == commitTracker && viewItem == commit",
           "group": "inline"
+        },
+        {
+          "command": "commit-tracker.addToBundle",
+          "when": "view == commitTracker && viewItem == commit && !inRefactorBundle",
+          "group": "7_modification"
+        },
+        {
+          "command": "commit-tracker.removeFromBundle",
+          "when": "view == commitTracker && viewItem == commit && inRefactorBundle",
+          "group": "7_modification"
+        },
+        {
+          "command": "git-context.compareFilesToCommit",
+          "when": "view == commitTracker && viewItem == commit",
+          "group": "8_analysis"
+        },
+        {
+          "command": "commit-tracker.regenerateBundle",
+          "when": "view == commitTracker && viewItem == activeBundle",
+          "group": "7_modification"
+        },
+        {
+          "command": "commit-tracker.clearBundle",
+          "when": "view == commitTracker && viewItem == activeBundle",
+          "group": "7_modification"
+        },
+        {
+          "command": "git-context.exportLlmContext",
+          "when": "view == commitTracker && viewItem == activeBundle",
+          "group": "8_analysis"
         }
       ]
     },
@@ -129,6 +203,24 @@
           "type": "number",
           "default": 5,
           "description": "Default number of commits to analyze"
+        },
+        "git-context.tokensPerStep": {
+          "type": "object",
+          "default": {},
+          "description": "Custom token limits per analysis step (e.g. {\"discovery\": 8000})"
+        },
+        "git-context.customPrompts": {
+          "type": "object",
+          "default": {},
+          "description": "Custom prompt overrides per step (e.g. {\"discovery\": \"...\"})"
+        },
+        "git-context.customIgnorePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional paths to ignore during analysis (glob patterns)"
         }
       }
     }
@@ -147,6 +239,7 @@
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.42.0",
     "@typescript-eslint/parser": "^5.42.0",
+    "esbuild": "^0.27.0",
     "eslint": "^8.31.0",
     "typescript": "^4.9.4"
   },

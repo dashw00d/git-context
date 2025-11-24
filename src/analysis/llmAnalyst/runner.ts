@@ -1,0 +1,642 @@
+import { RefactorBundleFacts } from '../../facts/types';
+import { LlmAnalysis, AnalysisBlock, AnalysisBlockUtils } from './blocks';
+import { PROMPT_INTENT_AND_STORY, PROMPT_DRIFT_VERIFICATION, PROMPT_CLEANUP_PLAN, PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT } from './prompts';
+import { getLLMClient } from '../../llm/openrouter';
+import { getExtensionConfig } from '../../utils/config';
+
+/**
+ * LLM Analyst - Runs sequential analysis passes over refactor bundle facts
+ */
+export class LlmAnalyst {
+  private client = getLLMClient();
+
+  /**
+   * Run complete analysis pipeline on facts JSON
+   */
+  async analyze(facts: RefactorBundleFacts, rawFeed?: any): Promise<LlmAnalysis> {
+    const startTime = Date.now();
+    let totalTokens = 0;
+    let totalCalls = 0;
+
+    try {
+      // Pass 1: Intent & Story Analysis
+      console.log('LLM Analyst: Running intent analysis...');
+      const intentBlock = await this.analyzeIntent(facts);
+      totalCalls++;
+      totalTokens += this.estimateTokens(JSON.stringify(facts) + PROMPT_INTENT_AND_STORY);
+
+      // Pass 2: Drift Verification
+      console.log('LLM Analyst: Running drift verification...');
+      const driftBlock = await this.analyzeDrift(facts);
+      totalCalls++;
+      totalTokens += this.estimateTokens(JSON.stringify(facts) + PROMPT_DRIFT_VERIFICATION);
+
+      // Pass 3: Cleanup Plan
+      console.log('LLM Analyst: Generating cleanup plan...');
+      const cleanupBlock = await this.analyzeCleanup(facts);
+      totalCalls++;
+      totalTokens += this.estimateTokens(JSON.stringify(facts) + PROMPT_CLEANUP_PLAN);
+
+      // Pass 4: Pattern Discovery (if raw feed provided)
+      let discoveryBlock: AnalysisBlock | undefined;
+      if (rawFeed) {
+        console.log('LLM Analyst: Running pattern discovery...');
+        const discoveryResult = await this.discoverPatterns(rawFeed);
+        discoveryBlock = this.createDiscoveryBlock(discoveryResult);
+        totalCalls += 3; // Discover, Quantify, Plan
+        totalTokens += discoveryResult.metadata.totalTokens;
+      }
+
+      // Combine results
+      const blocks = [intentBlock, driftBlock, cleanupBlock];
+      if (discoveryBlock) {
+        blocks.push(discoveryBlock);
+      }
+      const summary = this.generateSummary(blocks, facts);
+      const markdown = this.generateMarkdown(blocks, facts);
+
+      return {
+        summary,
+        blocks,
+        markdown,
+        metadata: {
+          totalCalls,
+          totalTokens,
+          model: getExtensionConfig().openRouterModel,
+          timestamp: new Date().toISOString()
+        }
+      };
+
+    } catch (error) {
+      console.error('LLM Analyst failed:', error);
+
+      // Return minimal fallback analysis
+      const fallbackBlock = AnalysisBlockUtils.createBlock(
+        'error',
+        'Analysis Error',
+        'summary',
+        [{
+          text: `LLM analysis failed: ${error}`,
+          confidence: 0,
+          evidence: [],
+          severity: 'high'
+        }],
+        [{
+          description: 'Retry analysis or check LLM configuration',
+          priority: 'high',
+          evidence: [],
+          effort: 's',
+          risk: 'low'
+        }]
+      );
+
+      return {
+        summary: `Analysis failed: ${error}`,
+        blocks: [fallbackBlock],
+        markdown: `# Analysis Error\n\n${error}`,
+        metadata: {
+          totalCalls: 1,
+          totalTokens: 0,
+          model: 'unknown',
+          timestamp: new Date().toISOString()
+        }
+      };
+    }
+  }
+
+  /**
+   * Run the "Churn" pipeline: Discover -> Quantify -> Plan
+   * Uses raw AST/diff/graph feed to find emergent patterns
+   */
+  async discoverPatterns(rawFeed: any): Promise<any> {
+    const startTime = Date.now();
+    let totalTokens = 0;
+
+    try {
+      // Turn 1: Discover Patterns
+      console.log('LLM Analyst: Discovering emergent patterns...');
+      const discoverPromptTemplate = this.getPrompt('discover', PROMPT_DISCOVER);
+      const discoverPrompt = `${SYSTEM_PROMPT}\n\nRAW FEED JSON:\n${JSON.stringify(rawFeed)}\n\n${discoverPromptTemplate}`;
+      const discovery = await this.callLLM(discoverPrompt, 'discover');
+      totalTokens += this.estimateTokens(discoverPrompt);
+
+      // Turn 2: Quantify Impact
+      console.log('LLM Analyst: Quantifying patterns...');
+      const quantifyPromptTemplate = this.getPrompt('quantify', PROMPT_QUANTIFY);
+      const quantifyPrompt = `${SYSTEM_PROMPT}\n\nDISCOVERED PATTERNS:\n${JSON.stringify(discovery)}\n\n${quantifyPromptTemplate}`;
+      const quantified = await this.callLLM(quantifyPrompt, 'quantify');
+      totalTokens += this.estimateTokens(quantifyPrompt);
+
+      // Turn 3: Plan Synthesis
+      console.log('LLM Analyst: Synthesizing fix plan...');
+      const planPromptTemplate = this.getPrompt('plan', PROMPT_PLAN);
+      const planPrompt = `${SYSTEM_PROMPT}\n\nQUANTIFIED PATTERNS:\n${JSON.stringify(quantified)}\n\n${planPromptTemplate}`;
+      const plan = await this.callLLM(planPrompt, 'plan');
+      totalTokens += this.estimateTokens(planPrompt);
+
+      return {
+        discovery,
+        quantified,
+        plan,
+        metadata: {
+          totalTokens,
+          duration: Date.now() - startTime,
+          model: getExtensionConfig().openRouterModel
+        }
+      };
+
+    } catch (error) {
+      console.error('Pattern discovery failed:', error);
+      return { error: String(error) };
+    }
+  }
+
+  /**
+   * Pass 1: Analyze refactor intent and story
+   */
+  private async analyzeIntent(facts: RefactorBundleFacts): Promise<AnalysisBlock> {
+    const promptTemplate = this.getPrompt('intent', PROMPT_INTENT_AND_STORY);
+    const prompt = this.buildPrompt(promptTemplate, facts);
+    const response = await this.callLLM(prompt, 'intent');
+
+    const block = AnalysisBlockUtils.createBlock(
+      'intent',
+      'Refactor Intent & Story',
+      'intent'
+    );
+
+    // Parse the LLM response and extract claims
+    const claims = this.parseIntentResponse(response, facts);
+    block.claims = claims;
+
+    return block;
+  }
+
+  /**
+   * Pass 2: Verify drift findings
+   */
+  private async analyzeDrift(facts: RefactorBundleFacts): Promise<AnalysisBlock> {
+    const promptTemplate = this.getPrompt('drift', PROMPT_DRIFT_VERIFICATION);
+    const prompt = this.buildPrompt(promptTemplate, facts);
+    const response = await this.callLLM(prompt, 'drift');
+
+    const block = AnalysisBlockUtils.createBlock(
+      'drift',
+      'Drift Verification',
+      'drift'
+    );
+
+    // Parse drift verification response
+    const { claims, actions } = this.parseDriftResponse(response, facts);
+    block.claims = claims;
+    block.actions = actions;
+
+    return block;
+  }
+
+  /**
+   * Pass 3: Generate cleanup plan
+   */
+  private async analyzeCleanup(facts: RefactorBundleFacts): Promise<AnalysisBlock> {
+    const promptTemplate = this.getPrompt('cleanup', PROMPT_CLEANUP_PLAN);
+    const prompt = this.buildPrompt(promptTemplate, facts);
+    const response = await this.callLLM(prompt, 'cleanup');
+
+    const block = AnalysisBlockUtils.createBlock(
+      'cleanup',
+      'Cleanup Plan',
+      'cleanup'
+    );
+
+    // Parse cleanup plan response
+    const { claims, actions } = this.parseCleanupResponse(response, facts);
+    block.claims = claims;
+    block.actions = actions;
+
+    return block;
+  }
+
+  /**
+   * Convert discovery results into an AnalysisBlock
+   */
+  private createDiscoveryBlock(discoveryResult: any): AnalysisBlock {
+    const block = AnalysisBlockUtils.createBlock(
+      'discovery',
+      'LLM-Driven Pattern Discovery',
+      'discovery'
+    );
+
+    if (discoveryResult.quantified && discoveryResult.quantified.quantified) {
+      const patterns = discoveryResult.quantified.quantified;
+      block.claims = patterns.map((p: any) => ({
+        text: `${p.name}: ${p.desc} (Impact: ${p.impact}, Coverage: ${p.coverage_pct}%)`,
+        confidence: 0.9,
+        severity: p.impact === 'high' ? 'high' : 'medium',
+        evidence: (p.examples || []).map((ex: string) => AnalysisBlockUtils.createEvidence(ex, 'Example'))
+      }));
+    }
+
+    if (discoveryResult.plan && discoveryResult.plan.plan) {
+      const plans = discoveryResult.plan.plan;
+      block.actions = plans.map((p: any) => ({
+        description: `Fix ${p.pattern}: ${p.fixes.length} fixes identified`,
+        priority: 'high',
+        effort: 'medium',
+        risk: 'medium',
+        evidence: [],
+        dependsOn: []
+      }));
+    }
+
+    return block;
+  }
+
+  /**
+   * Build a complete prompt with system message and facts
+   */
+  private buildPrompt(userPrompt: string, facts: RefactorBundleFacts): string {
+    const factsJson = JSON.stringify(facts, null, 2);
+    return `${SYSTEM_PROMPT}\n\nFACTS JSON:\n${factsJson}\n\n${userPrompt}`;
+  }
+
+  /**
+   * Get prompt from config or fallback to default
+   */
+  private getPrompt(key: string, defaultPrompt: string): string {
+    const config = getExtensionConfig();
+    if (config.customPrompts && config.customPrompts[key]) {
+      return config.customPrompts[key];
+    }
+    return defaultPrompt;
+  }
+
+  /**
+   * Get max tokens from config or fallback to default
+   */
+  private getMaxTokens(key: string, defaultTokens: number = 4000): number {
+    const config = getExtensionConfig();
+    if (config.tokensPerStep && config.tokensPerStep[key]) {
+      return config.tokensPerStep[key];
+    }
+    return defaultTokens;
+  }
+
+  /**
+   * Call the LLM with the prompt
+   */
+  private async callLLM(prompt: string, stepKey: string = 'default'): Promise<any> {
+    const messages = [
+      {
+        role: 'user' as const,
+        content: prompt
+      }
+    ];
+
+    const maxTokens = this.getMaxTokens(stepKey);
+
+    const response = await this.client.complete(messages, {
+      temperature: 0.1,
+      maxTokens
+    });
+
+    // Try to parse as JSON first
+    try {
+      // Extract JSON from markdown code blocks if present
+      const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+      const jsonStr = jsonMatch ? jsonMatch[1] : response.trim();
+
+      // Try to find JSON object in the response
+      const jsonStart = jsonStr.indexOf('{');
+      const jsonEnd = jsonStr.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        const extractedJson = jsonStr.substring(jsonStart, jsonEnd + 1);
+        return JSON.parse(extractedJson);
+      }
+
+      // If no braces found, try parsing the whole string
+      return JSON.parse(jsonStr);
+    } catch (error) {
+      console.warn('Failed to parse LLM response as JSON, falling back to string parsing:', error);
+      return { raw: response };
+    }
+  }
+
+  /**
+   * Parse intent analysis response
+   */
+  private parseIntentResponse(response: any, facts: RefactorBundleFacts): any[] {
+    const claims = [];
+
+    // If response is parsed JSON
+    if (response.claims && Array.isArray(response.claims)) {
+      return response.claims.map((claim: any) => ({
+        text: claim.text,
+        confidence: claim.confidence || 0.8,
+        severity: claim.severity || 'medium',
+        evidence: (claim.evidence || []).map((path: string) =>
+          AnalysisBlockUtils.createEvidence(path, path)
+        )
+      }));
+    }
+
+    // Fallback to existing string matching logic
+    if (response.raw) {
+      const rawResponse = response.raw.toLowerCase();
+
+      // Look for problem identification
+      if (rawResponse.includes('problem') ||
+        rawResponse.includes('issue') ||
+        rawResponse.includes('trying to solve')) {
+        claims.push({
+          text: 'Refactor addresses specific architectural problems',
+          confidence: 0.9,
+          evidence: [AnalysisBlockUtils.createEvidence(
+            'bundle.shas',
+            'Bundle contains multiple related commits'
+          )],
+          severity: 'medium'
+        });
+      }
+
+      // Look for scope assessment
+      const totalChanges = facts.intended.present + facts.intended.absent;
+      if (totalChanges > 50) {
+        claims.push({
+          text: 'Large-scale refactor affecting many symbols',
+          confidence: 0.95,
+          evidence: [AnalysisBlockUtils.createEvidence(
+            'intended',
+            `${totalChanges} symbols affected`
+          )],
+          severity: 'high'
+        });
+      }
+    }
+
+    return claims;
+  }
+
+  /**
+   * Parse drift verification response
+   */
+  private parseDriftResponse(response: any, facts: RefactorBundleFacts): { claims: any[], actions: any[] } {
+    const claims = [];
+    const actions = [];
+
+    // If response is parsed JSON
+    if (response.claims && Array.isArray(response.claims)) {
+      claims.push(...response.claims.map((claim: any) => ({
+        text: claim.text,
+        confidence: claim.confidence || 0.8,
+        severity: claim.severity || 'medium',
+        evidence: (claim.evidence || []).map((path: string) =>
+          AnalysisBlockUtils.createEvidence(path, path)
+        )
+      })));
+    }
+
+    if (response.actions && Array.isArray(response.actions)) {
+      actions.push(...response.actions.map((action: any) => ({
+        description: action.description,
+        priority: action.priority || 'medium',
+        effort: action.effort || 'medium',
+        risk: action.risk || 'low',
+        evidence: (action.evidence || []).map((path: string) =>
+          AnalysisBlockUtils.createEvidence(path, path)
+        ),
+        dependsOn: action.dependsOn || []
+      })));
+    }
+
+    // Fallback to existing logic if no structured data
+    if (claims.length === 0 && actions.length === 0 && response.raw) {
+      const rawResponse = response.raw.toLowerCase();
+
+      // Check for incompleteness validation
+      if (facts.findings.incompleteness.missing > 0) {
+        if (rawResponse.includes('real') ||
+          rawResponse.includes('valid') ||
+          rawResponse.includes('confirmed')) {
+          claims.push({
+            text: 'Missing symbols are real issues requiring completion',
+            confidence: 0.8,
+            evidence: [AnalysisBlockUtils.createEvidence(
+              'findings.incompleteness.missing',
+              `${facts.findings.incompleteness.missing} symbols missing`
+            )],
+            severity: 'high'
+          });
+
+          actions.push({
+            description: 'Complete missing symbol implementations',
+            priority: 'high',
+            evidence: [AnalysisBlockUtils.createEvidence('findings.incompleteness.missing', 'Missing symbols list')],
+            effort: 'l',
+            risk: 'medium'
+          });
+        }
+      }
+
+      // Check for zombie validation
+      if (facts.findings.incompleteness.zombies > 0) {
+        if (rawResponse.includes('should be removed') ||
+          rawResponse.includes('obsolete')) {
+          actions.push({
+            description: 'Remove zombie symbols that are no longer needed',
+            priority: 'medium',
+            evidence: [AnalysisBlockUtils.createEvidence('findings.incompleteness.zombies', 'Zombie symbols list')],
+            effort: 'm',
+            risk: 'low'
+          });
+        }
+      }
+    }
+
+    return { claims, actions };
+  }
+
+  /**
+   * Parse cleanup plan response
+   */
+  private parseCleanupResponse(response: any, facts: RefactorBundleFacts): { claims: any[], actions: any[] } {
+    const claims: any[] = [];
+    const actions: any[] = [];
+
+    // If response is parsed JSON
+    if (response.actions && Array.isArray(response.actions)) {
+      actions.push(...response.actions.map((action: any) => ({
+        description: action.description,
+        priority: action.priority || 'medium',
+        effort: action.effort || 'medium',
+        risk: action.risk || 'low',
+        evidence: (action.evidence || []).map((path: string) =>
+          AnalysisBlockUtils.createEvidence(path, path)
+        ),
+        dependsOn: action.dependsOn || []
+      })));
+    }
+
+    // Fallback to existing numbered list parsing
+    if (actions.length === 0 && response.raw) {
+      const lines = response.raw.split('\n');
+      let currentAction: any = null;
+
+      for (const line of lines) {
+        // Look for numbered items (1., 2., etc.)
+        const numberedMatch = line.match(/^(\d+)\.\s*(.+)/);
+        if (numberedMatch) {
+          if (currentAction) {
+            actions.push(currentAction);
+          }
+
+          currentAction = {
+            description: numberedMatch[2],
+            priority: this.inferPriority(numberedMatch[2]),
+            evidence: [],
+            effort: this.inferEffort(numberedMatch[2]),
+            risk: this.inferRisk(numberedMatch[2])
+          };
+        }
+        // Look for evidence citations
+        else if (currentAction && (line.includes('findings.') || line.includes('legacyAudit.'))) {
+          // Extract evidence paths
+          const evidenceMatch = line.match(/findings\.[^.]+(?:\[[^\]]+\])?/g);
+          if (evidenceMatch) {
+            for (const path of evidenceMatch) {
+              currentAction.evidence.push(AnalysisBlockUtils.createEvidence(
+                path,
+                `Referenced in cleanup plan`
+              ));
+            }
+          }
+        }
+      }
+
+      if (currentAction) {
+        actions.push(currentAction);
+      }
+    }
+
+    return { claims, actions };
+  }
+
+  /**
+   * Generate overall summary
+   */
+  private generateSummary(blocks: AnalysisBlock[], facts: RefactorBundleFacts): string {
+    const totalIssues = facts.findings.incompleteness.missing +
+      facts.findings.incompleteness.zombies +
+      facts.findings.incompleteness.divergent +
+      facts.findings.legacyAudit.dead;
+
+    let summary = `Analysis of ${facts.bundle.shas.length} commits affecting ${facts.working.symbols} symbols. `;
+
+    if (totalIssues === 0) {
+      summary += 'Refactor appears complete with no remaining issues.';
+    } else {
+      summary += `Found ${totalIssues} issues requiring attention: ` +
+        `${facts.findings.incompleteness.missing} missing, ` +
+        `${facts.findings.incompleteness.zombies} zombies, ` +
+        `${facts.findings.legacyAudit.dead} dead code.`;
+    }
+
+    return summary;
+  }
+
+  /**
+   * Generate markdown representation
+   */
+  private generateMarkdown(blocks: AnalysisBlock[], facts: RefactorBundleFacts): string {
+    let markdown = `# LLM Analysis Report\n\n`;
+    markdown += `**Generated:** ${new Date().toLocaleString()}\n\n`;
+    markdown += `**Bundle:** ${facts.bundle.shas.length} commits\n\n`;
+
+    for (const block of blocks) {
+      markdown += `## ${block.title}\n\n`;
+
+      if (block.claims.length > 0) {
+        markdown += `### Findings\n\n`;
+        for (const claim of block.claims) {
+          markdown += `- **${claim.severity.toUpperCase()}:** ${claim.text} (confidence: ${(claim.confidence * 100).toFixed(0)}%)\n`;
+          for (const evidence of claim.evidence) {
+            markdown += `  - Evidence: \`${evidence.path}\`\n`;
+          }
+        }
+        markdown += `\n`;
+      }
+
+      if (block.actions.length > 0) {
+        markdown += `### Actions\n\n`;
+        const sortedActions = AnalysisBlockUtils.sortActions(block.actions);
+        for (const action of sortedActions) {
+          markdown += `- **${action.priority.toUpperCase()}** [${action.effort.toUpperCase()}] ${action.description} (risk: ${action.risk})\n`;
+          for (const evidence of action.evidence) {
+            markdown += `  - Evidence: \`${evidence.path}\`\n`;
+          }
+        }
+        markdown += `\n`;
+      }
+    }
+
+    return markdown;
+  }
+
+  /**
+   * Infer priority from action description
+   */
+  private inferPriority(description: string): 'low' | 'medium' | 'high' | 'urgent' {
+    const lower = description.toLowerCase();
+    if (lower.includes('urgent') || lower.includes('critical') || lower.includes('breaking')) {
+      return 'urgent';
+    }
+    if (lower.includes('high') || lower.includes('important') || lower.includes('missing')) {
+      return 'high';
+    }
+    if (lower.includes('medium') || lower.includes('moderate')) {
+      return 'medium';
+    }
+    return 'low';
+  }
+
+  /**
+   * Infer effort from action description
+   */
+  private inferEffort(description: string): 'xs' | 's' | 'm' | 'l' | 'xl' {
+    const lower = description.toLowerCase();
+    if (lower.includes('complex') || lower.includes('large') || lower.includes('architectural')) {
+      return 'xl';
+    }
+    if (lower.includes('significant') || lower.includes('multiple')) {
+      return 'l';
+    }
+    if (lower.includes('moderate') || lower.includes('several')) {
+      return 'm';
+    }
+    if (lower.includes('simple') || lower.includes('single')) {
+      return 's';
+    }
+    return 'xs';
+  }
+
+  /**
+   * Infer risk from action description
+   */
+  private inferRisk(description: string): 'low' | 'medium' | 'high' {
+    const lower = description.toLowerCase();
+    if (lower.includes('high risk') || lower.includes('dangerous') || lower.includes('breaking')) {
+      return 'high';
+    }
+    if (lower.includes('medium risk') || lower.includes('careful') || lower.includes('complex')) {
+      return 'medium';
+    }
+    return 'low';
+  }
+
+  /**
+   * Rough token estimation for tracking
+   */
+  private estimateTokens(text: string): number {
+    // Very rough approximation: ~4 characters per token
+    return Math.ceil(text.length / 4);
+  }
+}

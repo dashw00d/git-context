@@ -15,7 +15,10 @@ export function getExtensionConfig(): ExtensionConfig {
       openRouterModel: config.get('openRouterModel', 'anthropic/claude-3-haiku:beta'),
       apiEndpoint: config.get('apiEndpoint', 'https://openrouter.ai/api/v1'),
       difftasticPath: config.get('difftasticPath'),
-      defaultCommitCount: config.get('defaultCommitCount', 5)
+      defaultCommitCount: config.get('defaultCommitCount', 5),
+      tokensPerStep: config.get('tokensPerStep'),
+      customPrompts: config.get('customPrompts'),
+      customIgnorePaths: config.get('customIgnorePaths')
     };
   } else {
     // CLI fallback
@@ -24,7 +27,10 @@ export function getExtensionConfig(): ExtensionConfig {
       openRouterModel: process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku:beta',
       apiEndpoint: process.env.API_ENDPOINT || 'https://openrouter.ai/api/v1',
       difftasticPath: process.env.DIFFTASTIC_PATH,
-      defaultCommitCount: parseInt(process.env.DEFAULT_COMMIT_COUNT || '5')
+      defaultCommitCount: parseInt(process.env.DEFAULT_COMMIT_COUNT || '5'),
+      tokensPerStep: process.env.TOKENS_PER_STEP ? JSON.parse(process.env.TOKENS_PER_STEP) : undefined,
+      customPrompts: process.env.CUSTOM_PROMPTS ? JSON.parse(process.env.CUSTOM_PROMPTS) : undefined,
+      customIgnorePaths: process.env.CUSTOM_IGNORE_PATHS ? process.env.CUSTOM_IGNORE_PATHS.split(',') : undefined
     };
   }
 }

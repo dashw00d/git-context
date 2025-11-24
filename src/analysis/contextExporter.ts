@@ -316,14 +316,30 @@ export class ContextExporter {
   }
 
   /**
-   * Remove low-confidence edges with dynamic threshold
+   * Remove low-confidence edges with dynamic threshold, preserving edges for legacy audit
    */
   private truncateLowConfidenceEdges(report: LlmContextReport): void {
     for (const commit of report.commits) {
       // Dynamic confidence threshold based on edge count
       const totalEdges = commit.edges.length;
       const threshold = totalEdges < 50 ? 0.4 : 0.7;
-      commit.edges = commit.edges.filter(edge => (edge.confidence ?? 0) >= threshold);
+
+      // Collect symbols that were removed or modified (important for legacy audit)
+      const legacySymbols = new Set<string>();
+      for (const file of commit.files) {
+        for (const symbol of file.symbols.removed) {
+          legacySymbols.add(String(symbol.symbol_id || symbol.id));
+        }
+        for (const symbol of file.symbols.modified) {
+          legacySymbols.add(String(symbol.symbol_id || symbol.id));
+        }
+      }
+
+      commit.edges = commit.edges.filter(edge => {
+        // Always keep edges connected to legacy symbols (removed/modified) for dead-code detection
+        const isLegacyEdge = legacySymbols.has(edge.from_symbol_id) || legacySymbols.has(edge.to_symbol_id);
+        return isLegacyEdge || (edge.confidence ?? 0) >= threshold;
+      });
     }
   }
 

@@ -70,7 +70,10 @@ export async function analyzeCommit(sha: string): Promise<void> {
 
   console.log(`Found ${symbols.added.length} added, ${symbols.removed.length} removed, ${symbols.modified.length} modified symbols`);
   if (symbols.renames.length > 0) {
-    console.log(`Detected ${symbols.renames.length} renames`);
+    console.log(`Detected ${symbols.renames.length} renames:`);
+    for (const rename of symbols.renames) {
+      console.log(`  ${rename.oldSymbol.name} → ${rename.newSymbol.name} (confidence: ${rename.confidence.toFixed(2)})`);
+    }
   }
   if (symbols.moves.length > 0) {
     console.log(`Detected ${symbols.moves.length} moves`);
@@ -277,22 +280,31 @@ async function storeAnalysisResult(
   }
 
   // Insert into renames table
-  const renamesStmt = db.prepare(`
-    INSERT OR REPLACE INTO renames
-    (sha, path, old_symbol_id, new_symbol_id, old_name, new_name, confidence)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
+  if (symbols.renames.length > 0) {
+    console.log(`Storing ${symbols.renames.length} renames to database...`);
+    const renamesStmt = db.prepare(`
+      INSERT OR REPLACE INTO renames
+      (sha, path, old_symbol_id, new_symbol_id, old_name, new_name, confidence)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
 
-  for (const rename of symbols.renames) {
-    renamesStmt.run(
-      analysis.commit.sha,
-      rename.newSymbol.id.split(':')[0],
-      rename.oldSymbol.id,
-      rename.newSymbol.id,
-      rename.oldSymbol.name,
-      rename.newSymbol.name,
-      rename.confidence
-    );
+    try {
+      for (const rename of symbols.renames) {
+        renamesStmt.run(
+          analysis.commit.sha,
+          rename.newSymbol.id.split(':')[0],
+          rename.oldSymbol.id,
+          rename.newSymbol.id,
+          rename.oldSymbol.name,
+          rename.newSymbol.name,
+          rename.confidence
+        );
+      }
+      console.log(`✓ Stored ${symbols.renames.length} renames`);
+    } catch (error) {
+      console.error(`✗ Failed to store renames:`, error);
+      throw error;
+    }
   }
 
   // Store moves as special symbol entries

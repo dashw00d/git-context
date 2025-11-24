@@ -115,6 +115,29 @@ export class GitOperations {
   }
 
   /**
+   * Get diff for a specific file in a commit
+   */
+  getFileDiff(sha: string, filePath: string): string {
+    // Use show with patch format for specific file
+    return this.execGit(['show', '--pretty=format:', '--patch', sha, '--', filePath]);
+  }
+
+  /**
+   * Get diff for a file across a range of commits (bundle)
+   */
+  getBundleDiff(startSha: string, endSha: string, filePath: string): string {
+    // Diff from parent of start to end
+    // If startSha has no parent (root), just diff startSha..endSha (which misses startSha changes if using ..)
+    // Safest is startSha~1..endSha
+    try {
+      return this.execGit(['diff', `${startSha}~1..${endSha}`, '--', filePath]);
+    } catch (e) {
+      // Fallback if no parent (e.g. shallow clone or root)
+      return this.execGit(['diff', `${startSha}..${endSha}`, '--', filePath]);
+    }
+  }
+
+  /**
    * Get staged changes diff
    */
   getStagedDiff(): string {
@@ -145,6 +168,19 @@ export class GitOperations {
         return '';
       }
       throw error;
+    }
+  }
+
+  /**
+   * Check if a file is ignored by git
+   */
+  isIgnored(filePath: string): boolean {
+    try {
+      // git check-ignore returns exit code 0 if ignored, 1 if not ignored
+      this.execGit(['check-ignore', '-q', filePath]);
+      return true;
+    } catch (error) {
+      return false;
     }
   }
 

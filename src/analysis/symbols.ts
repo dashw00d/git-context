@@ -153,7 +153,7 @@ export class SymbolExtractor {
   /**
    * Extract symbols from file content
    */
-  private async extractSymbolsFromContent(content: string, filePath: string): Promise<SymbolInfo[]> {
+  public async extractSymbolsFromContent(content: string, filePath: string): Promise<SymbolInfo[]> {
     const language = detectLanguage(filePath);
     if (!language) {
       return [];

@@ -25,27 +25,50 @@ export class LLMClient {
   }
 
   /**
-   * Send a completion request to the configured API endpoint
+   * Send a completion request to the configured API endpoint with retry logic
    */
   async complete(messages: OpenAI.Chat.ChatCompletionMessageParam[], options: {
     temperature?: number;
     maxTokens?: number;
     jsonMode?: boolean;
+    maxRetries?: number;
   } = {}): Promise<string> {
-    try {
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages,
-        temperature: options.temperature ?? 0.1,
-        max_tokens: options.maxTokens ?? 2000,
-        response_format: options.jsonMode ? { type: 'json_object' } : undefined
-      });
+    const maxRetries = options.maxRetries ?? 3;
+    let lastError: Error | null = null;
 
-      return response.choices[0]?.message?.content || '';
-    } catch (error: any) {
-      const endpointName = this.endpoint.includes('openrouter.ai') ? 'OpenRouter' : 'API endpoint';
-      throw new Error(`${endpointName} API error: ${error.message}`);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await this.client.chat.completions.create({
+          model: this.model,
+          messages,
+          temperature: options.temperature ?? 0.1,
+          max_tokens: options.maxTokens ?? 2000,
+          response_format: options.jsonMode ? { type: 'json_object' } : undefined
+        });
+
+        return response.choices[0]?.message?.content || '';
+      } catch (error: any) {
+        lastError = error;
+        const endpointName = this.endpoint.includes('openrouter.ai') ? 'OpenRouter' : 'API endpoint';
+
+        // Don't retry on certain errors (auth, invalid request, etc.)
+        if (error.status === 401 || error.status === 400 || error.status === 404) {
+          throw new Error(`${endpointName} API error: ${error.message}`);
+        }
+
+        // If this was the last attempt, throw the error
+        if (attempt === maxRetries) {
+          throw new Error(`${endpointName} API error after ${maxRetries + 1} attempts: ${error.message}`);
+        }
+
+        // Exponential backoff: wait 1s, 2s, 4s, etc.
+        const delayMs = Math.pow(2, attempt) * 1000;
+        console.warn(`LLM API call failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`, error.message);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
     }
+
+    throw new Error(`${this.endpoint.includes('openrouter.ai') ? 'OpenRouter' : 'API endpoint'} API error: ${lastError?.message || 'Unknown error'}`);
   }
 
   /**

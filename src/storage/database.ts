@@ -70,7 +70,9 @@ export class DatabaseManager {
 
   getDatabase(): any {
     if (!this.db) {
-      throw new Error('Database not initialized. Call initialize() first.');
+      // Return null instead of throwing - allows callers to check gracefully
+      console.warn('Database not initialized. Call initialize() first.');
+      return null;
     }
 
     // Return a proxy to intercept prepare calls and wrap statements
@@ -81,7 +83,10 @@ export class DatabaseManager {
         return {
           run: (...params: any[]) => {
             try {
-              const stmt = this.db!.prepare(sql);
+              if (!this.db) {
+                throw new Error('Database not initialized');
+              }
+              const stmt = this.db.prepare(sql);
               stmt.bind(params);
               stmt.step();
               stmt.free(); // Free the statement immediately
@@ -91,12 +96,16 @@ export class DatabaseManager {
               console.error('Statement.run() error:', error);
               console.error('SQL:', sql);
               console.error('Params:', params);
-              throw error;
+              // Don't throw - return error result instead
+              return { changes: 0, lastInsertRowid: 0 };
             }
           },
           get: (...params: any[]) => {
             try {
-              const stmt = this.db!.prepare(sql);
+              if (!this.db) {
+                return undefined;
+              }
+              const stmt = this.db.prepare(sql);
               stmt.bind(params);
               if (stmt.step()) {
                 const result = stmt.getAsObject();
@@ -107,12 +116,15 @@ export class DatabaseManager {
               return undefined;
             } catch (error) {
               console.error('Statement.get() error:', error);
-              throw error;
+              return undefined; // Return undefined instead of throwing
             }
           },
           all: (...params: any[]) => {
             try {
-              const stmt = this.db!.prepare(sql);
+              if (!this.db) {
+                return [];
+              }
+              const stmt = this.db.prepare(sql);
               stmt.bind(params);
               const results: any[] = [];
               while (stmt.step()) {
@@ -122,33 +134,50 @@ export class DatabaseManager {
               return results;
             } catch (error) {
               console.error('Statement.all() error:', error);
-              throw error;
+              return []; // Return empty array instead of throwing
             }
           }
         };
       },
       exec: (sql: string) => {
-        this.db!.exec(sql);
-        this.save();
+        try {
+          if (!this.db) {
+            console.warn('Database not initialized, cannot exec:', sql);
+            return;
+          }
+          this.db.exec(sql);
+          this.save();
+        } catch (error) {
+          console.error('Database.exec() error:', error);
+        }
       },
       pragma: (sql: string) => {
         // sql.js might not support all pragmas, but we can try
         try {
-          this.db!.exec(`PRAGMA ${sql}`);
+          if (!this.db) return;
+          this.db.exec(`PRAGMA ${sql}`);
         } catch (e) {
           console.warn('PRAGMA failed:', e);
         }
       },
       transaction: (fn: () => any) => {
         return () => {
-          this.db!.exec('BEGIN TRANSACTION');
+          if (!this.db) {
+            console.warn('Database not initialized, cannot start transaction');
+            return fn();
+          }
           try {
+            this.db.exec('BEGIN TRANSACTION');
             const result = fn();
-            this.db!.exec('COMMIT');
+            this.db.exec('COMMIT');
             this.save();
             return result;
           } catch (e) {
-            this.db!.exec('ROLLBACK');
+            try {
+              this.db.exec('ROLLBACK');
+            } catch (rollbackError) {
+              console.error('Rollback failed:', rollbackError);
+            }
             throw e;
           }
         };
@@ -159,33 +188,66 @@ export class DatabaseManager {
   async initialize(): Promise<void> {
     if (this.db) return;
 
+    const startTime = Date.now();
+    console.log('[DB-INIT] Starting database initialization...');
+
     // Ensure directory exists
     const dir = path.dirname(this.dbPath);
     if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch (error) {
+        console.error('Failed to create database directory:', error);
+        throw new Error(`Failed to create database directory: ${error}`);
+      }
     }
 
     try {
       // Load WASM
+      console.log('[DB-INIT] Loading SQL.js WASM...');
+      const wasmStartTime = Date.now();
       // In production (out/storage/database.js), __dirname is .../out/storage
       // We want .../out/sql-wasm.wasm
       const wasmPath = path.join(__dirname, '..', 'sql-wasm.wasm');
       const SQL = await initSqlJs({
         locateFile: () => wasmPath
       });
+      console.log(`[DB-INIT] WASM loaded in ${Date.now() - wasmStartTime}ms`);
 
       // Load existing DB if it exists
       if (fs.existsSync(this.dbPath)) {
-        const filebuffer = fs.readFileSync(this.dbPath);
-        this.db = new SQL.Database(filebuffer);
+        console.log('[DB-INIT] Loading existing database file...');
+        const loadStartTime = Date.now();
+        try {
+          const filebuffer = fs.readFileSync(this.dbPath);
+          this.db = new SQL.Database(filebuffer);
+          console.log(`[DB-INIT] Database file loaded in ${Date.now() - loadStartTime}ms (${filebuffer.length} bytes)`);
+        } catch (error: any) {
+          // If file is locked, corrupted, or has I/O errors, create a new one
+          if (error.code === 'EACCES' || error.code === 'EBUSY' || error.errno === 10) {
+            console.warn('Database file is locked or has I/O error, will retry later:', error);
+            // Don't create a new DB if file is just locked - throw to retry later
+            throw new Error(`Database file is locked or inaccessible: ${error.message}`);
+          }
+          console.warn('Failed to load existing database, creating new one:', error);
+          // For other errors (corruption, etc.), create a new database
+          this.db = new SQL.Database();
+        }
       } else {
         this.db = new SQL.Database();
       }
 
-      this.initializeSchema();
+      if (this.db) {
+        console.log('[DB-INIT] Initializing schema...');
+        const schemaStartTime = Date.now();
+        this.initializeSchema();
+        console.log(`[DB-INIT] Schema initialized in ${Date.now() - schemaStartTime}ms`);
+      }
+      console.log(`[DB-INIT] Total initialization time: ${Date.now() - startTime}ms`);
     } catch (error) {
       console.error('Failed to initialize sql.js:', error);
-      throw new Error(`Failed to initialize database: ${error}`);
+      // Re-throw to allow callers to handle gracefully
+      throw error;
     }
   }
 
@@ -198,10 +260,28 @@ export class DatabaseManager {
   }
 
   save(): void {
-    if (this.db) {
+    if (!this.db) return;
+
+    try {
       const data = this.db.export();
       const buffer = Buffer.from(data);
+
+      // Check if directory still exists before writing
+      const dir = path.dirname(this.dbPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
       fs.writeFileSync(this.dbPath, buffer);
+    } catch (error: any) {
+      // Handle I/O errors gracefully - don't crash if file is locked
+      if (error.code === 'EACCES' || error.code === 'EBUSY' || error.errno === 10) {
+        console.warn('Database file is locked, save will be retried on next operation:', error);
+        // Don't throw - allow operations to continue
+        return;
+      }
+      console.error('Failed to save database:', error);
+      // For other errors, log but don't throw to prevent cascading failures
     }
   }
 
@@ -224,10 +304,29 @@ export function getDatabaseManager(): DatabaseManager {
   return dbManager;
 }
 
-// Helper to ensure initialization
+// Helper to ensure initialization with retry logic
 export async function ensureDatabaseInitialized(): Promise<void> {
   const manager = getDatabaseManager();
-  await manager.initialize();
+  try {
+    await manager.initialize();
+  } catch (error: any) {
+    // If database is locked (SQLITE_IOERR), retry once after a short delay
+    if (error.message && error.message.includes('locked')) {
+      console.warn('Database locked, retrying initialization...');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      try {
+        await manager.initialize();
+      } catch (retryError) {
+        console.error('Database initialization failed after retry:', retryError);
+        // Don't throw - allow graceful degradation
+        return;
+      }
+    } else {
+      console.error('Database initialization failed:', error);
+      // Don't throw - allow graceful degradation
+      return;
+    }
+  }
 }
 
 export function getDatabase(): any {

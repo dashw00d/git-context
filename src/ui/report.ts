@@ -7,671 +7,347 @@ import { RiskDetector } from '../analysis/heuristics';
 import { GitOperations } from '../analysis/git';
 import { getGitRoot } from '../utils/config';
 import { SymbolContext, EdgeContext } from '../contracts/llmContext';
+import { computeScope } from '../facts/scope';
+import { getWorkingSnapshot } from '../facts/workingSnapshot';
+import { buildIntendedMap } from '../facts/intendedMap';
+import { detectDrift } from '../facts/driftDetector';
+import { auditLegacy } from '../facts/legacyAudit';
+import { assembleFacts, saveFacts } from '../facts/factsAssembler';
+import { LlmAnalyst } from '../analysis/llmAnalyst/runner';
+import { AnalysisRenderer } from '../analysis/llmAnalyst/renderer';
+import { RefactorReportProvider } from '../webview/refactorReportProvider';
+import { logInfo, logDebug, logError } from '../utils/logger';
 
 // Types for refactor bundle analysis
 interface IntendedState {
-  expect: 'present' | 'absent';
-  lastName?: string;
-  lastPath?: string;
-  lastSig?: string;
-  lastSha: string;
+    expect: 'present' | 'absent';
+    lastName?: string;
+    lastPath?: string;
+    lastSig?: string;
+    lastSha: string;
 }
 
 interface DriftFindings {
-  missing_symbols: Array<{symbol_id: string, expected: IntendedState}>;
-  zombie_symbols: Array<{symbol_id: string, expected: IntendedState, found: SymbolContext}>;
-  divergent_symbols: Array<{symbol_id: string, expected: IntendedState, found: SymbolContext}>;
-  missing_edges: Array<{from: string, to: string, type: string, expected: IntendedState}>;
-  zombie_edges: Array<{from: string, to: string, type: string, found: EdgeContext}>;
-  hotspots: Array<{path: string, drift_count: number}>;
+    missing_symbols: Array<{ symbol_id: string, expected: IntendedState }>;
+    zombie_symbols: Array<{ symbol_id: string, expected: IntendedState, found: SymbolContext }>;
+    divergent_symbols: Array<{ symbol_id: string, expected: IntendedState, found: SymbolContext }>;
+    missing_edges: Array<{ from: string, to: string, type: string, expected: IntendedState }>;
+    zombie_edges: Array<{ from: string, to: string, type: string, found: EdgeContext }>;
+    hotspots: Array<{ path: string, drift_count: number }>;
 }
 
 interface WorkingSnapshot {
-  symbolsById: Map<string, SymbolContext>;
-  symbolsByFile: Map<string, SymbolContext[]>;
-  edges: EdgeContext[];
-  analyzedPaths: Set<string>; // Track which paths were analyzed
+    symbolsById: Map<string, SymbolContext>;
+    symbolsByFile: Map<string, SymbolContext[]>;
+    edges: EdgeContext[];
+    analyzedPaths: Set<string>; // Track which paths were analyzed
 }
 
 interface ScopeSet {
-  commitFiles: Set<string>;        // Files touched by selected commits
-  workingChanged: Set<string>;     // Files changed in working tree
-  blastRadius: Set<string>;        // Neighbor files from dependency analysis
-  allPaths: Set<string>;           // Union of all paths to analyze
-}
-
-/**
- * Compute scoped analysis set for refactor bundle
- */
-async function computeScope(commitShas: string[]): Promise<ScopeSet> {
-  const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
-  const { GitOperations } = await import('../analysis/git');
-
-  await ensureDatabaseInitialized();
-  const db = getDatabaseManager().getDatabase();
-  const git = new GitOperations();
-
-  const scope: ScopeSet = {
-    commitFiles: new Set(),
-    workingChanged: new Set(),
-    blastRadius: new Set(),
-    allPaths: new Set()
-  };
-
-  // 1. Files touched by selected commits
-  for (const sha of commitShas) {
-    const commitFiles = git.getFileChanges(sha);
-    commitFiles.forEach(f => scope.commitFiles.add(f.path));
-  }
-
-  // 2. Files changed in working tree
-  const workingChanges = git.getWorkingDirectoryChanges();
-  workingChanges.forEach(f => scope.workingChanged.add(f.path));
-
-  // 3. Blast-radius neighbors (top N by confidence)
-  const blastRadiusFiles = await computeBlastRadiusNeighbors(commitShas, scope.commitFiles, 20); // Max 20 extra files
-  blastRadiusFiles.forEach(f => scope.blastRadius.add(f));
-
-  // Union all paths
-  scope.allPaths = new Set([
-    ...scope.commitFiles,
-    ...scope.workingChanged,
-    ...scope.blastRadius
-  ]);
-
-  return scope;
-}
-
-/**
- * Compute blast-radius neighbor files from commit metadata
- */
-async function computeBlastRadiusNeighbors(
-  commitShas: string[],
-  commitFiles: Set<string>,
-  maxNeighbors: number
-): Promise<string[]> {
-  const { getDatabaseManager } = await import('../storage/database');
-  const db = getDatabaseManager().getDatabase();
-
-  const neighborFiles = new Map<string, number>(); // file -> confidence score
-
-  // Get edges from selected commits
-  const placeholders = commitShas.map(() => '?').join(',');
-  const edgesStmt = db.prepare(`
-    SELECT from_symbol_id, to_symbol_id, confidence, change_type
-    FROM edges
-    WHERE sha IN (${placeholders}) AND change_type IS NOT NULL
-    ORDER BY confidence DESC
-    LIMIT 200
-  `);
-  const edges = edgesStmt.all(...commitShas) as any[];
-
-  // Extract symbol IDs that changed
-  const changedSymbols = new Set<string>();
-  for (const sha of commitShas) {
-    const symbolsStmt = db.prepare(`
-      SELECT symbol_id FROM symbols WHERE sha = ?
-    `);
-    const symbols = symbolsStmt.all(sha) as any[];
-    symbols.forEach(s => changedSymbols.add(s.symbol_id));
-  }
-
-  // For each edge connected to changed symbols, find the file containing the other end
-  for (const edge of edges) {
-    const fromChanged = changedSymbols.has(edge.from_symbol_id);
-    const toChanged = changedSymbols.has(edge.to_symbol_id);
-
-    // Only consider edges where one end is changed (to find neighbors)
-    if (fromChanged !== toChanged) {
-      const neighborSymbolId = fromChanged ? edge.to_symbol_id : edge.from_symbol_id;
-      const confidence = edge.confidence || 1.0;
-
-      // Extract file path from symbol ID (simplified heuristic)
-      const filePath = extractFileFromSymbolId(neighborSymbolId);
-      if (filePath && !commitFiles.has(filePath)) {
-        neighborFiles.set(filePath, (neighborFiles.get(filePath) || 0) + confidence);
-      }
-    }
-  }
-
-  // Return top N neighbors by confidence score
-  return Array.from(neighborFiles.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, maxNeighbors)
-    .map(([file]) => file);
-}
-
-/**
- * Extract file path from symbol ID (heuristic)
- */
-function extractFileFromSymbolId(symbolId: string): string | null {
-  // Symbol IDs are typically like "path/to/file.ts:ClassName" or "path/to/file:functionName"
-  const parts = symbolId.split(':');
-  if (parts.length >= 2) {
-    return parts[0];
-  }
-  return null;
-}
-
-/**
- * Get scoped working tree snapshot
- */
-async function getScopedWorkingTreeSnapshot(scopePaths: Set<string>): Promise<WorkingSnapshot> {
-  const gitRoot = getGitRoot();
-  if (!gitRoot) {
-    throw new Error('Not in a git repository');
-  }
-
-  const symbolsById = new Map<string, SymbolContext>();
-  const symbolsByFile = new Map<string, SymbolContext[]>();
-  const edges: EdgeContext[] = [];
-  const analyzedPaths = new Set<string>();
-
-  // Initialize analyzers
-  const dependencyExtractor = new DependencyExtractor();
-
-  // Only analyze files in scope
-  for (const filePath of scopePaths) {
-    try {
-      const fullPath = path.join(gitRoot, filePath);
-      if (!fs.existsSync(fullPath)) continue;
-
-      analyzedPaths.add(filePath);
-      const content = fs.readFileSync(fullPath, 'utf8');
-
-      // Extract symbols from current file
-      const symbols = await extractSymbolsFromContent(content, filePath);
-
-      for (const symbol of symbols) {
-        const symbolContext: SymbolContext = {
-          id: symbol.id,
-          symbol_id: symbol.id,
-          name: symbol.name,
-          kind: symbol.kind,
-          signature: symbol.signature,
-          loc_pre: symbol.location ? {
-            start: { line: symbol.location.start.line, column: symbol.location.start.column },
-            end: { line: symbol.location.end.line, column: symbol.location.end.column }
-          } : undefined
-        };
-
-        symbolsById.set(symbol.id, symbolContext);
-
-        if (!symbolsByFile.has(filePath)) {
-          symbolsByFile.set(filePath, []);
-        }
-        symbolsByFile.get(filePath)!.push(symbolContext);
-      }
-
-      // Extract edges from current file
-      const fileEdges = dependencyExtractor.extractDependencies(content, filePath, symbols);
-      edges.push(...fileEdges.map(edge => ({
-        from_symbol_id: edge.from,
-        to_symbol_id: edge.to,
-        edge_type: edge.type,
-        change_type: 'added' as any,
-        confidence: edge.confidence || 1.0,
-        is_resolved: edge.isResolved || true
-      })));
-
-    } catch (error) {
-      console.warn(`Failed to analyze scoped file ${filePath}:`, error);
-    }
-  }
-
-  return { symbolsById, symbolsByFile, edges, analyzedPaths };
-}
-
-/**
- * Detect if widening is needed and compute additional paths
- */
-function detectWideningNeeds(
-  intended: Map<string, IntendedState>,
-  working: WorkingSnapshot,
-  commitShas: string[]
-): { needsWidening: boolean; additionalPaths: Set<string> } {
-  const additionalPaths = new Set<string>();
-
-  // Check for missing symbols with known external callers
-  for (const [symbolKey, expected] of intended) {
-    if (expected.expect === 'present') {
-      const found = working.symbolsById.get(symbolKey);
-      if (!found) {
-        // Check if this symbol has callers in commit metadata that aren't in our snapshot
-        const hasExternalCallers = checkForExternalCallers(symbolKey, commitShas, working.analyzedPaths);
-        if (hasExternalCallers) {
-          // Add caller files to scope
-          const callerFiles = getCallerFiles(symbolKey, commitShas);
-          callerFiles.forEach(f => additionalPaths.add(f));
-        }
-      }
-    }
-  }
-
-  // Check for zombie symbols with unknown destinations
-  for (const [symbolKey, found] of working.symbolsById) {
-    const expected = intended.get(symbolKey);
-    if (!expected || expected.expect === 'absent') {
-      // Check if this zombie has outbound edges to unknown symbols
-      const hasUnknownDestinations = checkForUnknownDestinations(found.symbol_id, working, commitShas);
-      if (hasUnknownDestinations) {
-        const destFiles = getDestinationFiles(found.symbol_id, commitShas);
-        destFiles.forEach(f => additionalPaths.add(f));
-      }
-    }
-  }
-
-  return {
-    needsWidening: additionalPaths.size > 0,
-    additionalPaths
-  };
-}
-
-/**
- * Check if a symbol has callers outside the current scope
- */
-function checkForExternalCallers(symbolId: string, commitShas: string[], analyzedPaths: Set<string>): boolean {
-  // This would query the database for callers and check if their files are outside analyzedPaths
-  // Simplified for now - would need database access
-  return false;
-}
-
-/**
- * Get files containing callers of a symbol
- */
-function getCallerFiles(symbolId: string, commitShas: string[]): string[] {
-  // This would query database for caller files
-  // Simplified for now
-  return [];
-}
-
-/**
- * Check if a symbol has outbound edges to unknown destinations
- */
-function checkForUnknownDestinations(symbolId: string, working: WorkingSnapshot, commitShas: string[]): boolean {
-  // Check working edges for destinations not in analyzed paths
-  for (const edge of working.edges) {
-    if (edge.from_symbol_id === symbolId) {
-      const destFile = extractFileFromSymbolId(edge.to_symbol_id);
-      if (destFile && !working.analyzedPaths.has(destFile)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-/**
- * Get files containing destinations of a symbol's edges
- */
-function getDestinationFiles(symbolId: string, commitShas: string[]): string[] {
-  // This would query database for destination files
-  // Simplified for now
-  return [];
+    commitFiles: Set<string>;        // Files touched by selected commits
+    workingChanged: Set<string>;     // Files changed in working tree
+    blastRadius: Set<string>;        // Neighbor files from dependency analysis
+    allPaths: Set<string>;           // Union of all paths to analyze
 }
 
 
-/**
- * Build intended refactor map by folding selected commits oldest → newest
- */
-async function buildIntendedRefactorMap(commitShas: string[]): Promise<Map<string, IntendedState>> {
-  const { getDatabaseManager } = await import('../storage/database');
-  const db = getDatabaseManager().getDatabase();
 
-  // Sort SHAs oldest → newest (reverse chronological order)
-  const placeholders = commitShas.map(() => '?').join(',');
-  const shaOrderStmt = db.prepare(`
-    SELECT sha FROM commits
-    WHERE sha IN (${placeholders})
-    ORDER BY date ASC
-  `);
-  const orderedShas = shaOrderStmt.all(...commitShas).map((row: any) => row.sha);
 
-  const intended = new Map<string, IntendedState>();
 
-  for (const sha of orderedShas) {
-    // Load symbol deltas for this commit
-    const symbolsStmt = db.prepare(`
-      SELECT symbol_id, name, path, signature_post, signature_pre, change_type, mod_reason
-      FROM symbols WHERE sha = ?
-    `);
-    const symbols = symbolsStmt.all(sha) as any[];
-
-    // Load renames
-    const renamesStmt = db.prepare(`
-      SELECT symbol_id, name, change_type FROM symbols
-      WHERE sha = ? AND change_type = 'renamed'
-    `);
-    const renames = renamesStmt.all(sha) as any[];
-
-    // Process additions/modifications
-    for (const symbol of symbols) {
-      const key = symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
-
-      if (symbol.change_type === 'added') {
-        intended.set(key, {
-          expect: 'present',
-          lastName: symbol.name,
-          lastPath: symbol.path,
-          lastSig: symbol.signature_post || symbol.signature_pre,
-          lastSha: sha
-        });
-      } else if (symbol.change_type === 'modified') {
-        const prev = intended.get(key);
-        intended.set(key, {
-          expect: 'present',
-          lastName: symbol.name,
-          lastPath: symbol.path,
-          lastSig: symbol.signature_post || symbol.signature_pre,
-          lastSha: sha
-        });
-      }
-    }
-
-    // Process renames
-    for (const rename of renames) {
-      const key = rename.symbol_id;
-      const prev = intended.get(key);
-      intended.set(key, {
-        ...(prev || { expect: 'present' as const }),
-        expect: 'present',
-        lastName: rename.name,
-        lastSha: sha
-      });
-    }
-
-    // Process removals
-    for (const symbol of symbols) {
-      if (symbol.change_type === 'removed') {
-        const key = symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
-        intended.set(key, {
-          expect: 'absent',
-          lastSha: sha
-        });
-      }
-    }
-  }
-
-  return intended;
-}
-
-/**
- * Compare intended refactor map against working tree snapshot
- */
-function detectRefactorDrift(
-  intended: Map<string, IntendedState>,
-  working: WorkingSnapshot
-): DriftFindings {
-  const findings: DriftFindings = {
-    missing_symbols: [],
-    zombie_symbols: [],
-    divergent_symbols: [],
-    missing_edges: [],
-    zombie_edges: [],
-    hotspots: []
-  };
-
-  // Check symbol completeness
-  for (const [symbolKey, expected] of intended) {
-    const found = working.symbolsById.get(symbolKey);
-
-    if (expected.expect === 'present') {
-      if (!found) {
-        findings.missing_symbols.push({ symbol_id: symbolKey, expected });
-      } else {
-        // Check for divergence (simplified - could check signature/content hash)
-        if (expected.lastName && found.name !== expected.lastName) {
-          findings.divergent_symbols.push({ symbol_id: symbolKey, expected, found });
-        }
-      }
-    } else if (expected.expect === 'absent') {
-      if (found) {
-        findings.zombie_symbols.push({ symbol_id: symbolKey, expected, found });
-      }
-    }
-  }
-
-  // Check for symbols in working tree that weren't in intended (zombies)
-  for (const [symbolKey, found] of working.symbolsById) {
-    if (!intended.has(symbolKey)) {
-      findings.zombie_symbols.push({
-        symbol_id: symbolKey,
-        expected: { expect: 'absent', lastSha: 'unknown' },
-        found
-      });
-    }
-  }
-
-  // Build file hotspots
-  const fileDrift = new Map<string, number>();
-  for (const finding of [...findings.missing_symbols, ...findings.zombie_symbols, ...findings.divergent_symbols]) {
-    // Extract path from symbol key (simplified)
-    const path = finding.symbol_id.split(':')[0] || 'unknown';
-    fileDrift.set(path, (fileDrift.get(path) || 0) + 1);
-  }
-
-  findings.hotspots = Array.from(fileDrift.entries())
-    .map(([path, count]) => ({ path, drift_count: count }))
-    .sort((a, b) => b.drift_count - a.drift_count)
-    .slice(0, 10);
-
-  return findings;
-}
 
 /**
  * Generate refactor bundle analysis report with scoped working tree analysis
  */
-export async function generateRefactorBundleReport(commitShas: string[]): Promise<void> {
-  try {
-    vscode.window.withProgress({
-      location: vscode.ProgressLocation.Notification,
-      title: 'Analyzing refactor bundle...',
-      cancellable: false
-    }, async (progress) => {
-      progress.report({ increment: 0, message: 'Computing analysis scope...' });
+export async function generateRefactorBundleReport(
+    commitShas: string[],
+    refactorReportProvider?: RefactorReportProvider,
+    cancellationToken?: vscode.CancellationToken,
+    commitTracker?: any
+): Promise<void> {
+    const startTime = Date.now();
+    console.log(`[REPORT] ========== Starting Refactor Bundle Report Generation ==========`);
+    console.log(`[REPORT] Commits to analyze: ${commitShas?.length || 0}`);
 
-      // Phase 1: Compute scoped analysis set
-      const scope = await computeScope(commitShas);
-
-      progress.report({ increment: 10, message: `Analyzing ${scope.allPaths.size} scoped files...` });
-
-      // Phase 2A: Get scoped working tree snapshot
-      let working = await getScopedWorkingTreeSnapshot(scope.allPaths);
-
-      progress.report({ increment: 30, message: 'Building intended refactor map...' });
-
-      // Build intended refactor map
-      const intended = await buildIntendedRefactorMap(commitShas);
-
-      progress.report({ increment: 50, message: 'Detecting drift...' });
-
-      // Detect drift
-      let drift = detectRefactorDrift(intended, working);
-
-      // Phase 2B: Lazy widening if needed
-      let widening = { needsWidening: false, additionalPaths: new Set<string>() };
-      widening = detectWideningNeeds(intended, working, commitShas);
-      if (widening.needsWidening && scope.allPaths.size < 100) { // Hard limit to prevent explosion
-        progress.report({ increment: 70, message: `Widening scope to ${widening.additionalPaths.size} additional files...` });
-
-        // Add new paths to scope
-        widening.additionalPaths.forEach(p => scope.allPaths.add(p));
-
-        // Re-analyze with widened scope
-        working = await getScopedWorkingTreeSnapshot(scope.allPaths);
-        drift = detectRefactorDrift(intended, working);
-      }
-
-      progress.report({ increment: 90, message: 'Generating report...' });
-
-      // Generate markdown report
-      let markdown = `# Refactor Bundle Analysis Report\n\n`;
-      markdown += `Generated: ${new Date().toLocaleString()}\n\n`;
-      markdown += `Analyzing ${commitShas.length} commits as refactor bundle vs scoped working tree.\n\n`;
-
-      // Analysis Scope
-      markdown += `## 🎯 Analysis Scope\n\n`;
-      markdown += `- **Commit Files:** ${scope.commitFiles.size} files touched by selected commits\n`;
-      markdown += `- **Working Changes:** ${scope.workingChanged.size} files changed in working tree\n`;
-      markdown += `- **Blast Radius:** ${scope.blastRadius.size} additional neighbor files\n`;
-      markdown += `- **Total Analyzed:** ${scope.allPaths.size} files (widened: ${widening?.needsWidening ? 'yes' : 'no'})\n\n`;
-
-      // Bundle Summary
-      markdown += `## 🔄 Refactor Bundle Summary\n\n`;
-      markdown += `- **Selected Commits:** ${commitShas.length}\n`;
-      markdown += `- **Intended Changes:** ${intended.size} symbols\n`;
-      markdown += `- **Scoped Working Tree:** ${working.symbolsById.size} symbols, ${working.edges.length} edges\n\n`;
-
-      // Incompleteness
-      markdown += `## ❌ Incompleteness\n\n`;
-
-      if (drift.missing_symbols.length > 0) {
-        markdown += `### Missing Additions (${drift.missing_symbols.length})\n\n`;
-        for (const missing of drift.missing_symbols.slice(0, 10)) {
-          markdown += `- \`${missing.symbol_id}\` (expected in ${missing.expected.lastSha?.substring(0, 8)})\n`;
-        }
-        if (drift.missing_symbols.length > 10) markdown += `- ... and ${drift.missing_symbols.length - 10} more\n`;
-        markdown += `\n`;
-      }
-
-      if (drift.zombie_symbols.length > 0) {
-        markdown += `### Zombie Removals (${drift.zombie_symbols.length})\n\n`;
-        for (const zombie of drift.zombie_symbols.slice(0, 10)) {
-          markdown += `- \`${zombie.symbol_id}\` still exists but was removed in ${zombie.expected.lastSha?.substring(0, 8)}\n`;
-        }
-        if (drift.zombie_symbols.length > 10) markdown += `- ... and ${drift.zombie_symbols.length - 10} more\n`;
-        markdown += `\n`;
-      }
-
-      if (drift.divergent_symbols.length > 0) {
-        markdown += `### Divergent Modifications (${drift.divergent_symbols.length})\n\n`;
-        for (const divergent of drift.divergent_symbols.slice(0, 10)) {
-          markdown += `- \`${divergent.symbol_id}\` modified but current name differs from expected "${divergent.expected.lastName}"\n`;
-        }
-        if (drift.divergent_symbols.length > 10) markdown += `- ... and ${drift.divergent_symbols.length - 10} more\n`;
-        markdown += `\n`;
-      }
-
-      // Pattern Drift
-      markdown += `## 🔀 Pattern Drift\n\n`;
-      markdown += `Analysis of incomplete migrations and mixed patterns...\n\n`;
-
-      // Hotspots
-      if (drift.hotspots.length > 0) {
-        markdown += `### Drift Hotspots\n\n`;
-        for (const hotspot of drift.hotspots.slice(0, 5)) {
-          markdown += `- **${hotspot.path}:** ${hotspot.drift_count} inconsistencies\n`;
-        }
-        markdown += `\n`;
-      }
-
-      // Recommendations
-      markdown += `## 🎯 Recommendations\n\n`;
-      if (drift.missing_symbols.length > 0) {
-        markdown += `- **Complete additions:** ${drift.missing_symbols.length} symbols still need to be added\n`;
-      }
-      if (drift.zombie_symbols.length > 0) {
-        markdown += `- **Remove zombies:** ${drift.zombie_symbols.length} symbols should be deleted\n`;
-      }
-      if (drift.divergent_symbols.length > 0) {
-        markdown += `- **Fix divergences:** ${drift.divergent_symbols.length} symbols have inconsistent implementations\n`;
-      }
-      markdown += `- **Test thoroughly:** This refactor appears incomplete and may have runtime issues\n\n`;
-
-      // Create document
-      const doc = await vscode.workspace.openTextDocument({
-        content: markdown,
-        language: 'markdown'
-      });
-      await vscode.window.showTextDocument(doc, { preview: false });
-
-      vscode.window.showInformationMessage(`Refactor bundle analysis complete`);
-    });
-
-  } catch (error) {
-    vscode.window.showErrorMessage(`Failed to generate refactor bundle report: ${error}`);
-    console.error('Refactor bundle analysis error:', error);
-  }
-}
-
-/**
- * Extract symbols from file content (simplified version for working tree analysis)
- */
-async function extractSymbolsFromContent(content: string, filePath: string): Promise<any[]> {
-  const { getTreeSitterParser, detectLanguage } = await import('../analysis/tree-sitter');
-  const parser = getTreeSitterParser();
-  const language = detectLanguage(filePath);
-
-  if (!language) return [];
-
-  try {
-    const tree = await parser.parse(content, language);
-    const symbols: any[] = [];
-
-    // Simple symbol extraction (functions, classes, etc.)
-    function walkTree(node: any, depth = 0) {
-      if (depth > 10) return; // Prevent infinite recursion
-
-      // Extract function definitions
-      if (node.type === 'function_declaration' || node.type === 'method_definition' ||
-          node.type === 'function_expression' || node.type === 'arrow_function') {
-        const nameNode = node.childForFieldName?.('name') || node.childForFieldName?.('identifier');
-        if (nameNode) {
-          const name = content.substring(nameNode.startIndex, nameNode.endIndex);
-          const id = `${filePath}:${name}`;
-          symbols.push({
-            id,
-            name,
-            kind: 'function',
-            signature: name,
-            location: {
-              start: { line: nameNode.startPosition.row + 1, column: nameNode.startPosition.column },
-              end: { line: nameNode.endPosition.row + 1, column: nameNode.endPosition.column }
-            }
-          });
-        }
-      }
-
-      // Extract class definitions
-      if (node.type === 'class_declaration') {
-        const nameNode = node.childForFieldName?.('name');
-        if (nameNode) {
-          const name = content.substring(nameNode.startIndex, nameNode.endIndex);
-          const id = `${filePath}:${name}`;
-          symbols.push({
-            id,
-            name,
-            kind: 'class',
-            signature: `class ${name}`,
-            location: {
-              start: { line: nameNode.startPosition.row + 1, column: nameNode.startPosition.column },
-              end: { line: nameNode.endPosition.row + 1, column: nameNode.endPosition.column }
-            }
-          });
-        }
-      }
-
-      // Recurse on children
-      for (let i = 0; i < node.childCount; i++) {
-        walkTree(node.child(i), depth + 1);
-      }
+    // Guard: Check for empty commits
+    if (!commitShas || commitShas.length === 0) {
+        console.error('[REPORT] No commits provided');
+        vscode.window.showWarningMessage('Select commits in Commit Tracker first (use checkboxes), then click Generate Report.');
+        return;
     }
 
-    if (tree?.rootNode) {
-      walkTree(tree.rootNode);
+    console.log(`[REPORT] Commit SHAs: ${commitShas.map(s => s.substring(0, 8)).join(', ')}`);
+
+    try {
+        await vscode.window.withProgress({
+            location: { viewId: 'commitTracker' },
+            title: 'Analyzing refactor bundle...',
+            cancellable: true
+        }, async (progress, token) => {
+            // Merge provided token with the one from progress
+            const effectiveToken = cancellationToken || token;
+
+            // Check for cancellation at the start
+            if (effectiveToken.isCancellationRequested) {
+                return;
+            }
+
+            progress.report({ increment: 0, message: 'Computing analysis scope...' });
+
+            // Phase 1: Compute scoped analysis set
+            console.log('[REPORT] Phase 1: Computing scope...');
+            const scopeStartTime = Date.now();
+            const scope = await computeScope(commitShas);
+            console.log(`[REPORT] Scope computed in ${Date.now() - scopeStartTime}ms`);
+            console.log(`[REPORT] Scope - commit files: ${scope.commitFiles.size}, working changed: ${scope.workingChanged.size}, blast radius: ${scope.blastRadius.size}, total: ${scope.allPaths.size}`);
+
+            if (scope.allPaths.size === 0) {
+                console.warn('[REPORT] Empty scope - no files to analyze');
+                vscode.window.showWarningMessage('No files to analyze. Make sure commits have been analyzed first.');
+                return;
+            }
+
+            if (effectiveToken.isCancellationRequested) {
+                return;
+            }
+
+            progress.report({ increment: 10, message: `Analyzing ${scope.allPaths.size} scoped files...` });
+
+            // Phase 2: Get working tree snapshot
+            console.log(`[REPORT] Phase 2: Analyzing ${scope.allPaths.size} files in working tree...`);
+            const workingStartTime = Date.now();
+            const working = await getWorkingSnapshot(scope.allPaths);
+            console.log(`[REPORT] Working snapshot completed in ${Date.now() - workingStartTime}ms`);
+            console.log(`[REPORT] Working tree - symbols: ${working.symbolsById.size}, edges: ${working.edges.length}, analyzed paths: ${working.analyzedPaths.size}`);
+
+            if (working.symbolsById.size === 0) {
+                console.warn('[REPORT] No symbols found in working tree');
+            }
+
+            if (effectiveToken.isCancellationRequested) {
+                return;
+            }
+
+            progress.report({ increment: 30, message: 'Building intended refactor map...' });
+
+            // Build intended refactor map
+            console.log('[REPORT] Phase 3: Building intended refactor map...');
+            const intendedStartTime = Date.now();
+            const intended = await buildIntendedMap(commitShas);
+            console.log(`[REPORT] Intended map built in ${Date.now() - intendedStartTime}ms`);
+            console.log(`[REPORT] Intended state - entries: ${intended.size}`);
+
+            if (intended.size === 0) {
+                console.warn('[REPORT] Empty intended map - no refactor patterns detected');
+            }
+
+            if (effectiveToken.isCancellationRequested) {
+                return;
+            }
+
+            progress.report({ increment: 50, message: 'Detecting drift...' });
+
+            // Detect drift
+            console.log('[REPORT] Phase 4: Detecting drift...');
+            const driftStartTime = Date.now();
+            const drift = detectDrift(intended, working, commitShas);
+            console.log(`[REPORT] Drift detection completed in ${Date.now() - driftStartTime}ms`);
+            console.log(`[REPORT] Drift - missing: ${drift.missing_symbols.length}, zombies: ${drift.zombie_symbols.length}, divergent: ${drift.divergent_symbols.length}`);
+            console.log(`[REPORT] Drift edges - missing: ${drift.missing_edges.length}, zombies: ${drift.zombie_edges.length}`);
+            console.log(`[REPORT] Drift hotspots: ${drift.hotspots.length}`);
+
+            const totalDrift = drift.missing_symbols.length + drift.zombie_symbols.length + drift.divergent_symbols.length;
+            if (totalDrift === 0) {
+                console.log('[REPORT] No drift detected - refactor appears complete');
+            }
+
+            if (effectiveToken.isCancellationRequested) {
+                return;
+            }
+
+            progress.report({ increment: 70, message: 'Auditing legacy code...' });
+
+            // Audit legacy code
+            console.log('[REPORT] Phase 5: Auditing legacy code...');
+            const legacyStartTime = Date.now();
+            const legacy = await auditLegacy(intended, working, scope);
+            console.log(`[REPORT] Legacy audit completed in ${Date.now() - legacyStartTime}ms`);
+            console.log(`[REPORT] Legacy - dead code: ${legacy.dead.length}, leftovers: ${legacy.replacedLeftovers?.length || 0}`);
+
+            if (legacy.dead.length === 0 && (!legacy.replacedLeftovers || legacy.replacedLeftovers.length === 0)) {
+                console.log('[REPORT] No legacy issues found');
+            }
+
+            if (effectiveToken.isCancellationRequested) {
+                return;
+            }
+
+            progress.report({ increment: 85, message: 'Assembling facts...' });
+
+            // Assemble facts into JSON
+            console.log('[REPORT] Phase 6: Assembling facts...');
+            const factsStartTime = Date.now();
+            const facts = await assembleFacts(commitShas, scope, intended, working, drift, legacy);
+            const factsPath = await saveFacts(facts);
+            console.log(`[REPORT] Facts assembled in ${Date.now() - factsStartTime}ms`);
+            console.log(`[REPORT] Facts saved to: ${factsPath}`);
+            console.log(`[REPORT] Facts keys: ${Object.keys(facts).join(', ')}`);
+
+            // Guard: Check if facts are empty
+            const hasData = facts && (
+                (facts.findings?.incompleteness?.missing > 0) ||
+                (facts.findings?.incompleteness?.zombies > 0) ||
+                (facts.findings?.patternDrift?.mixedTargets > 0) ||
+                (facts.findings?.legacyAudit?.dead > 0)
+            );
+
+            if (!hasData) {
+                console.warn('[REPORT] Facts appear to be empty or have no findings');
+                console.log('[REPORT] Facts object:', JSON.stringify(facts, null, 2));
+            }
+
+            // Store facts in commit tracker for UI updates
+            if (commitTracker) {
+                commitTracker.lastBundleFacts = facts;
+                commitTracker.refresh();
+                console.log('[REPORT] Facts stored in commit tracker');
+            }
+
+            if (effectiveToken.isCancellationRequested) {
+                return;
+            }
+
+            progress.report({ increment: 90, message: 'Running LLM analysis...' });
+
+            // Run LLM analyst on facts
+            console.log('[REPORT] Phase 7: Running LLM analysis...');
+            const llmStartTime = Date.now();
+
+            // Build raw feed for pattern discovery
+            console.log('[REPORT] Building raw feed for discovery...');
+            const { AstSerializer } = await import('../analysis/astSerializer');
+            const astSerializer = new AstSerializer();
+
+            // Get ASTs for top 10 files
+            const topFiles = Array.from(scope.allPaths).slice(0, 10);
+            const astSamples = [];
+            const git = new GitOperations();
+
+            for (const filePath of topFiles) {
+                try {
+                    const fullPath = path.join(getGitRoot() || '', filePath);
+                    if (fs.existsSync(fullPath)) {
+                        const content = fs.readFileSync(fullPath, 'utf8');
+                        const ast = await astSerializer.serializeFile(content, filePath);
+                        if (ast) {
+                            astSamples.push({ path: filePath, ast });
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`Failed to serialize AST for ${filePath}:`, e);
+                }
+            }
+
+            // Get diff hunks for top 20 files
+            const diffHunks = [];
+            const diffFiles = Array.from(scope.commitFiles).slice(0, 20);
+
+            // Determine bundle range
+            // Assumes commitShas are ordered (newest first or oldest first? usually oldest first in this context)
+            // Let's sort them by date to be sure, or just trust the input
+            // If we assume input is arbitrary, we should sort. But for now let's assume valid range.
+            const startSha = commitShas[commitShas.length - 1]; // Oldest?
+            const endSha = commitShas[0]; // Newest?
+            // Actually, let's just use the first and last from the array as passed
+            // If commitShas is [newest, ..., oldest] (git log default), then start=last, end=first
+            // If commitShas is [oldest, ..., newest], then start=first, end=last
+            // We'll try to detect or just use the first/last in the list
+
+            for (const filePath of diffFiles) {
+                try {
+                    // Use bundle diff for better context
+                    const diff = git.getBundleDiff(commitShas[commitShas.length - 1], commitShas[0], filePath);
+                    if (diff) {
+                        diffHunks.push({ path: filePath, diff: diff.substring(0, 1000) }); // Truncate
+                    }
+                } catch (e) {
+                    // Ignore diff errors
+                }
+            }
+
+            const rawFeed = {
+                ast_samples: astSamples,
+                diff_hunks: diffHunks,
+                graph: {
+                    nodes: Array.from(working.symbolsById.keys()).slice(0, 50),
+                    edges: working.edges.slice(0, 200)
+                },
+                metrics: {
+                    symbols: working.symbolsById.size,
+                    edges: working.edges.length,
+                    files: scope.allPaths.size
+                }
+            };
+
+            const analyst = new LlmAnalyst();
+            const llmAnalysis = await analyst.analyze(facts, rawFeed);
+            console.log(`[REPORT] LLM analysis completed in ${Date.now() - llmStartTime}ms`);
+            console.log(`[REPORT] LLM analysis keys: ${llmAnalysis ? Object.keys(llmAnalysis).join(', ') : 'null'}`);
+
+            if (!llmAnalysis) {
+                console.warn('[REPORT] LLM analysis returned null or empty');
+            } else {
+                // Save analysis to file for quick re-opening
+                try {
+                    const { getGitRoot } = await import('../utils/config');
+                    const gitRoot = getGitRoot();
+                    if (gitRoot) {
+                        const fs = await import('fs');
+                        const path = await import('path');
+                        const analysisPath = path.join(gitRoot, '.git', 'commit-tracker', 'last-bundle-analysis.json');
+                        fs.writeFileSync(analysisPath, JSON.stringify(llmAnalysis, null, 2));
+                        console.log('[REPORT] Analysis saved to:', analysisPath);
+                    }
+                } catch (error) {
+                    console.error('[REPORT] Failed to save analysis:', error);
+                }
+            }
+
+            if (effectiveToken.isCancellationRequested) {
+                return;
+            }
+
+            progress.report({ increment: 95, message: 'Generating report...' });
+
+            // Update debt meter with new facts
+            console.log('[REPORT] Phase 8: Updating debt meter...');
+            const { refreshDebtMeter } = await import('./refactorDebtMeter');
+            refreshDebtMeter();
+            console.log('[REPORT] Debt meter refreshed');
+
+            // Generate markdown report instead of webview
+            console.log('[REPORT] Rendering markdown report...');
+            const renderer = new AnalysisRenderer();
+            const markdown = renderer.renderAnalysis(llmAnalysis, facts);
+            console.log(`[REPORT] Rendered markdown (${markdown.length} chars)`);
+
+            const doc = await vscode.workspace.openTextDocument({
+                content: markdown,
+                language: 'markdown'
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+            console.log(`[REPORT] Total report generation time: ${Date.now() - startTime}ms`);
+            vscode.window.showInformationMessage(`Refactor bundle analysis complete - see markdown report`);
+        });
+
+    } catch (error) {
+        console.error('[REPORT] ========== Report Generation FAILED ==========');
+        console.error('[REPORT] Error:', error);
+        console.error('[REPORT] Stack:', error instanceof Error ? error.stack : 'No stack trace');
+        vscode.window.showErrorMessage(`Failed to generate refactor bundle report: ${error}`);
+        console.error('Refactor bundle analysis error:', error);
     }
-
-    return symbols;
-  } catch (error) {
-    console.warn(`Failed to parse ${filePath}:`, error);
-    return [];
-  }
 }
 
-function shouldAnalyzeFile(filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase();
-  return ['.ts', '.js', '.tsx', '.jsx', '.php', '.py', '.java', '.go', '.rs', '.cpp', '.c', '.cs'].includes(ext);
-}
 
 export async function generateCommitReport(commitShas?: string[]): Promise<void> {
     try {

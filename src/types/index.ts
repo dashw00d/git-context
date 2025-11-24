@@ -141,4 +141,7 @@ export interface ExtensionConfig {
   apiEndpoint: string;
   difftasticPath?: string;
   defaultCommitCount: number;
+  tokensPerStep?: { [key: string]: number };
+  customPrompts?: { [key: string]: string };
+  customIgnorePaths?: string[];
 }

@@ -1,0 +1,4 @@
+/.continue
+/out
+/node_modules
+*.vsix
