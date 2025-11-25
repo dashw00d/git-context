@@ -2,11 +2,15 @@ import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import { CockpitSectionKey, CockpitState, SymbolChangeType } from '../../types/cockpit';
 import { Header } from './components/Header';
-import { CommitList } from './components/CommitList';
-import { ReportList } from './components/ReportList';
-import { SymbolList } from './components/SymbolList';
 import { SelectionPanel } from './components/SelectionPanel';
 import { BundlePanel } from './components/BundlePanel';
+import { Tabs } from './components/Tabs';
+import { MetricsRow } from './components/MetricsRow';
+import { CommitsTabContent } from './components/CommitsTabContent';
+import { BundleTabContent } from './components/BundleTabContent';
+import { SymbolsTabContent } from './components/SymbolsTabContent';
+import { ReportsTabContent } from './components/ReportsTabContent';
+import { LiveTabContent } from './components/LiveTabContent';
 import { formatDate } from './utils';
 
 declare global {
@@ -55,12 +59,6 @@ const defaultState: CockpitState = {
 };
 
 const App: React.FC = () => {
-  const [open, setOpen] = React.useState<Record<CockpitSectionKey, boolean>>({
-    commits: true,
-    bundle: true,
-    symbols: false,
-    reports: false
-  });
   const [state, setState] = React.useState<CockpitState>(defaultState);
   const filterDebounceRef = React.useRef<Record<string, NodeJS.Timeout>>({});
 
@@ -81,7 +79,6 @@ const App: React.FC = () => {
       } else if (message?.type === 'focusSection' && message.payload) {
         const payload = message.payload as { section: CockpitSectionKey };
         setState((prev) => ({ ...prev, activeSection: payload.section }));
-        setOpen((prev) => ({ ...prev, [payload.section]: true }));
       }
     };
     window.addEventListener('message', handler);
@@ -89,9 +86,10 @@ const App: React.FC = () => {
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  const toggle = (key: CockpitSectionKey) => {
-    setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-    vscode.postMessage({ type: 'setActiveSection', section: key });
+  const setActiveSection = (section: CockpitSectionKey | 'live') => {
+    if (section === 'live') return; // Disabled for now
+    setState((prev) => ({ ...prev, activeSection: section }));
+    vscode.postMessage({ type: 'setActiveSection', section });
   };
 
   const updateCommitsFilterText = (text: string) => {
@@ -150,16 +148,9 @@ const App: React.FC = () => {
     vscode.postMessage({ type: 'setReportsShowPinnedOnly', value });
   };
 
-  const selectionSummary = `${state.selectedCommitShas.length} commits • ${state.selectedStagedPaths.length} staged • ${state.selectedUnstagedPaths.length} unstaged`;
   const bundleSummaryText = state.bundleSummary
     ? `${state.bundleSummary.commitCount} commits, ${state.bundleSummary.fileCount} files${state.bundleSummary.symbolCount ? `, ${state.bundleSummary.symbolCount} symbols` : ''}`
     : 'Bundle: none';
-  const reportBranches = Array.from(new Set(state.reports.map((r) => r.branch).filter(Boolean))) as string[];
-  const commitsFiltered =
-    !!state.commitsFilterText ||
-    !state.commitsFilterScopes.staged ||
-    !state.commitsFilterScopes.unstaged ||
-    !state.commitsFilterScopes.history;
 
   return (
     <div className="cockpit">
@@ -178,251 +169,53 @@ const App: React.FC = () => {
         <BundlePanel state={state} vscode={vscode} />
       </section>
 
-      <div className="cockpit__accordion">
-        <button className="cockpit__accordion-header" onClick={() => toggle('commits')}>
-          <span>Commits & Selection</span>
-          <span className="cockpit__dim">
-            {selectionSummary}
-            {commitsFiltered ? ' • Filtered' : ''}
-          </span>
-        </button>
-        {open.commits && (
-          <div className="cockpit__accordion-body">
-            <div className="cockpit__actions">
-              <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'selectAllStaged' })}>
-                Select all staged
-              </button>
-              <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'selectAllUnstaged' })}>
-                Select all unstaged
-              </button>
-              <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'clearSelection' })}>
-                Clear selection
-              </button>
-              <button
-                className="cockpit__button ghost"
-                onClick={() => {
-                  const value = prompt('Add commit by SHA or ref');
-                  if (value) {
-                    vscode.postMessage({ type: 'addCommitBySha', shaOrRef: value });
-                  }
-                }}
-              >
-                Add commit by SHA
-              </button>
-            </div>
-            <div className="cockpit__actions">
-              <input
-                className="cockpit__input"
-                placeholder="Filter commits..."
-                value={state.commitsFilterText}
-                onChange={(e) => updateCommitsFilterText(e.target.value)}
-              />
-              <button
-                className="cockpit__button ghost small"
-                onClick={() => toggleCommitsScope('staged')}
-                title="Show staged commits"
-              >
-                {state.commitsFilterScopes.staged ? 'Staged ✓' : 'Staged ✕'}
-              </button>
-              <button
-                className="cockpit__button ghost small"
-                onClick={() => toggleCommitsScope('unstaged')}
-                title="Show unstaged commits"
-              >
-                {state.commitsFilterScopes.unstaged ? 'Unstaged ✓' : 'Unstaged ✕'}
-              </button>
-              <button
-                className="cockpit__button ghost small"
-                onClick={() => toggleCommitsScope('history')}
-                title="Show history commits"
-              >
-                {state.commitsFilterScopes.history ? 'History ✓' : 'History ✕'}
-              </button>
-            </div>
-            <div className="cockpit__message">
-              Staged files: {state.stagedFiles.length ? (
-                <>
-                  {state.stagedFiles.map((f) => f.path).slice(0, 5).join(', ')}
-                  {state.stagedFiles.length > 5 && ` (+${state.stagedFiles.length - 5} more)`}
-                </>
-              ) : (
-                <span className="cockpit__dim">No staged files</span>
-              )}
-            </div>
-            <div className="cockpit__message">
-              Unstaged files:{' '}
-              {state.unstagedFiles.length ? (
-                <>
-                  {state.unstagedFiles.map((f) => f.path).slice(0, 5).join(', ')}
-                  {state.unstagedFiles.length > 5 && ` (+${state.unstagedFiles.length - 5} more)`}
-                </>
-              ) : (
-                <span className="cockpit__dim">No unstaged files</span>
-              )}
-            </div>
-            <div className="cockpit__actions">
-              {state.hasMoreCommits ? (
-                <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'loadMoreCommits' })}>
-                  Load more
-                </button>
-              ) : (
-                <span className="cockpit__dim">Showing {state.commits.length} commits</span>
-              )}
-            </div>
-            <CommitList state={state} vscode={vscode} formatDate={formatDate} />
-          </div>
-        )}
+      <MetricsRow state={state} />
 
-        <button className="cockpit__accordion-header" onClick={() => toggle('bundle')}>
-          <span>Active Bundle</span>
-          <span className="cockpit__dim">{bundleSummaryText}</span>
-        </button>
-        {open.bundle && (
-          <div className="cockpit__accordion-body">
-            <div className="cockpit__message">
-              {state.bundleSummary ? (
-                <>
-                  <div>Commits: {state.bundleSummary.commitCount}</div>
-                  <div>Files: {state.bundleSummary.fileCount}</div>
-                  <div>Symbols: {state.bundleSummary.symbolCount}</div>
-                  <div>Created: {formatDate(state.bundleSummary.createdAt)}</div>
-                </>
-              ) : (
-                'No active bundle yet'
-              )}
-            </div>
-            <div className="cockpit__actions">
-              <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'bundleRegenerate' })}>
-                Regenerate
-              </button>
-              <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'bundleExport' })}>
-                Export JSON
-              </button>
-              <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'openActiveReport' })}>
-                Open full report
-              </button>
-              <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'bundleClear' })}>
-                Clear bundle
-              </button>
-              {state.isAnalyzing && (
-                <button className="cockpit__button ghost danger" onClick={() => vscode.postMessage({ type: 'cancelAnalysis' })}>
-                  Cancel analysis
-                </button>
-              )}
-            </div>
-            {state.bundleSummary && (
-              <div className="cockpit__actions">
-                <span className="cockpit__dim">Quick links:</span>
-                <button
-                  className="cockpit__button ghost small"
-                  onClick={() => vscode.postMessage({ type: 'scrollReportToSection', sectionId: 'overview' })}
-                >
-                  Overview
-                </button>
-                <button
-                  className="cockpit__button ghost small"
-                  onClick={() => vscode.postMessage({ type: 'scrollReportToSection', sectionId: 'incompleteness' })}
-                >
-                  Incompleteness
-                </button>
-                <button
-                  className="cockpit__button ghost small"
-                  onClick={() => vscode.postMessage({ type: 'scrollReportToSection', sectionId: 'drift' })}
-                >
-                  Drift
-                </button>
-                <button
-                  className="cockpit__button ghost small"
-                  onClick={() => vscode.postMessage({ type: 'scrollReportToSection', sectionId: 'legacy' })}
-                >
-                  Legacy
-                </button>
-                <button
-                  className="cockpit__button ghost small"
-                  onClick={() => vscode.postMessage({ type: 'scrollReportToSection', sectionId: 'timeline' })}
-                >
-                  Timeline
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+      <Tabs
+        active={state.activeSection}
+        onChange={setActiveSection}
+        counts={{
+          commits: state.commits.length,
+          bundle: bundleSummaryText,
+          symbols: state.symbols.length,
+          reports: state.reports.length
+        }}
+      />
 
-        <button className="cockpit__accordion-header" onClick={() => toggle('symbols')}>
-          <span>Symbols</span>
-          <span className="cockpit__dim">{state.symbols.length} rows</span>
-        </button>
-        {open.symbols && (
-          <div className="cockpit__accordion-body">
-            <div className="cockpit__actions">
-              <input
-                className="cockpit__input"
-                placeholder="Search symbols..."
-                value={state.symbolFilterText}
-                onChange={(e) => updateSymbolFilterText(e.target.value)}
-              />
-              <select
-                className="cockpit__input"
-                value={state.symbolKindFilter}
-                onChange={(e) => updateSymbolKind(e.target.value)}
-              >
-                <option value="all">All kinds</option>
-                <option value="function">function</option>
-                <option value="class">class</option>
-                <option value="method">method</option>
-                <option value="component">component</option>
-              </select>
-              <select
-                className="cockpit__input"
-                value={state.symbolChangeFilter}
-                onChange={(e) => updateSymbolChangeFilter(e.target.value as 'all' | SymbolChangeType)}
-              >
-                <option value="all">All changes</option>
-                <option value="added">added</option>
-                <option value="modified">modified</option>
-                <option value="removed">removed</option>
-              </select>
-            </div>
-            <SymbolList state={state} vscode={vscode} />
-          </div>
+      <div className="cockpit__tab-container">
+        {state.activeSection === 'commits' && (
+          <CommitsTabContent
+            state={state}
+            vscode={vscode}
+            updateCommitsFilterText={updateCommitsFilterText}
+            toggleCommitsScope={toggleCommitsScope}
+            formatDate={formatDate}
+          />
         )}
-
-        <button className="cockpit__accordion-header" onClick={() => toggle('reports')}>
-          <span>Reports</span>
-          <span className="cockpit__dim">{state.reports.length} saved</span>
-        </button>
-        {open.reports && (
-          <div className="cockpit__accordion-body">
-            <div className="cockpit__actions">
-              <input
-                className="cockpit__input"
-                placeholder="Filter reports..."
-                value={state.reportsFilterText}
-                onChange={(e) => updateReportsFilterText(e.target.value)}
-              />
-              <select
-                className="cockpit__input"
-                value={state.reportsBranchFilter}
-                onChange={(e) => updateReportsBranchFilter(e.target.value)}
-              >
-                <option value="all">All branches</option>
-                {reportBranches.map((branch) => (
-                  <option key={branch} value={branch}>
-                    {branch}
-                  </option>
-                ))}
-              </select>
-              <label className="cockpit__row">
-                <input
-                  type="checkbox"
-                  checked={state.reportsShowPinnedOnly}
-                  onChange={(e) => updateReportsPinned(e.target.checked)}
-                />
-                <span className="cockpit__dim">Pinned only</span>
-              </label>
-            </div>
-            <ReportList state={state} vscode={vscode} />
-          </div>
+        {state.activeSection === 'bundle' && (
+          <BundleTabContent
+            state={state}
+            vscode={vscode}
+            formatDate={formatDate}
+          />
+        )}
+        {state.activeSection === 'symbols' && (
+          <SymbolsTabContent
+            state={state}
+            vscode={vscode}
+            updateSymbolFilterText={updateSymbolFilterText}
+            updateSymbolKind={updateSymbolKind}
+            updateSymbolChangeFilter={updateSymbolChangeFilter}
+          />
+        )}
+        {state.activeSection === 'reports' && (
+          <ReportsTabContent
+            state={state}
+            vscode={vscode}
+            updateReportsFilterText={updateReportsFilterText}
+            updateReportsBranchFilter={updateReportsBranchFilter}
+            updateReportsPinned={updateReportsPinned}
+          />
         )}
       </div>
     </div>

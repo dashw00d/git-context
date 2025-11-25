@@ -128,6 +128,9 @@ export const BundlePanel: React.FC<BundlePanelProps> = ({ state, vscode }) => {
             >
                 Open Full Report →
             </button>
+            <div className="cockpit__dim" style={{ fontSize: '10px', marginTop: '6px', textAlign: 'center' }}>
+                See Bundle tab for detailed evidence
+            </div>
         </div>
     );
 };

@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import { logInfo, logDebug, logError } from './utils/logger';
-import type { ActiveBundleProvider } from './ui/activeBundleProvider';
-import type { CommitsProvider } from './ui/commitsProvider';
-import type { SymbolHistoryProvider } from './ui/symbolHistory';
-import type { ReportsProvider } from './ui/reportsProvider';
-import type { CockpitProvider } from './webview/CockpitProvider';
+import type { ActiveBundleProvider } from './providers/activeBundleProvider';
+import type { CommitsProvider } from './providers/commitsProvider';
+import type { SymbolHistoryProvider } from './providers/symbolHistoryProvider';
+import type { ReportsProvider } from './providers/reportsProvider';
+import type { CockpitProvider } from './webview/cockpit/CockpitProvider';
+import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
 import type {
   BundleSummaryDTO,
   CockpitState,
@@ -24,18 +25,23 @@ let outputChannel: vscode.OutputChannel;
 let debugChannel: vscode.OutputChannel;
 let cockpitProvider: CockpitProvider | undefined;
 
-async function syncCockpitState() {
-  if (!cockpitProvider || !commitsProvider) {
+async function publishCockpitState() {
+  if (!commitsProvider) {
     return;
   }
   try {
     // Ensure database is initialized before trying to export data
     await commitsProvider.initializeDatabase();
 
-    const currentState = cockpitProvider.getState();
+    const orchestrator = getCockpitOrchestrator();
+    const currentState = orchestrator.getState();
+    const { getExtensionConfig } = await import('./utils/config');
+    const config = getExtensionConfig();
+    const baseLimit = config.defaultCommitCount || 20;
+
     const [commits, selection, bundleFacts, symbols, reports, workspaceFiles] = await Promise.all([
       commitsProvider.exportCommitsDto(
-        20 + commitsProvider.loadMoreOffset
+        baseLimit + commitsProvider.loadMoreOffset
       ),
       Promise.resolve(commitsProvider.exportSelectionDto()),
       Promise.resolve(activeBundleProvider?.exportBundleFacts?.() ?? null),
@@ -198,7 +204,7 @@ async function syncCockpitState() {
       selectedStagedPaths: selectedFiles.filter((path: string) => stagedPaths.has(path)),
       selectedUnstagedPaths: selectedFiles.filter((path: string) => unstagedPaths.has(path)),
       selectedFiles: selection.selectedFiles,
-      hasMoreCommits: commitDtos.length >= 20,
+      hasMoreCommits: commitDtos.length >= baseLimit,
       commitsFilterText: currentState.commitsFilterText ?? '',
       commitsFilterScopes: currentState.commitsFilterScopes ?? { staged: true, unstaged: true, history: true },
       lastNCommits: currentState.lastNCommits ?? 20,
@@ -224,10 +230,12 @@ async function syncCockpitState() {
       analysisProgress: currentState.isAnalyzing && !bundleFacts ? currentState.analysisProgress : undefined
     };
 
-    cockpitProvider.updateState(cockpitState);
-    logInfo('[Cockpit] Synced state to webview');
+    orchestrator.updateState(cockpitState, 'publishCockpitState');
+    logInfo(`[Cockpit] Published cockpit state (${commitDtos.length} commits loaded)`);
   } catch (error) {
-    logError('Failed to sync cockpit state', error);
+    logError('[Cockpit] Failed to publish state', error);
+    // Re-throw to allow caller to handle
+    throw error;
   }
 }
 
@@ -254,7 +262,7 @@ export function getDebugChannel(): vscode.OutputChannel {
   return debugChannel;
 }
 
-export { syncCockpitState };
+export { publishCockpitState };
 
 export function getCockpitProvider(): CockpitProvider | undefined {
   return cockpitProvider;
@@ -274,14 +282,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Dynamically import providers and commands to prevent load-time errors
     // from native dependencies or ESM issues
-    const { ActiveBundleProvider } = await import('./ui/activeBundleProvider');
-    const { CommitsProvider } = await import('./ui/commitsProvider');
-    const { SymbolHistoryProvider } = await import('./ui/symbolHistory');
-    const { ReportsProvider } = await import('./ui/reportsProvider');
-    const { registerCommands } = await import('./ui/commands');
-    const { RefactorReportProvider } = await import('./webview/refactorReportProvider');
-    const { getDebtMeter, disposeDebtMeter } = await import('./ui/refactorDebtMeter');
-    const { CockpitProvider } = await import('./webview/CockpitProvider');
+    const { ActiveBundleProvider } = await import('./providers/activeBundleProvider');
+    const { CommitsProvider } = await import('./providers/commitsProvider');
+    const { SymbolHistoryProvider } = await import('./providers/symbolHistoryProvider');
+    const { ReportsProvider } = await import('./providers/reportsProvider');
+    const { registerCommands } = await import('./commands/commands');
+    const { RefactorReportProvider } = await import('./webview/reports/refactorReportProvider');
+    const { getDebtMeter, disposeDebtMeter } = await import('./providers/legacy/refactorDebtMeter');
+    const { CockpitProvider } = await import('./webview/cockpit/CockpitProvider');
 
     logDebug('Modules loaded successfully');
 
@@ -314,20 +322,46 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     commitsProvider.onDidChangeTreeData(async () => {
-      await syncCockpitState();
+      await publishCockpitState();
     });
     activeBundleProvider.onDidChangeTreeData(async () => {
-      await syncCockpitState();
+      await publishCockpitState();
     });
     symbolHistoryProvider.onDidChangeTreeData(async () => {
-      await syncCockpitState();
+      await publishCockpitState();
     });
     reportsProvider.onDidChangeTreeData(async () => {
-      await syncCockpitState();
+      await publishCockpitState();
     });
 
+    // Auto-load initial commits on activation
+    try {
+      logInfo('[Cockpit] Checking if initial commits need to be loaded...');
+      const { getAnalysisPipeline } = await import('./analysis/pipeline');
+      const pipeline = await getAnalysisPipeline();
+      const { getExtensionConfig } = await import('./utils/config');
+      const config = getExtensionConfig();
+
+      // Check if database has any commits
+      const { getDatabaseManager } = await import('./storage/database');
+      const db = getDatabaseManager().getDatabase();
+      const result = db.prepare('SELECT COUNT(*) as count FROM commits_metadata').get() as { count: number };
+
+      if (result.count === 0) {
+        logInfo(`[Cockpit] Database is empty, loading initial ${config.defaultCommitCount} commits...`);
+        await pipeline.loadRecentCommits(config.defaultCommitCount);
+        commitsProvider.refresh(); // This will trigger publishCockpitState
+        logInfo('[Cockpit] Initial commits loaded successfully');
+      } else {
+        logInfo(`[Cockpit] Database already has ${result.count} commits, skipping initial load`);
+      }
+    } catch (error) {
+      logError('[Cockpit] Failed to auto-load initial commits', error);
+      // Continue activation even if initial load fails
+    }
+
     // Register evidence provider for markdown links
-    const { EvidenceProvider } = await import('./ui/evidenceProvider');
+    const { EvidenceProvider } = await import('./providers/legacy/evidenceProvider');
     const evidenceProvider = new EvidenceProvider();
     context.subscriptions.push(
       vscode.workspace.registerTextDocumentContentProvider('evidence', evidenceProvider)
@@ -506,8 +540,18 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     );
 
-    syncCockpitState().catch(() => {
-      // Best-effort initial sync; errors are logged in syncCockpitState
+    // Initial sync after auto-load (or immediate if commits already exist)
+    publishCockpitState().catch((error) => {
+      logError('[Cockpit] Failed during initial publish', error);
+      // Show user-friendly message if initial sync fails
+      vscode.window.showWarningMessage(
+        'Git Context: Failed to load commit data. Try refreshing the view or reloading the window.',
+        'Refresh'
+      ).then((choice) => {
+        if (choice === 'Refresh') {
+          commitsProvider.refresh();
+        }
+      });
     });
 
     logInfo('Git Context extension activated successfully');

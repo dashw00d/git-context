@@ -1,68 +1,53 @@
 import * as vscode from 'vscode';
-import { logInfo, logError } from '../utils/logger';
-import { CockpitClientMessage, CockpitSectionKey, CockpitState } from '../types/cockpit';
+import { logInfo, logError, logDebug } from '../../utils/logger';
+import { CockpitClientMessage, CockpitSectionKey, CockpitState } from '../../types/cockpit';
+import { CockpitStateChange, getCockpitOrchestrator } from '../../state/cockpitOrchestrator';
 
 export class CockpitProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
-  private state: CockpitState = {
-    repoName: null,
-    branchName: null,
-    activeSection: 'commits',
-    isAnalyzing: false,
-    analysisStep: undefined,
-    analysisProgress: undefined,
-    error: null,
-    selectedCommitShas: [],
-    selectedStagedPaths: [],
-    selectedUnstagedPaths: [],
-    selectedFiles: [],
-    hasMoreCommits: false,
-    commitsFilterText: '',
-    commitsFilterScopes: { staged: true, unstaged: true, history: true },
-    lastNCommits: 20,
-    stagedFiles: [],
-    unstagedFiles: [],
-    workspaceScope: 'workspace',
-    commits: [],
-    bundleSummary: null,
-    bundleFacts: null,
-    bundleReportId: null,
-    symbols: [],
-    symbolFilterText: '',
-    symbolKindFilter: 'all',
-    symbolChangeFilter: 'all',
-    activeSymbolId: null,
-    activeSymbolHistory: [],
-    reports: [],
-    reportsFilterText: '',
-    reportsBranchFilter: 'all',
-    reportsShowPinnedOnly: false
-  };
+  private state: CockpitState;
+  private unsubscribe?: () => void;
+  private readonly orchestrator = getCockpitOrchestrator();
 
-  constructor(private readonly extensionUri: vscode.Uri) { }
+  constructor(private readonly extensionUri: vscode.Uri) {
+    this.state = this.orchestrator.getState();
+  }
 
   resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ): void {
+    this.unsubscribe?.();
+    this.unsubscribe = this.orchestrator.subscribe((change) => this.handleStateChange(change));
+
     this.view = webviewView;
+    this.state = this.orchestrator.getState();
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')]
     };
     webviewView.webview.html = this.getHtml(webviewView.webview);
     webviewView.webview.onDidReceiveMessage((msg) => this.handleMessage(msg));
+    webviewView.onDidDispose(() => {
+      this.unsubscribe?.();
+      this.view = undefined;
+    });
+    this.sendState();
+  }
+
+  private handleStateChange(change: CockpitStateChange) {
+    logDebug(`[Cockpit] Applying state change (${change.reason ?? 'unspecified'})`);
+    this.state = change.full;
     this.sendState();
   }
 
   getState(): CockpitState {
-    return this.state;
+    return this.orchestrator.getState();
   }
 
   updateCommits(commits: CockpitState['commits']) {
-    this.state = { ...this.state, commits };
-    this.sendState();
+    this.orchestrator.updatePartial('commits', commits, 'host:updateCommits');
   }
 
   updateSelection(
@@ -72,49 +57,48 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     workspaceScope: CockpitState['workspaceScope'],
     selectedFiles?: string[]
   ) {
-    this.state = {
-      ...this.state,
+    this.orchestrator.updateState({
       selectedCommitShas,
       selectedStagedPaths,
       selectedUnstagedPaths,
       selectedFiles,
       workspaceScope
-    };
-    this.sendState();
+    }, 'host:updateSelection');
   }
 
   updateWorkspaceFiles(stagedFiles: CockpitState['stagedFiles'], unstagedFiles: CockpitState['unstagedFiles']) {
-    this.state = { ...this.state, stagedFiles, unstagedFiles };
-    this.sendState();
+    this.orchestrator.updateState({ stagedFiles, unstagedFiles }, 'host:updateWorkspaceFiles');
   }
 
   updateBundleFacts(bundleFacts: CockpitState['bundleFacts'], bundleSummary?: CockpitState['bundleSummary']) {
-    this.state = { ...this.state, bundleFacts, bundleSummary: bundleSummary ?? this.state.bundleSummary };
-    this.sendState();
+    this.orchestrator.updateState(
+      { bundleFacts, bundleSummary: bundleSummary ?? this.state.bundleSummary },
+      'host:updateBundleFacts'
+    );
   }
 
   updateSymbols(symbols: CockpitState['symbols']) {
-    this.state = { ...this.state, symbols };
-    this.sendState();
+    this.orchestrator.updatePartial('symbols', symbols, 'host:updateSymbols');
   }
 
   updateReports(reports: CockpitState['reports']) {
-    this.state = { ...this.state, reports };
-    this.sendState();
+    this.orchestrator.updatePartial('reports', reports, 'host:updateReports');
   }
 
   updateState(partial: Partial<CockpitState>) {
-    this.state = { ...this.state, ...partial };
-    this.sendState();
+    this.orchestrator.updateState(partial, 'host:updateState');
   }
 
   updateAnalysisProgress(isAnalyzing: boolean, step?: string, progress?: number) {
-    this.state = { ...this.state, isAnalyzing, analysisStep: step, analysisProgress: progress };
+    this.orchestrator.updateState(
+      { isAnalyzing, analysisStep: step, analysisProgress: progress },
+      'host:analysisProgress'
+    );
     this.sendAnalysisProgress(isAnalyzing, step, progress);
   }
 
   focusSection(section: CockpitSectionKey) {
-    this.state = { ...this.state, activeSection: section };
+    this.orchestrator.updatePartial('activeSection', section, 'host:focusSection');
     this.sendFocusSection(section);
   }
 
@@ -153,8 +137,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     console.log('[Cockpit] Message details:', msg);
     switch (msg.type) {
       case 'setActiveSection':
-        this.state = { ...this.state, activeSection: msg.section };
-        this.sendState();
+        this.orchestrator.updatePartial('activeSection', msg.section, 'ui:setActiveSection');
         break;
       case 'generateReport': {
         const mode = msg.mode as 'selection' | 'lastN' | 'staged' | 'unstaged' | undefined;
@@ -165,7 +148,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
             await vscode.commands.executeCommand('git-context.analyzeUnstagedChanges');
           } else if (mode === 'lastN') {
             // Show VS Code input box for last N commits
-            const { getExtensionConfig } = await import('../utils/config');
+            const { getExtensionConfig } = await import('../../utils/config');
             const config = getExtensionConfig();
             const defaultValue = String(this.state.lastNCommits || config.defaultCommitCount || 20);
 
@@ -184,28 +167,25 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
             if (count) {
               const lastN = parseInt(count);
               // Update state with the selected count
-              this.state = { ...this.state, lastNCommits: lastN };
-              this.sendState();
+              this.orchestrator.updatePartial('lastNCommits', lastN, 'ui:setLastN');
               // Execute the command with the count
               await vscode.commands.executeCommand('git-context.analyzeLastCommits', count);
             }
           } else {
             await vscode.commands.executeCommand('git-context.analyze');
           }
-          this.state = { ...this.state, isAnalyzing: true, error: null };
+          this.orchestrator.updateState({ isAnalyzing: true, error: null }, 'ui:generateReport:start');
           logInfo(`[Cockpit] Triggered analysis (${mode || 'selection'})`);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          this.state = { ...this.state, isAnalyzing: false, error: errorMessage };
-          this.sendState();
+          this.orchestrator.updateState({ isAnalyzing: false, error: errorMessage }, 'ui:generateReport:error');
           logError('[Cockpit] Failed to trigger analysis', error);
         }
         break;
       }
       case 'cancelAnalysis':
         await vscode.commands.executeCommand('git-context.bundle.cancel');
-        this.state = { ...this.state, isAnalyzing: false };
-        this.sendState();
+        this.orchestrator.updatePartial('isAnalyzing', false, 'ui:cancelAnalysis');
         break;
       case 'toggleCommit':
         if (msg.sha) {
@@ -221,15 +201,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         await vscode.commands.executeCommand('git-context.addMoreCommits');
         break;
       case 'setCommitsFilterText':
-        this.state = { ...this.state, commitsFilterText: msg.text ?? '' };
-        this.sendState();
+        this.orchestrator.updatePartial('commitsFilterText', msg.text ?? '', 'ui:setCommitsFilterText');
         break;
       case 'setCommitsFilterScopes':
-        this.state = {
-          ...this.state,
-          commitsFilterScopes: { ...this.state.commitsFilterScopes, ...msg.scopes }
-        };
-        this.sendState();
+        this.orchestrator.updateState(
+          { commitsFilterScopes: { ...this.state.commitsFilterScopes, ...msg.scopes } },
+          'ui:setCommitsFilterScopes'
+        );
         break;
       case 'selectAllStaged':
         await vscode.commands.executeCommand('git-context.selectAllStaged');
@@ -297,16 +275,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         }
         break;
       case 'setSymbolFilterText':
-        this.state = { ...this.state, symbolFilterText: msg.text ?? '' };
-        this.sendState();
+        this.orchestrator.updatePartial('symbolFilterText', msg.text ?? '', 'ui:setSymbolFilterText');
         break;
       case 'setSymbolKindFilter':
-        this.state = { ...this.state, symbolKindFilter: msg.kind ?? 'all' };
-        this.sendState();
+        this.orchestrator.updatePartial('symbolKindFilter', msg.kind ?? 'all', 'ui:setSymbolKindFilter');
         break;
       case 'setSymbolChangeFilter':
-        this.state = { ...this.state, symbolChangeFilter: msg.change ?? 'all' };
-        this.sendState();
+        this.orchestrator.updatePartial('symbolChangeFilter', msg.change ?? 'all', 'ui:setSymbolChangeFilter');
         break;
       case 'compareFilesToCommit':
         if (msg.sha) {
@@ -314,16 +289,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         }
         break;
       case 'setReportsFilterText':
-        this.state = { ...this.state, reportsFilterText: msg.text ?? '' };
-        this.sendState();
+        this.orchestrator.updatePartial('reportsFilterText', msg.text ?? '', 'ui:setReportsFilterText');
         break;
       case 'setReportsBranchFilter':
-        this.state = { ...this.state, reportsBranchFilter: msg.branch ?? 'all' };
-        this.sendState();
+        this.orchestrator.updatePartial('reportsBranchFilter', msg.branch ?? 'all', 'ui:setReportsBranchFilter');
         break;
       case 'setReportsShowPinnedOnly':
-        this.state = { ...this.state, reportsShowPinnedOnly: msg.value ?? false };
-        this.sendState();
+        this.orchestrator.updatePartial('reportsShowPinnedOnly', msg.value ?? false, 'ui:setReportsShowPinnedOnly');
         break;
       case 'scrollReportToSection':
         if (msg.sectionId) {
@@ -345,8 +317,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         this.sendState();
         break;
       case 'clearError':
-        this.state = { ...this.state, error: null };
-        this.sendState();
+        this.orchestrator.updatePartial('error', null, 'ui:clearError');
         break;
       default:
         break;

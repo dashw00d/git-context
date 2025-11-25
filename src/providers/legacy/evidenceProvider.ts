@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getGitRoot } from '../utils/config';
+import { getGitRoot } from '../../utils/config';
 
 export class EvidenceProvider implements vscode.TextDocumentContentProvider {
     // Event emitter for content changes

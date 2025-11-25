@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getGitRoot } from '../utils/config';
-import { RefactorBundleFacts } from '../facts/types';
+import { getGitRoot } from '../../utils/config';
+import { RefactorBundleFacts } from '../../facts/types';
 
 /**
  * Status bar item showing refactor debt meter
@@ -72,7 +72,7 @@ export class RefactorDebtMeter {
     issues: number;
     breakdown: { missing: number; zombies: number; dead: number; replaced: number };
   } {
-    const { formatStats } = require('../utils/statsFormatter');
+    const { formatStats } = require('../../utils/statsFormatter');
     const { missing, zombies, dead, replaced } = formatStats(facts);
 
     const totalIssues = missing + zombies + dead + replaced;

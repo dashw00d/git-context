@@ -511,7 +511,7 @@
             }
             return element;
           };
-          function createElement8(type, config, children) {
+          function createElement15(type, config, children) {
             var propName;
             var props = {};
             var key = null;
@@ -1085,7 +1085,7 @@
             }
             return dispatcher.useContext(Context);
           }
-          function useState3(initialState) {
+          function useState4(initialState) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useState(initialState);
           }
@@ -1610,7 +1610,7 @@
                 error("React.createElement: type is invalid -- expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s", typeString, info);
               }
             }
-            var element = createElement8.apply(this, arguments);
+            var element = createElement15.apply(this, arguments);
             if (element == null) {
               return element;
             }
@@ -1888,7 +1888,7 @@
           exports.useMemo = useMemo;
           exports.useReducer = useReducer;
           exports.useRef = useRef2;
-          exports.useState = useState3;
+          exports.useState = useState4;
           exports.useSyncExternalStore = useSyncExternalStore;
           exports.useTransition = useTransition;
           exports.version = ReactVersion;
@@ -2384,9 +2384,9 @@
           if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart === "function") {
             __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
           }
-          var React8 = require_react();
+          var React15 = require_react();
           var Scheduler = require_scheduler();
-          var ReactSharedInternals = React8.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+          var ReactSharedInternals = React15.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
           var suppressWarning = false;
           function setSuppressWarning(newSuppressWarning) {
             {
@@ -2435,7 +2435,7 @@
           var HostPortal = 4;
           var HostComponent = 5;
           var HostText = 6;
-          var Fragment4 = 7;
+          var Fragment5 = 7;
           var Mode = 8;
           var ContextConsumer = 9;
           var ContextProvider = 10;
@@ -3592,7 +3592,7 @@
                 return "DehydratedFragment";
               case ForwardRef:
                 return getWrappedName$1(type, type.render, "ForwardRef");
-              case Fragment4:
+              case Fragment5:
                 return "Fragment";
               case HostComponent:
                 return type;
@@ -3993,7 +3993,7 @@
             {
               if (props.value == null) {
                 if (typeof props.children === "object" && props.children !== null) {
-                  React8.Children.forEach(props.children, function(child) {
+                  React15.Children.forEach(props.children, function(child) {
                     if (child == null) {
                       return;
                     }
@@ -9417,7 +9417,7 @@
               }
             }
           }
-          function createElement8(type, props, rootContainerElement, parentNamespace) {
+          function createElement15(type, props, rootContainerElement, parentNamespace) {
             var isCustomComponentTag;
             var ownerDocument = getOwnerDocumentFromRootContainer(rootContainerElement);
             var domElement;
@@ -10287,7 +10287,7 @@
               }
               parentNamespace = hostContextDev.namespace;
             }
-            var domElement = createElement8(type, props, rootContainerInstance, parentNamespace);
+            var domElement = createElement15(type, props, rootContainerInstance, parentNamespace);
             precacheFiberNode(internalInstanceHandle, domElement);
             updateFiberProps(domElement, props);
             return domElement;
@@ -12021,7 +12021,7 @@
               }
             }
             function updateFragment2(returnFiber, current2, fragment, lanes, key) {
-              if (current2 === null || current2.tag !== Fragment4) {
+              if (current2 === null || current2.tag !== Fragment5) {
                 var created = createFiberFromFragment(fragment, returnFiber.mode, lanes, key);
                 created.return = returnFiber;
                 return created;
@@ -12424,7 +12424,7 @@
                 if (child.key === key) {
                   var elementType = element.type;
                   if (elementType === REACT_FRAGMENT_TYPE) {
-                    if (child.tag === Fragment4) {
+                    if (child.tag === Fragment5) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var existing = useFiber(child, element.props.children);
                       existing.return = returnFiber;
@@ -17900,7 +17900,7 @@
                 var _resolvedProps2 = workInProgress2.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current2, workInProgress2, type, _resolvedProps2, renderLanes2);
               }
-              case Fragment4:
+              case Fragment5:
                 return updateFragment(current2, workInProgress2, renderLanes2);
               case Mode:
                 return updateMode(current2, workInProgress2, renderLanes2);
@@ -18172,7 +18172,7 @@
               case SimpleMemoComponent:
               case FunctionComponent:
               case ForwardRef:
-              case Fragment4:
+              case Fragment5:
               case Mode:
               case Profiler:
               case ContextConsumer:
@@ -22433,7 +22433,7 @@
             return fiber;
           }
           function createFiberFromFragment(elements, mode, lanes, key) {
-            var fiber = createFiber(Fragment4, elements, key, mode);
+            var fiber = createFiber(Fragment5, elements, key, mode);
             fiber.lanes = lanes;
             return fiber;
           }
@@ -23583,7 +23583,7 @@
   });
 
   // src/webview/cockpit/index.tsx
-  var React7 = __toESM(require_react());
+  var React14 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
   // src/webview/cockpit/components/Header.tsx
@@ -23624,10 +23624,139 @@
     ), state.isAnalyzing ? /* @__PURE__ */ React.createElement("button", { className: "cockpit__button ghost danger", onClick: () => vscode2.postMessage({ type: "cancelAnalysis" }) }, "Cancel") : null));
   };
 
-  // src/webview/cockpit/components/CommitList.tsx
+  // src/webview/cockpit/components/SelectionPanel.tsx
   var React2 = __toESM(require_react());
+  var SelectionPanel = ({ state, vscode: vscode2 }) => {
+    const totalSelected = state.selectedCommitShas.length + state.selectedStagedPaths.length + state.selectedUnstagedPaths.length;
+    if (totalSelected === 0) {
+      return /* @__PURE__ */ React2.createElement("div", { className: "cockpit__card cockpit__card--selection" }, /* @__PURE__ */ React2.createElement("div", { className: "cockpit__card-title" }, "Selection"), /* @__PURE__ */ React2.createElement("div", { className: "cockpit__empty", style: { padding: "12px 0", textAlign: "center" } }, /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "32px", opacity: 0.3 } }, "\u{1F4CB}"), /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "8px" } }, "No items selected"), /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "11px", marginTop: "4px" } }, "Select commits or files to analyze")));
+    }
+    return /* @__PURE__ */ React2.createElement("div", { className: "cockpit__card cockpit__card--selection" }, /* @__PURE__ */ React2.createElement("div", { className: "cockpit__card-title" }, "Selection (", totalSelected, " item", totalSelected !== 1 ? "s" : "", ")"), state.selectedCommitShas.length > 0 && /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "8px" } }, /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "COMMITS (", state.selectedCommitShas.length, ")"), /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "2px" } }, state.selectedCommitShas.slice(0, 3).map((sha) => {
+      const commit = state.commits.find((c) => c.sha === sha);
+      return /* @__PURE__ */ React2.createElement(
+        "div",
+        {
+          key: sha,
+          style: {
+            fontSize: "12px",
+            padding: "4px 6px",
+            background: "#14171c",
+            borderRadius: "3px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px"
+          }
+        },
+        /* @__PURE__ */ React2.createElement("span", { className: "cockpit__mono", style: { color: "#4fc3f7" } }, sha.slice(0, 7)),
+        /* @__PURE__ */ React2.createElement("span", { style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, commit?.message || "")
+      );
+    }), state.selectedCommitShas.length > 3 && /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", paddingLeft: "6px" } }, "+", state.selectedCommitShas.length - 3, " more"))), state.selectedStagedPaths.length > 0 && /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "8px" } }, /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "STAGED FILES (", state.selectedStagedPaths.length, ")"), /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "12px" } }, state.selectedStagedPaths.slice(0, 3).map((path, i) => /* @__PURE__ */ React2.createElement("div", { key: i, style: { padding: "2px 0 ", color: "#81c784" } }, "\u{1F4C4} ", path.split("/").pop())), state.selectedStagedPaths.length > 3 && /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "11px", color: "#8a8f98" } }, "+", state.selectedStagedPaths.length - 3, " more"))), state.selectedUnstagedPaths.length > 0 && /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "8px" } }, /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "UNSTAGED FILES (", state.selectedUnstagedPaths.length, ")"), /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "12px" } }, state.selectedUnstagedPaths.slice(0, 3).map((path, i) => /* @__PURE__ */ React2.createElement("div", { key: i, style: { padding: "2px 0", color: "#ffb74d" } }, "\u{1F4C4} ", path.split("/").pop())), state.selectedUnstagedPaths.length > 3 && /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "11px", color: "#8a8f98" } }, "+", state.selectedUnstagedPaths.length - 3, " more"))), /* @__PURE__ */ React2.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => vscode2.postMessage({ type: "clearSelection" }),
+        style: { marginTop: "12px", width: "100%" }
+      },
+      "Clear Selection"
+    ));
+  };
+
+  // src/webview/cockpit/components/BundlePanel.tsx
+  var React3 = __toESM(require_react());
+  var BundlePanel = ({ state, vscode: vscode2 }) => {
+    const facts = state.bundleFacts;
+    const summary = state.bundleSummary;
+    if (!facts || !summary) {
+      return /* @__PURE__ */ React3.createElement("div", { className: "cockpit__card cockpit__card--bundle" }, /* @__PURE__ */ React3.createElement("div", { className: "cockpit__card-title" }, "Analysis Results"), /* @__PURE__ */ React3.createElement("div", { className: "cockpit__empty", style: { padding: "12px 0", textAlign: "center" } }, /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "32px", opacity: 0.3 } }, "\u{1F4CA}"), /* @__PURE__ */ React3.createElement("div", { style: { marginTop: "8px" } }, "No analysis yet"), /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "11px", marginTop: "4px" } }, "Run an analysis to see results")));
+    }
+    const findings = facts.findings;
+    const criticalIssues = (findings?.incompleteness?.missing || 0) + (findings?.incompleteness?.zombies || 0) + (findings?.legacyAudit?.dead || 0);
+    const warnings = (findings?.patternDrift?.mixedTargets || 0) + (findings?.patternDrift?.oldNamespaces || 0) + (findings?.legacyAudit?.legacyUsed || 0);
+    return /* @__PURE__ */ React3.createElement("div", { className: "cockpit__card cockpit__card--bundle" }, /* @__PURE__ */ React3.createElement("div", { className: "cockpit__card-title" }, "Analysis Results", summary.createdAt && /* @__PURE__ */ React3.createElement("span", { style: { fontSize: "10px", color: "#8a8f98", marginLeft: "6px" } }, new Date(summary.createdAt).toLocaleTimeString())), /* @__PURE__ */ React3.createElement("div", { style: { marginTop: "8px" } }, /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "SCOPE"), /* @__PURE__ */ React3.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } }, /* @__PURE__ */ React3.createElement("div", { className: "cockpit__badge" }, summary.commitCount, " commit", summary.commitCount !== 1 ? "s" : ""), /* @__PURE__ */ React3.createElement("div", { className: "cockpit__badge" }, summary.fileCount, " file", summary.fileCount !== 1 ? "s" : ""), summary.symbolCount > 0 && /* @__PURE__ */ React3.createElement("div", { className: "cockpit__badge" }, summary.symbolCount, " symbol", summary.symbolCount !== 1 ? "s" : ""))), /* @__PURE__ */ React3.createElement("div", { style: { marginTop: "12px" } }, /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "KEY FINDINGS"), /* @__PURE__ */ React3.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" } }, /* @__PURE__ */ React3.createElement(
+      "div",
+      {
+        style: {
+          padding: "6px 8px",
+          background: criticalIssues > 0 ? "#3a1f1f" : "#14171c",
+          border: `1px solid ${criticalIssues > 0 ? "#b73a3a" : "#1e232b"}`,
+          borderRadius: "4px"
+        }
+      },
+      /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "18px", fontWeight: "600", color: criticalIssues > 0 ? "#ffb3b3" : "#81c784" } }, criticalIssues),
+      /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "10px", color: "#8a8f98" } }, "Critical")
+    ), /* @__PURE__ */ React3.createElement(
+      "div",
+      {
+        style: {
+          padding: "6px 8px",
+          background: warnings > 0 ? "#3a2f1f" : "#14171c",
+          border: `1px solid ${warnings > 0 ? "#b7853a" : "#1e232b"}`,
+          borderRadius: "4px"
+        }
+      },
+      /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "18px", fontWeight: "600", color: warnings > 0 ? "#ffcc80" : "#81c784" } }, warnings),
+      /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "10px", color: "#8a8f98" } }, "Warnings")
+    ))), findings?.incompleteness && criticalIssues > 0 && /* @__PURE__ */ React3.createElement("div", { style: { marginTop: "12px" } }, /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "INCOMPLETENESS"), /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "12px", display: "flex", flexDirection: "column", gap: "2px" } }, findings.incompleteness.missing > 0 && /* @__PURE__ */ React3.createElement("div", { style: { color: "#ffb3b3" } }, "\u26A0\uFE0F ", findings.incompleteness.missing, " missing symbol", findings.incompleteness.missing !== 1 ? "s" : ""), findings.incompleteness.zombies > 0 && /* @__PURE__ */ React3.createElement("div", { style: { color: "#ffb3b3" } }, "\u{1F47B} ", findings.incompleteness.zombies, " zombie", findings.incompleteness.zombies !== 1 ? "s" : ""), findings.legacyAudit?.dead > 0 && /* @__PURE__ */ React3.createElement("div", { style: { color: "#ffb3b3" } }, "\u{1F480} ", findings.legacyAudit.dead, " dead code path", findings.legacyAudit.dead !== 1 ? "s" : ""))), /* @__PURE__ */ React3.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => vscode2.postMessage({ type: "openActiveReport" }),
+        style: { marginTop: "12px", width: "100%" },
+        disabled: !state.bundleReportId
+      },
+      "Open Full Report \u2192"
+    ), /* @__PURE__ */ React3.createElement("div", { className: "cockpit__dim", style: { fontSize: "10px", marginTop: "6px", textAlign: "center" } }, "See Bundle tab for detailed evidence"));
+  };
+
+  // src/webview/cockpit/components/Tabs.tsx
+  var React4 = __toESM(require_react());
+  var Tabs = ({ active, onChange, counts }) => {
+    const tabs = [
+      { key: "live", label: "Live", badge: null, disabled: true, tooltip: "Coming soon: Real-time change tracking" },
+      { key: "commits", label: "Commits", badge: counts.commits.toString(), disabled: false, tooltip: void 0 },
+      { key: "bundle", label: "Bundle", badge: counts.bundle, disabled: false, tooltip: void 0 },
+      { key: "symbols", label: "Symbols", badge: counts.symbols.toString(), disabled: false, tooltip: void 0 },
+      { key: "reports", label: "Reports", badge: counts.reports.toString(), disabled: false, tooltip: void 0 }
+    ];
+    return /* @__PURE__ */ React4.createElement("div", { className: "cockpit__tabs" }, tabs.map((tab) => /* @__PURE__ */ React4.createElement(
+      "button",
+      {
+        key: tab.key,
+        className: `cockpit__tab${active === tab.key ? " cockpit__tab--active" : ""}${tab.disabled ? " cockpit__tab--disabled" : ""}`,
+        onClick: () => !tab.disabled && onChange(tab.key),
+        title: tab.tooltip,
+        disabled: tab.disabled
+      },
+      tab.label,
+      tab.badge && /* @__PURE__ */ React4.createElement("span", { className: "cockpit__tab-badge" }, tab.badge)
+    )));
+  };
+
+  // src/webview/cockpit/components/MetricsRow.tsx
+  var React5 = __toESM(require_react());
+  var MetricsRow = ({ state }) => {
+    const facts = state.bundleFacts;
+    if (!facts) return null;
+    const findings = facts.findings;
+    const critical = (findings?.incompleteness?.missing || 0) + (findings?.incompleteness?.zombies || 0) + (findings?.legacyAudit?.dead || 0);
+    const warnings = (findings?.patternDrift?.mixedTargets || 0) + (findings?.patternDrift?.oldNamespaces || 0) + (findings?.legacyAudit?.legacyUsed || 0);
+    const driftPct = findings?.patternDrift?.conventionDrift?.driftPercent || 0;
+    let health = 100;
+    health -= critical * 10;
+    health -= warnings * 3;
+    health -= driftPct * 0.5;
+    health = Math.max(0, Math.min(100, health));
+    const healthColor = health >= 80 ? "#81c784" : health >= 60 ? "#ffcc80" : "#ffb3b3";
+    return /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metrics" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-value", style: { color: healthColor } }, Math.round(health)), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Health")), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: `cockpit__metric-value${critical > 0 ? " cockpit__metric-value--bad" : ""}` }, critical), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Critical")), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: `cockpit__metric-value${warnings > 0 ? " cockpit__metric-value--warn" : ""}` }, warnings), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Warnings")), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-value" }, facts.scope?.files || 0), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Files")));
+  };
+
+  // src/webview/cockpit/components/CommitsTabContent.tsx
+  var React7 = __toESM(require_react());
+
+  // src/webview/cockpit/components/CommitList.tsx
+  var React6 = __toESM(require_react());
   var CommitList = ({ state, vscode: vscode2, formatDate: formatDate2 }) => {
-    const [expandedCommits, setExpandedCommits] = React2.useState(/* @__PURE__ */ new Set());
+    const [expandedCommits, setExpandedCommits] = React6.useState(/* @__PURE__ */ new Set());
     const toggleCommitExpanded = (sha, e) => {
       e.stopPropagation();
       const newSet = new Set(expandedCommits);
@@ -23650,34 +23779,230 @@
     );
     if (!list.length) {
       const hasScopeFilters = !state.commitsFilterScopes.staged || !state.commitsFilterScopes.unstaged || !state.commitsFilterScopes.history;
-      return /* @__PURE__ */ React2.createElement("div", { className: "cockpit__empty" }, hasScopeFilters ? /* @__PURE__ */ React2.createElement(React2.Fragment, null, /* @__PURE__ */ React2.createElement("div", null, "No commits match current filters"), /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Try adjusting scope toggles or clearing the search filter")) : /* @__PURE__ */ React2.createElement(React2.Fragment, null, /* @__PURE__ */ React2.createElement("div", null, "No commits yet"), /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, 'Start by clicking "Analyze last N" to analyze recent commits')));
+      return /* @__PURE__ */ React6.createElement("div", { className: "cockpit__empty" }, hasScopeFilters ? /* @__PURE__ */ React6.createElement(React6.Fragment, null, /* @__PURE__ */ React6.createElement("div", null, "No commits match current filters"), /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Try adjusting scope toggles or clearing the search filter")) : /* @__PURE__ */ React6.createElement(React6.Fragment, null, /* @__PURE__ */ React6.createElement("div", null, "No commits yet"), /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, 'Start by clicking "Analyze last N" to analyze recent commits')));
     }
-    return /* @__PURE__ */ React2.createElement("ul", { className: "cockpit__list" }, list.map((c) => {
+    return /* @__PURE__ */ React6.createElement("ul", { className: "cockpit__list" }, list.map((c) => {
       const isExpanded = expandedCommits.has(c.sha);
       const isSelected = state.selectedCommitShas.includes(c.sha);
-      return /* @__PURE__ */ React2.createElement(
+      return /* @__PURE__ */ React6.createElement(
         "li",
         {
           key: c.sha,
           className: `cockpit__list-item ${isSelected ? "cockpit__list-item--active" : ""}`,
           onClick: () => vscode2.postMessage({ type: "toggleCommit", sha: c.sha })
         },
-        /* @__PURE__ */ React2.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React2.createElement(
+        /* @__PURE__ */ React6.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React6.createElement(
           "span",
           {
             className: `cockpit__codicon codicon-${isExpanded ? "chevron-down" : "chevron-right"}`,
             onClick: (e) => toggleCommitExpanded(c.sha, e),
             style: { cursor: "pointer", marginRight: "4px", fontSize: "12px" }
           }
-        ), /* @__PURE__ */ React2.createElement("span", { className: "cockpit__mono" }, c.shortSha), /* @__PURE__ */ React2.createElement("span", null, c.author || "\u2014"), /* @__PURE__ */ React2.createElement("span", { className: "cockpit__dim" }, formatDate2(c.authoredAt)), c.inBundle ? /* @__PURE__ */ React2.createElement("span", { className: "cockpit__dim" }, "In bundle") : null, typeof c.changes === "number" && c.changes > 0 ? /* @__PURE__ */ React2.createElement("span", { className: "cockpit__dim" }, c.changes, " changes") : null),
-        /* @__PURE__ */ React2.createElement("div", { className: "cockpit__message", style: { paddingLeft: "20px" } }, c.message),
-        isExpanded && c.files && /* @__PURE__ */ React2.createElement("div", { className: "cockpit__file-list", style: { paddingLeft: "20px", marginTop: "4px" } }, c.files.length > 0 ? c.files.map((f, i) => /* @__PURE__ */ React2.createElement("div", { key: i, className: "cockpit__row", style: { fontSize: "12px", padding: "2px 0" } }, /* @__PURE__ */ React2.createElement("span", { className: `cockpit__file-status status-${f.status.toLowerCase()}`, style: { width: "12px", display: "inline-block", textAlign: "center" } }, f.status), /* @__PURE__ */ React2.createElement("span", { className: "cockpit__dim" }, f.path))) : /* @__PURE__ */ React2.createElement("div", { className: "cockpit__dim", style: { fontSize: "12px", fontStyle: "italic" } }, "No files changed"))
+        ), /* @__PURE__ */ React6.createElement("span", { className: "cockpit__mono" }, c.shortSha), /* @__PURE__ */ React6.createElement("span", null, c.author || "\u2014"), /* @__PURE__ */ React6.createElement("span", { className: "cockpit__dim" }, formatDate2(c.authoredAt)), c.inBundle ? /* @__PURE__ */ React6.createElement("span", { className: "cockpit__dim" }, "In bundle") : null, typeof c.changes === "number" && c.changes > 0 ? /* @__PURE__ */ React6.createElement("span", { className: "cockpit__dim" }, c.changes, " changes") : null),
+        /* @__PURE__ */ React6.createElement("div", { className: "cockpit__message", style: { paddingLeft: "20px" } }, c.message),
+        isExpanded && c.files && /* @__PURE__ */ React6.createElement("div", { className: "cockpit__file-list", style: { paddingLeft: "20px", marginTop: "4px" } }, c.files.length > 0 ? c.files.map((f, i) => /* @__PURE__ */ React6.createElement("div", { key: i, className: "cockpit__row", style: { fontSize: "12px", padding: "2px 0" } }, /* @__PURE__ */ React6.createElement("span", { className: `cockpit__file-status status-${f.status.toLowerCase()}`, style: { width: "12px", display: "inline-block", textAlign: "center" } }, f.status), /* @__PURE__ */ React6.createElement("span", { className: "cockpit__dim" }, f.path))) : /* @__PURE__ */ React6.createElement("div", { className: "cockpit__dim", style: { fontSize: "12px", fontStyle: "italic" } }, "No files changed"))
       );
     }));
   };
 
-  // src/webview/cockpit/components/ReportList.tsx
-  var React3 = __toESM(require_react());
+  // src/webview/cockpit/components/CommitsTabContent.tsx
+  var CommitsTabContent = ({
+    state,
+    vscode: vscode2,
+    updateCommitsFilterText,
+    toggleCommitsScope,
+    formatDate: formatDate2
+  }) => {
+    return /* @__PURE__ */ React7.createElement("div", { className: "cockpit__tab-body" }, /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "selectAllStaged" }) }, "Select all staged"), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "selectAllUnstaged" }) }, "Select all unstaged"), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "clearSelection" }) }, "Clear selection"), /* @__PURE__ */ React7.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost",
+        onClick: () => {
+          const value = prompt("Add commit by SHA or ref");
+          if (value) {
+            vscode2.postMessage({ type: "addCommitBySha", shaOrRef: value });
+          }
+        }
+      },
+      "Add commit by SHA"
+    )), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React7.createElement(
+      "input",
+      {
+        className: "cockpit__input",
+        placeholder: "Filter commits...",
+        value: state.commitsFilterText,
+        onChange: (e) => updateCommitsFilterText(e.target.value)
+      }
+    ), /* @__PURE__ */ React7.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => toggleCommitsScope("staged"),
+        title: "Show staged commits"
+      },
+      state.commitsFilterScopes.staged ? "Staged \u2713" : "Staged \u2715"
+    ), /* @__PURE__ */ React7.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => toggleCommitsScope("unstaged"),
+        title: "Show unstaged commits"
+      },
+      state.commitsFilterScopes.unstaged ? "Unstaged \u2713" : "Unstaged \u2715"
+    ), /* @__PURE__ */ React7.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => toggleCommitsScope("history"),
+        title: "Show history commits"
+      },
+      state.commitsFilterScopes.history ? "History \u2713" : "History \u2715"
+    )), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__message" }, "Staged files: ", state.stagedFiles.length ? /* @__PURE__ */ React7.createElement(React7.Fragment, null, state.stagedFiles.map((f) => f.path).slice(0, 5).join(", "), state.stagedFiles.length > 5 && ` (+${state.stagedFiles.length - 5} more)`) : /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "No staged files")), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__message" }, "Unstaged files:", " ", state.unstagedFiles.length ? /* @__PURE__ */ React7.createElement(React7.Fragment, null, state.unstagedFiles.map((f) => f.path).slice(0, 5).join(", "), state.unstagedFiles.length > 5 && ` (+${state.unstagedFiles.length - 5} more)`) : /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "No unstaged files")), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, state.hasMoreCommits ? /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "loadMoreCommits" }) }, "Load more") : /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "Showing ", state.commits.length, " commits")), /* @__PURE__ */ React7.createElement(CommitList, { state, vscode: vscode2, formatDate: formatDate2 }));
+  };
+
+  // src/webview/cockpit/components/BundleTabContent.tsx
+  var React9 = __toESM(require_react());
+
+  // src/webview/cockpit/components/ExpandableSection.tsx
+  var React8 = __toESM(require_react());
+  var ExpandableSection = ({
+    title,
+    count,
+    variant = "default",
+    children
+  }) => {
+    const [expanded, setExpanded] = React8.useState(false);
+    if (count === 0) return null;
+    const variantClass = variant === "critical" ? "cockpit__expandable--critical" : variant === "warning" ? "cockpit__expandable--warning" : "";
+    return /* @__PURE__ */ React8.createElement("div", { className: `cockpit__expandable ${variantClass}` }, /* @__PURE__ */ React8.createElement(
+      "button",
+      {
+        className: "cockpit__expandable-header",
+        onClick: () => setExpanded(!expanded)
+      },
+      /* @__PURE__ */ React8.createElement("span", null, expanded ? "\u25BC" : "\u25B6"),
+      /* @__PURE__ */ React8.createElement("span", null, title),
+      /* @__PURE__ */ React8.createElement("span", { className: "cockpit__badge" }, count)
+    ), expanded && /* @__PURE__ */ React8.createElement("div", { className: "cockpit__expandable-body" }, children));
+  };
+
+  // src/webview/cockpit/components/BundleTabContent.tsx
+  var BundleTabContent = ({ state, vscode: vscode2, formatDate: formatDate2 }) => {
+    const facts = state.bundleFacts;
+    if (!facts) {
+      return /* @__PURE__ */ React9.createElement("div", { className: "cockpit__tab-body cockpit__empty" }, /* @__PURE__ */ React9.createElement("div", { style: { textAlign: "center", padding: "40px 20px" } }, /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "48px", opacity: 0.3 } }, "\u{1F4CA}"), /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "12px", fontSize: "14px" } }, "No bundle analyzed yet"), /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "8px", fontSize: "12px", color: "#8a8f98" } }, "Run an analysis to see bundle details")));
+    }
+    const evidence = facts.evidence || {};
+    const findings = facts.findings;
+    const missingEvidence = evidence["findings.incompleteness"]?.missing || [];
+    const zombiesEvidence = evidence["findings.incompleteness"]?.zombies || [];
+    const deadEvidence = evidence["findings.legacyAudit"]?.dead || [];
+    const driftEvidence = evidence["findings.patternDrift.conventionDrift"]?.driftSymbols || [];
+    const legacyUsedEvidence = evidence["findings.legacyAudit"]?.legacyUsed || [];
+    const replacedEvidence = findings?.legacyAudit?.replacedLeftovers || [];
+    return /* @__PURE__ */ React9.createElement("div", { className: "cockpit__tab-body" }, /* @__PURE__ */ React9.createElement("div", { className: "cockpit__message" }, state.bundleSummary ? /* @__PURE__ */ React9.createElement(React9.Fragment, null, /* @__PURE__ */ React9.createElement("div", null, "Commits: ", state.bundleSummary.commitCount), /* @__PURE__ */ React9.createElement("div", null, "Files: ", state.bundleSummary.fileCount), /* @__PURE__ */ React9.createElement("div", null, "Symbols: ", state.bundleSummary.symbolCount), /* @__PURE__ */ React9.createElement("div", null, "Created: ", formatDate2(state.bundleSummary.createdAt || ""))) : "No active bundle yet"), /* @__PURE__ */ React9.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React9.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "bundleRegenerate" }) }, "Regenerate"), /* @__PURE__ */ React9.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "bundleExport" }) }, "Export JSON"), /* @__PURE__ */ React9.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "openActiveReport" }) }, "Open full report"), /* @__PURE__ */ React9.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "bundleClear" }) }, "Clear bundle"), state.isAnalyzing && /* @__PURE__ */ React9.createElement("button", { className: "cockpit__button ghost danger", onClick: () => vscode2.postMessage({ type: "cancelAnalysis" }) }, "Cancel analysis")), state.bundleSummary && /* @__PURE__ */ React9.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React9.createElement("span", { className: "cockpit__dim" }, "Quick links:"), /* @__PURE__ */ React9.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => vscode2.postMessage({ type: "scrollReportToSection", sectionId: "overview" })
+      },
+      "Overview"
+    ), /* @__PURE__ */ React9.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => vscode2.postMessage({ type: "scrollReportToSection", sectionId: "incompleteness" })
+      },
+      "Incompleteness"
+    ), /* @__PURE__ */ React9.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => vscode2.postMessage({ type: "scrollReportToSection", sectionId: "drift" })
+      },
+      "Drift"
+    ), /* @__PURE__ */ React9.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => vscode2.postMessage({ type: "scrollReportToSection", sectionId: "legacy" })
+      },
+      "Legacy"
+    ), /* @__PURE__ */ React9.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => vscode2.postMessage({ type: "scrollReportToSection", sectionId: "timeline" })
+      },
+      "Timeline"
+    )), /* @__PURE__ */ React9.createElement(
+      ExpandableSection,
+      {
+        title: "Missing Symbols",
+        count: missingEvidence.length,
+        variant: "critical"
+      },
+      missingEvidence.map((item, i) => /* @__PURE__ */ React9.createElement("div", { key: i, className: "cockpit__evidence-item" }, /* @__PURE__ */ React9.createElement("div", { className: "cockpit__mono" }, item.symbol_id), /* @__PURE__ */ React9.createElement("div", { className: "cockpit__dim" }, "Expected but not found")))
+    ), /* @__PURE__ */ React9.createElement(
+      ExpandableSection,
+      {
+        title: "Zombie Symbols",
+        count: zombiesEvidence.length,
+        variant: "critical"
+      },
+      zombiesEvidence.map((item, i) => /* @__PURE__ */ React9.createElement("div", { key: i, className: "cockpit__evidence-item" }, /* @__PURE__ */ React9.createElement("div", { className: "cockpit__mono" }, item.symbol_id), /* @__PURE__ */ React9.createElement("div", { className: "cockpit__dim" }, item.found?.name, " (", item.found?.kind, ")")))
+    ), /* @__PURE__ */ React9.createElement(
+      ExpandableSection,
+      {
+        title: "Dead Code Paths",
+        count: deadEvidence.length,
+        variant: "critical"
+      },
+      deadEvidence.map((item, i) => /* @__PURE__ */ React9.createElement(
+        "div",
+        {
+          key: i,
+          className: "cockpit__evidence-item cockpit__evidence-item--clickable",
+          onClick: () => vscode2.postMessage({
+            type: "openEvidence",
+            evidenceId: item.symbol_id
+          })
+        },
+        /* @__PURE__ */ React9.createElement("div", { className: "cockpit__mono" }, item.name),
+        /* @__PURE__ */ React9.createElement("div", { className: "cockpit__dim" }, item.kind, " \u2022 No incoming edges")
+      ))
+    ), /* @__PURE__ */ React9.createElement(
+      ExpandableSection,
+      {
+        title: "Convention Drift",
+        count: driftEvidence.length,
+        variant: "warning"
+      },
+      driftEvidence.map((item, i) => /* @__PURE__ */ React9.createElement("div", { key: i, className: "cockpit__evidence-item" }, /* @__PURE__ */ React9.createElement("div", { className: "cockpit__mono" }, item.name, " \u2192 ", item.suggestedName), /* @__PURE__ */ React9.createElement("div", { className: "cockpit__dim" }, item.path), /* @__PURE__ */ React9.createElement("div", { className: "cockpit__dim" }, "Convention: ", item.convention)))
+    ), /* @__PURE__ */ React9.createElement(
+      ExpandableSection,
+      {
+        title: "Legacy References",
+        count: legacyUsedEvidence.length,
+        variant: "warning"
+      },
+      legacyUsedEvidence.map((item, i) => /* @__PURE__ */ React9.createElement("div", { key: i, className: "cockpit__evidence-item" }, /* @__PURE__ */ React9.createElement("div", { className: "cockpit__mono" }, item.name), /* @__PURE__ */ React9.createElement("div", { className: "cockpit__dim" }, item.kind)))
+    ), /* @__PURE__ */ React9.createElement(
+      ExpandableSection,
+      {
+        title: "Replacement Leftovers",
+        count: replacedEvidence.length,
+        variant: "warning"
+      },
+      replacedEvidence.map((item, i) => /* @__PURE__ */ React9.createElement("div", { key: i, className: "cockpit__evidence-item" }, /* @__PURE__ */ React9.createElement("div", { className: "cockpit__mono" }, item.old, " \u2192 ", item.new), /* @__PURE__ */ React9.createElement("div", { className: "cockpit__dim" }, "Confidence: ", Math.round(item.confidence * 100), "%")))
+    ));
+  };
+
+  // src/webview/cockpit/components/SymbolsTabContent.tsx
+  var React11 = __toESM(require_react());
+
+  // src/webview/cockpit/components/SymbolList.tsx
+  var React10 = __toESM(require_react());
 
   // src/webview/cockpit/utils.ts
   var formatDate = (value) => {
@@ -23713,25 +24038,98 @@
     return badges[changeType] || "";
   };
 
+  // src/webview/cockpit/components/SymbolList.tsx
+  var SymbolList = ({ state, vscode: vscode2 }) => {
+    const filter = state.symbolFilterText.toLowerCase();
+    const list = state.symbols.filter(
+      (s) => (!filter || s.name.toLowerCase().includes(filter) || s.path.toLowerCase().includes(filter)) && (state.symbolKindFilter === "all" || s.kind === state.symbolKindFilter) && (state.symbolChangeFilter === "all" || (s.changeType || "modified") === state.symbolChangeFilter)
+    );
+    if (!list.length) {
+      const hasFilters = state.symbolFilterText || state.symbolKindFilter !== "all" || state.symbolChangeFilter !== "all";
+      return /* @__PURE__ */ React10.createElement("div", { className: "cockpit__empty" }, hasFilters ? /* @__PURE__ */ React10.createElement(React10.Fragment, null, /* @__PURE__ */ React10.createElement("div", null, "No symbols match current filters"), /* @__PURE__ */ React10.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Try adjusting filters or clearing the search")) : /* @__PURE__ */ React10.createElement(React10.Fragment, null, /* @__PURE__ */ React10.createElement("div", null, "No symbols yet"), /* @__PURE__ */ React10.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Symbols will appear after analyzing commits")));
+    }
+    return /* @__PURE__ */ React10.createElement("ul", { className: "cockpit__list" }, list.map((s) => /* @__PURE__ */ React10.createElement("li", { key: s.id, className: "cockpit__list-item" }, /* @__PURE__ */ React10.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React10.createElement("span", { className: "cockpit__codicon", "data-icon": getSymbolKindIcon(s.kind), title: s.kind }), /* @__PURE__ */ React10.createElement("span", null, s.name), s.changeType && /* @__PURE__ */ React10.createElement("span", { className: "cockpit__badge", title: `${s.changeType} symbol` }, getChangeTypeBadge(s.changeType)), /* @__PURE__ */ React10.createElement("span", { className: "cockpit__dim" }, s.kind || ""), /* @__PURE__ */ React10.createElement("span", { className: "cockpit__mono" }, formatDate(s.lastChangedAt))), /* @__PURE__ */ React10.createElement("div", { className: "cockpit__message" }, s.path), /* @__PURE__ */ React10.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React10.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => vscode2.postMessage({ type: "openSymbolHistory", symbolId: s.id })
+      },
+      "Open history"
+    ), /* @__PURE__ */ React10.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost small",
+        onClick: () => vscode2.postMessage({ type: "openSymbolInEditor", symbolId: s.id })
+      },
+      "Open latest"
+    )))));
+  };
+
+  // src/webview/cockpit/components/SymbolsTabContent.tsx
+  var SymbolsTabContent = ({
+    state,
+    vscode: vscode2,
+    updateSymbolFilterText,
+    updateSymbolKind,
+    updateSymbolChangeFilter
+  }) => {
+    return /* @__PURE__ */ React11.createElement("div", { className: "cockpit__tab-body" }, /* @__PURE__ */ React11.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React11.createElement(
+      "input",
+      {
+        className: "cockpit__input",
+        placeholder: "Search symbols...",
+        value: state.symbolFilterText,
+        onChange: (e) => updateSymbolFilterText(e.target.value)
+      }
+    ), /* @__PURE__ */ React11.createElement(
+      "select",
+      {
+        className: "cockpit__input",
+        value: state.symbolKindFilter,
+        onChange: (e) => updateSymbolKind(e.target.value)
+      },
+      /* @__PURE__ */ React11.createElement("option", { value: "all" }, "All kinds"),
+      /* @__PURE__ */ React11.createElement("option", { value: "function" }, "function"),
+      /* @__PURE__ */ React11.createElement("option", { value: "class" }, "class"),
+      /* @__PURE__ */ React11.createElement("option", { value: "method" }, "method"),
+      /* @__PURE__ */ React11.createElement("option", { value: "component" }, "component")
+    ), /* @__PURE__ */ React11.createElement(
+      "select",
+      {
+        className: "cockpit__input",
+        value: state.symbolChangeFilter,
+        onChange: (e) => updateSymbolChangeFilter(e.target.value)
+      },
+      /* @__PURE__ */ React11.createElement("option", { value: "all" }, "All changes"),
+      /* @__PURE__ */ React11.createElement("option", { value: "added" }, "added"),
+      /* @__PURE__ */ React11.createElement("option", { value: "modified" }, "modified"),
+      /* @__PURE__ */ React11.createElement("option", { value: "removed" }, "removed")
+    )), /* @__PURE__ */ React11.createElement(SymbolList, { state, vscode: vscode2 }));
+  };
+
+  // src/webview/cockpit/components/ReportsTabContent.tsx
+  var React13 = __toESM(require_react());
+
   // src/webview/cockpit/components/ReportList.tsx
+  var React12 = __toESM(require_react());
   var ReportList = ({ state, vscode: vscode2 }) => {
     const filter = state.reportsFilterText.toLowerCase();
     const list = state.reports.filter(
       (r) => (!filter || (r.title || "").toLowerCase().includes(filter) || (r.summary || "").toLowerCase().includes(filter)) && (!state.reportsShowPinnedOnly || r.pinned) && (state.reportsBranchFilter === "all" || r.branch === state.reportsBranchFilter)
     );
     if (!list.length) {
-      return /* @__PURE__ */ React3.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React3.createElement("div", null, "No reports yet"), /* @__PURE__ */ React3.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
+      return /* @__PURE__ */ React12.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React12.createElement("div", null, "No reports yet"), /* @__PURE__ */ React12.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
     }
-    return /* @__PURE__ */ React3.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React3.createElement(
+    return /* @__PURE__ */ React12.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React12.createElement(
       "li",
       {
         key: r.id,
         className: "cockpit__list-item cockpit__list-item--clickable",
         onClick: () => vscode2.postMessage({ type: "openReport", reportId: r.id })
       },
-      /* @__PURE__ */ React3.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React3.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React3.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React3.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React3.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
-      r.summary ? /* @__PURE__ */ React3.createElement("div", { className: "cockpit__message" }, r.summary) : null,
-      /* @__PURE__ */ React3.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React3.createElement(
+      /* @__PURE__ */ React12.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React12.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React12.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React12.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React12.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
+      r.summary ? /* @__PURE__ */ React12.createElement("div", { className: "cockpit__message" }, r.summary) : null,
+      /* @__PURE__ */ React12.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React12.createElement(
         "button",
         {
           className: "cockpit__button ghost small",
@@ -23741,7 +24139,7 @@
           }
         },
         "Regenerate"
-      ), /* @__PURE__ */ React3.createElement(
+      ), /* @__PURE__ */ React12.createElement(
         "button",
         {
           className: "cockpit__button ghost small",
@@ -23751,7 +24149,7 @@
           }
         },
         r.pinned ? "Unpin" : "Pin"
-      ), /* @__PURE__ */ React3.createElement(
+      ), /* @__PURE__ */ React12.createElement(
         "button",
         {
           className: "cockpit__button ghost small danger",
@@ -23767,116 +24165,40 @@
     )));
   };
 
-  // src/webview/cockpit/components/SymbolList.tsx
-  var React4 = __toESM(require_react());
-  var SymbolList = ({ state, vscode: vscode2 }) => {
-    const filter = state.symbolFilterText.toLowerCase();
-    const list = state.symbols.filter(
-      (s) => (!filter || s.name.toLowerCase().includes(filter) || s.path.toLowerCase().includes(filter)) && (state.symbolKindFilter === "all" || s.kind === state.symbolKindFilter) && (state.symbolChangeFilter === "all" || (s.changeType || "modified") === state.symbolChangeFilter)
-    );
-    if (!list.length) {
-      const hasFilters = state.symbolFilterText || state.symbolKindFilter !== "all" || state.symbolChangeFilter !== "all";
-      return /* @__PURE__ */ React4.createElement("div", { className: "cockpit__empty" }, hasFilters ? /* @__PURE__ */ React4.createElement(React4.Fragment, null, /* @__PURE__ */ React4.createElement("div", null, "No symbols match current filters"), /* @__PURE__ */ React4.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Try adjusting filters or clearing the search")) : /* @__PURE__ */ React4.createElement(React4.Fragment, null, /* @__PURE__ */ React4.createElement("div", null, "No symbols yet"), /* @__PURE__ */ React4.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Symbols will appear after analyzing commits")));
-    }
-    return /* @__PURE__ */ React4.createElement("ul", { className: "cockpit__list" }, list.map((s) => /* @__PURE__ */ React4.createElement("li", { key: s.id, className: "cockpit__list-item" }, /* @__PURE__ */ React4.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React4.createElement("span", { className: "cockpit__codicon", "data-icon": getSymbolKindIcon(s.kind), title: s.kind }), /* @__PURE__ */ React4.createElement("span", null, s.name), s.changeType && /* @__PURE__ */ React4.createElement("span", { className: "cockpit__badge", title: `${s.changeType} symbol` }, getChangeTypeBadge(s.changeType)), /* @__PURE__ */ React4.createElement("span", { className: "cockpit__dim" }, s.kind || ""), /* @__PURE__ */ React4.createElement("span", { className: "cockpit__mono" }, formatDate(s.lastChangedAt))), /* @__PURE__ */ React4.createElement("div", { className: "cockpit__message" }, s.path), /* @__PURE__ */ React4.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React4.createElement(
-      "button",
+  // src/webview/cockpit/components/ReportsTabContent.tsx
+  var ReportsTabContent = ({
+    state,
+    vscode: vscode2,
+    updateReportsFilterText,
+    updateReportsBranchFilter,
+    updateReportsPinned
+  }) => {
+    const reportBranches = Array.from(new Set(state.reports.map((r) => r.branch).filter(Boolean)));
+    return /* @__PURE__ */ React13.createElement("div", { className: "cockpit__tab-body" }, /* @__PURE__ */ React13.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React13.createElement(
+      "input",
       {
-        className: "cockpit__button ghost small",
-        onClick: () => vscode2.postMessage({ type: "openSymbolHistory", symbolId: s.id })
-      },
-      "Open history"
-    ), /* @__PURE__ */ React4.createElement(
-      "button",
+        className: "cockpit__input",
+        placeholder: "Filter reports...",
+        value: state.reportsFilterText,
+        onChange: (e) => updateReportsFilterText(e.target.value)
+      }
+    ), /* @__PURE__ */ React13.createElement(
+      "select",
       {
-        className: "cockpit__button ghost small",
-        onClick: () => vscode2.postMessage({ type: "openSymbolInEditor", symbolId: s.id })
+        className: "cockpit__input",
+        value: state.reportsBranchFilter,
+        onChange: (e) => updateReportsBranchFilter(e.target.value)
       },
-      "Open latest"
-    )))));
-  };
-
-  // src/webview/cockpit/components/SelectionPanel.tsx
-  var React5 = __toESM(require_react());
-  var SelectionPanel = ({ state, vscode: vscode2 }) => {
-    const totalSelected = state.selectedCommitShas.length + state.selectedStagedPaths.length + state.selectedUnstagedPaths.length;
-    if (totalSelected === 0) {
-      return /* @__PURE__ */ React5.createElement("div", { className: "cockpit__card cockpit__card--selection" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__card-title" }, "Selection"), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__empty", style: { padding: "12px 0", textAlign: "center" } }, /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "32px", opacity: 0.3 } }, "\u{1F4CB}"), /* @__PURE__ */ React5.createElement("div", { style: { marginTop: "8px" } }, "No items selected"), /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "11px", marginTop: "4px" } }, "Select commits or files to analyze")));
-    }
-    return /* @__PURE__ */ React5.createElement("div", { className: "cockpit__card cockpit__card--selection" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__card-title" }, "Selection (", totalSelected, " item", totalSelected !== 1 ? "s" : "", ")"), state.selectedCommitShas.length > 0 && /* @__PURE__ */ React5.createElement("div", { style: { marginTop: "8px" } }, /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "COMMITS (", state.selectedCommitShas.length, ")"), /* @__PURE__ */ React5.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "2px" } }, state.selectedCommitShas.slice(0, 3).map((sha) => {
-      const commit = state.commits.find((c) => c.sha === sha);
-      return /* @__PURE__ */ React5.createElement(
-        "div",
-        {
-          key: sha,
-          style: {
-            fontSize: "12px",
-            padding: "4px 6px",
-            background: "#14171c",
-            borderRadius: "3px",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px"
-          }
-        },
-        /* @__PURE__ */ React5.createElement("span", { className: "cockpit__mono", style: { color: "#4fc3f7" } }, sha.slice(0, 7)),
-        /* @__PURE__ */ React5.createElement("span", { style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, commit?.message || "")
-      );
-    }), state.selectedCommitShas.length > 3 && /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", paddingLeft: "6px" } }, "+", state.selectedCommitShas.length - 3, " more"))), state.selectedStagedPaths.length > 0 && /* @__PURE__ */ React5.createElement("div", { style: { marginTop: "8px" } }, /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "STAGED FILES (", state.selectedStagedPaths.length, ")"), /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "12px" } }, state.selectedStagedPaths.slice(0, 3).map((path, i) => /* @__PURE__ */ React5.createElement("div", { key: i, style: { padding: "2px 0 ", color: "#81c784" } }, "\u{1F4C4} ", path.split("/").pop())), state.selectedStagedPaths.length > 3 && /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "11px", color: "#8a8f98" } }, "+", state.selectedStagedPaths.length - 3, " more"))), state.selectedUnstagedPaths.length > 0 && /* @__PURE__ */ React5.createElement("div", { style: { marginTop: "8px" } }, /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "UNSTAGED FILES (", state.selectedUnstagedPaths.length, ")"), /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "12px" } }, state.selectedUnstagedPaths.slice(0, 3).map((path, i) => /* @__PURE__ */ React5.createElement("div", { key: i, style: { padding: "2px 0", color: "#ffb74d" } }, "\u{1F4C4} ", path.split("/").pop())), state.selectedUnstagedPaths.length > 3 && /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "11px", color: "#8a8f98" } }, "+", state.selectedUnstagedPaths.length - 3, " more"))), /* @__PURE__ */ React5.createElement(
-      "button",
+      /* @__PURE__ */ React13.createElement("option", { value: "all" }, "All branches"),
+      reportBranches.map((branch) => /* @__PURE__ */ React13.createElement("option", { key: branch, value: branch }, branch))
+    ), /* @__PURE__ */ React13.createElement("label", { className: "cockpit__row" }, /* @__PURE__ */ React13.createElement(
+      "input",
       {
-        className: "cockpit__button ghost small",
-        onClick: () => vscode2.postMessage({ type: "clearSelection" }),
-        style: { marginTop: "12px", width: "100%" }
-      },
-      "Clear Selection"
-    ));
-  };
-
-  // src/webview/cockpit/components/BundlePanel.tsx
-  var React6 = __toESM(require_react());
-  var BundlePanel = ({ state, vscode: vscode2 }) => {
-    const facts = state.bundleFacts;
-    const summary = state.bundleSummary;
-    if (!facts || !summary) {
-      return /* @__PURE__ */ React6.createElement("div", { className: "cockpit__card cockpit__card--bundle" }, /* @__PURE__ */ React6.createElement("div", { className: "cockpit__card-title" }, "Analysis Results"), /* @__PURE__ */ React6.createElement("div", { className: "cockpit__empty", style: { padding: "12px 0", textAlign: "center" } }, /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "32px", opacity: 0.3 } }, "\u{1F4CA}"), /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "8px" } }, "No analysis yet"), /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "11px", marginTop: "4px" } }, "Run an analysis to see results")));
-    }
-    const findings = facts.findings;
-    const criticalIssues = (findings?.incompleteness?.missing || 0) + (findings?.incompleteness?.zombies || 0) + (findings?.legacyAudit?.dead || 0);
-    const warnings = (findings?.patternDrift?.mixedTargets || 0) + (findings?.patternDrift?.oldNamespaces || 0) + (findings?.legacyAudit?.legacyUsed || 0);
-    return /* @__PURE__ */ React6.createElement("div", { className: "cockpit__card cockpit__card--bundle" }, /* @__PURE__ */ React6.createElement("div", { className: "cockpit__card-title" }, "Analysis Results", summary.createdAt && /* @__PURE__ */ React6.createElement("span", { style: { fontSize: "10px", color: "#8a8f98", marginLeft: "6px" } }, new Date(summary.createdAt).toLocaleTimeString())), /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "8px" } }, /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "SCOPE"), /* @__PURE__ */ React6.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px" } }, /* @__PURE__ */ React6.createElement("div", { className: "cockpit__badge" }, summary.commitCount, " commit", summary.commitCount !== 1 ? "s" : ""), /* @__PURE__ */ React6.createElement("div", { className: "cockpit__badge" }, summary.fileCount, " file", summary.fileCount !== 1 ? "s" : ""), summary.symbolCount > 0 && /* @__PURE__ */ React6.createElement("div", { className: "cockpit__badge" }, summary.symbolCount, " symbol", summary.symbolCount !== 1 ? "s" : ""))), /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "12px" } }, /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "KEY FINDINGS"), /* @__PURE__ */ React6.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" } }, /* @__PURE__ */ React6.createElement(
-      "div",
-      {
-        style: {
-          padding: "6px 8px",
-          background: criticalIssues > 0 ? "#3a1f1f" : "#14171c",
-          border: `1px solid ${criticalIssues > 0 ? "#b73a3a" : "#1e232b"}`,
-          borderRadius: "4px"
-        }
-      },
-      /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "18px", fontWeight: "600", color: criticalIssues > 0 ? "#ffb3b3" : "#81c784" } }, criticalIssues),
-      /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "10px", color: "#8a8f98" } }, "Critical")
-    ), /* @__PURE__ */ React6.createElement(
-      "div",
-      {
-        style: {
-          padding: "6px 8px",
-          background: warnings > 0 ? "#3a2f1f" : "#14171c",
-          border: `1px solid ${warnings > 0 ? "#b7853a" : "#1e232b"}`,
-          borderRadius: "4px"
-        }
-      },
-      /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "18px", fontWeight: "600", color: warnings > 0 ? "#ffcc80" : "#81c784" } }, warnings),
-      /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "10px", color: "#8a8f98" } }, "Warnings")
-    ))), findings?.incompleteness && criticalIssues > 0 && /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "12px" } }, /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "11px", color: "#8a8f98", marginBottom: "4px" } }, "INCOMPLETENESS"), /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "12px", display: "flex", flexDirection: "column", gap: "2px" } }, findings.incompleteness.missing > 0 && /* @__PURE__ */ React6.createElement("div", { style: { color: "#ffb3b3" } }, "\u26A0\uFE0F ", findings.incompleteness.missing, " missing symbol", findings.incompleteness.missing !== 1 ? "s" : ""), findings.incompleteness.zombies > 0 && /* @__PURE__ */ React6.createElement("div", { style: { color: "#ffb3b3" } }, "\u{1F47B} ", findings.incompleteness.zombies, " zombie", findings.incompleteness.zombies !== 1 ? "s" : ""), findings.legacyAudit?.dead > 0 && /* @__PURE__ */ React6.createElement("div", { style: { color: "#ffb3b3" } }, "\u{1F480} ", findings.legacyAudit.dead, " dead code path", findings.legacyAudit.dead !== 1 ? "s" : ""))), /* @__PURE__ */ React6.createElement(
-      "button",
-      {
-        className: "cockpit__button ghost small",
-        onClick: () => vscode2.postMessage({ type: "openActiveReport" }),
-        style: { marginTop: "12px", width: "100%" },
-        disabled: !state.bundleReportId
-      },
-      "Open Full Report \u2192"
-    ));
+        type: "checkbox",
+        checked: state.reportsShowPinnedOnly,
+        onChange: (e) => updateReportsPinned(e.target.checked)
+      }
+    ), /* @__PURE__ */ React13.createElement("span", { className: "cockpit__dim" }, "Pinned only"))), /* @__PURE__ */ React13.createElement(ReportList, { state, vscode: vscode2 }));
   };
 
   // src/webview/cockpit/index.tsx
@@ -23916,15 +24238,9 @@
     reportsShowPinnedOnly: false
   };
   var App = () => {
-    const [open, setOpen] = React7.useState({
-      commits: true,
-      bundle: true,
-      symbols: false,
-      reports: false
-    });
-    const [state, setState] = React7.useState(defaultState);
-    const filterDebounceRef = React7.useRef({});
-    React7.useEffect(() => {
+    const [state, setState] = React14.useState(defaultState);
+    const filterDebounceRef = React14.useRef({});
+    React14.useEffect(() => {
       const handler = (event) => {
         const message = event.data;
         if (message?.type === "updateState" && message.payload) {
@@ -23941,16 +24257,16 @@
         } else if (message?.type === "focusSection" && message.payload) {
           const payload = message.payload;
           setState((prev) => ({ ...prev, activeSection: payload.section }));
-          setOpen((prev) => ({ ...prev, [payload.section]: true }));
         }
       };
       window.addEventListener("message", handler);
       vscode.postMessage({ type: "ready" });
       return () => window.removeEventListener("message", handler);
     }, []);
-    const toggle = (key) => {
-      setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-      vscode.postMessage({ type: "setActiveSection", section: key });
+    const setActiveSection = (section) => {
+      if (section === "live") return;
+      setState((prev) => ({ ...prev, activeSection: section }));
+      vscode.postMessage({ type: "setActiveSection", section });
     };
     const updateCommitsFilterText = (text) => {
       setState((prev) => ({ ...prev, commitsFilterText: text }));
@@ -24000,11 +24316,8 @@
       setState((prev) => ({ ...prev, reportsShowPinnedOnly: value }));
       vscode.postMessage({ type: "setReportsShowPinnedOnly", value });
     };
-    const selectionSummary = `${state.selectedCommitShas.length} commits \u2022 ${state.selectedStagedPaths.length} staged \u2022 ${state.selectedUnstagedPaths.length} unstaged`;
     const bundleSummaryText = state.bundleSummary ? `${state.bundleSummary.commitCount} commits, ${state.bundleSummary.fileCount} files${state.bundleSummary.symbolCount ? `, ${state.bundleSummary.symbolCount} symbols` : ""}` : "Bundle: none";
-    const reportBranches = Array.from(new Set(state.reports.map((r) => r.branch).filter(Boolean)));
-    const commitsFiltered = !!state.commitsFilterText || !state.commitsFilterScopes.staged || !state.commitsFilterScopes.unstaged || !state.commitsFilterScopes.history;
-    return /* @__PURE__ */ React7.createElement("div", { className: "cockpit" }, /* @__PURE__ */ React7.createElement(
+    return /* @__PURE__ */ React14.createElement("div", { className: "cockpit" }, /* @__PURE__ */ React14.createElement(
       Header,
       {
         state,
@@ -24015,146 +24328,58 @@
           vscode.postMessage({ type: "clearError" });
         }
       }
-    ), /* @__PURE__ */ React7.createElement("section", { className: "cockpit__dashboard" }, /* @__PURE__ */ React7.createElement(SelectionPanel, { state, vscode }), /* @__PURE__ */ React7.createElement(BundlePanel, { state, vscode })), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__accordion" }, /* @__PURE__ */ React7.createElement("button", { className: "cockpit__accordion-header", onClick: () => toggle("commits") }, /* @__PURE__ */ React7.createElement("span", null, "Commits & Selection"), /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, selectionSummary, commitsFiltered ? " \u2022 Filtered" : "")), open.commits && /* @__PURE__ */ React7.createElement("div", { className: "cockpit__accordion-body" }, /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode.postMessage({ type: "selectAllStaged" }) }, "Select all staged"), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode.postMessage({ type: "selectAllUnstaged" }) }, "Select all unstaged"), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode.postMessage({ type: "clearSelection" }) }, "Clear selection"), /* @__PURE__ */ React7.createElement(
-      "button",
+    ), /* @__PURE__ */ React14.createElement("section", { className: "cockpit__dashboard" }, /* @__PURE__ */ React14.createElement(SelectionPanel, { state, vscode }), /* @__PURE__ */ React14.createElement(BundlePanel, { state, vscode })), /* @__PURE__ */ React14.createElement(MetricsRow, { state }), /* @__PURE__ */ React14.createElement(
+      Tabs,
       {
-        className: "cockpit__button ghost",
-        onClick: () => {
-          const value = prompt("Add commit by SHA or ref");
-          if (value) {
-            vscode.postMessage({ type: "addCommitBySha", shaOrRef: value });
-          }
+        active: state.activeSection,
+        onChange: setActiveSection,
+        counts: {
+          commits: state.commits.length,
+          bundle: bundleSummaryText,
+          symbols: state.symbols.length,
+          reports: state.reports.length
         }
-      },
-      "Add commit by SHA"
-    )), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React7.createElement(
-      "input",
-      {
-        className: "cockpit__input",
-        placeholder: "Filter commits...",
-        value: state.commitsFilterText,
-        onChange: (e) => updateCommitsFilterText(e.target.value)
       }
-    ), /* @__PURE__ */ React7.createElement(
-      "button",
+    ), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__tab-container" }, state.activeSection === "commits" && /* @__PURE__ */ React14.createElement(
+      CommitsTabContent,
       {
-        className: "cockpit__button ghost small",
-        onClick: () => toggleCommitsScope("staged"),
-        title: "Show staged commits"
-      },
-      state.commitsFilterScopes.staged ? "Staged \u2713" : "Staged \u2715"
-    ), /* @__PURE__ */ React7.createElement(
-      "button",
-      {
-        className: "cockpit__button ghost small",
-        onClick: () => toggleCommitsScope("unstaged"),
-        title: "Show unstaged commits"
-      },
-      state.commitsFilterScopes.unstaged ? "Unstaged \u2713" : "Unstaged \u2715"
-    ), /* @__PURE__ */ React7.createElement(
-      "button",
-      {
-        className: "cockpit__button ghost small",
-        onClick: () => toggleCommitsScope("history"),
-        title: "Show history commits"
-      },
-      state.commitsFilterScopes.history ? "History \u2713" : "History \u2715"
-    )), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__message" }, "Staged files: ", state.stagedFiles.length ? /* @__PURE__ */ React7.createElement(React7.Fragment, null, state.stagedFiles.map((f) => f.path).slice(0, 5).join(", "), state.stagedFiles.length > 5 && ` (+${state.stagedFiles.length - 5} more)`) : /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "No staged files")), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__message" }, "Unstaged files:", " ", state.unstagedFiles.length ? /* @__PURE__ */ React7.createElement(React7.Fragment, null, state.unstagedFiles.map((f) => f.path).slice(0, 5).join(", "), state.unstagedFiles.length > 5 && ` (+${state.unstagedFiles.length - 5} more)`) : /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "No unstaged files")), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, state.hasMoreCommits ? /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode.postMessage({ type: "loadMoreCommits" }) }, "Load more") : /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "Showing ", state.commits.length, " commits")), /* @__PURE__ */ React7.createElement(CommitList, { state, vscode, formatDate })), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__accordion-header", onClick: () => toggle("bundle") }, /* @__PURE__ */ React7.createElement("span", null, "Active Bundle"), /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, bundleSummaryText)), open.bundle && /* @__PURE__ */ React7.createElement("div", { className: "cockpit__accordion-body" }, /* @__PURE__ */ React7.createElement("div", { className: "cockpit__message" }, state.bundleSummary ? /* @__PURE__ */ React7.createElement(React7.Fragment, null, /* @__PURE__ */ React7.createElement("div", null, "Commits: ", state.bundleSummary.commitCount), /* @__PURE__ */ React7.createElement("div", null, "Files: ", state.bundleSummary.fileCount), /* @__PURE__ */ React7.createElement("div", null, "Symbols: ", state.bundleSummary.symbolCount), /* @__PURE__ */ React7.createElement("div", null, "Created: ", formatDate(state.bundleSummary.createdAt))) : "No active bundle yet"), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode.postMessage({ type: "bundleRegenerate" }) }, "Regenerate"), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode.postMessage({ type: "bundleExport" }) }, "Export JSON"), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode.postMessage({ type: "openActiveReport" }) }, "Open full report"), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode.postMessage({ type: "bundleClear" }) }, "Clear bundle"), state.isAnalyzing && /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost danger", onClick: () => vscode.postMessage({ type: "cancelAnalysis" }) }, "Cancel analysis")), state.bundleSummary && /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "Quick links:"), /* @__PURE__ */ React7.createElement(
-      "button",
-      {
-        className: "cockpit__button ghost small",
-        onClick: () => vscode.postMessage({ type: "scrollReportToSection", sectionId: "overview" })
-      },
-      "Overview"
-    ), /* @__PURE__ */ React7.createElement(
-      "button",
-      {
-        className: "cockpit__button ghost small",
-        onClick: () => vscode.postMessage({ type: "scrollReportToSection", sectionId: "incompleteness" })
-      },
-      "Incompleteness"
-    ), /* @__PURE__ */ React7.createElement(
-      "button",
-      {
-        className: "cockpit__button ghost small",
-        onClick: () => vscode.postMessage({ type: "scrollReportToSection", sectionId: "drift" })
-      },
-      "Drift"
-    ), /* @__PURE__ */ React7.createElement(
-      "button",
-      {
-        className: "cockpit__button ghost small",
-        onClick: () => vscode.postMessage({ type: "scrollReportToSection", sectionId: "legacy" })
-      },
-      "Legacy"
-    ), /* @__PURE__ */ React7.createElement(
-      "button",
-      {
-        className: "cockpit__button ghost small",
-        onClick: () => vscode.postMessage({ type: "scrollReportToSection", sectionId: "timeline" })
-      },
-      "Timeline"
-    ))), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__accordion-header", onClick: () => toggle("symbols") }, /* @__PURE__ */ React7.createElement("span", null, "Symbols"), /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, state.symbols.length, " rows")), open.symbols && /* @__PURE__ */ React7.createElement("div", { className: "cockpit__accordion-body" }, /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React7.createElement(
-      "input",
-      {
-        className: "cockpit__input",
-        placeholder: "Search symbols...",
-        value: state.symbolFilterText,
-        onChange: (e) => updateSymbolFilterText(e.target.value)
+        state,
+        vscode,
+        updateCommitsFilterText,
+        toggleCommitsScope,
+        formatDate
       }
-    ), /* @__PURE__ */ React7.createElement(
-      "select",
+    ), state.activeSection === "bundle" && /* @__PURE__ */ React14.createElement(
+      BundleTabContent,
       {
-        className: "cockpit__input",
-        value: state.symbolKindFilter,
-        onChange: (e) => updateSymbolKind(e.target.value)
-      },
-      /* @__PURE__ */ React7.createElement("option", { value: "all" }, "All kinds"),
-      /* @__PURE__ */ React7.createElement("option", { value: "function" }, "function"),
-      /* @__PURE__ */ React7.createElement("option", { value: "class" }, "class"),
-      /* @__PURE__ */ React7.createElement("option", { value: "method" }, "method"),
-      /* @__PURE__ */ React7.createElement("option", { value: "component" }, "component")
-    ), /* @__PURE__ */ React7.createElement(
-      "select",
-      {
-        className: "cockpit__input",
-        value: state.symbolChangeFilter,
-        onChange: (e) => updateSymbolChangeFilter(e.target.value)
-      },
-      /* @__PURE__ */ React7.createElement("option", { value: "all" }, "All changes"),
-      /* @__PURE__ */ React7.createElement("option", { value: "added" }, "added"),
-      /* @__PURE__ */ React7.createElement("option", { value: "modified" }, "modified"),
-      /* @__PURE__ */ React7.createElement("option", { value: "removed" }, "removed")
-    )), /* @__PURE__ */ React7.createElement(SymbolList, { state, vscode })), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__accordion-header", onClick: () => toggle("reports") }, /* @__PURE__ */ React7.createElement("span", null, "Reports"), /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, state.reports.length, " saved")), open.reports && /* @__PURE__ */ React7.createElement("div", { className: "cockpit__accordion-body" }, /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React7.createElement(
-      "input",
-      {
-        className: "cockpit__input",
-        placeholder: "Filter reports...",
-        value: state.reportsFilterText,
-        onChange: (e) => updateReportsFilterText(e.target.value)
+        state,
+        vscode,
+        formatDate
       }
-    ), /* @__PURE__ */ React7.createElement(
-      "select",
+    ), state.activeSection === "symbols" && /* @__PURE__ */ React14.createElement(
+      SymbolsTabContent,
       {
-        className: "cockpit__input",
-        value: state.reportsBranchFilter,
-        onChange: (e) => updateReportsBranchFilter(e.target.value)
-      },
-      /* @__PURE__ */ React7.createElement("option", { value: "all" }, "All branches"),
-      reportBranches.map((branch) => /* @__PURE__ */ React7.createElement("option", { key: branch, value: branch }, branch))
-    ), /* @__PURE__ */ React7.createElement("label", { className: "cockpit__row" }, /* @__PURE__ */ React7.createElement(
-      "input",
-      {
-        type: "checkbox",
-        checked: state.reportsShowPinnedOnly,
-        onChange: (e) => updateReportsPinned(e.target.checked)
+        state,
+        vscode,
+        updateSymbolFilterText,
+        updateSymbolKind,
+        updateSymbolChangeFilter
       }
-    ), /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "Pinned only"))), /* @__PURE__ */ React7.createElement(ReportList, { state, vscode }))));
+    ), state.activeSection === "reports" && /* @__PURE__ */ React14.createElement(
+      ReportsTabContent,
+      {
+        state,
+        vscode,
+        updateReportsFilterText,
+        updateReportsBranchFilter,
+        updateReportsPinned
+      }
+    )));
   };
   var rootEl = document.getElementById("root");
   if (rootEl) {
     const root = (0, import_client.createRoot)(rootEl);
-    root.render(/* @__PURE__ */ React7.createElement(App, null));
+    root.render(/* @__PURE__ */ React14.createElement(App, null));
   }
 })();
 /*! Bundled license information:

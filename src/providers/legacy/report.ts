@@ -2,24 +2,24 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { SymbolExtractor } from '../analysis/symbols';
-import { DependencyExtractor } from '../analysis/dependencies';
-import { RiskDetector } from '../analysis/heuristics';
-import { GitOperations } from '../analysis/git';
-import { getGitRoot } from '../utils/config';
-import { SymbolContext, EdgeContext } from '../contracts/llmContext';
-import { computeScope } from '../facts/scope';
-import { getWorkingSnapshot } from '../facts/workingSnapshot';
-import { buildIntendedMap } from '../facts/intendedMap';
-import { detectDrift } from '../facts/driftDetector';
-import { auditLegacy } from '../facts/legacyAudit';
-import { assembleFacts, saveFacts } from '../facts/factsAssembler';
-import { LlmAnalyst } from '../analysis/llmAnalyst/runner';
-import { AnalysisRenderer } from '../analysis/llmAnalyst/renderer';
-import { RefactorReportProvider } from '../webview/refactorReportProvider';
-import { ActiveBundleProvider } from './activeBundleProvider';
-import { logInfo, logDebug, logError } from '../utils/logger';
-import { getCockpitProvider } from '../extension';
+import { SymbolExtractor } from '../../analysis/symbols';
+import { DependencyExtractor } from '../../analysis/dependencies';
+import { RiskDetector } from '../../analysis/heuristics';
+import { GitOperations } from '../../analysis/git';
+import { getGitRoot } from '../../utils/config';
+import { SymbolContext, EdgeContext } from '../../contracts/llmContext';
+import { computeScope } from '../../facts/scope';
+import { getWorkingSnapshot } from '../../facts/workingSnapshot';
+import { buildIntendedMap } from '../../facts/intendedMap';
+import { detectDrift } from '../../facts/driftDetector';
+import { auditLegacy } from '../../facts/legacyAudit';
+import { assembleFacts, saveFacts } from '../../facts/factsAssembler';
+import { LlmAnalyst } from '../../analysis/llmAnalyst/runner';
+import { AnalysisRenderer } from '../../analysis/llmAnalyst/renderer';
+import { RefactorReportProvider } from '../../webview/reports/refactorReportProvider';
+import { ActiveBundleProvider } from '../activeBundleProvider';
+import { logInfo, logDebug, logError } from '../../utils/logger';
+import { getCockpitProvider } from '../../extension';
 
 /**
  * Generate report title from workspace scope and commit SHAs
@@ -118,7 +118,7 @@ export async function generateRefactorBundleReport(
     }
 
     // Ensure all commits are analyzed before proceeding
-    const { getAnalysisPipeline } = await import('../analysis/pipeline');
+    const { getAnalysisPipeline } = await import('../../analysis/pipeline');
     const pipeline = await getAnalysisPipeline();
 
     const unanalyzed: string[] = [];
@@ -212,9 +212,9 @@ export async function generateRefactorBundleReport(
             if (workspaceScope === 'staged' || workspaceScope === 'unstaged') {
                 console.log(`[REPORT] Using change detection for ${workspaceScope} analysis`);
 
-                const { SymbolExtractor } = await import('../analysis/symbols');
-                const { GitOperations } = await import('../analysis/git');
-                const { convertDeltasToSnapshot } = await import('../facts/deltaConverter');
+                const { SymbolExtractor } = await import('../../analysis/symbols');
+                const { GitOperations } = await import('../../analysis/git');
+                const { convertDeltasToSnapshot } = await import('../../facts/deltaConverter');
 
                 const git = new GitOperations();
                 const symbolExtractor = new SymbolExtractor(git);
@@ -383,7 +383,7 @@ export async function generateRefactorBundleReport(
 
             // Build raw feed for pattern discovery
             console.log('[REPORT] Building raw feed for discovery...');
-            const { AstSerializer } = await import('../analysis/astSerializer');
+            const { AstSerializer } = await import('../../analysis/astSerializer');
             const astSerializer = new AstSerializer();
 
             // Get ASTs for top 10 files
@@ -462,7 +462,7 @@ export async function generateRefactorBundleReport(
                 const discoveryBlock = llmAnalysis.blocks.find(b => b.type === 'discovery');
                 if (discoveryBlock && discoveryBlock.claims.length > 0) {
                     try {
-                        const { getSearchIndex } = await import('../storage/index');
+                        const { getSearchIndex } = await import('../../storage/index');
                         const searchIndex = getSearchIndex();
 
                         // Extract patterns from claims (they contain pattern info)
@@ -487,7 +487,7 @@ export async function generateRefactorBundleReport(
             } else {
                 // Save analysis to file for quick re-opening
                 try {
-                    const { getGitRoot } = await import('../utils/config');
+                    const { getGitRoot } = await import('../../utils/config');
                     const gitRoot = getGitRoot();
                     if (gitRoot) {
                         const fs = await import('fs');
@@ -503,8 +503,8 @@ export async function generateRefactorBundleReport(
 
             // Save report to database
             try {
-                const { getReportManager } = await import('../storage/reportManager');
-                const { GitOperations } = await import('../analysis/git');
+                const { getReportManager } = await import('../../storage/reportManager');
+                const { GitOperations } = await import('../../analysis/git');
                 const reportManager = getReportManager();
                 const git = new GitOperations();
 
@@ -613,7 +613,7 @@ export async function generateRefactorBundleReport(
 
 export async function generateCommitReport(commitShas?: string[]): Promise<void> {
     try {
-        const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+        const { getDatabaseManager, ensureDatabaseInitialized } = await import('../../storage/database');
         await ensureDatabaseInitialized();
         const db = getDatabaseManager().getDatabase();
 
@@ -820,7 +820,7 @@ export async function generateCommitReport(commitShas?: string[]): Promise<void>
         }
 
         // Create and show document
-        const { getGitRoot } = await import('../utils/config');
+        const { getGitRoot } = await import('../../utils/config');
         const gitRoot = getGitRoot();
 
         let reportPath: string;

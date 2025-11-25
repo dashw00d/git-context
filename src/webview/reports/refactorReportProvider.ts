@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { logInfo, logDebug, logError } from '../utils/logger';
-import { LlmAnalysis } from '../analysis/llmAnalyst/blocks';
-import { RefactorBundleFacts } from '../facts/types';
-import { EvidenceLink } from '../analysis/llmAnalyst/blocks';
-import { resolveEvidencePath } from '../analysis/llmAnalyst/renderer';
-import { getGitRoot } from '../utils/config';
+import { logInfo, logDebug, logError } from '../../utils/logger';
+import { LlmAnalysis } from '../../analysis/llmAnalyst/blocks';
+import { RefactorBundleFacts } from '../../facts/types';
+import { EvidenceLink } from '../../analysis/llmAnalyst/blocks';
+import { resolveEvidencePath } from '../../analysis/llmAnalyst/renderer';
+import { getGitRoot } from '../../utils/config';
 
 /**
  * Webview provider for the refactor report
