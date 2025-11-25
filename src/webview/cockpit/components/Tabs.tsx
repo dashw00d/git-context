@@ -9,12 +9,13 @@ interface TabsProps {
     bundle: string;
     symbols: number;
     reports: number;
+    live: number;
   };
 }
 
 export const Tabs: React.FC<TabsProps> = ({ active, onChange, counts }) => {
   const tabs = [
-    { key: 'live' as const, label: 'Live', badge: null, disabled: true, tooltip: 'Coming soon: Real-time change tracking' },
+    { key: 'live' as const, label: 'Live', badge: counts.live > 0 ? counts.live.toString() : null, disabled: false, tooltip: 'Real-time change tracking' },
     { key: 'commits' as const, label: 'Commits', badge: counts.commits.toString(), disabled: false, tooltip: undefined },
     { key: 'bundle' as const, label: 'Bundle', badge: counts.bundle, disabled: false, tooltip: undefined },
     { key: 'symbols' as const, label: 'Symbols', badge: counts.symbols.toString(), disabled: false, tooltip: undefined },

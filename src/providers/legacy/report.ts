@@ -19,7 +19,7 @@ import { AnalysisRenderer } from '../../analysis/llmAnalyst/renderer';
 import { RefactorReportProvider } from '../../webview/reports/refactorReportProvider';
 import { ActiveBundleProvider } from '../activeBundleProvider';
 import { logInfo, logDebug, logError } from '../../utils/logger';
-import { getCockpitProvider } from '../../extension';
+import { getCockpitOrchestrator } from '../../state/cockpitOrchestrator';
 
 /**
  * Generate report title from workspace scope and commit SHAs
@@ -110,12 +110,8 @@ export async function generateRefactorBundleReport(
     console.log(`[REPORT] Commit SHAs: ${commitShas.map(s => s.substring(0, 8)).join(', ')}`);
 
     // Start analysis progress
-    const cockpitProvider = getCockpitProvider();
-    if (cockpitProvider) {
-        cockpitProvider.updateAnalysisProgress(true, 'scope', 0.1);
-    } else {
-        logDebug('[REPORT] Cockpit provider not available for progress updates');
-    }
+    const orchestrator = getCockpitOrchestrator();
+    orchestrator.updateState({ isAnalyzing: true, analysisStep: 'scope', analysisProgress: 0.1 }, 'report:scope');
 
     // Ensure all commits are analyzed before proceeding
     const { getAnalysisPipeline } = await import('../../analysis/pipeline');
@@ -147,14 +143,11 @@ export async function generateRefactorBundleReport(
         }, async (progress, token) => {
             // Merge provided token with the one from progress
             const effectiveToken = cancellationToken || token;
-            // Get cockpit provider once for progress updates
-            const cockpitProvider = getCockpitProvider();
+            const orchestrator = getCockpitOrchestrator();
 
             // Check for cancellation at the start
             if (effectiveToken.isCancellationRequested) {
-                if (cockpitProvider) {
-                    cockpitProvider.updateAnalysisProgress(false);
-                }
+                orchestrator.updateState({ isAnalyzing: false }, 'report:cancel');
                 return;
             }
 
@@ -196,9 +189,7 @@ export async function generateRefactorBundleReport(
             }
 
             if (effectiveToken.isCancellationRequested) {
-                if (cockpitProvider) {
-                    cockpitProvider.updateAnalysisProgress(false);
-                }
+                orchestrator.updateState({ isAnalyzing: false }, 'report:cancel');
                 return;
             }
 
@@ -254,18 +245,14 @@ export async function generateRefactorBundleReport(
             console.log(`[REPORT] Working snapshot completed in ${Date.now() - workingStartTime}ms`);
             console.log(`[REPORT] Working tree - symbols: ${working.symbolsById.size}, edges: ${working.edges.length}, analyzed paths: ${working.analyzedPaths.size}`);
 
-            if (cockpitProvider) {
-                cockpitProvider.updateAnalysisProgress(true, 'symbols', 0.4);
-            }
+            orchestrator.updateState({ isAnalyzing: true, analysisStep: 'symbols', analysisProgress: 0.4 }, 'report:symbols');
 
             if (working.symbolsById.size === 0) {
                 console.warn('[REPORT] No symbols found in working tree');
             }
 
             if (effectiveToken.isCancellationRequested) {
-                if (cockpitProvider) {
-                    cockpitProvider.updateAnalysisProgress(false);
-                }
+                orchestrator.updateState({ isAnalyzing: false }, 'report:cancel');
                 return;
             }
 
@@ -281,9 +268,7 @@ export async function generateRefactorBundleReport(
             }
 
             if (effectiveToken.isCancellationRequested) {
-                if (cockpitProvider) {
-                    cockpitProvider.updateAnalysisProgress(false);
-                }
+                orchestrator.updateState({ isAnalyzing: false }, 'report:cancel');
                 return;
             }
 
@@ -301,14 +286,10 @@ export async function generateRefactorBundleReport(
                 console.log('[REPORT] No drift detected - refactor appears complete');
             }
 
-            if (cockpitProvider) {
-                cockpitProvider.updateAnalysisProgress(true, 'risks', 0.6);
-            }
+            orchestrator.updateState({ isAnalyzing: true, analysisStep: 'risks', analysisProgress: 0.6 }, 'report:risks');
 
             if (effectiveToken.isCancellationRequested) {
-                if (cockpitProvider) {
-                    cockpitProvider.updateAnalysisProgress(false);
-                }
+                orchestrator.updateState({ isAnalyzing: false }, 'report:cancel');
                 return;
             }
 
@@ -324,9 +305,7 @@ export async function generateRefactorBundleReport(
             }
 
             if (effectiveToken.isCancellationRequested) {
-                if (cockpitProvider) {
-                    cockpitProvider.updateAnalysisProgress(false);
-                }
+                orchestrator.updateState({ isAnalyzing: false }, 'report:cancel');
                 return;
             }
 
@@ -367,15 +346,11 @@ export async function generateRefactorBundleReport(
             }
 
             if (effectiveToken.isCancellationRequested) {
-                if (cockpitProvider) {
-                    cockpitProvider.updateAnalysisProgress(false);
-                }
+                orchestrator.updateState({ isAnalyzing: false }, 'report:cancel');
                 return;
             }
 
-            if (cockpitProvider) {
-                cockpitProvider.updateAnalysisProgress(true, 'llm', 0.9);
-            }
+            orchestrator.updateState({ isAnalyzing: true, analysisStep: 'llm', analysisProgress: 0.9 }, 'report:llm');
 
             // Run LLM analyst on facts
             console.log('[REPORT] Phase 7: Running LLM analysis...');
@@ -549,9 +524,7 @@ export async function generateRefactorBundleReport(
             }
 
             if (effectiveToken.isCancellationRequested) {
-                if (cockpitProvider) {
-                    cockpitProvider.updateAnalysisProgress(false);
-                }
+                orchestrator.updateState({ isAnalyzing: false }, 'report:cancel');
                 return;
             }
 
@@ -596,15 +569,14 @@ export async function generateRefactorBundleReport(
             vscode.window.showInformationMessage(`Refactor bundle analysis complete - see markdown preview`);
 
             // Mark analysis as complete
-            if (cockpitProvider) {
-                cockpitProvider.updateAnalysisProgress(false);
-            }
+            orchestrator.updateState({ isAnalyzing: false, analysisStep: undefined, analysisProgress: undefined }, 'report:complete');
         });
 
     } catch (error) {
         console.error('[REPORT] ========== Report Generation FAILED ==========');
         console.error('[REPORT] Error:', error);
         console.error('[REPORT] Stack:', error instanceof Error ? error.stack : 'No stack trace');
+        orchestrator.updateState({ isAnalyzing: false, error: String(error) }, 'report:error');
         vscode.window.showErrorMessage(`Failed to generate refactor bundle report: ${error}`);
         console.error('Refactor bundle analysis error:', error);
     }
@@ -848,17 +820,13 @@ export async function generateCommitReport(commitShas?: string[]): Promise<void>
         vscode.window.showInformationMessage(`Report saved to ${reportPath}`);
 
         // Mark analysis as complete
-        const cockpitProvider = getCockpitProvider();
-        if (cockpitProvider) {
-            cockpitProvider.updateAnalysisProgress(false);
-        }
+        const orchestrator = getCockpitOrchestrator();
+        orchestrator.updateState({ isAnalyzing: false, analysisStep: undefined, analysisProgress: undefined }, 'report:commitReportComplete');
 
     } catch (error) {
         // Mark analysis as failed/complete on error
-        const cockpitProvider = getCockpitProvider();
-        if (cockpitProvider) {
-            cockpitProvider.updateAnalysisProgress(false);
-        }
+        const orchestrator = getCockpitOrchestrator();
+        orchestrator.updateState({ isAnalyzing: false, error: String(error) }, 'report:commitReportError');
         vscode.window.showErrorMessage(`Failed to generate report: ${error}`);
         console.error('Report generation error:', error);
     }

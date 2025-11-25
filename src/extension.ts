@@ -6,6 +6,7 @@ import type { SymbolHistoryProvider } from './providers/symbolHistoryProvider';
 import type { ReportsProvider } from './providers/reportsProvider';
 import type { CockpitProvider } from './webview/cockpit/CockpitProvider';
 import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
+import { LiveDiffTracker } from './liveTracker';
 import type {
   BundleSummaryDTO,
   CockpitState,
@@ -25,180 +26,139 @@ let outputChannel: vscode.OutputChannel;
 let debugChannel: vscode.OutputChannel;
 let cockpitProvider: CockpitProvider | undefined;
 
-async function publishCockpitState() {
-  if (!commitsProvider) {
-    return;
-  }
+const orchestrator = getCockpitOrchestrator();
+let workspaceRefreshTimeout: NodeJS.Timeout | null = null;
+
+async function getRepoContext(): Promise<Pick<CockpitState, 'repoName' | 'branchName'>> {
+  let repoName: string | null = null;
+  let branchName: string | null = null;
   try {
-    // Ensure database is initialized before trying to export data
-    await commitsProvider.initializeDatabase();
-
-    const orchestrator = getCockpitOrchestrator();
-    const currentState = orchestrator.getState();
-    const { getExtensionConfig } = await import('./utils/config');
-    const config = getExtensionConfig();
-    const baseLimit = config.defaultCommitCount || 20;
-
-    const [commits, selection, bundleFacts, symbols, reports, workspaceFiles] = await Promise.all([
-      commitsProvider.exportCommitsDto(
-        baseLimit + commitsProvider.loadMoreOffset
-      ),
-      Promise.resolve(commitsProvider.exportSelectionDto()),
-      Promise.resolve(activeBundleProvider?.exportBundleFacts?.() ?? null),
-      symbolHistoryProvider?.exportRecentSymbols
-        ? symbolHistoryProvider.exportRecentSymbols(
-            50,
-            currentState.symbolFilterText || undefined,
-            currentState.symbolKindFilter !== 'all' ? currentState.symbolKindFilter : undefined,
-            currentState.symbolChangeFilter !== 'all' ? currentState.symbolChangeFilter : undefined
-          )
-        : Promise.resolve([]),
-      reportsProvider?.exportReportsDto
-        ? reportsProvider.exportReportsDto(
-            currentState.reportsFilterText || undefined,
-            currentState.reportsBranchFilter !== 'all' ? currentState.reportsBranchFilter : undefined,
-            currentState.reportsShowPinnedOnly
-          )
-        : Promise.resolve([]),
-      Promise.resolve(commitsProvider.exportWorkspaceFilesDto())
-    ]);
-
-    let repoName: string | null = null;
-    let branchName: string | null = null;
-    try {
-      const { getGitRoot } = await import('./utils/config');
-      const gitRoot = getGitRoot();
-      if (gitRoot) {
-        const path = await import('path');
-        repoName = path.basename(gitRoot);
-        const { promisify } = await import('util');
-        const { exec } = await import('child_process');
-        const execAsync = promisify(exec);
-        try {
-          const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', {
-            cwd: gitRoot,
-            encoding: 'utf8',
-            timeout: 2000
-          });
-          branchName = stdout.trim();
-        } catch {
-          // Silently fail if git command times out or fails
-        }
+    const { getGitRoot } = await import('./utils/config');
+    const gitRoot = getGitRoot();
+    if (gitRoot) {
+      const path = await import('path');
+      repoName = path.basename(gitRoot);
+      const { promisify } = await import('util');
+      const { exec } = await import('child_process');
+      const execAsync = promisify(exec);
+      try {
+        const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', {
+          cwd: gitRoot,
+          encoding: 'utf8',
+          timeout: 2000
+        });
+        branchName = stdout.trim();
+      } catch {
+        // best-effort branch lookup
       }
-    } catch {
-      // best-effort repo/branch detection
     }
+  } catch {
+    // ignore
+  }
+  return { repoName, branchName };
+}
 
-    const mapStatus = (status: string): FileStatus => {
-      switch (status) {
-        case 'A':
-          return 'added';
-        case 'M':
-          return 'modified';
-        case 'D':
-          return 'deleted';
-        case 'R':
-          return 'renamed';
-        default:
-          return 'unknown';
-      }
-    };
+const mapStatus = (status: string): FileStatus => {
+  switch (status) {
+    case 'A':
+      return 'added';
+    case 'M':
+      return 'modified';
+    case 'D':
+      return 'deleted';
+    case 'R':
+      return 'renamed';
+    default:
+      return 'unknown';
+  }
+};
 
-    const stagedFiles: StagedFileDTO[] = workspaceFiles.staged.map((file: { path: string; status: string }) => ({
-      path: file.path,
-      status: mapStatus(file.status)
-    }));
-    const unstagedFiles: UnstagedFileDTO[] = workspaceFiles.unstaged.map((file: { path: string; status: string }) => ({
-      path: file.path,
-      status: mapStatus(file.status)
-    }));
+async function updateWorkspaceFilesState(reason = 'workspace:update') {
+  if (!commitsProvider) return;
+  const workspaceFiles = await Promise.resolve(commitsProvider.exportWorkspaceFilesDto());
+  const selection = commitsProvider.exportSelectionDto();
 
-    const stagedPaths = new Set(stagedFiles.map((file) => file.path));
-    const unstagedPaths = new Set(unstagedFiles.map((file) => file.path));
-    const selectedFiles = selection.selectedFiles || [];
+  const stagedFiles: StagedFileDTO[] = workspaceFiles.staged.map((file: { path: string; status: string }) => ({
+    path: file.path,
+    status: mapStatus(file.status)
+  }));
+  const unstagedFiles: UnstagedFileDTO[] = workspaceFiles.unstaged.map((file: { path: string; status: string }) => ({
+    path: file.path,
+    status: mapStatus(file.status)
+  }));
 
-    const bundleShaSet = new Set(bundleFacts?.bundle?.shas ?? []);
+  const stagedPaths = new Set(stagedFiles.map((file) => file.path));
+  const unstagedPaths = new Set(unstagedFiles.map((file) => file.path));
+  const selectedFiles = selection.selectedFiles || [];
 
-    // Check analyzed status for commits
-    const { getAnalysisPipeline } = await import('./analysis/pipeline');
-    const pipeline = await getAnalysisPipeline();
-    const analyzedStatuses = await Promise.all(
-      commits.map(async (commit: any) => ({
-        sha: commit.sha,
-        analyzed: await pipeline.isCommitAnalyzed(commit.sha)
-      }))
-    );
-    const analyzedMap = new Map(analyzedStatuses.map(s => [s.sha, s.analyzed]));
+  orchestrator.updateState(
+    {
+      stagedFiles,
+      unstagedFiles,
+      selectedStagedPaths: selectedFiles.filter((path: string) => stagedPaths.has(path)),
+      selectedUnstagedPaths: selectedFiles.filter((path: string) => unstagedPaths.has(path)),
+      selectedFiles: selection.selectedFiles,
+      workspaceScope: selection.workspaceScope
+    },
+    reason
+  );
+}
 
-    // Map commits to DTOs with scope information
-    // Note: All commits from the database are 'history' commits.
-    // Staged/unstaged are working directory files, not commits.
-    // If we need to show virtual commits for staged/unstaged in the future,
-    // we would create them here with appropriate scope.
-    const commitDtos: CommitDTO[] = commits.map((commit: any) => {
-      // Determine scope: all commits from DB are history
-      // Future: could check if commit affects staged/unstaged files to tag scope
-      const scope: 'staged' | 'unstaged' | 'history' = 'history';
-      
-      return {
-        sha: commit.sha,
-        shortSha: (commit.sha || '').slice(0, 8),
-        message: commit.message,
-        author: commit.author || 'Unknown',
-        authoredAt: commit.date || '',
-        changes: typeof commit.changes === 'number' ? commit.changes : 0,
-        inBundle: bundleShaSet.has(commit.sha),
-        scope,
-        analyzed: analyzedMap.get(commit.sha) || false
-      };
-    });
+async function updateCommitsState(reason = 'commits:update') {
+  if (!commitsProvider) return;
+  await commitsProvider.initializeDatabase();
 
-    const bundleSummary: BundleSummaryDTO | null = bundleFacts
-      ? {
-          id: bundleFacts.bundle?.newestSha || bundleFacts.bundle?.oldestSha || 'bundle',
-          commitCount: bundleFacts.bundle?.shas?.length ?? 0,
-          fileCount: bundleFacts.scope?.files ?? (bundleFacts.evidence?.['bundle.files']?.length ?? 0),
-          symbolCount: bundleFacts.working?.symbols ?? 0,
-          createdAt: bundleFacts.generated_at
-        }
-      : null;
+  const currentState = orchestrator.getState();
+  const { getExtensionConfig } = await import('./utils/config');
+  const config = getExtensionConfig();
+  const baseLimit = config.defaultCommitCount || 20;
 
-    const symbolDtos: SymbolDTO[] = symbols.map((symbol: any) => {
-      // Map change_type from DB to SymbolChangeType
-      const changeType: 'added' | 'modified' | 'removed' | undefined = 
-        symbol.change_type || symbol.changeType || undefined;
-      
-      return {
-        id: `${symbol.path}:${symbol.name}`,
-        name: symbol.name,
-        path: symbol.path,
-        kind: symbol.kind,
-        language: symbol.language || '',
-        changeType: changeType as 'added' | 'modified' | 'removed' | undefined,
-        commitCount: symbol.commitCount ?? 1,
-        lastChangedAt: symbol.date || ''
-      };
-    });
+  const [commits, selection, workspaceFiles] = await Promise.all([
+    commitsProvider.exportCommitsDto(baseLimit + commitsProvider.loadMoreOffset),
+    Promise.resolve(commitsProvider.exportSelectionDto()),
+    Promise.resolve(commitsProvider.exportWorkspaceFilesDto())
+  ]);
 
-    const reportDtos: ReportDTO[] = reports.map((report: any) => ({
-      id: report.id,
-      title: report.title,
-      summary: report.summary,
-      createdAt: report.createdAt,
-      branch: report.branch,
-      pinned: report.pinned,
-      bundleSummary: report.bundleSummary
-    }));
+  const stagedFiles: StagedFileDTO[] = workspaceFiles.staged.map((file: { path: string; status: string }) => ({
+    path: file.path,
+    status: mapStatus(file.status)
+  }));
+  const unstagedFiles: UnstagedFileDTO[] = workspaceFiles.unstaged.map((file: { path: string; status: string }) => ({
+    path: file.path,
+    status: mapStatus(file.status)
+  }));
 
-    // Get the latest report ID (reports are sorted by date DESC, so first is latest)
-    // Only set if we have bundle facts (active bundle) and reports exist
-    const latestReportId = bundleFacts && reportDtos.length > 0 
-      ? reportDtos[0].id 
-      : (currentState.bundleReportId ?? null);
+  const stagedPaths = new Set(stagedFiles.map((file) => file.path));
+  const unstagedPaths = new Set(unstagedFiles.map((file) => file.path));
+  const selectedFiles = selection.selectedFiles || [];
 
-    const cockpitState: Partial<CockpitState> = {
-      repoName,
-      branchName,
+  const bundleShaSet = new Set(activeBundleProvider?.exportBundleFacts?.()?.bundle?.shas ?? []);
+
+  const { getAnalysisPipeline } = await import('./analysis/pipeline');
+  const pipeline = await getAnalysisPipeline();
+  const analyzedStatuses = await Promise.all(
+    commits.map(async (commit: any) => ({
+      sha: commit.sha,
+      analyzed: await pipeline.isCommitAnalyzed(commit.sha)
+    }))
+  );
+  const analyzedMap = new Map(analyzedStatuses.map((s) => [s.sha, s.analyzed]));
+
+  const commitDtos: CommitDTO[] = commits.map((commit: any) => ({
+    sha: commit.sha,
+    shortSha: (commit.sha || '').slice(0, 8),
+    message: commit.message,
+    author: commit.author || 'Unknown',
+    authoredAt: commit.date || '',
+    changes: typeof commit.changes === 'number' ? commit.changes : 0,
+    inBundle: bundleShaSet.has(commit.sha),
+    scope: 'history',
+    analyzed: analyzedMap.get(commit.sha) || false
+  }));
+
+  orchestrator.updateState(
+    {
+      ...(await getRepoContext()),
       commits: commitDtos,
       selectedCommitShas: selection.selectedCommitShas,
       selectedStagedPaths: selectedFiles.filter((path: string) => stagedPaths.has(path)),
@@ -209,34 +169,87 @@ async function publishCockpitState() {
       commitsFilterScopes: currentState.commitsFilterScopes ?? { staged: true, unstaged: true, history: true },
       lastNCommits: currentState.lastNCommits ?? 20,
       workspaceScope: selection.workspaceScope,
-      bundleFacts,
-      bundleSummary,
-      bundleReportId: latestReportId,
-      symbols: symbolDtos,
-      symbolFilterText: currentState.symbolFilterText ?? '',
-      symbolKindFilter: currentState.symbolKindFilter ?? 'all',
-      symbolChangeFilter: currentState.symbolChangeFilter ?? 'all',
-      activeSymbolId: currentState.activeSymbolId ?? null,
-      activeSymbolHistory: currentState.activeSymbolHistory ?? [],
-      reports: reportDtos,
-      reportsFilterText: currentState.reportsFilterText ?? '',
-      reportsBranchFilter: currentState.reportsBranchFilter ?? 'all',
-      reportsShowPinnedOnly: currentState.reportsShowPinnedOnly ?? false,
       stagedFiles,
-      unstagedFiles,
-      activeSection: currentState.activeSection ?? 'commits',
-      isAnalyzing: currentState.isAnalyzing && !bundleFacts ? true : false,
-      analysisStep: currentState.isAnalyzing && !bundleFacts ? currentState.analysisStep : undefined,
-      analysisProgress: currentState.isAnalyzing && !bundleFacts ? currentState.analysisProgress : undefined
-    };
+      unstagedFiles
+    },
+    reason
+  );
+}
 
-    orchestrator.updateState(cockpitState, 'publishCockpitState');
-    logInfo(`[Cockpit] Published cockpit state (${commitDtos.length} commits loaded)`);
-  } catch (error) {
-    logError('[Cockpit] Failed to publish state', error);
-    // Re-throw to allow caller to handle
-    throw error;
-  }
+async function updateBundleState(reason = 'bundle:update') {
+  if (!activeBundleProvider) return;
+  const bundleFacts = activeBundleProvider.exportBundleFacts();
+  const bundleSummary: BundleSummaryDTO | null = bundleFacts
+    ? {
+      id: bundleFacts.bundle?.newestSha || bundleFacts.bundle?.oldestSha || 'bundle',
+      commitCount: bundleFacts.bundle?.shas?.length ?? 0,
+      fileCount: bundleFacts.scope?.files ?? (bundleFacts.evidence?.['bundle.files']?.length ?? 0),
+      symbolCount: bundleFacts.working?.symbols ?? 0,
+      createdAt: bundleFacts.generated_at
+    }
+    : null;
+  orchestrator.updateState({ bundleFacts, bundleSummary, metrics: orchestrator.metrics }, reason);
+}
+
+async function updateSymbolsState(reason = 'symbols:update') {
+  if (!symbolHistoryProvider?.exportRecentSymbols) return;
+  const currentState = orchestrator.getState();
+  const symbols = await symbolHistoryProvider.exportRecentSymbols(
+    50,
+    currentState.symbolFilterText || undefined,
+    currentState.symbolKindFilter !== 'all' ? currentState.symbolKindFilter : undefined,
+    currentState.symbolChangeFilter !== 'all' ? currentState.symbolChangeFilter : undefined
+  );
+  const symbolDtos: SymbolDTO[] = symbols.map((symbol: any) => {
+    const changeType: 'added' | 'modified' | 'removed' | undefined = symbol.change_type || symbol.changeType || undefined;
+    return {
+      id: `${symbol.path}:${symbol.name}`,
+      name: symbol.name,
+      path: symbol.path,
+      kind: symbol.kind,
+      language: symbol.language || '',
+      changeType: changeType as 'added' | 'modified' | 'removed' | undefined,
+      commitCount: symbol.commitCount ?? 1,
+      lastChangedAt: symbol.date || ''
+    };
+  });
+  orchestrator.updatePartial('symbols', symbolDtos, reason);
+}
+
+async function updateReportsState(reason = 'reports:update') {
+  if (!reportsProvider?.exportReportsDto) return;
+  const currentState = orchestrator.getState();
+  const reports = await reportsProvider.exportReportsDto(
+    currentState.reportsFilterText || undefined,
+    currentState.reportsBranchFilter !== 'all' ? currentState.reportsBranchFilter : undefined,
+    currentState.reportsShowPinnedOnly
+  );
+  const reportDtos: ReportDTO[] = reports.map((report: any) => ({
+    id: report.id,
+    title: report.title,
+    summary: report.summary,
+    createdAt: report.createdAt,
+    branch: report.branch,
+    pinned: report.pinned,
+    bundleSummary: report.bundleSummary
+  }));
+  orchestrator.updateState(
+    {
+      reports: reportDtos,
+      bundleReportId: reportDtos.length > 0 ? reportDtos[0].id : currentState.bundleReportId ?? null
+    },
+    reason
+  );
+}
+
+async function refreshCockpitState(reason = 'refresh:all') {
+  await Promise.all([
+    updateCommitsState(`${reason}:commits`),
+    updateBundleState(`${reason}:bundle`),
+    updateSymbolsState(`${reason}:symbols`),
+    updateReportsState(`${reason}:reports`),
+    updateWorkspaceFilesState(`${reason}:workspace`)
+  ]);
 }
 
 export async function updateContexts() {
@@ -262,7 +275,7 @@ export function getDebugChannel(): vscode.OutputChannel {
   return debugChannel;
 }
 
-export { publishCockpitState };
+export { refreshCockpitState };
 
 export function getCockpitProvider(): CockpitProvider | undefined {
   return cockpitProvider;
@@ -300,6 +313,32 @@ export async function activate(context: vscode.ExtensionContext) {
     reportsProvider = new ReportsProvider(context);
     cockpitProvider = new CockpitProvider(context.extensionUri);
 
+    // Initialize LiveDiffTracker
+    const liveTracker = new LiveDiffTracker();
+    context.subscriptions.push(liveTracker);
+
+    // Initialize LiveAnalysisEngine
+    const { LiveAnalysisEngine } = await import('./analysis/liveAnalysis');
+    const liveAnalysisEngine = new LiveAnalysisEngine(liveTracker, orchestrator);
+
+    // Register live analysis command
+    context.subscriptions.push(
+      vscode.commands.registerCommand('git-context.live.thresholdReached', async (data: { uri: string; linesChanged: number; editCount: number }) => {
+        logDebug(`[Extension] Live threshold reached for ${data.uri}`);
+
+        // Update state to show tracking
+        orchestrator.updateLiveState({
+          isTracking: true,
+          pendingChanges: liveTracker.hasPendingChanges().files,
+          totalEdits: data.editCount,
+          status: 'analyzing'
+        });
+
+        // Trigger analysis
+        await liveAnalysisEngine.analyze();
+      })
+    );
+
     // Register tree data providers
     vscode.window.registerTreeDataProvider('bundle', activeBundleProvider);
     vscode.window.registerTreeDataProvider('commits', commitsProvider);
@@ -322,17 +361,31 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     commitsProvider.onDidChangeTreeData(async () => {
-      await publishCockpitState();
+      await updateCommitsState('commits:treeChange');
     });
     activeBundleProvider.onDidChangeTreeData(async () => {
-      await publishCockpitState();
+      await updateBundleState('bundle:treeChange');
     });
     symbolHistoryProvider.onDidChangeTreeData(async () => {
-      await publishCockpitState();
+      await updateSymbolsState('symbols:treeChange');
     });
     reportsProvider.onDidChangeTreeData(async () => {
-      await publishCockpitState();
+      await updateReportsState('reports:treeChange');
     });
+    // Lightweight working directory watcher (debounced)
+    const scheduleWorkspaceRefresh = (reason: string) => {
+      if (workspaceRefreshTimeout) {
+        clearTimeout(workspaceRefreshTimeout);
+      }
+      workspaceRefreshTimeout = setTimeout(() => {
+        updateWorkspaceFilesState(reason).catch((error) => logError('[Cockpit] Workspace refresh failed', error));
+        workspaceRefreshTimeout = null;
+      }, 300);
+    };
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeTextDocument(() => scheduleWorkspaceRefresh('workspace:textChange')),
+      vscode.workspace.onDidSaveTextDocument(() => scheduleWorkspaceRefresh('workspace:save'))
+    );
 
     // Auto-load initial commits on activation
     try {
@@ -350,7 +403,7 @@ export async function activate(context: vscode.ExtensionContext) {
       if (result.count === 0) {
         logInfo(`[Cockpit] Database is empty, loading initial ${config.defaultCommitCount} commits...`);
         await pipeline.loadRecentCommits(config.defaultCommitCount);
-        commitsProvider.refresh(); // This will trigger publishCockpitState
+        commitsProvider.refresh(); // This will trigger orchestrator updates
         logInfo('[Cockpit] Initial commits loaded successfully');
       } else {
         logInfo(`[Cockpit] Database already has ${result.count} commits, skipping initial load`);
@@ -396,9 +449,9 @@ export async function activate(context: vscode.ExtensionContext) {
         if (!gitRoot) {
           return; // No git root available
         }
-        
+
         const dbPath = vscode.Uri.file(`${gitRoot}/.git/commit-tracker/commit_tracker.db`);
-        
+
         // Check if database file actually exists before refreshing
         const fs = require('fs');
         if (!fs.existsSync(dbPath.fsPath)) {
@@ -469,15 +522,15 @@ export async function activate(context: vscode.ExtensionContext) {
         '.git/commit-tracker/last-bundle-facts.json'
       );
       const factsWatcher = vscode.workspace.createFileSystemWatcher(factsPathPattern);
-      
+
       let factsRefreshTimeout: NodeJS.Timeout | null = null;
-      
+
       const refreshTreeOnFactsUpdate = () => {
         // Debounce rapid changes
         if (factsRefreshTimeout) {
           clearTimeout(factsRefreshTimeout);
         }
-        
+
         factsRefreshTimeout = setTimeout(() => {
           try {
             // Get gitRoot dynamically in case workspace changed
@@ -485,9 +538,9 @@ export async function activate(context: vscode.ExtensionContext) {
             if (!gitRoot) {
               return; // No git root available
             }
-            
+
             const factsPath = vscode.Uri.file(`${gitRoot}/.git/commit-tracker/last-bundle-facts.json`);
-            
+
             // Refresh bundle provider to pick up latest facts
             if (activeBundleProvider) {
               activeBundleProvider.refresh();
@@ -504,10 +557,10 @@ export async function activate(context: vscode.ExtensionContext) {
           factsRefreshTimeout = null;
         }, 200); // 200ms debounce for facts updates
       };
-      
+
       factsWatcher.onDidChange(refreshTreeOnFactsUpdate);
       factsWatcher.onDidCreate(refreshTreeOnFactsUpdate);
-      
+
       context.subscriptions.push(factsWatcher);
       context.subscriptions.push({
         dispose: () => {
@@ -541,8 +594,8 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Initial sync after auto-load (or immediate if commits already exist)
-    publishCockpitState().catch((error) => {
-      logError('[Cockpit] Failed during initial publish', error);
+    refreshCockpitState().catch((error) => {
+      logError('[Cockpit] Failed during initial refresh', error);
       // Show user-friendly message if initial sync fails
       vscode.window.showWarningMessage(
         'Git Context: Failed to load commit data. Try refreshing the view or reloading the window.',

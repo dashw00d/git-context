@@ -247,6 +247,48 @@ export const MIGRATION_V6 = `
 ALTER TABLE commits_analysis ADD COLUMN difftastic_highlights TEXT;
 `;
 
+export const MIGRATION_V7 = `
+-- Symbol DNA: Stable identity for symbols
+CREATE TABLE IF NOT EXISTS symbol_dna (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dna_id TEXT UNIQUE NOT NULL, -- UUID or hash
+  first_seen_sha TEXT NOT NULL,
+  first_seen_path TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Symbol Versions: Links DNA to specific commits/files
+CREATE TABLE IF NOT EXISTS symbol_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dna_id TEXT NOT NULL,
+  sha TEXT NOT NULL, -- 'live' for pending changes
+  path TEXT NOT NULL,
+  symbol_id TEXT NOT NULL, -- The transient ID (path:name)
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  signature_hash TEXT NOT NULL,
+  body_hash TEXT NOT NULL,
+  FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE,
+  UNIQUE(sha, path, symbol_id)
+);
+
+-- Decision Log: Why we matched this symbol to this DNA
+CREATE TABLE IF NOT EXISTS dna_decision_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  symbol_id TEXT NOT NULL,
+  dna_id TEXT NOT NULL,
+  decision_type TEXT NOT NULL, -- 'exact_match', 'signature_match', 'llm_tie_breaker'
+  confidence REAL NOT NULL,
+  reasoning TEXT, -- JSON or text explanation
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_symbol_versions_dna ON symbol_versions(dna_id);
+CREATE INDEX IF NOT EXISTS idx_symbol_versions_sha ON symbol_versions(sha);
+CREATE INDEX IF NOT EXISTS idx_symbol_versions_lookup ON symbol_versions(sha, path, symbol_id);
+`;
+
 export const MIGRATIONS = [
   // Version 1: Initial schema
   DATABASE_SCHEMA,
@@ -259,7 +301,9 @@ export const MIGRATIONS = [
   // Version 5: Split commits table
   MIGRATION_V5,
   // Version 6: Add difftastic highlights storage
-  MIGRATION_V6
+  MIGRATION_V6,
+  // Version 7: Symbol DNA tables
+  MIGRATION_V7
 ];
 
-export const CURRENT_VERSION = 6;
+export const CURRENT_VERSION = 7;

@@ -3,13 +3,18 @@ import { getTreeSitterParser, detectLanguage } from './tree-sitter';
 import { GitOperations } from './git';
 import { SemanticChangeDetector } from './semanticChanges';
 
+import { SymbolDnaEngine } from './symbolDna';
+import { getDatabaseManager } from '../storage/database';
+
 export class SymbolExtractor {
   private git: GitOperations;
   private parser = getTreeSitterParser();
   private semanticDetector = new SemanticChangeDetector();
+  private dnaEngine: SymbolDnaEngine;
 
   constructor(git: GitOperations) {
     this.git = git;
+    this.dnaEngine = new SymbolDnaEngine(getDatabaseManager());
   }
 
   /**
@@ -122,9 +127,25 @@ export class SymbolExtractor {
 
       // Extract symbols from both versions
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
+      for (const sym of currentSymbols) {
+        sym.dnaId = await this.dnaEngine.resolveSymbolIdentity(sym, currentContent, sha, file.path);
+      }
+
       const previousSymbols = previousContent
         ? await this.extractSymbolsFromContent(previousContent, file.oldPath || file.path)
         : [];
+
+      if (previousContent) {
+        // We might want to resolve previous symbols too if they haven't been resolved
+        // But typically we rely on them being in the DB already. 
+        // For robustness in this flow, we can try to resolve them if needed, 
+        // but let's assume for now we focus on the current commit's DNA.
+        // Actually, for diffing, having DNA on both sides helps.
+        const parentSha = this.git.getCommitInfo(sha).parent || 'unknown';
+        for (const sym of previousSymbols) {
+          sym.dnaId = await this.dnaEngine.resolveSymbolIdentity(sym, previousContent, parentSha, file.oldPath || file.path);
+        }
+      }
 
       // Compare and categorize changes
       const changes = this.compareSymbolSets(previousSymbols, currentSymbols, file.path);
@@ -209,9 +230,19 @@ export class SymbolExtractor {
 
       // Extract symbols from both versions
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
+      for (const sym of currentSymbols) {
+        sym.dnaId = await this.dnaEngine.resolveSymbolIdentity(sym, currentContent, 'live', file.path);
+      }
+
       const headSymbols = headContent
         ? await this.extractSymbolsFromContent(headContent, file.path)
         : [];
+
+      if (headContent) {
+        for (const sym of headSymbols) {
+          sym.dnaId = await this.dnaEngine.resolveSymbolIdentity(sym, headContent, 'HEAD', file.path);
+        }
+      }
 
       // Compare and categorize changes
       const changes = this.compareSymbolSets(headSymbols, currentSymbols, file.path);

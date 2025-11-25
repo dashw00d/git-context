@@ -17,6 +17,7 @@ export interface FileChange {
 // Symbol information extracted from code
 export interface SymbolInfo {
   id: string;
+  dnaId?: string; // Stable DNA ID
   semanticId?: string; // Path-independent ID (e.g. class:MyClass)
   name: string;
   kind: 'function' | 'class' | 'method' | 'const' | 'interface' | 'type' | 'variable';

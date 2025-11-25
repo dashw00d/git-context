@@ -23735,10 +23735,11 @@
   // src/webview/cockpit/components/MetricsRow.tsx
   var React5 = __toESM(require_react());
   var MetricsRow = ({ state }) => {
+    const metrics = state.metrics ?? {};
     const facts = state.bundleFacts;
-    if (!facts) return null;
-    const findings = facts.findings;
-    const critical = (findings?.incompleteness?.missing || 0) + (findings?.incompleteness?.zombies || 0) + (findings?.legacyAudit?.dead || 0);
+    if (!facts && !metrics.debtScore) return null;
+    const findings = facts?.findings;
+    const critical = (findings?.incompleteness?.missing || 0) + (findings?.incompleteness?.zombies || 0) + (findings?.legacyAudit?.dead || 0) + (metrics.debtScore || 0);
     const warnings = (findings?.patternDrift?.mixedTargets || 0) + (findings?.patternDrift?.oldNamespaces || 0) + (findings?.legacyAudit?.legacyUsed || 0);
     const driftPct = findings?.patternDrift?.conventionDrift?.driftPercent || 0;
     let health = 100;
@@ -23747,7 +23748,7 @@
     health -= driftPct * 0.5;
     health = Math.max(0, Math.min(100, health));
     const healthColor = health >= 80 ? "#81c784" : health >= 60 ? "#ffcc80" : "#ffb3b3";
-    return /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metrics" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-value", style: { color: healthColor } }, Math.round(health)), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Health")), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: `cockpit__metric-value${critical > 0 ? " cockpit__metric-value--bad" : ""}` }, critical), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Critical")), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: `cockpit__metric-value${warnings > 0 ? " cockpit__metric-value--warn" : ""}` }, warnings), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Warnings")), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-value" }, facts.scope?.files || 0), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Files")));
+    return /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metrics" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-value", style: { color: healthColor } }, Math.round(health)), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Health")), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: `cockpit__metric-value${critical > 0 ? " cockpit__metric-value--bad" : ""}` }, critical), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Critical")), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: `cockpit__metric-value${warnings > 0 ? " cockpit__metric-value--warn" : ""}` }, warnings), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Warnings")), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-value" }, metrics.fileCount ?? facts?.scope?.files ?? 0), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Files")), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-value" }, metrics.symbolCount ?? facts?.working?.symbols ?? 0), /* @__PURE__ */ React5.createElement("div", { className: "cockpit__metric-label" }, "Symbols")));
   };
 
   // src/webview/cockpit/components/CommitsTabContent.tsx

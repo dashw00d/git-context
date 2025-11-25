@@ -9,6 +9,12 @@ export type CockpitStateChange = {
   timestamp: number;
 };
 
+export type CockpitMetrics = {
+  debtScore?: number;
+  symbolCount?: number;
+  fileCount?: number;
+};
+
 export function createDefaultCockpitState(): CockpitState {
   return {
     repoName: null,
@@ -42,7 +48,16 @@ export function createDefaultCockpitState(): CockpitState {
     reports: [],
     reportsFilterText: '',
     reportsBranchFilter: 'all',
-    reportsShowPinnedOnly: false
+    reportsShowPinnedOnly: false,
+    metrics: {},
+    liveAnalysis: {
+      isTracking: true,
+      pendingChanges: 0,
+      totalEdits: 0,
+      status: 'idle',
+      summary: null,
+      facts: null
+    }
   };
 }
 
@@ -70,6 +85,22 @@ export class CockpitOrchestrator extends EventEmitter {
     return this.state;
   }
 
+  get metrics(): CockpitMetrics {
+    const facts = this.state.bundleFacts;
+    if (!facts) return {};
+    const symbolCount = facts.working?.symbols ?? 0;
+    const fileCount = facts.scope?.files ?? facts.evidence?.['bundle.files']?.length ?? 0;
+    // Very simple debt metric placeholder: missing + zombies + dead + replaced
+    const findings = facts.findings || ({} as any);
+    const debtScore = [
+      findings.incompleteness?.missing ?? 0,
+      findings.incompleteness?.zombies ?? 0,
+      findings.legacyAudit?.dead ?? 0,
+      findings.legacyAudit?.replacedLeftovers?.length ?? 0
+    ].reduce((a, b) => a + b, 0);
+    return { debtScore, symbolCount, fileCount };
+  }
+
   reset(partial?: Partial<CockpitState>, reason = 'reset'): void {
     this.state = { ...createDefaultCockpitState(), ...(partial ?? {}) };
     this.emitChange(partial ?? {}, reason);
@@ -85,6 +116,13 @@ export class CockpitOrchestrator extends EventEmitter {
 
   updatePartial<K extends keyof CockpitState>(key: K, value: CockpitState[K], reason?: string): void {
     this.updateState({ [key]: value } as Partial<CockpitState>, reason ?? `update:${String(key)}`);
+  }
+
+  updateLiveState(partial: Partial<CockpitState['liveAnalysis']>, reason = 'live:update'): void {
+    const current = this.state.liveAnalysis;
+    this.updateState({
+      liveAnalysis: { ...current, ...partial }
+    }, reason);
   }
 
   subscribe(cb: (change: CockpitStateChange) => void): () => void {

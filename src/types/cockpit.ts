@@ -1,7 +1,7 @@
 import { RefactorBundleFacts } from '../facts/types';
 
 /** Which section (accordion) is active/open in the cockpit sidebar */
-export type CockpitSectionKey = 'commits' | 'bundle' | 'symbols' | 'reports';
+export type CockpitSectionKey = 'commits' | 'bundle' | 'symbols' | 'reports' | 'live';
 
 /* ---------- DTOs shared between host and cockpit ---------- */
 
@@ -80,6 +80,11 @@ export interface CockpitState {
   repoName: string | null;
   branchName: string | null;
   workspaceScope?: 'workspace' | 'staged' | 'unstaged';
+  metrics?: {
+    debtScore?: number;
+    symbolCount?: number;
+    fileCount?: number;
+  };
 
   /** Which accordion should be open by default / last */
   activeSection: CockpitSectionKey;
@@ -130,6 +135,23 @@ export interface CockpitState {
 
   /** Temporary property while we bridge to the new contract */
   selectedFiles?: string[];
+
+  /* Live Analysis State */
+  liveAnalysis: {
+    isTracking: boolean;
+    pendingChanges: number; // lines/symbols
+    totalEdits: number;
+    status: 'idle' | 'analyzing' | 'ready' | 'error';
+    summary: LiveAnalysisSummary | null;
+    facts: any; // Relaxed type for now, or define LiveFactsDTO
+  };
+}
+
+export interface LiveAnalysisSummary {
+  missing: number;
+  zombies: number;
+  drift: number;
+  dead: number;
 }
 
 /* ---------- Cockpit → Host messages ---------- */

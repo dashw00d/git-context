@@ -11,7 +11,7 @@ import { LLMSummarizer } from '../llm/summarizer';
 import { generateRefactorBundleReport } from '../providers/legacy/report';
 import { getCockpitProvider } from '../extension';
 import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
-import { updateContexts, publishCockpitState } from '../extension';
+import { updateContexts, refreshCockpitState } from '../extension';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -74,8 +74,8 @@ export async function registerCommands(
               );
 
               commitsProvider.refresh();
-              const { publishCockpitState } = await import('../extension');
-              await publishCockpitState();
+              const { refreshCockpitState } = await import('../extension');
+              await refreshCockpitState();
               vscode.window.showInformationMessage(`Analyzed last ${count} commits and generated report`);
             } catch (error) {
               vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
@@ -113,8 +113,8 @@ export async function registerCommands(
             await pipeline.analyzeStagedChanges();
 
             commitsProvider.refresh();
-            const { publishCockpitState } = await import('../extension');
-            await publishCockpitState();
+            const { refreshCockpitState } = await import('../extension');
+            await refreshCockpitState();
 
             // Generate report for staged changes
             const { generateRefactorBundleReport } = await import('../providers/legacy/report');
@@ -167,8 +167,8 @@ export async function registerCommands(
             await pipeline.analyzeUnstagedChanges();
 
             commitsProvider.refresh();
-            const { publishCockpitState } = await import('../extension');
-            await publishCockpitState();
+            const { refreshCockpitState } = await import('../extension');
+            await refreshCockpitState();
 
             // Generate report for unstaged changes
             const { generateRefactorBundleReport } = await import('../providers/legacy/report');
@@ -1580,8 +1580,8 @@ export async function registerCommands(
       'git-context.toggleFileSelection',
       async (filePath: string) => {
         commitsProvider.toggleFileSelection(filePath);
-        const { publishCockpitState } = await import('../extension');
-        await publishCockpitState();
+        const { refreshCockpitState } = await import('../extension');
+        await refreshCockpitState();
       }
     );
 
@@ -1600,8 +1600,8 @@ export async function registerCommands(
             const sha = elementId.replace('select-commit-', '');
             commitsProvider.toggleCommitSelection(sha);
           }
-          const { publishCockpitState } = await import('../extension');
-          await publishCockpitState();
+          const { refreshCockpitState } = await import('../extension');
+          await refreshCockpitState();
         }
       }
     );
@@ -1651,8 +1651,8 @@ export async function registerCommands(
             commitsProvider.markCommitAsManual(metadata.sha);
 
             // Sync UI
-            const { publishCockpitState } = await import('../extension');
-            await publishCockpitState();
+            const { refreshCockpitState } = await import('../extension');
+            await refreshCockpitState();
           } catch (error) {
             vscode.window.showErrorMessage(`Failed to add commit: ${error}`);
           }
@@ -1714,8 +1714,8 @@ export async function registerCommands(
       'git-context.selectAllStaged',
       async () => {
         commitsProvider.selectAllStaged();
-        const { publishCockpitState } = await import('../extension');
-        await publishCockpitState();
+        const { refreshCockpitState } = await import('../extension');
+        await refreshCockpitState();
       }
     );
 
@@ -1723,8 +1723,8 @@ export async function registerCommands(
       'git-context.selectAllUnstaged',
       async () => {
         commitsProvider.selectAllUnstaged();
-        const { publishCockpitState } = await import('../extension');
-        await publishCockpitState();
+        const { refreshCockpitState } = await import('../extension');
+        await refreshCockpitState();
       }
     );
 
@@ -1930,7 +1930,7 @@ export async function registerCommands(
           activeBundleProvider.lastBundleFacts = null;
           activeBundleProvider.refresh();
           commitsProvider.clearSelection();
-          await publishCockpitState();
+          await refreshCockpitState();
           vscode.window.showInformationMessage('Bundle cleared');
         }
       }
@@ -1957,7 +1957,7 @@ export async function registerCommands(
         if (commitSha) {
           commitsProvider.selectedCommits.add(commitSha);
           commitsProvider.refresh();
-          await publishCockpitState();
+          await refreshCockpitState();
         }
       }
     );
@@ -1968,7 +1968,7 @@ export async function registerCommands(
         if (commitSha) {
           commitsProvider.selectedCommits.delete(commitSha);
           commitsProvider.refresh();
-          await publishCockpitState();
+          await refreshCockpitState();
         }
       }
     );

@@ -16,7 +16,10 @@ export interface WorkingSnapshot {
 /**
  * Get scoped working tree snapshot using real SymbolExtractor + DependencyExtractor
  */
-export async function getWorkingSnapshot(scopePaths: Set<string>): Promise<WorkingSnapshot> {
+export async function getWorkingSnapshot(
+  scopePaths: Set<string>,
+  liveOverrides?: Map<string, string>
+): Promise<WorkingSnapshot> {
   const gitRoot = getGitRoot();
   if (!gitRoot) {
     throw new Error('Not in a git repository');
@@ -51,7 +54,14 @@ export async function getWorkingSnapshot(scopePaths: Set<string>): Promise<Worki
       }
 
       analyzedPaths.add(filePath);
-      const content = fs.readFileSync(fullPath, 'utf8');
+
+      let content: string;
+      if (liveOverrides && liveOverrides.has(fullPath)) {
+        content = liveOverrides.get(fullPath)!;
+        console.log(`[WORKING-SNAPSHOT] Using live content for: ${filePath}`);
+      } else {
+        content = fs.readFileSync(fullPath, 'utf8');
+      }
 
       // Extract symbols from current file using the same SymbolExtractor as commit analysis
       // CRITICAL: This MUST use the exact same extractor and ID format as commit analysis

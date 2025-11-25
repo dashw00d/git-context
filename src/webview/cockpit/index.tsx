@@ -55,7 +55,15 @@ const defaultState: CockpitState = {
   reports: [],
   reportsFilterText: '',
   reportsBranchFilter: 'all',
-  reportsShowPinnedOnly: false
+  reportsShowPinnedOnly: false,
+  liveAnalysis: {
+    isTracking: true,
+    pendingChanges: 0,
+    totalEdits: 0,
+    status: 'idle',
+    summary: null,
+    facts: null
+  }
 };
 
 const App: React.FC = () => {
@@ -87,7 +95,6 @@ const App: React.FC = () => {
   }, []);
 
   const setActiveSection = (section: CockpitSectionKey | 'live') => {
-    if (section === 'live') return; // Disabled for now
     setState((prev) => ({ ...prev, activeSection: section }));
     vscode.postMessage({ type: 'setActiveSection', section });
   };
@@ -178,7 +185,8 @@ const App: React.FC = () => {
           commits: state.commits.length,
           bundle: bundleSummaryText,
           symbols: state.symbols.length,
-          reports: state.reports.length
+          reports: state.reports.length,
+          live: state.liveAnalysis.pendingChanges
         }}
       />
 
@@ -215,6 +223,12 @@ const App: React.FC = () => {
             updateReportsFilterText={updateReportsFilterText}
             updateReportsBranchFilter={updateReportsBranchFilter}
             updateReportsPinned={updateReportsPinned}
+          />
+        )}
+        {state.activeSection === 'live' && (
+          <LiveTabContent
+            state={state}
+            vscode={vscode}
           />
         )}
       </div>

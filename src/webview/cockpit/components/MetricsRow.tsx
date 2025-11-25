@@ -6,13 +6,15 @@ interface MetricsRowProps {
 }
 
 export const MetricsRow: React.FC<MetricsRowProps> = ({ state }) => {
+  const metrics = state.metrics ?? {};
   const facts = state.bundleFacts;
-  if (!facts) return null;
+  if (!facts && !metrics.debtScore) return null;
 
-  const findings = facts.findings;
+  const findings = facts?.findings;
   const critical = (findings?.incompleteness?.missing || 0) +
     (findings?.incompleteness?.zombies || 0) +
-    (findings?.legacyAudit?.dead || 0);
+    (findings?.legacyAudit?.dead || 0) +
+    (metrics.debtScore || 0); // debtScore rolls up other issues
 
   const warnings = (findings?.patternDrift?.mixedTargets || 0) +
     (findings?.patternDrift?.oldNamespaces || 0) +
@@ -51,9 +53,15 @@ export const MetricsRow: React.FC<MetricsRowProps> = ({ state }) => {
       </div>
       <div className="cockpit__metric">
         <div className="cockpit__metric-value">
-          {facts.scope?.files || 0}
+          {metrics.fileCount ?? facts?.scope?.files ?? 0}
         </div>
         <div className="cockpit__metric-label">Files</div>
+      </div>
+      <div className="cockpit__metric">
+        <div className="cockpit__metric-value">
+          {metrics.symbolCount ?? facts?.working?.symbols ?? 0}
+        </div>
+        <div className="cockpit__metric-label">Symbols</div>
       </div>
     </div>
   );

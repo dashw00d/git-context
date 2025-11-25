@@ -60,7 +60,7 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   getTreeItem(element: TreeNode): vscode.TreeItem {
-    let collapsibleState = this.getCollapsibleState(element);
+    const collapsibleState = this.getCollapsibleState(element);
 
     const treeItem = new vscode.TreeItem(element.label || '', collapsibleState);
     treeItem.id = element.id;
