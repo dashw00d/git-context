@@ -1,4 +1,5 @@
 import { EdgeInfo, SymbolInfo } from '../types';
+import { getDefaultThreshold } from '../utils/edgeThresholds';
 
 /**
  * Generate Mermaid graph visualizations for dependency graphs
@@ -97,8 +98,9 @@ export class MermaidGenerator {
    */
   private filterRelevantEdges(edges: EdgeInfo[], maxNodes: number): EdgeInfo[] {
     // Sort by confidence and keep only high-confidence edges
+    const threshold = getDefaultThreshold();
     const sortedEdges = edges
-      .filter(edge => (edge.confidence || 0) > 0.5)
+      .filter(edge => (edge.confidence || 0) > threshold)
       .sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
     // Limit to prevent overwhelming graphs

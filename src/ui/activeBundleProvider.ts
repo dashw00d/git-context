@@ -61,6 +61,10 @@ export class ActiveBundleProvider implements vscode.TreeDataProvider<TreeNode> {
     this._onDidChangeTreeData.fire();
   }
 
+  exportBundleFacts(): RefactorBundleFacts | null {
+    return this.lastBundleFacts;
+  }
+
   getTreeItem(element: TreeNode): vscode.TreeItem {
     let collapsibleState = this.getCollapsibleState(element);
 
@@ -152,6 +156,7 @@ export class ActiveBundleProvider implements vscode.TreeDataProvider<TreeNode> {
       description: hasData ? `${commitCount} commits, ${fileCount} files` : 'Generate report first',
       tooltip: hasData ? `Bundle created from ${commitCount} commits affecting ${fileCount} files` : 'No active bundle - run analysis first',
       contextValue: 'gitContextActiveBundle',
+      command: { command: "git-context.viewBundle", title: "View Bundle" },
       icon: 'package'
     };
   }

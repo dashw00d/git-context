@@ -1,5 +1,7 @@
+import React, { useState, useEffect } from 'react';
 import { LlmAnalysis, AnalysisBlock, Claim, Action, EvidenceLink } from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
+import { formatStats } from '../utils/statsFormatter';
 
 /**
  * Props for the RefactorReportView component
@@ -13,24 +15,7 @@ interface RefactorReportViewProps {
 /**
  * Main refactor report webview component with three-panel layout
  */
-export class RefactorReportView {
-  private analysis: LlmAnalysis;
-  private facts: RefactorBundleFacts;
-  private onEvidenceClick: (evidence: EvidenceLink) => void;
-  private selectedBlock: AnalysisBlock | null = null;
-  private selectedEvidence: EvidenceLink | null = null;
-  private activeTab: 'analysis' | 'facts' = 'analysis';
-
-  constructor(props: RefactorReportViewProps) {
-    this.analysis = props.analysis;
-    this.facts = props.facts;
-    this.onEvidenceClick = props.onEvidenceClick;
-
-    // Auto-select first block
-    if (this.analysis.blocks.length > 0) {
-      this.selectedBlock = this.analysis.blocks[0];
-    }
-  }
+export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis, facts, onEvidenceClick }) => {
   const [selectedBlock, setSelectedBlock] = useState<AnalysisBlock | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceLink | null>(null);
   const [activeTab, setActiveTab] = useState<'analysis' | 'facts'>('analysis');
@@ -82,22 +67,29 @@ export class RefactorReportView {
           <div className="sidebar-section">
             <h3>📈 Quick Stats</h3>
             <div className="stats-grid">
-              <div className="stat-item">
-                <span className="stat-label">Missing</span>
-                <span className="stat-value">{facts.findings.incompleteness.missing}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Zombies</span>
-                <span className="stat-value">{facts.findings.incompleteness.zombies}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Dead Code</span>
-                <span className="stat-value">{facts.findings.legacyAudit.dead}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Replaced</span>
-                <span className="stat-value">{facts.findings.legacyAudit.replacedLeftovers.length}</span>
-              </div>
+              {(() => {
+                const stats = formatStats(facts);
+                return (
+                  <>
+                    <div className="stat-item">
+                      <span className="stat-label">Missing</span>
+                      <span className="stat-value">{stats.missing}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Zombies</span>
+                      <span className="stat-value">{stats.zombies}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Dead Code</span>
+                      <span className="stat-value">{stats.dead}</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Replaced</span>
+                      <span className="stat-value">{stats.replaced}</span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 

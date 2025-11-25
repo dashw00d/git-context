@@ -31,6 +31,23 @@ window.addEventListener('message', event => {
       facts = message.facts;
       renderApp();
       break;
+    case 'scrollToSection':
+      // Scroll to section by ID
+      const sectionId = message.sectionId;
+      if (sectionId) {
+        const element = document.getElementById(sectionId);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+          // Try to find by data attribute or class
+          const altElement = document.querySelector(`[data-commit-sha="${sectionId.replace('commit-', '')}"]`) ||
+                            document.querySelector(`.commit-section[data-sha="${sectionId.replace('commit-', '')}"]`);
+          if (altElement) {
+            altElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      }
+      break;
   }
 });
 

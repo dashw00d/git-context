@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { logInfo, logDebug, logError } from '../utils/logger';
 import { LlmAnalysis } from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
 import { EvidenceLink } from '../analysis/llmAnalyst/blocks';
@@ -21,27 +22,27 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
    * Set the analysis data and show the webview
    */
   public showReport(analysis: LlmAnalysis, facts: RefactorBundleFacts): void {
-    console.log('[WEBVIEW] showReport called');
-    console.log(`[WEBVIEW] Analysis provided: ${!!analysis}`);
-    console.log(`[WEBVIEW] Facts provided: ${!!facts}`);
+    logDebug('[WEBVIEW] showReport called');
+    logDebug(`[WEBVIEW] Analysis provided: ${!!analysis}`);
+    logDebug(`[WEBVIEW] Facts provided: ${!!facts}`);
 
     if (analysis) {
-      console.log(`[WEBVIEW] Analysis keys: ${Object.keys(analysis).join(', ')}`);
+      logDebug(`[WEBVIEW] Analysis keys: ${Object.keys(analysis).join(', ')}`);
     }
     if (facts) {
-      console.log(`[WEBVIEW] Facts keys: ${Object.keys(facts).join(', ')}`);
-      console.log(`[WEBVIEW] Facts findings: ${JSON.stringify(facts.findings)}`);
+      logDebug(`[WEBVIEW] Facts keys: ${Object.keys(facts).join(', ')}`);
+      logDebug(`[WEBVIEW] Facts findings: ${JSON.stringify(facts.findings)}`);
     }
 
     this._analysis = analysis;
     this._facts = facts;
 
     if (this._panel) {
-      console.log('[WEBVIEW] Updating existing panel');
+      logDebug('[WEBVIEW] Updating existing panel');
       this._panel.reveal(vscode.ViewColumn.Two);
       this._update();
     } else {
-      console.log('[WEBVIEW] Creating new panel');
+      logDebug('[WEBVIEW] Creating new panel');
       this._panel = vscode.window.createWebviewPanel(
         RefactorReportProvider.viewType,
         'Refactor Intelligence',
@@ -53,11 +54,11 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       );
 
       this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
-      console.log('[WEBVIEW] Panel created and HTML set');
+      logDebug('[WEBVIEW] Panel created and HTML set');
       this._update();
 
       this._panel.onDidDispose(() => {
-        console.log('[WEBVIEW] Panel disposed');
+        logDebug('[WEBVIEW] Panel disposed');
         this._panel = undefined;
       });
     }
@@ -79,11 +80,11 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
    * Update the webview content
    */
   private _update(): void {
-    console.log('[WEBVIEW] _update called');
+    logDebug('[WEBVIEW] _update called');
     const webview = this._panel?.webview;
 
     if (!webview) {
-      console.warn('[WEBVIEW] No webview available to update');
+      logDebug('[WEBVIEW] No webview available to update');
       return;
     }
 
@@ -92,7 +93,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       (this._panel as any).title = 'Refactor Intelligence Report';
     }
 
-    console.log(`[WEBVIEW] Posting message to webview - hasAnalysis: ${!!this._analysis}, hasFacts: ${!!this._facts}`);
+    logDebug(`[WEBVIEW] Posting message to webview - hasAnalysis: ${!!this._analysis}, hasFacts: ${!!this._facts}`);
 
     const message = {
       type: 'setData',  // Changed from 'update' to match webview listener
@@ -102,22 +103,38 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
 
     // Log size of message being sent
     const messageStr = JSON.stringify(message);
-    console.log(`[WEBVIEW] Message size: ${messageStr.length} chars`);
-    console.log(`[WEBVIEW] Message preview (first 500 chars): ${messageStr.substring(0, 500)}`);
+    logDebug(`[WEBVIEW] Message size: ${messageStr.length} chars`);
+    logDebug(`[WEBVIEW] Message preview (first 500 chars): ${messageStr.substring(0, 500)}`);
 
     webview.postMessage(message);
-    console.log('[WEBVIEW] Message posted to webview');
+    logDebug('[WEBVIEW] Message posted to webview');
 
     // Set up message handler for clicks
     webview.onDidReceiveMessage(
       async (message) => {
-        console.log(`[WEBVIEW] Received message from webview: ${message.type}`);
+        logDebug(`[WEBVIEW] Received message from webview: ${message.type}`);
         if (message.type === 'evidenceClick') {
-          console.log(`[WEBVIEW] Evidence click: ${JSON.stringify(message.evidence)}`);
+          logDebug(`[WEBVIEW] Evidence click: ${JSON.stringify(message.evidence)}`);
           await this._handleEvidenceClick(message.evidence);
         }
       }
     );
+  }
+
+  /**
+   * Navigate to a specific commit section in the report
+   */
+  public navigateToCommitSection(commitSha: string): void {
+    const webview = this._panel?.webview;
+    if (!webview) {
+      return;
+    }
+
+    // Send scroll message to webview
+    webview.postMessage({
+      type: 'scrollToSection',
+      sectionId: `commit-${commitSha.substring(0, 8)}`
+    });
   }
 
   /**

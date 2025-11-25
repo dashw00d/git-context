@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getGitRoot } from '../utils/config';
+import { ActiveBundleProvider } from './activeBundleProvider';
 
 export type TreeNode = {
   id: string;
@@ -40,7 +41,7 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
   public runningTask: { cancel: () => void; token: vscode.CancellationToken } | null = null;
   public PAGE_SIZE = 50;
 
-  constructor(private context: vscode.ExtensionContext) {
+  constructor(private context: vscode.ExtensionContext, private activeBundleProvider: ActiveBundleProvider) {
     this.manualCommits = new Set(context.workspaceState.get<string[]>('commit-tracker.manualCommits', []));
 
     // Load initial state
@@ -180,7 +181,11 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
       label: '🔄 New Analysis',
       description: '',
       tooltip: 'Select workspace files and commits to analyze',
-      contextValue: 'gitContextSelectionHeader'
+      contextValue: 'gitContextSelectionHeader',
+      command: {
+        command: 'git-context.analyzeLastCommits',
+        title: 'Analyze Last N Commits'
+      }
     }];
 
     // Add recent commits section
@@ -522,6 +527,7 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
 
       for (const commit of commits) {
         const isSelected = this.selectedCommits.has(commit.sha);
+        const inBundle = this.activeBundleProvider.lastBundleFacts?.bundle?.shas?.includes(commit.sha) || false;
         const shortSha = commit.sha.substring(0, 8);
         const changesText = commit.changes > 0 ? ` (${commit.changes} changes)` : '';
 
@@ -535,7 +541,12 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
           label: this.getCheckboxLabel(isSelected, `${shortSha} - ${commit.message.split('\n')[0]}`),
           description: `${commit.author} • ${new Date(commit.date).toLocaleDateString()}${changesText}`,
           tooltip: `Commit: ${commit.sha}\nAuthor: ${commit.author}\nDate: ${commit.date}\nMessage: ${commit.message}`,
-          contextValue: 'gitContextCommit'
+          contextValue: inBundle ? 'gitContextCommitInBundle' : 'gitContextCommit',
+          command: {
+            command: 'git-context.toggleCommitSelection',
+            title: 'Toggle Selection',
+            arguments: [commit.sha]
+          }
         });
       }
 
@@ -554,5 +565,39 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
 
   private getCheckboxLabel(isChecked: boolean, label: string): string {
     return isChecked ? `☑ ${label}` : `☐ ${label}`;
+  }
+
+  async exportCommitsDto(limit = 20): Promise<Array<{ sha: string; message: string; author?: string; date?: string }>> {
+    try {
+      const { getDatabaseManager } = await import('../storage/database');
+      const db = getDatabaseManager().getDatabase();
+      const limitValue = Math.max(1, Number(limit) || 20);
+      const commitsStmt = db.prepare(`
+        SELECT m.sha, m.author, m.date, m.message
+        FROM commits_metadata m
+        ORDER BY m.date DESC
+        LIMIT ${limitValue}
+      `);
+      const commits = commitsStmt.all() as any[];
+      commitsStmt.free?.();
+
+      return commits.map((commit) => ({
+        sha: commit.sha,
+        message: commit.message,
+        author: commit.author,
+        date: commit.date
+      }));
+    } catch (error) {
+      console.error('Failed to export commits for cockpit:', error);
+      return [];
+    }
+  }
+
+  exportSelectionDto(): { selectedCommitShas: string[]; selectedFiles: string[]; workspaceScope: 'workspace' | 'staged' | 'unstaged' } {
+    return {
+      selectedCommitShas: Array.from(this.selectedCommits),
+      selectedFiles: Array.from(this.selectedFiles),
+      workspaceScope: this.workspaceScope
+    };
   }
 }

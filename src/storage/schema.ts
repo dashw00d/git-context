@@ -214,6 +214,7 @@ CREATE TABLE IF NOT EXISTS commits_analysis (
   edges_removed INTEGER DEFAULT 0,
   risks TEXT DEFAULT '[]',  -- JSON array
   blast_radius INTEGER DEFAULT 0,
+  difftastic_highlights TEXT,  -- JSON array of difftastic highlight strings
   analyzed_at TEXT NOT NULL,  -- ISO timestamp when analyzed
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE
 );
@@ -241,6 +242,11 @@ DROP TABLE IF EXISTS commits;
 -- for future compatibility with SQLite databases that support FKs
 `;
 
+export const MIGRATION_V6 = `
+-- Add difftastic_highlights column to commits_analysis table
+ALTER TABLE commits_analysis ADD COLUMN difftastic_highlights TEXT;
+`;
+
 export const MIGRATIONS = [
   // Version 1: Initial schema
   DATABASE_SCHEMA,
@@ -251,7 +257,9 @@ export const MIGRATIONS = [
   // Version 4: Reports table
   MIGRATION_V4,
   // Version 5: Split commits table
-  MIGRATION_V5
+  MIGRATION_V5,
+  // Version 6: Add difftastic highlights storage
+  MIGRATION_V6
 ];
 
-export const CURRENT_VERSION = 5;
+export const CURRENT_VERSION = 6;

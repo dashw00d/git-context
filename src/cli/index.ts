@@ -5,6 +5,7 @@ import { Command } from 'commander';
 import { showCommit, searchSymbol, showLastCommits } from './queries';
 import { installHooks } from './hooks';
 import chalk from 'chalk';
+import { logInfo, logError } from '../utils/logger';
 
 const program = new Command();
 
@@ -19,7 +20,7 @@ program
   .option('-c, --count <number>', 'number of commits to analyze', '5')
   .action(async (options) => {
     const count = parseInt(options.count);
-    console.log(chalk.blue(`Analyzing last ${count} commits...`));
+    logInfo(chalk.blue(`Analyzing last ${count} commits...`));
 
     try {
       const { getAnalysisPipeline } = await import('../analysis/pipeline');
@@ -32,9 +33,9 @@ program
       // Then analyze
       await pipeline.analyzeCommits(shas);
 
-      console.log(chalk.green('Analysis complete!'));
+      logInfo(chalk.green('Analysis complete!'));
     } catch (error) {
-      console.error(chalk.red(`Analysis failed: ${error}`));
+      logError(chalk.red(`Analysis failed: ${error}`));
       process.exit(1);
     }
   });
@@ -43,16 +44,16 @@ program
   .command('staged')
   .description('Analyze staged changes')
   .action(async () => {
-    console.log(chalk.blue('Analyzing staged changes...'));
+    logInfo(chalk.blue('Analyzing staged changes...'));
 
     try {
       const { getAnalysisPipeline } = await import('../analysis/pipeline');
       const pipeline = await getAnalysisPipeline();
       await pipeline.analyzeStagedChanges();
 
-      console.log(chalk.green('Staged analysis complete!'));
+      logInfo(chalk.green('Staged analysis complete!'));
     } catch (error) {
-      console.error(chalk.red(`Staged analysis failed: ${error}`));
+      logError(chalk.red(`Staged analysis failed: ${error}`));
       process.exit(1);
     }
   });
@@ -61,7 +62,7 @@ program
   .command('analyze-commit <sha>')
   .description('Analyze a specific commit')
   .action(async (sha) => {
-    console.log(chalk.blue(`Analyzing commit ${sha}...`));
+    logInfo(chalk.blue(`Analyzing commit ${sha}...`));
 
     try {
       const { getAnalysisPipeline } = await import('../analysis/pipeline');
@@ -71,9 +72,9 @@ program
       await pipeline.loadCommitMetadata(sha);
       await pipeline.analyzeCommit(sha);
 
-      console.log(chalk.green(`Commit ${sha} analysis complete!`));
+      logInfo(chalk.green(`Commit ${sha} analysis complete!`));
     } catch (error) {
-      console.error(chalk.red(`Commit analysis failed: ${error}`));
+      logError(chalk.red(`Commit analysis failed: ${error}`));
       process.exit(1);
     }
   });
@@ -85,7 +86,7 @@ program
     try {
       await showCommit(sha);
     } catch (error) {
-      console.error(chalk.red(`Failed to show commit: ${error}`));
+      logError(chalk.red(`Failed to show commit: ${error}`));
       process.exit(1);
     }
   });
@@ -97,7 +98,7 @@ program
     try {
       await searchSymbol(name);
     } catch (error) {
-      console.error(chalk.red(`Symbol search failed: ${error}`));
+      logError(chalk.red(`Symbol search failed: ${error}`));
       process.exit(1);
     }
   });
@@ -110,7 +111,7 @@ program
     try {
       await showLastCommits(parseInt(options.count));
     } catch (error) {
-      console.error(chalk.red(`Failed to show commits: ${error}`));
+      logError(chalk.red(`Failed to show commits: ${error}`));
       process.exit(1);
     }
   });
@@ -119,13 +120,13 @@ program
   .command('install-hooks')
   .description('Install git hooks')
   .action(async () => {
-    console.log(chalk.blue('Installing git hooks...'));
+    logInfo(chalk.blue('Installing git hooks...'));
 
     try {
       await installHooks();
-      console.log(chalk.green('Hooks installed successfully!'));
+      logInfo(chalk.green('Hooks installed successfully!'));
     } catch (error) {
-      console.error(chalk.red(`Failed to install hooks: ${error}`));
+      logError(chalk.red(`Failed to install hooks: ${error}`));
       process.exit(1);
     }
   });

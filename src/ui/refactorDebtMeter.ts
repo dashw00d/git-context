@@ -72,10 +72,8 @@ export class RefactorDebtMeter {
     issues: number;
     breakdown: { missing: number; zombies: number; dead: number; replaced: number };
   } {
-    const missing = facts.findings.incompleteness.missing;
-    const zombies = facts.findings.incompleteness.zombies;
-    const dead = facts.findings.legacyAudit.dead;
-    const replaced = facts.findings.legacyAudit.replacedLeftovers.length;
+    const { formatStats } = require('../utils/statsFormatter');
+    const { missing, zombies, dead, replaced } = formatStats(facts);
 
     const totalIssues = missing + zombies + dead + replaced;
     const totalSymbols = facts.working.symbols + facts.intended.present + facts.intended.absent;

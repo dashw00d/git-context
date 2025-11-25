@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { logError, logDebug } from '../utils/logger';
 import { TreeNode, toVSCodeTreeItem } from '../contracts/treeNodes';
 
 export class ReportsProvider implements vscode.TreeDataProvider<TreeNode> {
@@ -77,10 +78,15 @@ export class ReportsProvider implements vscode.TreeDataProvider<TreeNode> {
         description: `📅 ${this.formatDate(report.createdAt)}`,
         tooltip: report.summary,
         contextValue: 'gitContextReport',
+        command: {
+          command: "git-context.openReport",
+          title: "Open Report",
+          arguments: [report.id]
+        },
         collapsibleState: vscode.TreeItemCollapsibleState.Collapsed
       }));
     } catch (error) {
-      console.error('Failed to load saved reports:', error);
+      logError('Failed to load saved reports', error);
       return [];
     }
   }
@@ -139,13 +145,13 @@ export class ReportsProvider implements vscode.TreeDataProvider<TreeNode> {
             });
           }
         } catch (error) {
-          console.warn(`Failed to get commit info for ${sha}:`, error);
+          logDebug(`Failed to get commit info for ${sha}: ${error}`);
         }
       }
 
       return result;
     } catch (error) {
-      console.error('Failed to get report children:', error);
+      logError('Failed to get report children', error);
       return [];
     }
   }
@@ -172,7 +178,7 @@ export class ReportsProvider implements vscode.TreeDataProvider<TreeNode> {
         contextValue: 'gitContextReportFile'
       } as TreeNode));
     } catch (error) {
-      console.error('Failed to get report workspace files:', error);
+      logError('Failed to get report workspace files', error);
       return [];
     }
   }
@@ -191,7 +197,7 @@ export class ReportsProvider implements vscode.TreeDataProvider<TreeNode> {
       // For now, return empty array
       return [];
     } catch (error) {
-      console.error('Failed to get report commit findings:', error);
+      logError('Failed to get report commit findings', error);
       return [];
     }
   }
@@ -199,6 +205,25 @@ export class ReportsProvider implements vscode.TreeDataProvider<TreeNode> {
   private countIssuesInReport(report: any, commitSha: string): number {
     // Placeholder - implement based on report structure
     return 0;
+  }
+
+  async exportReportsDto(): Promise<Array<{ id: string; title: string; summary: string; createdAt: string; pinned?: boolean }>> {
+    try {
+      const { getReportManager } = await import('../storage/reportManager');
+      const reportManager = getReportManager();
+      const reports = reportManager.list();
+
+      return reports.map((report: any) => ({
+        id: report.id,
+        title: report.title,
+        summary: report.summary || '',
+        createdAt: (report.createdAt instanceof Date ? report.createdAt : new Date(report.createdAt)).toISOString(),
+        pinned: !!report.isPinned
+      }));
+    } catch (error) {
+      logError('Failed to export reports for cockpit', error);
+      return [];
+    }
   }
 
   private getDriftStatus(report: any, commitSha: string): string {

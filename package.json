@@ -16,6 +16,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onView:cockpit",
     "onView:bundle",
     "onView:commits",
     "onView:symbols",
@@ -243,6 +244,11 @@
     "views": {
       "gitContext": [
         {
+          "id": "cockpit",
+          "name": "Cockpit",
+          "type": "webview"
+        },
+        {
           "id": "bundle",
           "name": "Active Bundle",
           "type": "tree"
@@ -301,22 +307,22 @@
       "view/item/context": [
         {
           "command": "git-context.toggleCommitSelection",
-          "when": "view == commits && viewItem == gitContextCommit",
+          "when": "view == commits && (viewItem == gitContextCommit || viewItem == gitContextCommitInBundle)",
           "group": "inline@1"
         },
         {
           "command": "git-context.bundle.addCommit",
-          "when": "view == commits && viewItem == gitContextCommit && !gitContext.inBundle",
+          "when": "view == commits && viewItem == gitContextCommit",
           "group": "bundle@1"
         },
         {
           "command": "git-context.bundle.removeCommit",
-          "when": "view == commits && viewItem == gitContextCommit && gitContext.inBundle",
+          "when": "view == commits && viewItem == gitContextCommitInBundle",
           "group": "bundle@1"
         },
         {
           "command": "git-context.compareFilesToCommit",
-          "when": "view == commits && viewItem == gitContextCommit",
+          "when": "view == commits && (viewItem == gitContextCommit || viewItem == gitContextCommitInBundle)",
           "group": "analysis@1"
         },
         {
@@ -445,20 +451,25 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && node copy-wasm.js && node download-wasm.js",
+    "compile": "tsc -p ./ && node copy-wasm.js && node download-wasm.js && npm run build:cockpit",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
+    "build:cockpit": "esbuild src/webview/cockpit/index.tsx --bundle --outfile=media/cockpit.js --format=iife --platform=browser --loader:.tsx=tsx --loader:.ts=ts --jsx=automatic --sourcemap",
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
     "@types/node": "16.x",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.3.7",
     "@types/sql.js": "^1.4.9",
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.42.0",
     "@typescript-eslint/parser": "^5.42.0",
     "esbuild": "^0.27.0",
     "eslint": "^8.31.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.3.1",
     "typescript": "^4.9.4"
   },
   "dependencies": {

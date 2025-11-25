@@ -1,6 +1,6 @@
 import { RefactorBundleFacts } from '../../facts/types';
 import { LlmAnalysis, AnalysisBlock, AnalysisBlockUtils, Claim, Action } from './blocks';
-import { PROMPT_INTENT_AND_STORY, PROMPT_DRIFT_VERIFICATION, PROMPT_CLEANUP_PLAN, PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT } from './prompts';
+import { PROMPT_INTENT_AND_STORY, PROMPT_DRIFT_VERIFICATION, PROMPT_CLEANUP_PLAN, PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT } from '../../llm/prompts';
 import { getLLMClient } from '../../llm/openrouter';
 import { getExtensionConfig } from '../../utils/config';
 

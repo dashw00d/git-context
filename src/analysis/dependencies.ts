@@ -2,6 +2,7 @@ import { SymbolInfo, EdgeInfo, EdgeDelta, FileChange } from '../types';
 import { detectLanguage } from './tree-sitter';
 import { getDatabaseManager } from '../storage/database';
 import { GitOperations } from './git';
+import { getDefaultThreshold } from '../utils/edgeThresholds';
 
 export class DependencyExtractor {
   private readonly MAX_DEPTH = 3; // Prevent infinite recursion
@@ -380,9 +381,9 @@ export class DependencyExtractor {
    * Check if an edge target is resolved
    */
   private isEdgeResolved(edge: EdgeInfo): boolean {
-    // For now, assume edges are resolved if confidence > 0.5
+    // For now, assume edges are resolved if confidence > default threshold
     // In a full implementation, this would check against a symbol registry
-    return (edge.confidence ?? 0) > 0.5;
+    return (edge.confidence ?? 0) > getDefaultThreshold();
   }
 
   /**

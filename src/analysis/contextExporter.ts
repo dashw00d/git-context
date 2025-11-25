@@ -5,8 +5,12 @@ import { getDatabaseManager } from '../storage/database';
 import { getGitRoot } from '../utils/config';
 import { MermaidGenerator } from './mermaidGenerator';
 import { DependencyExtractor } from './dependencies';
-import { LegacyAuditService } from './legacyAudit';
+import { auditLegacy } from '../facts/legacyAudit';
+import { buildIntendedMap } from '../facts/intendedMap';
+import { getWorkingSnapshot } from '../facts/workingSnapshot';
+import { computeScope } from '../facts/scope';
 import { LegacyAuditReport } from '../contracts/llmContext';
+import { getDynamicThreshold } from '../utils/edgeThresholds';
 
 /**
  * Export LLM context in structured JSON format
@@ -19,7 +23,6 @@ export class ContextExporter {
   private readonly TOKEN_PER_CHAR = 1 / 4; // Rough approximation
   private readonly mermaidGenerator = new MermaidGenerator();
   private readonly dependencyExtractor = new DependencyExtractor();
-  private readonly legacyAuditService = new LegacyAuditService();
 
   /**
    * Export full context report for specified commits
@@ -39,7 +42,7 @@ export class ContextExporter {
       commits.push(commit);
     }
 
-    const auditReport = await this.legacyAuditService.auditDrift(shas);
+    const auditReport = await this.performLegacyAudit(shas);
 
     const report: LlmContextReport = {
       version: "1.0.0",
@@ -322,7 +325,7 @@ export class ContextExporter {
     for (const commit of report.commits) {
       // Dynamic confidence threshold based on edge count
       const totalEdges = commit.edges.length;
-      const threshold = totalEdges < 50 ? 0.4 : 0.7;
+      const threshold = getDynamicThreshold(totalEdges);
 
       // Collect symbols that were removed or modified (important for legacy audit)
       const legacySymbols = new Set<string>();
@@ -460,8 +463,46 @@ export class ContextExporter {
         blast_radius_graph: blastRadiusGraph
       };
     } catch (error) {
-      console.warn('Failed to generate graphs:', error);
+      const { logError } = await import('../utils/logger');
+      logError('Failed to generate graphs', error);
       return undefined;
+    }
+  }
+
+  /**
+   * Perform legacy audit using facts/legacyAudit implementation
+   * Adapter that converts LegacyAuditResult to LegacyAuditReport format
+   */
+  private async performLegacyAudit(shas: string[]): Promise<LegacyAuditReport> {
+    try {
+      // Build required inputs for auditLegacy
+      const scope = await computeScope(shas);
+      const intended = await buildIntendedMap(shas);
+      const working = await getWorkingSnapshot(scope.allPaths);
+
+      // Call the production-ready audit function
+      const result = await auditLegacy(intended, working, scope);
+
+      // Convert LegacyAuditResult to LegacyAuditReport format
+      return {
+        missing_symbols: [], // Not directly provided by auditLegacy, would need drift detector
+        zombie_symbols: result.legacyUsed.map(s => s.symbol_id),
+        replaced_leftover: result.replacedLeftovers.map(r => r.old.symbol_id),
+        dead_candidates: result.dead.map(s => s.symbol_id),
+        drift_edges: [], // Not directly provided by auditLegacy
+        hotspots: [] // Would need to compute from file-level analysis
+      };
+    } catch (error) {
+      const { logError } = await import('../utils/logger');
+      logError('Legacy audit failed, returning empty report', error);
+      return {
+        missing_symbols: [],
+        zombie_symbols: [],
+        replaced_leftover: [],
+        dead_candidates: [],
+        drift_edges: [],
+        hotspots: []
+      };
     }
   }
 

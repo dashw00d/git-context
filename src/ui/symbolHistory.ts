@@ -158,7 +158,12 @@ export class SymbolHistoryProvider implements vscode.TreeDataProvider<TreeNode> 
               description: `${s.kind}`,
               tooltip: `${s.change_type} in ${s.sha.substring(0, 8)}`,
               icon: `symbol-${s.kind}`,
-              contextValue: 'gitContextSymbol'
+              contextValue: 'gitContextSymbol',
+              command: {
+                command: "git-context.openSymbolHistory",
+                title: "Open Symbol History",
+                arguments: [s.symbol_id || `${s.path}:${s.name}`]
+              }
             })),
             icon: 'file'
           });
@@ -180,6 +185,37 @@ export class SymbolHistoryProvider implements vscode.TreeDataProvider<TreeNode> 
   private async getSymbolTimeline(symbol: TreeNode): Promise<TreeNode[]> {
     // Children are already set in getSymbolSearchResults
     return symbol.children || [];
+  }
+
+  async exportRecentSymbols(limit = 20): Promise<Array<{ path: string; name: string; kind: string; changeType: string; sha: string; date: string }>> {
+    try {
+      const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+      await ensureDatabaseInitialized();
+      const db = getDatabaseManager().getDatabase();
+      const safeLimit = Math.max(1, Number(limit) || 20);
+      const stmt = db.prepare(`
+        SELECT s.path, s.name, s.kind, s.change_type, c.date, s.sha
+        FROM symbols s
+        JOIN commits_metadata c ON s.sha = c.sha
+        ORDER BY c.date DESC
+        LIMIT ${safeLimit}
+      `);
+
+      const rows = stmt.all() as any[];
+      stmt.free?.();
+
+      return rows.map((row) => ({
+        path: row.path,
+        name: row.name,
+        kind: row.kind,
+        changeType: row.change_type,
+        sha: row.sha,
+        date: row.date
+      }));
+    } catch (error) {
+      console.error('Failed to export symbols for cockpit:', error);
+      return [];
+    }
   }
 
   setSearchQuery(query: string): void {

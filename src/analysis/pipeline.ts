@@ -5,6 +5,7 @@ import { RiskDetector } from './heuristics';
 import { LLMSummarizer } from '../llm/summarizer';
 import { getDifftasticIntegration } from './difftastic';
 import { getDatabaseManager } from '../storage/database';
+import { logInfo, logDebug, logError } from '../utils/logger';
 import {
   CommitMetadata,
   CommitAnalysis,
@@ -84,7 +85,7 @@ export class AnalysisPipeline {
         const metadata = await this.loadCommitMetadata(sha);
         results.push(metadata);
       } catch (error) {
-        console.error(`Failed to load metadata for ${sha}:`, error);
+        logError(`Failed to load metadata for ${sha}`, error);
         // Continue with other commits
       }
     }
@@ -123,10 +124,10 @@ export class AnalysisPipeline {
     const files = metadata.filesChanged;
 
     // Extract symbols
-    console.log(`Extracting symbols from ${files.length} files...`);
+    logDebug(`Extracting symbols from ${files.length} files...`);
     const symbols = await this.symbolExtractor.extractCommitSymbols(sha, files);
 
-    console.log(`Found ${symbols.added.length} added, ${symbols.removed.length} removed, ${symbols.modified.length} modified symbols`);
+    logDebug(`Found ${symbols.added.length} added, ${symbols.removed.length} removed, ${symbols.modified.length} modified symbols`);
 
     // Extract dependencies
     const fileContents = new Map<string, string>();
@@ -140,13 +141,13 @@ export class AnalysisPipeline {
     }
 
     const edges = await this.dependencyExtractor.extractCommitEdges(sha, symbols, fileContents, files, this.git);
-    console.log(`Extracted edges: +${edges.added.length} -${edges.removed.length}`);
+    logDebug(`Extracted edges: +${edges.added.length} -${edges.removed.length}`);
 
     // Calculate blast radius
     const changedSymbols = [...symbols.added, ...symbols.modified.map(m => m.symbol)];
     const blastRadius = this.dependencyExtractor.calculateBlastRadius(changedSymbols, edges.added);
     const totalImpact = Array.from(blastRadius.impactScore.values()).reduce((a, b) => a + b, 0);
-    console.log(`Blast radius calculated: ${totalImpact} total impacts`);
+    logDebug(`Blast radius calculated: ${totalImpact} total impacts`);
 
     // Get difftastic highlights
     const difftasticHighlights: any[] = [];
@@ -198,7 +199,7 @@ export class AnalysisPipeline {
 
         analysis.llmSummary = await this.llmSummarizer.summarizeCommit(fullAnalysis);
       } catch (error) {
-        console.warn(`LLM summarization failed for ${sha}:`, error);
+        logDebug(`LLM summarization failed for ${sha}: ${error}`);
       }
     }
 
@@ -211,7 +212,7 @@ export class AnalysisPipeline {
       await this.syncCommitToQdrant(analysis);
     }
 
-    console.log(`Stored analysis for ${sha}`);
+    logDebug(`Stored analysis for ${sha}`);
     return analysis;
   }
 
@@ -223,12 +224,12 @@ export class AnalysisPipeline {
     const results: CommitAnalysis[] = [];
     for (const sha of shas) {
       try {
-        console.log(`Processing commit ${sha}...`);
+        logInfo(`Processing commit ${sha}...`);
         const analysis = await this.analyzeCommit(sha, options);
         results.push(analysis);
-        console.log(`✓ Completed ${sha}`);
+        logInfo(`✓ Completed ${sha}`);
       } catch (error) {
-        console.error(`✗ Failed to analyze ${sha}:`, error);
+        logError(`✗ Failed to analyze ${sha}`, error);
         // Continue with other commits
       }
     }
@@ -241,8 +242,8 @@ export class AnalysisPipeline {
   async analyzeStagedChanges(): Promise<StagedAnalysis> {
     // For staged changes, we create a temporary analysis
     // This is more complex and would require comparing staged vs HEAD
-    console.log('Staged changes analysis not yet implemented');
-    console.log('Use "ct analyze" to analyze committed changes');
+    logInfo('Staged changes analysis not yet implemented');
+    logInfo('Use "ct analyze" to analyze committed changes');
 
     // Return empty result for now
     return {
@@ -290,7 +291,7 @@ export class AnalysisPipeline {
         removed: JSON.parse(row.edges_removed || '[]')
       },
       risks: JSON.parse(row.risks || '[]'),
-      difftasticHighlights: [], // TODO: store this in DB
+      difftasticHighlights: row.difftastic_highlights ? JSON.parse(row.difftastic_highlights) : [],
       llmSummary: row.raw_llm_json ? JSON.parse(row.raw_llm_json) : undefined,
       blastRadius: row.blast_radius || 0,
       analyzedAt: row.analyzed_at
@@ -306,13 +307,29 @@ export class AnalysisPipeline {
     `);
     const row = stmt.get(sha);
     if (row) {
+      // Reconstruct filesChanged array from files table
+      const filesStmt = this.db.prepare(`
+        SELECT path, status, lang FROM files WHERE sha = ?
+      `);
+      const fileRows = filesStmt.all(sha) as Array<{
+        path: string;
+        status: string;
+        lang: string | null;
+      }>;
+      
+      const filesChanged = fileRows.map(fileRow => ({
+        path: fileRow.path,
+        status: fileRow.status as any,
+        oldPath: undefined // Could be enhanced to track renames
+      }));
+
       return {
         sha: row.sha,
         author: row.author,
         date: row.date,
         message: row.message,
         parent: row.parent,
-        filesChanged: [], // TODO: reconstruct from git or store in DB
+        filesChanged,
         loadedAt: row.loaded_at
       };
     }
@@ -331,12 +348,15 @@ export class AnalysisPipeline {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO commits_analysis
       (sha, summary_md, raw_llm_json, symbols_added, symbols_removed, symbols_modified,
-       edges_added, edges_removed, risks, blast_radius, analyzed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       edges_added, edges_removed, risks, blast_radius, difftastic_highlights, analyzed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const llmJson = analysis.llmSummary ? JSON.stringify(analysis.llmSummary) : null;
     const risksJson = JSON.stringify(analysis.risks);
+    const difftasticJson = analysis.difftasticHighlights && analysis.difftasticHighlights.length > 0
+      ? JSON.stringify(analysis.difftasticHighlights)
+      : null;
 
     stmt.run(
       analysis.sha,
@@ -349,6 +369,7 @@ export class AnalysisPipeline {
       analysis.edges.removed.length,
       risksJson,
       analysis.blastRadius,
+      difftasticJson,
       analysis.analyzedAt
     );
   }
@@ -441,10 +462,10 @@ export class AnalysisPipeline {
           wait: true,
           points
         });
-        console.log(`[Qdrant] Synced ${points.length} symbols to Qdrant`);
+        logDebug(`[Qdrant] Synced ${points.length} symbols to Qdrant`);
       }
     } catch (error) {
-      console.warn('[Qdrant] Failed to sync symbols:', error);
+      logError('[Qdrant] Failed to sync symbols', error);
       // Don't throw - Qdrant sync is optional
     }
   }
@@ -494,9 +515,9 @@ export class AnalysisPipeline {
           }
         }]
       });
-      console.log(`[Qdrant] Synced commit ${analysis.sha.substring(0, 8)} to Qdrant`);
+      logDebug(`[Qdrant] Synced commit ${analysis.sha.substring(0, 8)} to Qdrant`);
     } catch (error) {
-      console.warn('[Qdrant] Failed to sync commit:', error);
+      logError('[Qdrant] Failed to sync commit', error);
       // Don't throw - Qdrant sync is optional
     }
   }

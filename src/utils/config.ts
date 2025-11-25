@@ -1,4 +1,6 @@
 import { ExtensionConfig } from '../types';
+import * as fs from 'fs';
+import * as path from 'path';
 
 let vscode: any;
 try {
@@ -66,6 +68,27 @@ export function getGitRoot(): string | undefined {
   const workspaceRoot = getWorkspaceRoot();
   if (!workspaceRoot) return undefined;
 
-  // TODO: Find .git directory by walking up from workspace root
+  // Walk up directory tree to find .git directory
+  let currentPath = workspaceRoot;
+  const rootPath = path.parse(currentPath).root;
+
+  while (currentPath !== rootPath) {
+    const gitPath = path.join(currentPath, '.git');
+    
+    // Check if .git exists (as directory or file for worktrees/submodules)
+    if (fs.existsSync(gitPath)) {
+      return currentPath;
+    }
+
+    // Move up one directory
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) {
+      // Reached filesystem root without finding .git
+      break;
+    }
+    currentPath = parentPath;
+  }
+
+  // Fallback: return workspace root if .git not found
   return workspaceRoot;
 }

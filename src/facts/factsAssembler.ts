@@ -55,8 +55,8 @@ export async function assembleFacts(
         divergent: drift.divergent_symbols.length
       },
       patternDrift: {
-        mixedTargets: 0, // TODO: Implement pattern drift detection
-        oldNamespaces: 0,  // TODO: Implement pattern drift detection
+        mixedTargets: detectMixedTargets(drift, working),
+        oldNamespaces: detectOldNamespaces(working, intended),
         conventionDrift: drift.conventionDrift ? {
           dominantConvention: drift.conventionDrift.dominantConvention,
           driftPercent: drift.conventionDrift.driftPercent,
@@ -213,4 +213,91 @@ function getWorkingLists(working: WorkingSnapshot): { symbols: string[]; edges: 
     symbols: Array.from(working.symbolsById.keys()),
     edges: working.edges.map(e => `${e.from_symbol_id} -> ${e.to_symbol_id} (${e.edge_type})`)
   };
+}
+
+/**
+ * Detect files with mixed naming convention targets
+ * Counts files that have multiple naming conventions in use
+ */
+function detectMixedTargets(drift: DriftFindings, working: WorkingSnapshot): number {
+  // Use mixedConventionFiles from drift detector if available
+  if (drift.mixedConventionFiles && drift.mixedConventionFiles.length > 0) {
+    return drift.mixedConventionFiles.length;
+  }
+
+  // Fallback: detect by analyzing files with multiple conventions
+  const fileConventions = new Map<string, Set<string>>();
+  
+  for (const [symbolId, symbol] of working.symbolsById) {
+    const filePath = symbolId.split(':')[0];
+    if (!fileConventions.has(filePath)) {
+      fileConventions.set(filePath, new Set());
+    }
+    
+    // Simple convention detection based on naming patterns
+    const name = symbol.name;
+    if (/^[a-z]/.test(name)) {
+      fileConventions.get(filePath)!.add('camelCase');
+    } else if (/^[A-Z]/.test(name) && /[A-Z]/.test(name.slice(1))) {
+      fileConventions.get(filePath)!.add('PascalCase');
+    } else if (/_/.test(name)) {
+      fileConventions.get(filePath)!.add('snake_case');
+    }
+  }
+
+  // Count files with multiple conventions
+  let mixedCount = 0;
+  for (const conventions of fileConventions.values()) {
+    if (conventions.size > 1) {
+      mixedCount++;
+    }
+  }
+
+  return mixedCount;
+}
+
+/**
+ * Detect old namespace usage patterns
+ * Looks for symbols using deprecated/old namespace patterns
+ */
+function detectOldNamespaces(working: WorkingSnapshot, intended: Map<string, IntendedState>): number {
+  const oldNamespacePatterns = [
+    /^(old|legacy|deprecated|v1|v2|old_|legacy_|deprecated_)/i,
+    /(Old|Legacy|Deprecated)([A-Z]|$)/,
+    /\\Old\\/,
+    /\\Legacy\\/,
+    /\\Deprecated\\/,
+    /\/old\//,
+    /\/legacy\//,
+    /\/deprecated\//
+  ];
+
+  let oldNamespaceCount = 0;
+
+  // Check working symbols for old namespace patterns
+  for (const [symbolId, symbol] of working.symbolsById) {
+    const filePath = symbolId.split(':')[0];
+    const symbolName = symbol.name;
+
+    // Check if path or name matches old namespace patterns
+    const matchesOldPattern = oldNamespacePatterns.some(pattern => 
+      pattern.test(filePath) || pattern.test(symbolName)
+    );
+
+    if (matchesOldPattern) {
+      // Only count if it's in scope (intended map) or if it's a zombie (should be removed)
+      const intendedState = intended.get(symbolId);
+      if (intendedState || !intended.has(symbolId)) {
+        // Check if this is a zombie (should be removed but still exists)
+        if (intendedState?.expect === 'absent') {
+          oldNamespaceCount++;
+        } else if (!intended.has(symbolId)) {
+          // Symbol not in intended map but matches old pattern - potential old namespace
+          oldNamespaceCount++;
+        }
+      }
+    }
+  }
+
+  return oldNamespaceCount;
 }

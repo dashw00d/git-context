@@ -60,7 +60,8 @@ export class SearchIndex {
       try {
         return await this.searchSymbolsSemantic(query, limit);
       } catch (error) {
-        console.warn('[Search] Qdrant search failed, falling back to LIKE:', error);
+        const { logError } = await import('../utils/logger');
+        logError('[Search] Qdrant search failed, falling back to LIKE', error);
       }
     }
 
@@ -613,7 +614,8 @@ export class SearchIndex {
         wait: true,
         points
       });
-      console.log(`[Qdrant] Stored ${points.length} patterns`);
+      const { logDebug } = await import('../utils/logger');
+      logDebug(`[Qdrant] Stored ${points.length} patterns`);
     }
   }
 

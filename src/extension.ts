@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
+import { logInfo, logDebug, logError } from './utils/logger';
 import type { ActiveBundleProvider } from './ui/activeBundleProvider';
 import type { CommitsProvider } from './ui/commitsProvider';
 import type { SymbolHistoryProvider } from './ui/symbolHistory';
 import type { ReportsProvider } from './ui/reportsProvider';
+import type { CockpitProvider } from './webview/CockpitProvider';
 
 let activeBundleProvider: ActiveBundleProvider;
 let commitsProvider: CommitsProvider;
@@ -10,6 +12,43 @@ let symbolHistoryProvider: SymbolHistoryProvider;
 let reportsProvider: ReportsProvider;
 let outputChannel: vscode.OutputChannel;
 let debugChannel: vscode.OutputChannel;
+let cockpitProvider: CockpitProvider | undefined;
+
+async function syncCockpitState() {
+  if (!cockpitProvider || !commitsProvider) {
+    return;
+  }
+  try {
+    const [commits, selection, bundleFacts, symbols, reports] = await Promise.all([
+      commitsProvider.exportCommitsDto(),
+      Promise.resolve(commitsProvider.exportSelectionDto()),
+      Promise.resolve(activeBundleProvider?.exportBundleFacts?.() ?? null),
+      symbolHistoryProvider?.exportRecentSymbols ? symbolHistoryProvider.exportRecentSymbols() : Promise.resolve([]),
+      reportsProvider?.exportReportsDto ? reportsProvider.exportReportsDto() : Promise.resolve([])
+    ]);
+
+    cockpitProvider.updateState({
+      commits,
+      selectedCommitShas: selection.selectedCommitShas,
+      selectedFiles: selection.selectedFiles,
+      workspaceScope: selection.workspaceScope,
+      bundleFacts,
+      symbols,
+      reports
+    });
+  } catch (error) {
+    logError('Failed to sync cockpit state', error);
+  }
+}
+
+export async function updateContexts() {
+  try {
+    await vscode.commands.executeCommand('setContext', 'gitContext.hasActiveBundle', !!activeBundleProvider?.lastBundleFacts);
+    await vscode.commands.executeCommand('setContext', 'gitContext.hasSelection', commitsProvider?.selectedCommits.size > 0 || false);
+  } catch (error) {
+    logError('Failed to update context keys', error);
+  }
+}
 
 export function getOutputChannel(): vscode.OutputChannel {
   if (!outputChannel) {
@@ -26,19 +65,7 @@ export function getDebugChannel(): vscode.OutputChannel {
 }
 
 async function updateContextKeys() {
-  try {
-    // Check if there's an active bundle
-    const hasActiveBundle = activeBundleProvider?.lastBundleFacts !== null;
-    await vscode.commands.executeCommand('setContext', 'gitContext.hasActiveBundle', hasActiveBundle);
-
-    // Check if current selection is in bundle (simplified - could be enhanced)
-    const inBundle = false; // TODO: Implement bundle membership checking
-    await vscode.commands.executeCommand('setContext', 'gitContext.inBundle', inBundle);
-
-    console.log('Context keys updated:', { hasActiveBundle, inBundle });
-  } catch (error) {
-    console.error('Failed to update context keys:', error);
-  }
+  await updateContexts();
 }
 
 
@@ -47,7 +74,7 @@ export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Git Context');
     debugChannel = vscode.window.createOutputChannel('Git Context (Debug)');
     outputChannel.appendLine('[ACTIVATION] Git Context extension is activating...');
-    console.log('Git Context extension is activating...');
+    logInfo('Git Context extension is activating...');
 
     // Dynamically import providers and commands to prevent load-time errors
     // from native dependencies or ESM issues
@@ -58,14 +85,16 @@ export async function activate(context: vscode.ExtensionContext) {
     const { registerCommands } = await import('./ui/commands');
     const { RefactorReportProvider } = await import('./webview/refactorReportProvider');
     const { getDebtMeter, disposeDebtMeter } = await import('./ui/refactorDebtMeter');
+    const { CockpitProvider } = await import('./webview/CockpitProvider');
 
-    console.log('Modules loaded successfully');
+    logDebug('Modules loaded successfully');
 
     // Initialize providers
     activeBundleProvider = new ActiveBundleProvider(context);
-    commitsProvider = new CommitsProvider(context);
+    commitsProvider = new CommitsProvider(context, activeBundleProvider);
     symbolHistoryProvider = new SymbolHistoryProvider(context);
     reportsProvider = new ReportsProvider(context);
+    cockpitProvider = new CockpitProvider(context.extensionUri);
 
     // Register tree data providers
     vscode.window.registerTreeDataProvider('bundle', activeBundleProvider);
@@ -84,6 +113,22 @@ export async function activate(context: vscode.ExtensionContext) {
         refactorReportProvider
       )
     );
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider('cockpit', cockpitProvider)
+    );
+
+    commitsProvider.onDidChangeTreeData(async () => {
+      await syncCockpitState();
+    });
+    activeBundleProvider.onDidChangeTreeData(async () => {
+      await syncCockpitState();
+    });
+    symbolHistoryProvider.onDidChangeTreeData(async () => {
+      await syncCockpitState();
+    });
+    reportsProvider.onDidChangeTreeData(async () => {
+      await syncCockpitState();
+    });
 
     // Register evidence provider for markdown links
     const { EvidenceProvider } = await import('./ui/evidenceProvider');
@@ -160,13 +205,13 @@ export async function activate(context: vscode.ExtensionContext) {
                 // Try to update once to see if facts file now exists
                 debtMeter.update().catch(err => {
                   // Silently fail if facts don't exist yet
-                  console.debug('Debt meter update skipped (no facts file):', err);
+                  logDebug(`Debt meter update skipped (no facts file): ${err}`);
                 });
               }
             }
           } catch (error) {
             // Gracefully handle any errors during refresh
-            console.warn('Error refreshing UI after database change:', error);
+            logError('Error refreshing UI after database change', error);
           }
           refreshTimeout = null;
         }, 100); // 100ms debounce
@@ -224,7 +269,7 @@ export async function activate(context: vscode.ExtensionContext) {
               reportsProvider.refresh();
             }
           } catch (error) {
-            console.warn('Error refreshing tree after facts update:', error);
+            logError('Error refreshing tree after facts update', error);
           }
           factsRefreshTimeout = null;
         }, 200); // 200ms debounce for facts updates
@@ -245,7 +290,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     // Register commands
-    registerCommands(context, commitsProvider, activeBundleProvider, symbolHistoryProvider, refactorReportProvider, reportsProvider);
+    await registerCommands(context, commitsProvider, activeBundleProvider, symbolHistoryProvider, refactorReportProvider, reportsProvider);
 
     // Refresh providers when workspace changes
     context.subscriptions.push(
@@ -265,9 +310,13 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     );
 
-    console.log('Git Context extension activated successfully');
+    syncCockpitState().catch(() => {
+      // Best-effort initial sync; errors are logged in syncCockpitState
+    });
+
+    logInfo('Git Context extension activated successfully');
   } catch (error) {
-    console.error('Failed to activate Git Context extension:', error);
+    logError('Failed to activate Git Context extension', error);
     // This is the critical part: show the error to the user!
     vscode.window.showErrorMessage(
       `Git Context extension failed to activate. Error: ${error instanceof Error ? error.message : String(error)}`
@@ -276,13 +325,13 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  console.log('Git Context extension is now deactivated!');
+  logInfo('Git Context extension is now deactivated!');
 
   // Cleanup: Close database connection
   try {
     const { closeDatabase } = require('./storage/database');
     closeDatabase();
   } catch (error) {
-    console.error('Error closing database:', error);
+    logError('Error closing database', error);
   }
 }

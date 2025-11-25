@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { logInfo, logError } from '../utils/logger';
 import { CommitsProvider } from './commitsProvider';
 import { ActiveBundleProvider } from './activeBundleProvider';
 import { SymbolHistoryProvider } from './symbolHistory';
@@ -9,10 +10,11 @@ import { getExtensionConfig } from '../utils/config';
 import { LLMSummarizer } from '../llm/summarizer';
 import { generateRefactorBundleReport } from './report';
 import { RefactorReportProvider } from '../webview/refactorReportProvider';
+import { updateContexts } from '../extension';
 import * as fs from 'fs';
 import * as path from 'path';
 
-export function registerCommands(
+export async function registerCommands(
   context: vscode.ExtensionContext,
   commitsProvider: CommitsProvider,
   activeBundleProvider: ActiveBundleProvider,
@@ -20,9 +22,8 @@ export function registerCommands(
   refactorReportProvider?: RefactorReportProvider,
   reportsProvider?: ReportsProvider
 ) {
-  // Set context keys for when clauses
-  vscode.commands.executeCommand('setContext', 'gitContext.hasSelection', false);
-  vscode.commands.executeCommand('setContext', 'gitContext.hasActiveBundle', !!activeBundleProvider.lastBundleFacts);
+  // Initialize context keys
+  await updateContexts();
   try {
     // Analyze last N commits
     const analyzeLastCommitsCmd = vscode.commands.registerCommand(
@@ -189,14 +190,43 @@ export function registerCommands(
           try {
             const llm = new LLMSummarizer();
 
-            // TODO: Get actual symbol code before/after
+            // Extract commit SHA from commit label (format: "SHA: message" or just SHA)
+            const commitSha = commit.detail?.split(':')[0] || commit.label.split(':')[0] || commit.label;
+
+            // Get actual symbol code before/after from database
+            let codeBefore = '// Previous code not available';
+            let codeAfter = '// Current code not available';
+
+            try {
+              const { getDatabaseManager } = await import('../storage/database');
+              const db = getDatabaseManager().getDatabase();
+              
+              // Query for symbol diff snippets
+              const symbolStmt = db.prepare(`
+                SELECT diff_snippet_pre, diff_snippet_post, change_type
+                FROM symbols
+                WHERE sha = ? AND path = ? AND name = ?
+                ORDER BY id DESC
+                LIMIT 1
+              `);
+              
+              const symbolRow = symbolStmt.get(commitSha, symbol.file, symbol.name) as any;
+              
+              if (symbolRow) {
+                codeBefore = symbolRow.diff_snippet_pre || codeBefore;
+                codeAfter = symbolRow.diff_snippet_post || codeAfter;
+              }
+            } catch (dbError) {
+              logError('Failed to fetch symbol diff snippets from database', dbError);
+            }
+
             const explanation = await llm.explainSymbolChange(
               symbol.name,
               'modified',
               symbol.file,
               symbol.line,
-              '// Previous code',
-              '// Current code',
+              codeBefore,
+              codeAfter,
               commit.detail || commit.label,
               commit.description || 'Selected commit'
             );
@@ -293,6 +323,7 @@ export function registerCommands(
 
           try {
             await generateRefactorBundleReport(shas, refactorReportProvider, cancellationTokenSource.token, activeBundleProvider);
+            await updateContexts();
           } finally {
             commitsProvider.runningTask = null;
             commitsProvider.refresh();
@@ -312,6 +343,7 @@ export function registerCommands(
         const sha = typeof shaOrItem === 'string' ? shaOrItem : (shaOrItem?.id || shaOrItem?.sha);
         if (sha) {
           commitsProvider.toggleCommitSelection(sha);
+          await updateContexts();
         }
       }
     );
@@ -319,8 +351,9 @@ export function registerCommands(
     // Clear selection
     const clearSelectionCmd = vscode.commands.registerCommand(
       'git-context.clearSelection',
-      () => {
+      async () => {
         commitsProvider.clearSelection();
+        await updateContexts();
       }
     );
 
@@ -421,7 +454,7 @@ export function registerCommands(
             }
           }
         } catch (error) {
-          console.error('Failed to show refactor report:', error);
+          logError('Failed to show refactor report', error);
           vscode.window.showErrorMessage(`Failed to show report: ${error}`);
         }
       }
@@ -1557,7 +1590,14 @@ export function registerCommands(
         // Open report and navigate to section
         if (refactorReportProvider && report.analysis && report.facts) {
           refactorReportProvider.showReport(report.analysis, report.facts);
-          // TODO: Navigate to specific commit section in report
+          // Navigate to specific commit section in report
+          if (report.commitShas && report.commitShas.length > 0) {
+            // Use the first SHA or the selected commit SHA
+            const commitSha = report.commitShas[0];
+            setTimeout(() => {
+              refactorReportProvider.navigateToCommitSection(commitSha);
+            }, 500); // Wait for webview to render
+          }
         } else {
           vscode.window.showErrorMessage('Report provider not available or report data incomplete');
         }
@@ -1641,7 +1681,7 @@ export function registerCommands(
           });
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to pull latest commits: ${error}`);
-          console.error('Pull latest error:', error);
+          logError('Pull latest error', error);
         }
       }
     );
@@ -1679,7 +1719,7 @@ export function registerCommands(
           });
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to reset analysis: ${error}`);
-          console.error('Reset analysis error:', error);
+          logError('Reset analysis error', error);
         }
       }
     );
@@ -1721,7 +1761,7 @@ export function registerCommands(
                 const dbPath = path.join(gitRoot, '.git', 'commit-tracker', 'commit_tracker.sqlite');
                 if (fs.existsSync(dbPath)) {
                   fs.unlinkSync(dbPath);
-                  console.log('Deleted database file for complete reset');
+                  logInfo('Deleted database file for complete reset');
                 }
               }
 
@@ -1731,6 +1771,7 @@ export function registerCommands(
               commitsProvider.selectedFiles.clear();
               commitsProvider.loadMoreOffset = 0;
               commitsProvider.persistState();
+              await updateContexts();
 
               // 4. Force database reinitialization with new schema
               await commitsProvider.initializeDatabase();
@@ -1749,9 +1790,35 @@ export function registerCommands(
             });
           } catch (error) {
             vscode.window.showErrorMessage(`Failed to reset all: ${error}`);
-            console.error('Reset all error:', error);
+            logError('Reset all error', error);
           }
         }
+      }
+    );
+
+    // Bundle root view command (alias to showRefactorReport)
+    const viewBundleCmd = vscode.commands.registerCommand(
+      'git-context.viewBundle',
+      async () => {
+        await vscode.commands.executeCommand('git-context.showRefactorReport');
+      }
+    );
+
+    // Bundle export command (alias to exportLlmContext)
+    const bundleExportCmd = vscode.commands.registerCommand(
+      'git-context.bundle.export',
+      async () => {
+        await vscode.commands.executeCommand('git-context.exportLlmContext');
+      }
+    );
+
+    // Open symbol history command
+    const openSymbolHistoryCmd = vscode.commands.registerCommand(
+      'git-context.openSymbolHistory',
+      async (symbolId: string) => {
+        // TODO: Implement symbol history opening logic
+        // For now, just show a message
+        vscode.window.showInformationMessage(`Opening symbol history for: ${symbolId}`);
       }
     );
 
@@ -1772,32 +1839,62 @@ export function registerCommands(
       addMoreCommitsCmd,
       pullLatestCmd,
       resetAnalysisCmd,
-      resetAllCmd
+      resetAllCmd,
+      viewBundleCmd,
+      bundleExportCmd,
+      openSymbolHistoryCmd
     );
 
 
-    console.log('Git Context commands registered successfully');
+    logInfo('Git Context commands registered successfully');
   } catch (error) {
-    console.error('Failed to register Git Context commands:', error);
+    logError('Failed to register Git Context commands', error);
     vscode.window.showErrorMessage(`Failed to register Git Context commands: ${error}`);
   }
 }
 
 async function getRecentCommits(): Promise<vscode.QuickPickItem[]> {
-  // TODO: Get commits from database
-  // For now, return dummy data
-  return [
-    {
-      label: 'HEAD',
-      description: 'Current commit',
-      detail: 'Most recent commit'
-    },
-    {
-      label: 'HEAD~1',
-      description: 'Previous commit',
-      detail: 'One commit back'
-    }
-  ];
+  try {
+    const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+    await ensureDatabaseInitialized();
+    const db = getDatabaseManager().getDatabase();
+
+    // Query recent commits from database
+    const stmt = db.prepare(`
+      SELECT sha, message, author, date
+      FROM commits_metadata
+      ORDER BY date DESC
+      LIMIT 20
+    `);
+    
+    const commits = stmt.all() as Array<{
+      sha: string;
+      message: string;
+      author: string;
+      date: string;
+    }>;
+
+    return commits.map(commit => ({
+      label: commit.sha.substring(0, 8),
+      description: commit.message.split('\n')[0].substring(0, 60),
+      detail: `${commit.sha}: ${commit.message.split('\n')[0]}`
+    }));
+  } catch (error) {
+    logError('Failed to get recent commits from database', error);
+    // Fallback to dummy data
+    return [
+      {
+        label: 'HEAD',
+        description: 'Current commit',
+        detail: 'Most recent commit'
+      },
+      {
+        label: 'HEAD~1',
+        description: 'Previous commit',
+        detail: 'One commit back'
+      }
+    ];
+  }
 }
 
 async function getCurrentCommit(): Promise<string | undefined> {
