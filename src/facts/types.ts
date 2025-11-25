@@ -33,6 +33,12 @@ export interface RefactorBundleFacts {
     patternDrift: {
       mixedTargets: number;
       oldNamespaces: number;
+      conventionDrift?: {
+        dominantConvention: string;
+        driftPercent: number;
+        driftSymbolCount: number;
+      };
+      mixedConventionFiles?: number;
     };
     legacyAudit: {
       dead: number;
@@ -45,5 +51,16 @@ export interface RefactorBundleFacts {
     };
   };
   evidence: Record<string, any>;
+}
+
+export interface RefactorPattern {
+  id: string; // Hash of name + examples
+  name: string;
+  description: string;
+  examples: string[];
+  count: number;
+  pct: number;
+  bundleShas: string[]; // Which commit bundles discovered this pattern
+  refactorType?: string; // auth, api, migration, etc. (extracted from context)
 }
 

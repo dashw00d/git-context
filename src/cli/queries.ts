@@ -84,7 +84,7 @@ export async function searchSymbol(name: string): Promise<void> {
 
   console.log(chalk.blue(`Searching for symbol: ${name}`));
 
-  const results = searchIndex.searchSymbolsByName(name, 20);
+  const results = await searchIndex.searchSymbolsByName(name, 20);
 
   if (results.length === 0) {
     console.log('No symbols found matching that name.');

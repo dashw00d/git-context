@@ -286,7 +286,7 @@ export function registerCommands(
     );
 
     // Toggle commit selection
-    const toggleSelectionCmd = vscode.commands.registerCommand(
+    const toggleCommitSelectionCmd = vscode.commands.registerCommand(
       'git-context.toggleCommitSelection',
       async (shaOrItem: string | any) => {
         // Handle both direct SHA string and object with id property
@@ -388,11 +388,11 @@ export function registerCommands(
             const renderer = new AnalysisRenderer();
             const markdown = renderer.renderAnalysis(analysis, facts);
 
-            const doc = await vscode.workspace.openTextDocument({
-              content: markdown,
-              language: 'markdown'
-            });
-            await vscode.window.showTextDocument(doc, { preview: false });
+            // Save to temp file and open in markdown preview
+            const os = require('os');
+            const reportPath = path.join(os.tmpdir(), 'git-context-cached-report.md');
+            fs.writeFileSync(reportPath, markdown, 'utf8');
+            await vscode.commands.executeCommand('markdown.showPreviewToSide', vscode.Uri.file(reportPath));
           } else {
             // If no cached report, check if commits are selected to generate one
             if (commitTracker.selectedCommits.size >= 2) {
@@ -1106,6 +1106,268 @@ export function registerCommands(
       }
     );
 
+    // Qdrant-enhanced commands
+    const findSimilarCommitsCmd = vscode.commands.registerCommand(
+      'git-context.findSimilarCommits',
+      async (sha?: string) => {
+        try {
+          const { getSearchIndex } = await import('../storage/index');
+          const searchIndex = getSearchIndex();
+
+          // Get SHA if not provided
+          if (!sha) {
+            const currentSha = await getCurrentCommit();
+            if (!currentSha) {
+              vscode.window.showErrorMessage('No commit selected');
+              return;
+            }
+            sha = currentSha;
+          }
+
+          const similar = await searchIndex.findSimilarCommits(sha, 10);
+          if (similar.length === 0) {
+            vscode.window.showInformationMessage('No similar commits found');
+            return;
+          }
+
+          const items = similar.map(c => ({
+            label: c.sha.substring(0, 8),
+            description: c.message.split('\n')[0],
+            detail: `${c.author} • ${c.date} • Similarity: ${(c.similarity * 100).toFixed(0)}%`,
+            sha: c.sha
+          }));
+
+          const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a similar commit to view'
+          });
+
+          if (selected) {
+            await showCommit(selected.sha);
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to find similar commits: ${error}`);
+        }
+      }
+    );
+
+    const searchCommitsSemanticCmd = vscode.commands.registerCommand(
+      'git-context.searchCommitsSemantic',
+      async () => {
+        try {
+          const query = await vscode.window.showInputBox({
+            prompt: 'Search commits semantically',
+            placeHolder: 'e.g., "authentication refactor" or "API migration"'
+          });
+
+          if (!query) return;
+
+          const { getSearchIndex } = await import('../storage/index');
+          const searchIndex = getSearchIndex();
+
+          const results = await searchIndex.searchCommits(query, 10);
+          if (results.length === 0) {
+            vscode.window.showInformationMessage('No matching commits found');
+            return;
+          }
+
+          const items = results.map(c => ({
+            label: c.sha.substring(0, 8),
+            description: c.message.split('\n')[0],
+            detail: `${c.author} • ${c.date} • Similarity: ${(c.similarity * 100).toFixed(0)}%`,
+            sha: c.sha
+          }));
+
+          const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a commit to view'
+          });
+
+          if (selected) {
+            await showCommit(selected.sha);
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to search commits: ${error}`);
+        }
+      }
+    );
+
+    const findSimilarSymbolsCmd = vscode.commands.registerCommand(
+      'git-context.findSimilarSymbols',
+      async (symbolId?: string) => {
+        try {
+          const { getSearchIndex } = await import('../storage/index');
+          const searchIndex = getSearchIndex();
+
+          // Get symbol ID if not provided
+          if (!symbolId) {
+            const symbol = await getSymbolAtCursor();
+            if (!symbol) {
+              vscode.window.showErrorMessage('No symbol selected');
+              return;
+            }
+            // Try to find symbol ID from database
+            const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+            await ensureDatabaseInitialized();
+            const db = getDatabaseManager().getDatabase();
+            const stmt = db.prepare(`
+              SELECT symbol_id FROM symbols
+              WHERE name = ? AND path LIKE ?
+              ORDER BY sha DESC
+              LIMIT 1
+            `);
+            const result = stmt.get(symbol.name, `%${symbol.file}%`) as any;
+            if (!result) {
+              vscode.window.showErrorMessage('Symbol not found in database');
+              return;
+            }
+            symbolId = result.symbol_id;
+          }
+
+          if (!symbolId) {
+            vscode.window.showErrorMessage('Symbol ID not found');
+            return;
+          }
+
+          const similar = await searchIndex.findSimilarSymbols(symbolId, 10);
+          if (similar.length === 0) {
+            vscode.window.showInformationMessage('No similar symbols found');
+            return;
+          }
+
+          const items = similar.map(s => ({
+            label: s.name,
+            description: s.path,
+            detail: `Similarity: ${(s.rank * 100).toFixed(0)}% • Commit: ${s.sha.substring(0, 8)}`,
+            symbolId: `${s.path}:${s.name}`
+          }));
+
+          const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select a similar symbol to view'
+          });
+
+          if (selected) {
+            await vscode.commands.executeCommand('git-context.openSymbol', selected.symbolId);
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to find similar symbols: ${error}`);
+        }
+      }
+    );
+
+    const findConventionDriftCmd = vscode.commands.registerCommand(
+      'git-context.findConventionDrift',
+      async () => {
+        try {
+          const { getSearchIndex } = await import('../storage/index');
+          const searchIndex = getSearchIndex();
+
+          // Get current bundle or workspace
+          const selectedShas = Array.from(commitTracker.selectedCommits);
+          if (selectedShas.length === 0) {
+            vscode.window.showInformationMessage('Select commits or generate a bundle to analyze convention drift');
+            return;
+          }
+
+          // Get drift data from facts if available
+          const facts = commitTracker.lastBundleFacts;
+          if (facts?.findings?.patternDrift?.conventionDrift) {
+            const drift = facts.findings.patternDrift.conventionDrift;
+            const driftSymbols = (facts.evidence?.['findings.patternDrift.conventionDrift']?.driftSymbols || []) as Array<{
+              symbolId: string;
+              name: string;
+              convention: string;
+              suggestedName: string;
+              path: string;
+            }>;
+
+            const message = `Convention Drift: ${drift.driftPercent.toFixed(1)}% (${driftSymbols.length} symbols)\nDominant: ${drift.dominantConvention}`;
+            const action = await vscode.window.showInformationMessage(
+              message,
+              'View Details',
+              'Show Migration List'
+            );
+
+            if (action === 'View Details') {
+              // Open report section
+              await vscode.commands.executeCommand('git-context.generateReport');
+            } else if (action === 'Show Migration List') {
+              // Show quick pick with drift symbols
+              const items = driftSymbols.slice(0, 50).map((ds: {
+                symbolId: string;
+                name: string;
+                convention: string;
+                suggestedName: string;
+                path: string;
+              }) => ({
+                label: ds.name,
+                description: `${ds.convention} → ${drift.dominantConvention}`,
+                detail: `Suggested: ${ds.suggestedName} | ${ds.path}`,
+                symbolId: ds.symbolId
+              }));
+
+              const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select a symbol to view migration suggestion'
+              });
+
+              if (selected) {
+                await vscode.commands.executeCommand('git-context.openSymbol', selected.symbolId);
+              }
+            }
+          } else {
+            vscode.window.showInformationMessage('No convention drift data available. Generate a bundle report first.');
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to analyze convention drift: ${error}`);
+        }
+      }
+    );
+
+    const showConventionTimelineCmd = vscode.commands.registerCommand(
+      'git-context.showConventionTimeline',
+      async () => {
+        try {
+          type NamingConvention = 'camelCase' | 'PascalCase' | 'snake_case' | 'SCREAMING_SNAKE' | 'kebab-case' | 'hungarian' | 'mixed' | 'unknown';
+          
+          const convention = await vscode.window.showQuickPick([
+            { label: 'camelCase', value: 'camelCase' as NamingConvention },
+            { label: 'PascalCase', value: 'PascalCase' as NamingConvention },
+            { label: 'snake_case', value: 'snake_case' as NamingConvention },
+            { label: 'SCREAMING_SNAKE', value: 'SCREAMING_SNAKE' as NamingConvention }
+          ], {
+            placeHolder: 'Select convention to track'
+          });
+
+          if (!convention) return;
+
+          const { getSearchIndex } = await import('../storage/index');
+          const searchIndex = getSearchIndex();
+
+          const timeline = await searchIndex.getConventionTimeline(convention.value);
+          if (timeline.length === 0) {
+            vscode.window.showInformationMessage('No timeline data available for this convention');
+            return;
+          }
+
+          // Show timeline in quick pick
+          const items = timeline.slice(-20).map(entry => ({
+            label: `${entry.adoptionPercent.toFixed(1)}% adoption`,
+            description: entry.date.substring(0, 10),
+            detail: `${entry.newSymbols} symbols, ${entry.driftSymbols} drift | ${entry.sha.substring(0, 8)}`,
+            sha: entry.sha
+          }));
+
+          const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Convention adoption timeline (newest first)'
+          });
+
+          if (selected) {
+            await showCommit(selected.sha);
+          }
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to show convention timeline: ${error}`);
+        }
+      }
+    );
+
     context.subscriptions.push(
       analyzeLastCommitsCmd,
       analyzeStagedCmd,
@@ -1115,7 +1377,7 @@ export function registerCommands(
       initializeDatabaseCmd,
       openSymbolCmd,
       generateReportCmd,
-      toggleSelectionCmd,
+      toggleCommitSelectionCmd,
       clearSelectionCmd,
       exportContextCmd,
       showRefactorReportCmd,
@@ -1138,7 +1400,399 @@ export function registerCommands(
       openFileCmd,
       copyDriftTableCmd,
       showGroupingOptionsCmd,
-      refreshDebtMeterAndRevealCmd
+      refreshDebtMeterAndRevealCmd,
+      findSimilarCommitsCmd,
+      searchCommitsSemanticCmd,
+      findSimilarSymbolsCmd,
+      findConventionDriftCmd,
+      showConventionTimelineCmd
+    );
+
+    // New report-centric commands
+    const analyzeCmd = vscode.commands.registerCommand(
+      'git-context.analyze',
+      async () => {
+        const selectedFiles = commitTracker.getSelectedFiles();
+        const selectedCommits = Array.from(commitTracker.selectedCommits);
+        const workspaceScope = commitTracker.getWorkspaceScope();
+
+        if (selectedFiles.length === 0 && selectedCommits.length === 0) {
+          vscode.window.showWarningMessage('Please select files and/or commits to analyze');
+          return;
+        }
+
+        try {
+          await commitTracker.initializeDatabase();
+          await generateRefactorBundleReport(
+            selectedCommits,
+            refactorReportProvider,
+            undefined,
+            commitTracker,
+            selectedFiles,
+            workspaceScope
+          );
+          commitTracker.refresh();
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to analyze: ${error}`);
+        }
+      }
+    );
+
+    const openReportCmd = vscode.commands.registerCommand(
+      'git-context.openReport',
+      async (reportId: string) => {
+        const { getReportManager } = await import('../storage/reportManager');
+        const reportManager = getReportManager();
+        const report = reportManager.load(reportId);
+
+        if (!report) {
+          vscode.window.showErrorMessage(`Report ${reportId} not found`);
+          return;
+        }
+
+        // Reuse existing report display logic
+        if (refactorReportProvider && report.analysis && report.facts) {
+          refactorReportProvider.showReport(report.analysis, report.facts);
+        } else {
+          vscode.window.showErrorMessage('Report provider not available or report data incomplete');
+        }
+      }
+    );
+
+    const regenerateReportCmd = vscode.commands.registerCommand(
+      'git-context.regenerateReport',
+      async (reportId: string) => {
+        const { getReportManager } = await import('../storage/reportManager');
+        const reportManager = getReportManager();
+        const report = reportManager.load(reportId);
+
+        if (!report) {
+          vscode.window.showErrorMessage(`Report ${reportId} not found`);
+          return;
+        }
+
+        try {
+          await commitTracker.initializeDatabase();
+          await generateRefactorBundleReport(
+            report.commitShas,
+            refactorReportProvider,
+            undefined,
+            commitTracker,
+            report.selectedFiles,
+            report.workspaceScope,
+            reportId  // Pass existing report ID to update instead of create new
+          );
+          commitTracker.refresh();
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to regenerate report: ${error}`);
+        }
+      }
+    );
+
+    const deleteReportCmd = vscode.commands.registerCommand(
+      'git-context.deleteReport',
+      async (reportId: string) => {
+        const confirm = await vscode.window.showWarningMessage(
+          'Are you sure you want to delete this report?',
+          { modal: true },
+          'Delete'
+        );
+
+        if (confirm === 'Delete') {
+          const { getReportManager } = await import('../storage/reportManager');
+          const reportManager = getReportManager();
+          reportManager.delete(reportId);
+          commitTracker.refresh();
+        }
+      }
+    );
+
+    const toggleFileSelectionCmd = vscode.commands.registerCommand(
+      'git-context.toggleFileSelection',
+      async (filePath: string) => {
+        commitTracker.toggleFileSelection(filePath);
+      }
+    );
+
+    const toggleSelectionCmd = vscode.commands.registerCommand(
+      'git-context.toggleSelection',
+      async (elementId: string) => {
+        // Parse element ID to determine if file or commit
+        if (elementId.startsWith('select-file-')) {
+          const filePath = elementId.replace('select-file-', '');
+          commitTracker.toggleFileSelection(filePath);
+        } else if (elementId.startsWith('select-commit-')) {
+          const sha = elementId.replace('select-commit-', '');
+          commitTracker.toggleCommitSelection(sha);
+        }
+      }
+    );
+
+    const togglePinReportCmd = vscode.commands.registerCommand(
+      'git-context.togglePinReport',
+      async (reportId: string) => {
+        const { getReportManager } = await import('../storage/reportManager');
+        const reportManager = getReportManager();
+        reportManager.togglePin(reportId);
+        commitTracker.refresh();
+      }
+    );
+
+    const addCommitByShaCmd = vscode.commands.registerCommand(
+      'git-context.addCommitBySha',
+      async () => {
+        const input = await vscode.window.showInputBox({
+          prompt: 'Enter commit SHA or branch name',
+          placeHolder: 'abc123 or feature/my-branch',
+          validateInput: async (value) => {
+            if (!value) {
+              return 'Please enter a commit SHA or branch name';
+            }
+            try {
+              const { GitOperations } = await import('../analysis/git');
+              const git = new GitOperations();
+              // Validate commit exists - getCommitInfo handles both SHA and branch names
+              git.getCommitInfo(value);
+              return undefined; // Valid
+            } catch {
+              return 'Commit or branch not found';
+            }
+          }
+        });
+
+        if (input) {
+          try {
+            const { GitOperations } = await import('../analysis/git');
+            const git = new GitOperations();
+            // getCommitInfo returns the full SHA
+            const commitInfo = git.getCommitInfo(input);
+            commitTracker.toggleCommitSelection(commitInfo.sha);
+            // Mark as manually added to preserve during Pull Latest
+            commitTracker.markCommitAsManual(commitInfo.sha);
+          } catch (error) {
+            vscode.window.showErrorMessage(`Failed to add commit: ${error}`);
+          }
+        }
+      }
+    );
+
+    const viewLatestReportCmd = vscode.commands.registerCommand(
+      'git-context.viewLatestReport',
+      async () => {
+        const { getReportManager } = await import('../storage/reportManager');
+        const reportManager = getReportManager();
+        const reports = reportManager.list();
+
+        if (reports.length === 0) {
+          vscode.window.showInformationMessage('No saved reports available');
+          return;
+        }
+
+        const latestReport = reports[0]; // Already sorted by date DESC
+        if (refactorReportProvider && latestReport.analysis && latestReport.facts) {
+          refactorReportProvider.showReport(latestReport.analysis, latestReport.facts);
+        } else {
+          vscode.window.showErrorMessage('Report provider not available or report data incomplete');
+        }
+      }
+    );
+
+    const openReportSectionCmd = vscode.commands.registerCommand(
+      'git-context.openReportSection',
+      async (reportId: string, commitSha: string) => {
+        const { getReportManager } = await import('../storage/reportManager');
+        const reportManager = getReportManager();
+        const report = reportManager.load(reportId);
+
+        if (!report) {
+          vscode.window.showErrorMessage(`Report ${reportId} not found`);
+          return;
+        }
+
+        // Open report and navigate to section
+        if (refactorReportProvider && report.analysis && report.facts) {
+          refactorReportProvider.showReport(report.analysis, report.facts);
+          // TODO: Navigate to specific commit section in report
+        } else {
+          vscode.window.showErrorMessage('Report provider not available or report data incomplete');
+        }
+      }
+    );
+
+    const selectAllStagedCmd = vscode.commands.registerCommand(
+      'git-context.selectAllStaged',
+      async () => {
+        commitTracker.selectAllStaged();
+      }
+    );
+
+    const selectAllUnstagedCmd = vscode.commands.registerCommand(
+      'git-context.selectAllUnstaged',
+      async () => {
+        commitTracker.selectAllUnstaged();
+      }
+    );
+
+    // Add More Commits command (cumulative loading)
+    const addMoreCommitsCmd = vscode.commands.registerCommand(
+      'git-context.addMoreCommits',
+      () => {
+        commitTracker.loadMoreOffset += commitTracker.PAGE_SIZE;
+        commitTracker.persistState();
+        commitTracker.refresh();
+      }
+    );
+
+    // Pull Latest command (re-analyze latest N commits, preserving manual selections)
+    const pullLatestCmd = vscode.commands.registerCommand(
+      'git-context.pullLatest',
+      async () => {
+        try {
+          await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Pulling latest commits...',
+            cancellable: false
+          }, async (progress) => {
+            const config = getExtensionConfig();
+            const configCount = config.defaultCommitCount;
+
+            // Preserve manual commits
+            const manualShas = Array.from(commitTracker.manualCommits);
+
+            // Re-analyze latest N commits from git (populates database)
+            await analyzeLastCommits(configCount);
+
+            // Restore manual commits to selection (they're preserved)
+            manualShas.forEach(sha => {
+              commitTracker.selectedCommits.add(sha);
+            });
+            commitTracker.manualCommits = new Set(manualShas);
+
+            // Reset offset since we've refreshed the list
+            commitTracker.loadMoreOffset = 0;
+            commitTracker.persistState();
+            commitTracker.refresh();
+
+            vscode.window.showInformationMessage(`Analyzed ${configCount} latest commits`);
+          });
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to pull latest commits: ${error}`);
+          console.error('Pull latest error:', error);
+        }
+      }
+    );
+
+    // Reset Analysis command (clear selection and reload)
+    const resetAnalysisCmd = vscode.commands.registerCommand(
+      'git-context.resetAnalysis',
+      async () => {
+        try {
+          await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Resetting analysis...',
+            cancellable: false
+          }, async (progress) => {
+            const config = getExtensionConfig();
+            const configCount = config.defaultCommitCount;
+
+            // Clear state
+            commitTracker.selectedCommits.clear();
+            commitTracker.manualCommits.clear();
+            commitTracker.selectedFiles.clear();
+            commitTracker.loadMoreOffset = 0;
+
+            // Pull fresh commits
+            await analyzeLastCommits(configCount);
+            commitTracker.persistState();
+            commitTracker.refresh();
+
+            vscode.window.showInformationMessage('Analysis reset complete');
+          });
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to reset analysis: ${error}`);
+          console.error('Reset analysis error:', error);
+        }
+      }
+    );
+
+    // Reset All command (clear DB, reports, commits)
+    const resetAllCmd = vscode.commands.registerCommand(
+      'git-context.resetAll',
+      async () => {
+        const confirm = await vscode.window.showWarningMessage(
+          'Reset ALL data? This will clear the database, all reports, and reload commits from scratch.',
+          { modal: true },
+          'Reset All'
+        );
+
+        if (confirm === 'Reset All') {
+          try {
+            await vscode.window.withProgress({
+              location: vscode.ProgressLocation.Notification,
+              title: 'Resetting all data...',
+              cancellable: false
+            }, async (progress) => {
+              // 1. Clear reports using reportManager
+              const { getReportManager } = await import('../storage/reportManager');
+              const reportManager = getReportManager();
+              const reports = reportManager.list();
+              reports.forEach(r => reportManager.delete(r.id));
+
+              // 2. Clear database tables in correct order (reverse of foreign keys)
+              const { getDatabaseManager } = await import('../storage/database');
+              const db = getDatabaseManager().getDatabase();
+
+              // Clear tables in dependency order
+              db.exec('DELETE FROM edges');           // Dependencies first
+              db.exec('DELETE FROM renames');
+              db.exec('DELETE FROM file_conventions');
+              db.exec('DELETE FROM import_conventions');
+              db.exec('DELETE FROM symbols');         // Then symbols
+              db.exec('DELETE FROM files');           // Then files
+              db.exec('DELETE FROM reports');         // Then reports
+              db.exec('DELETE FROM commits');         // Finally commits
+
+              // 3. Clear state
+              commitTracker.selectedCommits.clear();
+              commitTracker.manualCommits.clear();
+              commitTracker.selectedFiles.clear();
+              commitTracker.loadMoreOffset = 0;
+
+              // 4. Pull fresh commits
+              const config = getExtensionConfig();
+              await analyzeLastCommits(config.defaultCommitCount);
+
+              commitTracker.persistState();
+              commitTracker.refresh();
+
+              vscode.window.showInformationMessage('Reset complete');
+            });
+          } catch (error) {
+            vscode.window.showErrorMessage(`Failed to reset all: ${error}`);
+            console.error('Reset all error:', error);
+          }
+        }
+      }
+    );
+
+    context.subscriptions.push(
+      analyzeCmd,
+      openReportCmd,
+      regenerateReportCmd,
+      deleteReportCmd,
+      toggleFileSelectionCmd,
+      toggleCommitSelectionCmd,
+      toggleSelectionCmd,
+      togglePinReportCmd,
+      addCommitByShaCmd,
+      viewLatestReportCmd,
+      openReportSectionCmd,
+      selectAllStagedCmd,
+      selectAllUnstagedCmd,
+      addMoreCommitsCmd,
+      pullLatestCmd,
+      resetAnalysisCmd,
+      resetAllCmd
     );
 
     console.log('Git Context commands registered successfully');

@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import initSqlJs, { Database, Statement } from 'sql.js';
-import { DATABASE_SCHEMA, CURRENT_VERSION } from './schema';
+import { DATABASE_SCHEMA, CURRENT_VERSION, MIGRATIONS } from './schema';
 import { getGitRoot } from '../utils/config';
 
 // Wrapper to mimic better-sqlite3 API
@@ -254,9 +254,52 @@ export class DatabaseManager {
   private initializeSchema(): void {
     if (!this.db) return;
 
-    // Run schema
-    this.db.exec(DATABASE_SCHEMA);
-    this.save();
+    // Check current version
+    let currentVersion = 0;
+    try {
+      const versionResult = this.db.exec("SELECT value FROM pragma_user_version");
+      if (versionResult.length > 0 && versionResult[0].values.length > 0) {
+        currentVersion = versionResult[0].values[0][0] as number;
+      }
+    } catch (error) {
+      // No version table yet, start from 0
+      console.log('[DB-INIT] No version found, starting fresh');
+    }
+
+    // Run initial schema if needed
+    if (currentVersion === 0) {
+      console.log('[DB-INIT] Running initial schema...');
+      this.db.exec(DATABASE_SCHEMA);
+      currentVersion = 1;
+    }
+
+    // Run migrations
+    for (let version = currentVersion; version < CURRENT_VERSION; version++) {
+      const migrationIndex = version; // Migration index matches version (version 1 = migration[1])
+      if (migrationIndex < MIGRATIONS.length) {
+        console.log(`[DB-INIT] Running migration ${version + 1}...`);
+        try {
+          this.db.exec(MIGRATIONS[migrationIndex]);
+          this.save();
+        } catch (error: any) {
+          // If migration fails due to columns already existing, that's okay (idempotent)
+          if (error.message && error.message.includes('duplicate column')) {
+            console.log(`[DB-INIT] Migration ${version + 1} already applied (columns exist)`);
+          } else {
+            console.error(`[DB-INIT] Migration ${version + 1} failed:`, error);
+            throw error;
+          }
+        }
+      }
+    }
+
+    // Set version
+    try {
+      this.db.exec(`PRAGMA user_version = ${CURRENT_VERSION}`);
+      this.save();
+    } catch (error) {
+      console.warn('[DB-INIT] Failed to set version pragma:', error);
+    }
   }
 
   save(): void {

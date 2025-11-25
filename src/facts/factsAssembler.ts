@@ -56,7 +56,13 @@ export async function assembleFacts(
       },
       patternDrift: {
         mixedTargets: 0, // TODO: Implement pattern drift detection
-        oldNamespaces: 0  // TODO: Implement pattern drift detection
+        oldNamespaces: 0,  // TODO: Implement pattern drift detection
+        conventionDrift: drift.conventionDrift ? {
+          dominantConvention: drift.conventionDrift.dominantConvention,
+          driftPercent: drift.conventionDrift.driftPercent,
+          driftSymbolCount: drift.conventionDrift.driftSymbols.length
+        } : undefined,
+        mixedConventionFiles: drift.mixedConventionFiles?.length || undefined
       },
       legacyAudit: {
         dead: legacy.dead.length,
@@ -101,6 +107,20 @@ export async function assembleFacts(
           confidence: r.confidence
         }))
       },
+
+      "findings.patternDrift.conventionDrift": drift.conventionDrift ? {
+        dominantConvention: drift.conventionDrift.dominantConvention,
+        driftPercent: drift.conventionDrift.driftPercent,
+        driftSymbols: drift.conventionDrift.driftSymbols.map(ds => ({
+          symbolId: ds.symbolId,
+          name: ds.name,
+          convention: ds.convention,
+          suggestedName: ds.suggestedName,
+          path: ds.path
+        }))
+      } : undefined,
+
+      "findings.patternDrift.mixedConventionFiles": drift.mixedConventionFiles || undefined,
 
       // Legacy fields for backward compatibility
       missing: drift.missing_symbols.map(m => ({ symbol_id: m.symbol_id, expected: m.expected })),

@@ -174,11 +174,13 @@ DISCOVER emergent patterns generically:
 - DRIFT: Diff-applied files w/ lingering old code; intended symbols w/o edges.
 - HOOKS: New symbols w/o callers; edge drops.
 
-Examples (self-generate):
-- "String lit 'red' repeated 12x → const candidate"
-- "Class fan-out +20 post-diff → missed abstraction"
+**IMPORTANT:** For examples, provide DESCRIPTIVE paths that explain what the evidence shows:
+- Good: "diff[UserService.php] shows renamed getUser() to fetchUser()"
+- Good: "ast[PaymentController.php].method_processPayment - new payment flow"
+- Bad: "diff[file.php] (truncated)"
+- Bad: "Example"
 
-Output ONLY JSON: {patterns: [{name:"naming_drift", desc:"...", examples:["AST[Widget.php].method_names"], count:15, pct:12}]}
+Output ONLY JSON: {patterns: [{name:"naming_drift", desc:"...", examples:["diff[Widget.php] shows old camelCase method names"], count:15, pct:12}]}
 `;
 
 /**
@@ -192,7 +194,13 @@ From discovered patterns, compute:
 - SILENT: No errors but inconsistency (e.g., 80% new naming, 20% old)
 
 Prioritize top-5 by impact.
-JSON: {quantified: [{...pattern, coverage_pct:30, impact: "high"}]} 
+
+**IMPORTANT:** For examples array, provide DESCRIPTIVE evidence paths:
+- Include file name and what the evidence shows
+- Format: "diff[FileName.php] shows <specific change>"
+- Format: "ast[FileName.php].method_name - <what it demonstrates>"
+
+JSON: {quantified: [{...pattern, coverage_pct:30, impact: "high", examples:["diff[PaymentService.php] shows consistent defaultSort() additions"]}]} 
 `;
 
 /**
@@ -201,5 +209,12 @@ JSON: {quantified: [{...pattern, coverage_pct:30, impact: "high"}]}
  */
 export const PROMPT_PLAN = `
 Weave top patterns → fixes. Gen code snippets/diffs for each.
-JSON: {plan: [{pattern:"naming_drift", fixes:[{before:"oldFunc()", after:"new_func()"}]}]}
+
+For each fix, include:
+- file: The target file path
+- before: The current code snippet
+- after: The suggested replacement
+- description: Brief explanation of the change
+
+JSON: {plan: [{pattern:"naming_drift", fixes:[{file:"UserService.php", before:"oldFunc()", after:"newFunc()", description:"Rename to match new convention"}]}]}
 `;

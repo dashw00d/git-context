@@ -140,6 +140,170 @@ export class AnalysisBlockUtils {
   }
 
   /**
+   * Create an evidence link with auto-generated readable description
+   * Parses the evidence path to generate human-readable text
+   */
+  static createEvidenceAuto(path: string, context?: string): EvidenceLink {
+    const description = this.parseEvidencePathToDescription(path, context);
+    const parsed = this.parseEvidencePath(path);
+    
+    return {
+      path,
+      description,
+      symbolId: parsed.symbolId,
+      filePath: parsed.filePath,
+      lineNumber: parsed.lineNumber
+    };
+  }
+
+  /**
+   * Parse evidence path into human-readable description
+   * Handles various path formats:
+   * - diff[file.php] (code snippet)
+   * - ast[file.php].method_name
+   * - graph.nodes[symbol_id]
+   * - graph.edges[from -> to]
+   * - findings.incompleteness.missing[0]
+   */
+  static parseEvidencePathToDescription(path: string, context?: string): string {
+    if (!path) return context || 'Evidence';
+
+    // Handle diff paths: diff[file.php] (code snippet)
+    const diffMatch = path.match(/^diff\[([^\]]+)\]\s*(?:\(([^)]+)\))?/);
+    if (diffMatch) {
+      const file = diffMatch[1].split('/').pop() || diffMatch[1];
+      const snippet = diffMatch[2];
+      if (snippet) {
+        // Clean up the snippet - show first meaningful part
+        const cleanSnippet = snippet.replace(/\s+/g, ' ').trim();
+        return `Diff: ${file} - "${cleanSnippet.substring(0, 40)}${cleanSnippet.length > 40 ? '...' : ''}"`;
+      }
+      return `Diff: ${file}`;
+    }
+
+    // Handle AST paths: ast[file.php].method_name
+    const astMatch = path.match(/^ast\[([^\]]+)\]\.?(\w+)?/);
+    if (astMatch) {
+      const file = astMatch[1].split('/').pop() || astMatch[1];
+      const symbol = astMatch[2];
+      if (symbol) {
+        const cleanSymbol = symbol.replace(/^(method_|property_|class_|function_)/, '');
+        return `AST: ${cleanSymbol}() in ${file}`;
+      }
+      return `AST: ${file}`;
+    }
+
+    // Handle graph node paths: graph.nodes[symbol_id]
+    const nodeMatch = path.match(/^graph\.nodes\[([^\]]+)\]/);
+    if (nodeMatch) {
+      const symbolId = nodeMatch[1];
+      const parts = symbolId.split(':');
+      if (parts.length > 1) {
+        const file = parts[0].split('/').pop() || parts[0];
+        const symbol = parts[1].replace(/^(method_|property_|class_|function_)/, '');
+        return `Graph node: ${symbol} in ${file}`;
+      }
+      return `Graph node: ${symbolId}`;
+    }
+
+    // Handle graph edge paths: graph.edges[from -> to]
+    const edgeMatch = path.match(/^graph\.edges\[([^\]]+)\]/);
+    if (edgeMatch) {
+      const edge = edgeMatch[1];
+      return `Graph edge: ${edge.replace(/ -> /g, ' → ')}`;
+    }
+
+    // Handle JSON paths: findings.incompleteness.missing
+    const jsonPathMatch = path.match(/^(findings|intended|working|scope|bundle|evidence)\.(.+)/);
+    if (jsonPathMatch) {
+      const section = jsonPathMatch[1];
+      const subpath = jsonPathMatch[2];
+      
+      // Clean up the subpath for display
+      const parts = subpath.split('.');
+      const lastPart = parts[parts.length - 1].replace(/\[\d+\]$/, '');
+      
+      // Generate human-readable names
+      const readableNames: Record<string, string> = {
+        'incompleteness.missing': 'Missing symbols',
+        'incompleteness.zombies': 'Zombie symbols',
+        'incompleteness.divergent': 'Divergent symbols',
+        'legacyAudit.dead': 'Dead code',
+        'legacyAudit.legacyUsed': 'Legacy code still in use',
+        'legacyAudit.replacedLeftovers': 'Replaced leftovers',
+        'patternDrift.mixedTargets': 'Mixed patterns',
+        'patternDrift.oldNamespaces': 'Old namespaces',
+        'patternDrift.conventionDrift': 'Naming convention drift',
+        'patternDrift.mixedConventionFiles': 'Files with mixed conventions',
+        'blastRadius': 'Blast radius',
+        'symbols': 'Working symbols',
+        'edges': 'Symbol relationships',
+        'files': 'Changed files',
+        'shas': 'Commit SHAs',
+        'present': 'Symbols expected present',
+        'absent': 'Symbols expected absent'
+      };
+
+      const readableName = readableNames[subpath] || 
+                          readableNames[parts.slice(-2).join('.')] || 
+                          lastPart.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
+      
+      return `${readableName}`;
+    }
+
+    // Fallback: clean up raw path
+    if (context) {
+      return context;
+    }
+    
+    // Try to make the path more readable
+    return path
+      .replace(/\[/g, ': ')
+      .replace(/\]/g, '')
+      .replace(/_/g, ' ')
+      .replace(/\./g, ' > ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
+
+  /**
+   * Parse evidence path to extract file/symbol info
+   */
+  static parseEvidencePath(path: string): { filePath?: string; symbolId?: string; lineNumber?: number } {
+    const result: { filePath?: string; symbolId?: string; lineNumber?: number } = {};
+
+    // Extract file path from various formats
+    const filePatterns = [
+      /diff\[([^\]]+)\]/,           // diff[file.php]
+      /ast\[([^\]]+)\]/,            // ast[file.php]
+      /^([^:]+\.(?:php|ts|js|tsx|jsx)):/, // file.php:symbol
+    ];
+
+    for (const pattern of filePatterns) {
+      const match = path.match(pattern);
+      if (match) {
+        result.filePath = match[1];
+        break;
+      }
+    }
+
+    // Extract symbol ID
+    const symbolPatterns = [
+      /graph\.nodes\[([^\]]+)\]/,   // graph.nodes[symbol_id]
+      /([^:]+):(\w+)$/,              // file:symbol
+    ];
+
+    for (const pattern of symbolPatterns) {
+      const match = path.match(pattern);
+      if (match) {
+        result.symbolId = match[1];
+        break;
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * Extract file path from symbol ID
    */
   static extractFilePath(symbolId: string): string {

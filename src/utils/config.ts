@@ -10,27 +10,45 @@ try {
 export function getExtensionConfig(): ExtensionConfig {
   if (vscode) {
     const config = vscode.workspace.getConfiguration('git-context');
+    const apiEndpoint = config.get('apiEndpoint', 'https://openrouter.ai/api/v1');
+    const embeddingProvider = config.get('embeddingProvider', ''); // Blank = use LLM provider
+    
     return {
       openRouterApiKey: config.get('openRouterApiKey') || process.env.OPENROUTER_API_KEY,
       openRouterModel: config.get('openRouterModel', 'anthropic/claude-3-haiku:beta'),
-      apiEndpoint: config.get('apiEndpoint', 'https://openrouter.ai/api/v1'),
+      apiEndpoint,
       difftasticPath: config.get('difftasticPath'),
       defaultCommitCount: config.get('defaultCommitCount', 5),
       tokensPerStep: config.get('tokensPerStep'),
       customPrompts: config.get('customPrompts'),
-      customIgnorePaths: config.get('customIgnorePaths')
+      customIgnorePaths: config.get('customIgnorePaths'),
+      // Qdrant config
+      qdrantUrl: config.get('qdrantUrl', ''),
+      qdrantApiKey: config.get('qdrantApiKey', ''),
+      // Embedding config
+      embeddingProvider: embeddingProvider || apiEndpoint, // Fallback to LLM provider
+      embeddingModel: config.get('embeddingModel', 'text-embedding-3-small')
     };
   } else {
     // CLI fallback
+    const apiEndpoint = process.env.API_ENDPOINT || 'https://openrouter.ai/api/v1';
+    const embeddingProvider = process.env.EMBEDDING_PROVIDER || '';
+    
     return {
       openRouterApiKey: process.env.OPENROUTER_API_KEY,
       openRouterModel: process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku:beta',
-      apiEndpoint: process.env.API_ENDPOINT || 'https://openrouter.ai/api/v1',
+      apiEndpoint,
       difftasticPath: process.env.DIFFTASTIC_PATH,
       defaultCommitCount: parseInt(process.env.DEFAULT_COMMIT_COUNT || '5'),
       tokensPerStep: process.env.TOKENS_PER_STEP ? JSON.parse(process.env.TOKENS_PER_STEP) : undefined,
       customPrompts: process.env.CUSTOM_PROMPTS ? JSON.parse(process.env.CUSTOM_PROMPTS) : undefined,
-      customIgnorePaths: process.env.CUSTOM_IGNORE_PATHS ? process.env.CUSTOM_IGNORE_PATHS.split(',') : undefined
+      customIgnorePaths: process.env.CUSTOM_IGNORE_PATHS ? process.env.CUSTOM_IGNORE_PATHS.split(',') : undefined,
+      // Qdrant config
+      qdrantUrl: process.env.QDRANT_URL || '',
+      qdrantApiKey: process.env.QDRANT_API_KEY || '',
+      // Embedding config
+      embeddingProvider: embeddingProvider || apiEndpoint,
+      embeddingModel: process.env.EMBEDDING_MODEL || 'text-embedding-3-small'
     };
   }
 }

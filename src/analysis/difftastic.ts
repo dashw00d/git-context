@@ -85,13 +85,18 @@ export class DifftasticIntegration {
         fs.writeFileSync(oldFile, oldContent);
         fs.writeFileSync(newFile, newContent);
 
-        // Run difftastic
+        // Run difftastic with fixed width to prevent side-by-side overflow panics
+        const width = '200'; // Fixed wide terminal
         const difft = spawn(this.difftasticPath, [
           '--color=never', // No ANSI colors for parsing
           '--exit-code',   // Exit with code based on differences
+          '--width', width, // Prevent panic on wide diffs
           oldFile,
           newFile
-        ], { stdio: ['pipe', 'pipe', 'pipe'] });
+        ], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env, COLUMNS: width, DIFT_WIDTH: width }
+        });
 
         let stdout = '';
         let stderr = '';
@@ -220,8 +225,11 @@ export class DifftasticIntegration {
       }
 
       return await this.runDifftastic(oldContent, newContent, parentPath, filePath);
-    } catch (error) {
-      console.warn(`Failed to get structural highlights for ${filePath} at ${sha}:`, error);
+    } catch (error: any) {
+      const errorMsg = error.message || String(error);
+      const widthRelated = errorMsg.includes('width') || errorMsg.includes('overflow') || errorMsg.includes('panic');
+      const diagMsg = widthRelated ? 'width overflow - consider adjusting --width flag' : errorMsg;
+      console.warn(`[DIFFTASTIC] Skipped ${filePath} (${diagMsg})`);
       return {
         highlights: [],
         morphs: [],

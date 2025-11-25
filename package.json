@@ -48,6 +48,68 @@
         "icon": "$(file-text)"
       },
       {
+        "command": "git-context.analyze",
+        "title": "Analyze",
+        "category": "Git Context",
+        "icon": "$(play)"
+      },
+      {
+        "command": "git-context.viewLatestReport",
+        "title": "View Report",
+        "category": "Git Context",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "git-context.openReport",
+        "title": "Open Report",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.regenerateReport",
+        "title": "Regenerate Report",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.deleteReport",
+        "title": "Delete Report",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.toggleFileSelection",
+        "title": "Toggle File Selection",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.toggleSelection",
+        "title": "Toggle Selection",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.togglePinReport",
+        "title": "Toggle Pin Report",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.addCommitBySha",
+        "title": "Add Commit by SHA",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.openReportSection",
+        "title": "Open Report Section",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.selectAllStaged",
+        "title": "Select All Staged",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.selectAllUnstaged",
+        "title": "Select All Unstaged",
+        "category": "Git Context"
+      },
+      {
         "command": "git-context.exportLlmContext",
         "title": "Export LLM Context (JSON)",
         "category": "Git Context",
@@ -62,6 +124,12 @@
         "command": "git-context.clearSelection",
         "title": "Clear Selection",
         "category": "Git Context"
+      },
+      {
+        "command": "git-context.resetAll",
+        "title": "Reset All",
+        "category": "Git Context",
+        "icon": "$(trash)"
       },
       {
         "command": "commit-tracker.regenerateBundle",
@@ -87,6 +155,36 @@
         "command": "commit-tracker.removeFromBundle",
         "title": "Remove from Bundle",
         "icon": "$(remove)"
+      },
+      {
+        "command": "git-context.findSimilarCommits",
+        "title": "Find Similar Commits",
+        "category": "Git Context",
+        "icon": "$(search)"
+      },
+      {
+        "command": "git-context.searchCommitsSemantic",
+        "title": "Search Commits (Semantic)",
+        "category": "Git Context",
+        "icon": "$(search)"
+      },
+      {
+        "command": "git-context.findSimilarSymbols",
+        "title": "Find Similar Symbols",
+        "category": "Git Context",
+        "icon": "$(symbol-method)"
+      },
+      {
+        "command": "git-context.findConventionDrift",
+        "title": "Find Convention Drift",
+        "category": "Git Context",
+        "icon": "$(symbol-constant)"
+      },
+      {
+        "command": "git-context.showConventionTimeline",
+        "title": "Show Convention Timeline",
+        "category": "Git Context",
+        "icon": "$(timeline)"
       }
     ],
     "viewsContainers": {
@@ -120,19 +218,24 @@
     "menus": {
       "view/title": [
         {
-          "command": "git-context.analyzeLastCommits",
+          "command": "git-context.analyze",
           "when": "view == commitTracker",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
-          "command": "git-context.generateReport",
+          "command": "git-context.viewLatestReport",
           "when": "view == commitTracker",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "git-context.clearSelection",
+          "when": "view == commitTracker && git-context.hasSelection",
+          "group": "navigation@3"
+        },
+        {
+          "command": "git-context.resetAll",
           "when": "view == commitTracker",
-          "group": "navigation"
+          "group": "navigation@4"
         },
         {
           "command": "git-context.searchSymbols",
@@ -144,6 +247,21 @@
         {
           "command": "git-context.toggleCommitSelection",
           "when": "view == commitTracker && viewItem == commit",
+          "group": "inline"
+        },
+        {
+          "command": "git-context.toggleSelection",
+          "when": "view == commitTracker && viewItem =~ /^selection-/",
+          "group": "inline"
+        },
+        {
+          "command": "git-context.selectAllStaged",
+          "when": "view == commitTracker && viewItem == selection-staged",
+          "group": "inline"
+        },
+        {
+          "command": "git-context.selectAllUnstaged",
+          "when": "view == commitTracker && viewItem == selection-unstaged",
           "group": "inline"
         },
         {
@@ -221,6 +339,26 @@
           },
           "default": [],
           "description": "Additional paths to ignore during analysis (glob patterns)"
+        },
+        "git-context.qdrantUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Qdrant server URL (e.g., http://localhost:6333). Leave blank for local instance."
+        },
+        "git-context.qdrantApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Qdrant API key (required for cloud instances, optional for local)"
+        },
+        "git-context.embeddingProvider": {
+          "type": "string",
+          "default": "",
+          "description": "Embedding API endpoint (e.g., https://api.openai.com/v1). Leave blank to use the same provider as LLM."
+        },
+        "git-context.embeddingModel": {
+          "type": "string",
+          "default": "text-embedding-3-small",
+          "description": "Embedding model to use (e.g., text-embedding-3-small, text-embedding-ada-002)"
         }
       }
     }
@@ -244,6 +382,7 @@
     "typescript": "^4.9.4"
   },
   "dependencies": {
+    "@qdrant/js-client-rest": "^1.16.0",
     "chalk": "^4.1.2",
     "commander": "^10.0.0",
     "openai": "^4.0.0",

@@ -71,14 +71,20 @@ export class LegacyAuditService {
                 // Ideally: const content = fs.readFileSync(path, 'utf8');
                 // But we should use the git wrapper if possible.
 
-                const content = this.git.getFileContent('HEAD', path); // Fallback to HEAD
+                const content = this.git.safeGetFileContent('HEAD', path); // Fallback to HEAD
+
+                // Skip if file doesn't exist at HEAD
+                if (!content) {
+                    continue;
+                }
+
                 const symbols = await this.symbolExtractor['extractSymbolsFromContent'](content, path);
 
                 for (const symbol of symbols) {
                     workingSymbols.set(symbol.id, symbol);
                 }
             } catch (error) {
-                // File might be deleted in working tree
+                // File might be deleted in working tree or parsing error
             }
         }
 

@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import { TreeNode, isCommitNode, isFileNode, isCategoryNode, isSymbolNode, getCollapsibleState, toVSCodeTreeItem } from '../contracts/treeNodes';
 import { RefactorBundleFacts } from '../facts/types';
+import { FileChange } from '../types';
 
 export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> {
   private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | null | void> =
@@ -11,6 +13,12 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
 
   // Track selected commits for multi-report generation
   public selectedCommits = new Set<string>();
+
+  // Track selected files for analysis
+  public selectedFiles: Set<string> = new Set();
+
+  // Workspace scope for analysis
+  private workspaceScope: 'full' | 'staged' | 'unstaged' | 'partial' = 'full';
 
   // Store last bundle facts for bundle node display
   public lastBundleFacts: RefactorBundleFacts | null = null;
@@ -41,6 +49,13 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
   // Performance: Track expanded state for bundle node (sticky expansion)
   private bundleExpandedState = vscode.TreeItemCollapsibleState.Expanded;
 
+  // Pagination state for commit selection
+  public loadMoreOffset = 0;
+  public readonly PAGE_SIZE = 3;
+
+  // Track manually added commits (preserve during Pull Latest)
+  public manualCommits = new Set<string>();
+
   toggleCommitSelection(sha: string): void {
     if (this.selectedCommits.has(sha)) {
       this.selectedCommits.delete(sha);
@@ -48,13 +63,101 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       this.selectedCommits.add(sha);
     }
     this.persistState();
+    this.updateSelectionContext();
+    this.refresh();
+  }
+
+  toggleFileSelection(filePath: string): void {
+    if (this.selectedFiles.has(filePath)) {
+      this.selectedFiles.delete(filePath);
+    } else {
+      this.selectedFiles.add(filePath);
+    }
+    this.persistState();
+    this.updateSelectionContext();
+    this.refresh();
+  }
+
+  selectAllStaged(): void {
+    try {
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const staged = git.getStagedFiles();
+      staged.forEach((f: FileChange) => this.selectedFiles.add(f.path));
+      this.persistState();
+      this.updateSelectionContext();
+      this.refresh();
+    } catch (error) {
+      console.error('Failed to select all staged files:', error);
+    }
+  }
+
+  selectAllUnstaged(): void {
+    try {
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const unstaged = git.getUnstagedFiles();
+      unstaged.forEach((f: FileChange) => this.selectedFiles.add(f.path));
+      this.persistState();
+      this.updateSelectionContext();
+      this.refresh();
+    } catch (error) {
+      console.error('Failed to select all unstaged files:', error);
+    }
+  }
+
+  clearFileSelection(): void {
+    this.selectedFiles.clear();
+    this.persistState();
+    this.updateSelectionContext();
     this.refresh();
   }
 
   clearSelection(): void {
     this.selectedCommits.clear();
+    this.selectedFiles.clear();
+    this.persistState();
+    this.updateSelectionContext();
+    this.refresh();
+  }
+
+  /**
+   * Mark a commit as manually added (preserve during Pull Latest)
+   */
+  markCommitAsManual(sha: string): void {
+    this.manualCommits.add(sha);
+    this.persistState();
+  }
+
+  /**
+   * Get selected files
+   */
+  getSelectedFiles(): string[] {
+    return Array.from(this.selectedFiles);
+  }
+
+  /**
+   * Get workspace scope
+   */
+  getWorkspaceScope(): 'full' | 'staged' | 'unstaged' | 'partial' {
+    return this.workspaceScope;
+  }
+
+  /**
+   * Set workspace scope
+   */
+  setWorkspaceScope(scope: 'full' | 'staged' | 'unstaged' | 'partial'): void {
+    this.workspaceScope = scope;
     this.persistState();
     this.refresh();
+  }
+
+  /**
+   * Update VS Code context key for selection state
+   */
+  private updateSelectionContext(): void {
+    const hasSelection = this.selectedCommits.size > 0 || this.selectedFiles.size > 0;
+    vscode.commands.executeCommand('setContext', 'git-context.hasSelection', hasSelection);
   }
 
   /**
@@ -285,17 +388,21 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       });
     }
 
+    // Determine if we have data to show
+    const hasData = !!this.lastBundleFacts;
+    const noDataContextValue = hasData ? 'refactor-bundle-item' : 'no-data-placeholder';
+
     // Net Effect vs Working Tree
     children.push({
       id: 'refactor-bundle-net-effect',
       type: 'category' as const,
       categoryType: 'added' as const,
       parentId: 'refactor-bundle',
-      count: selectedCount,
+      count: hasData ? selectedCount : 0,
       label: 'Net Effect vs Working Tree',
-      description: 'Combined changes from bundle',
+      description: hasData ? 'Combined changes from bundle' : 'Generate report first',
       tooltip: 'Shows the net result of all commits in the bundle compared to working tree',
-      contextValue: 'refactor-bundle-item'
+      contextValue: noDataContextValue
     });
 
     // Incompleteness Analysis
@@ -313,7 +420,7 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
         ? `${this.lastBundleFacts.findings.incompleteness.missing} missing · ${this.lastBundleFacts.findings.incompleteness.zombies} zombies`
         : 'Missing additions and zombie removals',
       tooltip: 'Analyze what parts of the refactor are incomplete',
-      contextValue: 'refactor-bundle-item'
+      contextValue: hasData ? 'refactor-bundle-item' : 'no-data-placeholder'
     });
 
     // Pattern Drift
@@ -329,7 +436,7 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       label: `Pattern Drift${driftCount > 0 ? ` ${driftCount} issues` : ''}`,
       description: driftCount > 0 ? `${driftCount} mixed/old patterns` : 'Pattern consistency analysis',
       tooltip: 'Identify where patterns have drifted during the refactor',
-      contextValue: 'refactor-bundle-item'
+      contextValue: hasData ? 'refactor-bundle-item' : 'no-data-placeholder'
     });
 
     // Legacy / Dead
@@ -347,7 +454,7 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
         ? `${this.lastBundleFacts.findings.legacyAudit.dead} dead · ${this.lastBundleFacts.findings.legacyAudit.replacedLeftovers.length} replaced`
         : 'Dead code and technical debt',
       tooltip: 'Identify dead code, legacy usage, and cleanup opportunities',
-      contextValue: 'refactor-bundle-item'
+      contextValue: hasData ? 'refactor-bundle-item' : 'no-data-placeholder'
     });
 
     // Timeline Rewind
@@ -356,11 +463,11 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       type: 'category' as const,
       categoryType: 'added' as const,
       parentId: 'refactor-bundle',
-      count: selectedCount,
+      count: hasData ? selectedCount : 0,
       label: 'Timeline Rewind',
-      description: 'Evolution of changes over time',
+      description: hasData ? 'Evolution of changes over time' : 'Generate report first',
       tooltip: 'See how the refactor evolved across commits',
-      contextValue: 'refactor-bundle-item'
+      contextValue: hasData ? 'refactor-bundle-item' : 'no-data-placeholder'
     });
 
     return children;
@@ -369,17 +476,22 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
   private async getBundleChildDetails(element: TreeNode): Promise<TreeNode[]> {
     const children: TreeNode[] = [];
 
+    // Prevent recursive expansion of "no-data" placeholders
+    if (element.id?.endsWith('-no-data') || element.contextValue === 'no-data-placeholder') {
+      return [];
+    }
+
     if (!this.lastBundleFacts) {
       children.push({
         id: `${element.id}-no-data`,
         type: 'category' as const,
         categoryType: 'added' as const,
         parentId: element.id,
-        count: 1,
+        count: 0,  // Set to 0 so it won't be expandable
         label: 'No data available',
         description: 'Generate report first',
         tooltip: 'Run analysis to see detailed findings',
-        contextValue: 'refactor-bundle-item'
+        contextValue: 'no-data-placeholder'  // Different contextValue to prevent expansion
       });
       return children;
     }
@@ -991,6 +1103,7 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
 
   constructor(private context: vscode.ExtensionContext) {
     this.restoreState();
+    this.updateSelectionContext();
   }
 
   /**
@@ -1032,7 +1145,12 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
   public persistState(): void {
     const selectedShas = Array.from(this.selectedCommits);
     this.context.workspaceState.update('commit-tracker.selectedShas', selectedShas);
+    this.context.workspaceState.update('commit-tracker.selectedFiles', Array.from(this.selectedFiles));
+    this.context.workspaceState.update('commit-tracker.workspaceScope', this.workspaceScope);
     this.context.workspaceState.update('commit-tracker.workspaceParts', Array.from(this.workspaceParts));
+    this.context.workspaceState.update('commit-tracker.loadMoreOffset', this.loadMoreOffset);
+    this.context.workspaceState.update('commit-tracker.manualCommits', Array.from(this.manualCommits));
+    this.updateSelectionContext();
 
     // Also persist last bundle SHAs for regenerate fallback
     if (selectedShas.length >= 2) {
@@ -1046,9 +1164,35 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
   private restoreState(): void {
     const selectedShas = this.context.workspaceState.get<string[]>('commit-tracker.selectedShas', []);
     this.selectedCommits = new Set(selectedShas);
-    
+
+    const selectedFiles = this.context.workspaceState.get<string[]>('commit-tracker.selectedFiles', []);
+    this.selectedFiles = new Set(selectedFiles);
+
+    const workspaceScope = this.context.workspaceState.get<'full' | 'staged' | 'unstaged' | 'partial'>('commit-tracker.workspaceScope', 'full');
+    this.workspaceScope = workspaceScope;
+
+    // Auto-select HEAD if no selection exists
+    if (this.selectedCommits.size === 0) {
+      try {
+        const { GitOperations } = require('../analysis/git');
+        const git = new GitOperations();
+        const headSha = git.getHeadSha();
+        if (headSha) {
+          this.selectedCommits.add(headSha);
+        }
+      } catch {
+        // Ignore - will select on first load when database is initialized
+      }
+    }
+
     const workspaceParts = this.context.workspaceState.get<string[]>('commit-tracker.workspaceParts', ['staged', 'unstaged']);
     this.workspaceParts = new Set(workspaceParts as ('staged' | 'unstaged')[]);
+
+    const loadMoreOffset = this.context.workspaceState.get<number>('commit-tracker.loadMoreOffset', 0);
+    this.loadMoreOffset = loadMoreOffset;
+
+    const manualCommits = this.context.workspaceState.get<string[]>('commit-tracker.manualCommits', []);
+    this.manualCommits = new Set(manualCommits);
   }
 
   getTreeItem(element: TreeNode): vscode.TreeItem {
@@ -1074,6 +1218,18 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
     } else if (element.contextValue === 'workspace-full') {
       // Workspace-full is not expandable (has command)
       collapsibleState = vscode.TreeItemCollapsibleState.None;
+    } else if (element.contextValue === 'no-data-placeholder') {
+      // "No data available" placeholders should never be expandable
+      collapsibleState = vscode.TreeItemCollapsibleState.None;
+    } else if (element.contextValue === 'refactor-bundle-grouping-item' || element.contextValue === 'timeline-item' || element.contextValue === 'load-more') {
+      // Action items with commands but no children should not be expandable
+      collapsibleState = vscode.TreeItemCollapsibleState.None;
+    } else if (element.type === 'category' && element.count === 0 && !element.children?.length) {
+      // Don't make category items expandable if they have no children
+      collapsibleState = vscode.TreeItemCollapsibleState.None;
+    } else if (element.id?.startsWith('hotspot-')) {
+      // Hotspot files with no drift symbols shouldn't be expandable (no nested children implemented)
+      collapsibleState = vscode.TreeItemCollapsibleState.None;
     } else if (element.children && element.children.length > 0) {
       // Items with pre-populated children (like risks, file groups)
       collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
@@ -1082,10 +1238,143 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
     const treeItem = new vscode.TreeItem(element.label || '', collapsibleState);
     treeItem.id = element.id;
     treeItem.description = element.description;
-    treeItem.tooltip = element.tooltip;
+    
+    // Create rich tooltips with MarkdownString
+    if (element.type === 'commit') {
+      const mdTooltip = new vscode.MarkdownString();
+      mdTooltip.appendMarkdown(`**${element.message.split('\n')[0]}**\n\n`);
+      mdTooltip.appendMarkdown(`- SHA: \`${element.sha.substring(0, 8)}\`\n`);
+      mdTooltip.appendMarkdown(`- Author: ${element.author}\n`);
+      mdTooltip.appendMarkdown(`- Date: ${new Date(element.date).toLocaleDateString()}\n\n`);
+      if (element.message.includes('\n')) {
+        mdTooltip.appendMarkdown(`\n\`\`\`\n${element.message}\n\`\`\`\n\n`);
+      }
+      mdTooltip.appendMarkdown(`*Click to expand files • Right-click for actions*`);
+      treeItem.tooltip = mdTooltip;
+    } else if (element.type === 'file' && element.stats) {
+      const fileTooltip = new vscode.MarkdownString();
+      fileTooltip.appendMarkdown(`**${element.path}**\n\n`);
+      fileTooltip.appendMarkdown(`| Added | Modified | Removed |\n|-------|----------|----------|\n`);
+      fileTooltip.appendMarkdown(`| ${element.stats.added} | ${element.stats.modified} | ${element.stats.removed} |\n\n`);
+      if (element.sha) {
+        fileTooltip.appendMarkdown(`- Commit: \`${element.sha.substring(0, 8)}\`\n`);
+      }
+      fileTooltip.appendMarkdown(`*Click to open file*`);
+      treeItem.tooltip = fileTooltip;
+    } else if (element.tooltip) {
+      // Use existing tooltip if it's already a MarkdownString, otherwise convert
+      if (element.tooltip instanceof vscode.MarkdownString) {
+        treeItem.tooltip = element.tooltip;
+      } else {
+        // Convert string tooltip to MarkdownString for better formatting
+        const mdTooltip = new vscode.MarkdownString(element.tooltip);
+        treeItem.tooltip = mdTooltip;
+      }
+    }
+    
     treeItem.iconPath = element.icon ? new vscode.ThemeIcon(element.icon) : undefined;
     treeItem.command = element.command;
     treeItem.contextValue = element.contextValue;
+
+    // Handle selection items: No commands, simple tooltips
+    if (element.contextValue?.startsWith('selection-')) {
+      // No command - clicking toggles selection
+      treeItem.command = undefined;
+      
+      // Simple tooltip
+      treeItem.tooltip = element.description || element.tooltip || '';
+      
+      // Collapsible state
+      if (element.type === 'file') {
+        collapsibleState = vscode.TreeItemCollapsibleState.None;
+      } else {
+        collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
+      }
+      treeItem.collapsibleState = collapsibleState;
+    }
+
+    // Handle report items: Rich interaction with inline buttons
+    if (element.contextValue === 'saved-report') {
+      const reportId = element.id.replace('report-', '');
+      try {
+        const { getReportManager } = require('../storage/reportManager');
+        const reportManager = getReportManager();
+        const report = reportManager.load(reportId);
+        
+        if (report) {
+          // Inline buttons
+          (treeItem as any).buttons = [
+            { 
+              iconPath: new vscode.ThemeIcon('go-to-file'), 
+              tooltip: 'View Report', 
+              command: 'git-context.openReport',
+              arguments: [reportId]
+            },
+            { 
+              iconPath: new vscode.ThemeIcon('refresh'), 
+              tooltip: 'Regenerate', 
+              command: 'git-context.regenerateReport',
+              arguments: [reportId]
+            },
+            { 
+              iconPath: new vscode.ThemeIcon('trash'), 
+              tooltip: 'Delete', 
+              command: 'git-context.deleteReport',
+              arguments: [reportId]
+            },
+            { 
+              iconPath: new vscode.ThemeIcon(report.isPinned ? 'pinned' : 'pin'), 
+              tooltip: report.isPinned ? 'Unpin' : 'Pin', 
+              command: 'git-context.togglePinReport',
+              arguments: [reportId]
+            }
+          ];
+          
+          // Rich MarkdownString tooltip
+          const tooltip = new vscode.MarkdownString();
+          tooltip.appendMarkdown(`**${report.title}**\n\n`);
+          tooltip.appendMarkdown(`📅 Created: ${report.createdAt.toLocaleString()}\n\n`);
+          tooltip.appendMarkdown(`| Metric | Count |\n|--------|-------|\n`);
+          tooltip.appendMarkdown(`| Critical | ${report.criticalCount} |\n`);
+          tooltip.appendMarkdown(`| Warnings | ${report.warningCount} |\n`);
+          tooltip.appendMarkdown(`| Files analyzed | ${report.selectedFiles.length} |\n`);
+          tooltip.appendMarkdown(`| Commits | ${report.commitShas.length} |\n\n`);
+          const changedSince = reportManager.getChangedFileCount(report);
+          if (changedSince > 0) {
+            tooltip.appendMarkdown(`⚠️ **${changedSince} files changed since report**\n\n`);
+          }
+          tooltip.appendMarkdown(`*Click to open report*\n\n*Note: File links work best in editor mode, not preview*`);
+          treeItem.tooltip = tooltip;
+        }
+      } catch (error) {
+        console.error('Failed to load report for tooltip:', error);
+      }
+    }
+
+    // Handle report commit summary child
+    if (element.contextValue === 'report-commit-summary') {
+      const tooltip = new vscode.MarkdownString();
+      if (element.type === 'category' && element.label) {
+        tooltip.appendMarkdown(`**${element.label}**\n\n`);
+      }
+      if (element.description) {
+        tooltip.appendMarkdown(`${element.description}\n\n`);
+      }
+      tooltip.appendMarkdown(`*Click to jump to this section in report*`);
+      treeItem.tooltip = tooltip;
+    }
+
+    // Handle report file node
+    if (element.contextValue === 'report-file' && element.type === 'file') {
+      const tooltip = new vscode.MarkdownString();
+      tooltip.appendMarkdown(`**${element.path}**\n\n`);
+      if (element.stats) {
+        tooltip.appendMarkdown(`| Added | Modified | Removed |\n|-------|----------|----------|\n`);
+        tooltip.appendMarkdown(`| ${element.stats.added} | ${element.stats.modified} | ${element.stats.removed} |\n\n`);
+      }
+      tooltip.appendMarkdown(`*Click to open file*`);
+      treeItem.tooltip = tooltip;
+    }
 
     // Add buttons for different node types
     if (element.id === 'refactor-bundle') {
@@ -1137,13 +1426,84 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       ];
     }
 
+    // Ensure all symbol nodes get proper commands if they don't have one
+    if (element.type === 'symbol' && !treeItem.command && element.path) {
+      let range: vscode.Range | undefined;
+      if (element.loc) {
+        try {
+          range = new vscode.Range(
+            new vscode.Position(element.loc.line - 1, element.loc.column || 0),
+            new vscode.Position(element.loc.end_line ? element.loc.end_line - 1 : element.loc.line - 1, element.loc.end_column || 0)
+          );
+        } catch {
+          // Invalid location, use undefined
+        }
+      }
+      treeItem.command = {
+        command: 'git-context.openSymbol',
+        title: 'Open Symbol',
+        arguments: [element.sha || '', element.path, range]
+      };
+    }
+
     return treeItem;
   }
 
   async getChildren(element?: TreeNode): Promise<TreeNode[]> {
     if (!element) {
-      // Root level - show recent commits
-      return this.getRecentCommits();
+      // Root level - show root nodes
+      return this.getRootNodes();
+    }
+
+    // Handle selection section children
+    if (element.id === 'selection-header') {
+      return this.getSelectionNodes();
+    }
+
+    // Handle reports-section children
+    if (element.id === 'reports-section') {
+      return this.getSavedReportNodes();
+    }
+
+    if (element.id === 'workspace-select') {
+      return this.getWorkspaceSelectionChildren();
+    }
+
+    if (element.id === 'selection-staged') {
+      return this.getStagedFileNodes();
+    }
+
+    if (element.id === 'selection-unstaged') {
+      return this.getUnstagedFileNodes();
+    }
+
+    if (element.id === 'selection-commits') {
+      return this.getCommitSelectionNodes();
+    }
+
+    if (element.id === 'selection-more' || element.contextValue === 'action-add-commit') {
+      return []; // Leaf node, clicking shows input
+    }
+
+    // Handle reports section children
+    if (element.id?.startsWith('report-') && 
+        !element.id.includes('-workspace') && 
+        !element.id.includes('-commit-')) {
+      const reportId = element.id.replace('report-', '');
+      return this.getReportChildren(reportId);
+    }
+
+    if (element.id?.match(/^report-.*-workspace$/)) {
+      const reportId = element.id.replace('report-', '').replace('-workspace', '');
+      return this.getReportWorkspaceFiles(reportId);
+    }
+
+    if (element.id?.match(/^report-.*-commit-/)) {
+      const match = element.id.match(/^report-(.*)-commit-(.*)$/);
+      if (match) {
+        const [, reportId, commitSha] = match;
+        return this.getReportCommitFindings(reportId, commitSha);
+      }
     }
 
     // Handle workspace staged/unstaged file children
@@ -1154,26 +1514,50 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       const gitRoot = getGitRoot();
       const staged = git.getStagedFiles();
       
-      return staged.map((f: { path: string }) => ({
-        id: `workspace-staged-${f.path}`,
-        type: 'file' as const,
-        path: f.path,
-        sha: '', // Workspace files don't have a commit SHA
-        stats: {
-          added: 0,
-          modified: 0,
-          removed: 0
-        },
-        label: f.path.split('/').pop() || f.path,
-        description: f.path,
-        tooltip: `Staged file: ${f.path}`,
-        contextValue: 'workspace-file',
-        command: gitRoot ? {
-          command: 'vscode.open',
-          title: 'Open File',
-          arguments: [vscode.Uri.file(path.join(gitRoot, f.path))]
-        } : undefined
-      }));
+      return staged.map((f: { path: string }) => {
+        const fullPath = gitRoot ? path.join(gitRoot, f.path) : f.path;
+        let command: vscode.Command | undefined;
+        
+        if (gitRoot) {
+          try {
+            const stats = fs.statSync(fullPath);
+            const isFile = stats.isFile();
+            if (isFile) {
+              command = {
+                command: 'vscode.open',
+                title: 'Open File',
+                arguments: [vscode.Uri.file(fullPath)]
+              };
+            } else {
+              command = {
+                command: 'revealInExplorer',
+                title: 'Reveal in Explorer',
+                arguments: [vscode.Uri.file(fullPath)]
+              };
+            }
+          } catch {
+            // File doesn't exist or can't be accessed - no command
+            command = undefined;
+          }
+        }
+        
+        return {
+          id: `workspace-staged-${f.path}`,
+          type: 'file' as const,
+          path: f.path,
+          sha: '', // Workspace files don't have a commit SHA
+          stats: {
+            added: 0,
+            modified: 0,
+            removed: 0
+          },
+          label: f.path.split('/').pop() || f.path,
+          description: f.path,
+          tooltip: `Staged file: ${f.path}`,
+          contextValue: 'workspace-file',
+          command
+        };
+      });
     }
 
     if (element.id === 'workspace-unstaged') {
@@ -1183,26 +1567,50 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       const gitRoot = getGitRoot();
       const unstaged = git.getUnstagedFiles();
       
-      return unstaged.map((f: { path: string }) => ({
-        id: `workspace-unstaged-${f.path}`,
-        type: 'file' as const,
-        path: f.path,
-        sha: '', // Workspace files don't have a commit SHA
-        stats: {
-          added: 0,
-          modified: 0,
-          removed: 0
-        },
-        label: f.path.split('/').pop() || f.path,
-        description: f.path,
-        tooltip: `Unstaged file: ${f.path}`,
-        contextValue: 'workspace-file',
-        command: gitRoot ? {
-          command: 'vscode.open',
-          title: 'Open File',
-          arguments: [vscode.Uri.file(path.join(gitRoot, f.path))]
-        } : undefined
-      }));
+      return unstaged.map((f: { path: string }) => {
+        const fullPath = gitRoot ? path.join(gitRoot, f.path) : f.path;
+        let command: vscode.Command | undefined;
+        
+        if (gitRoot) {
+          try {
+            const stats = fs.statSync(fullPath);
+            const isFile = stats.isFile();
+            if (isFile) {
+              command = {
+                command: 'vscode.open',
+                title: 'Open File',
+                arguments: [vscode.Uri.file(fullPath)]
+              };
+            } else {
+              command = {
+                command: 'revealInExplorer',
+                title: 'Reveal in Explorer',
+                arguments: [vscode.Uri.file(fullPath)]
+              };
+            }
+          } catch {
+            // File doesn't exist or can't be accessed - no command
+            command = undefined;
+          }
+        }
+        
+        return {
+          id: `workspace-unstaged-${f.path}`,
+          type: 'file' as const,
+          path: f.path,
+          sha: '', // Workspace files don't have a commit SHA
+          stats: {
+            added: 0,
+            modified: 0,
+            removed: 0
+          },
+          label: f.path.split('/').pop() || f.path,
+          description: f.path,
+          tooltip: `Unstaged file: ${f.path}`,
+          contextValue: 'workspace-file',
+          command
+        };
+      });
     }
 
     // Handle selected-commits-group children
@@ -1328,8 +1736,767 @@ export class CommitTrackerProvider implements vscode.TreeDataProvider<TreeNode> 
       });
     }
 
+    // Handle file nodes with pre-populated children (from getCommitDetails)
+    if (element.type === 'file' && element.children?.length) {
+      return element.children;
+    }
+
+    // Handle category nodes with pre-populated children (Added/Modified/Removed under files)
+    if (element.type === 'category' && element.children?.length) {
+      return element.children;
+    }
+
     // Child level - show commit details
     return this.getCommitDetails(element);
+  }
+
+  /**
+   * Helper function to generate checkbox label
+   */
+  private getCheckboxLabel(isSelected: boolean, label: string): string {
+    return `${isSelected ? '☑' : '☐'} ${label}`;
+  }
+
+  /**
+   * Helper function to generate partial checkbox label
+   */
+  private getPartialCheckboxLabel(selected: number, total: number, label: string): string {
+    if (selected === 0) return `☐ ${label}`;
+    if (selected === total) return `☑ ${label}`;
+    return `▣ ${label} (${selected}/${total})`;
+  }
+
+  /**
+   * Generate report title from workspace scope and commit SHAs
+   */
+  private generateReportTitle(
+    workspaceScope: string,
+    commitShas: string[],
+    git: any
+  ): string {
+    const parts: string[] = [];
+    
+    // Workspace part
+    if (workspaceScope !== 'none') {
+      parts.push(`Workspace (${workspaceScope})`);
+    }
+    
+    // Commits part
+    if (commitShas.length === 1) {
+      const isHead = commitShas[0] === git.getHeadSha();
+      parts.push(isHead ? 'HEAD' : commitShas[0].substring(0, 8));
+    } else if (commitShas.length > 1) {
+      parts.push(`HEAD+${commitShas.length - 1}`);
+    }
+    
+    return parts.join(' vs ');
+  }
+
+  /**
+   * Get saved report nodes for the reports section
+   */
+  private getSavedReportNodes(): TreeNode[] {
+    try {
+      const { getReportManager } = require('../storage/reportManager');
+      const reportManager = getReportManager();
+      const reports = reportManager.list();
+
+      if (reports.length === 0) {
+      return [{
+        id: 'empty-reports',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'root',
+        count: 0,
+        label: 'No saved reports. Select items above and click Analyze.',
+        description: '',
+        tooltip: 'Select files and commits above, then click Analyze to create a report',
+        contextValue: 'empty-state'
+      }];
+      }
+
+      return reports.map((report: any) => ({
+        id: `report-${report.id}`,
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'root',
+        count: report.criticalCount + report.warningCount,
+        label: `${report.isPinned ? '📌' : '📊'} ${report.title}`,
+        description: `📅 ${this.formatDate(report.createdAt)}`,
+        tooltip: report.summary,
+        contextValue: 'saved-report',
+        collapsibleState: vscode.TreeItemCollapsibleState.Collapsed
+      }));
+    } catch (error) {
+      console.error('Failed to load saved reports:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Format date for display
+   */
+  private formatDate(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  }
+
+  /**
+   * Get root nodes - selection section + reports section
+   */
+  private async getRootNodes(): Promise<TreeNode[]> {
+    const startTime = Date.now();
+    console.log('[COMMIT-TRACKER] getRootNodes() called');
+
+    // If database is not initialized, show placeholder
+    if (!this.isInitialized) {
+      console.log('[COMMIT-TRACKER] Database not initialized, showing placeholder');
+      return [{
+        id: 'initialize-placeholder',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'root',
+        count: 0,
+        label: '📦 Click to Load Commits',
+        description: 'Database not initialized',
+        tooltip: 'Click to initialize the database and load commit history',
+        contextValue: 'initialize-placeholder',
+        command: {
+          command: 'git-context.initializeDatabase',
+          title: 'Initialize Database'
+        }
+      }];
+    }
+
+    try {
+      const result: TreeNode[] = [];
+
+      // Selection Section
+      result.push({
+        id: 'selection-header',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'root',
+        count: 0,
+        label: '🔄 New Analysis',
+        description: '',
+        tooltip: 'Select workspace files and commits to analyze',
+        contextValue: 'selection-header'
+      });
+
+      // Reports Section (collapsible)
+      result.push({
+        id: 'reports-section',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'root',
+        count: 0,
+        label: '📊 Saved Reports',
+        description: '',
+        tooltip: 'Previously generated analysis reports',
+        contextValue: 'reports-section'
+      });
+
+      console.log(`[COMMIT-TRACKER] getRootNodes() completed in ${Date.now() - startTime}ms`);
+      return result;
+    } catch (error) {
+      console.error('Failed to load root nodes:', error);
+      // @ts-ignore
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return [{
+        id: 'error',
+        type: 'risk' as const,
+        label: 'Error loading tree',
+        description: errorMessage,
+        icon: 'error'
+      }];
+    }
+  }
+
+  /**
+   * Get selection section nodes (workspace + commits)
+   */
+  private getSelectionNodes(): TreeNode[] {
+    const nodes: TreeNode[] = [];
+
+    // Workspace node
+    try {
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const changes = git.getWorkingDirectoryChanges();
+      const fileCount = changes.length;
+
+      // Check if workspace has selected files (for checkbox state)
+      const hasSelectedFiles = this.selectedFiles.size > 0;
+
+      nodes.push({
+        id: 'workspace-select',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'selection-header',
+        count: fileCount,
+        label: this.getCheckboxLabel(hasSelectedFiles, `Workspace - ${fileCount} files (${this.workspaceScope})`),
+        description: '',
+        tooltip: `Select workspace files for analysis. Scope: ${this.workspaceScope}`,
+        contextValue: 'selection-item'
+      });
+
+      // Commits node
+      nodes.push({
+        id: 'selection-commits',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'selection-header',
+        count: this.selectedCommits.size,
+        label: `Commits (${this.selectedCommits.size} selected)`,
+        description: '',
+        tooltip: 'Select commits to analyze',
+        contextValue: 'selection-item'
+      });
+
+      // Pull Latest action button
+      nodes.push({
+        id: 'pull-latest-action',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'selection-header',
+        count: 0,
+        label: '🔄 Pull Latest',
+        description: 'Re-analyze latest commits',
+        tooltip: 'Re-analyze latest commits from git, preserving manual selections',
+        contextValue: 'pull-latest',
+        command: { command: 'git-context.pullLatest', title: 'Pull Latest' }
+      });
+
+      // Reset Analysis action button
+      nodes.push({
+        id: 'reset-analysis-action',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'selection-header',
+        count: 0,
+        label: '🔄 Reset',
+        description: 'Clear selection and reload',
+        tooltip: 'Clear all selections and reload latest commits',
+        contextValue: 'reset-analysis',
+        command: { command: 'git-context.resetAnalysis', title: 'Reset Analysis' }
+      });
+    } catch (error) {
+      console.error('Failed to get selection nodes:', error);
+    }
+
+    return nodes;
+  }
+
+  /**
+   * Get workspace selection children (staged/unstaged groups)
+   */
+  private getWorkspaceSelectionChildren(): TreeNode[] {
+    const nodes: TreeNode[] = [];
+
+    try {
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const staged = git.getStagedFiles();
+      const unstaged = git.getUnstagedFiles();
+
+      if (staged.length > 0) {
+        nodes.push({
+          id: 'selection-staged',
+          type: 'category' as const,
+          categoryType: 'added' as const,
+          parentId: 'workspace-select',
+          count: staged.length,
+          label: this.getPartialCheckboxLabel(
+            staged.filter((f: FileChange) => this.selectedFiles.has(f.path)).length,
+            staged.length,
+            `Staged (${staged.length})`
+          ),
+          description: '',
+          tooltip: 'Staged files',
+          contextValue: 'selection-item'
+        });
+      }
+
+      if (unstaged.length > 0) {
+        nodes.push({
+          id: 'selection-unstaged',
+          type: 'category' as const,
+          categoryType: 'added' as const,
+          parentId: 'workspace-select',
+          count: unstaged.length,
+          label: this.getPartialCheckboxLabel(
+            unstaged.filter((f: FileChange) => this.selectedFiles.has(f.path)).length,
+            unstaged.length,
+            `Unstaged (${unstaged.length})`
+          ),
+          description: '',
+          tooltip: 'Unstaged files',
+          contextValue: 'selection-item'
+        });
+      }
+
+      if (staged.length === 0 && unstaged.length === 0) {
+        nodes.push({
+          id: 'empty-workspace',
+          type: 'category' as const,
+          categoryType: 'added' as const,
+          parentId: 'workspace-select',
+          count: 0,
+          label: '✓ Workspace is clean',
+          description: '',
+          tooltip: 'No changes in working directory',
+          contextValue: 'empty-state'
+        });
+      }
+    } catch (error) {
+      console.error('Failed to get workspace selection children:', error);
+    }
+
+    return nodes;
+  }
+
+  /**
+   * Get staged file nodes
+   */
+  private getStagedFileNodes(): TreeNode[] {
+    try {
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const staged = git.getStagedFiles();
+
+      return staged.map((f: FileChange) => {
+        const isSelected = this.selectedFiles.has(f.path);
+        const stats = git.getFileDiffStats(f.path, true);
+        return {
+          id: `select-file-${f.path}`,
+          type: 'file' as const,
+          path: f.path,
+          sha: '',
+          stats: { added: stats.added, modified: 0, removed: stats.removed },
+          label: this.getCheckboxLabel(isSelected, path.basename(f.path)),
+          description: `${f.status} • +${stats.added} -${stats.removed}`,
+          tooltip: `Staged file: ${f.path}`,
+          contextValue: 'selection-file'
+        };
+      });
+    } catch (error) {
+      console.error('Failed to get staged file nodes:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get unstaged file nodes
+   */
+  private getUnstagedFileNodes(): TreeNode[] {
+    try {
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const unstaged = git.getUnstagedFiles();
+
+      return unstaged.map((f: FileChange) => {
+        const isSelected = this.selectedFiles.has(f.path);
+        const stats = git.getFileDiffStats(f.path, false);
+        return {
+          id: `select-file-${f.path}`,
+          type: 'file' as const,
+          path: f.path,
+          sha: '',
+          stats: { added: stats.added, modified: 0, removed: stats.removed },
+          label: this.getCheckboxLabel(isSelected, path.basename(f.path)),
+          description: `${f.status} • +${stats.added} -${stats.removed}`,
+          tooltip: `Unstaged file: ${f.path}`,
+          contextValue: 'selection-file'
+        };
+      });
+    } catch (error) {
+      console.error('Failed to get unstaged file nodes:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get commit selection nodes (HEAD + recent commits + manual commits + actions)
+   * Uses cumulative loading: "Add More" loads 3 more commits, skipping manual ones
+   */
+  private async getCommitSelectionNodes(): Promise<TreeNode[]> {
+    const nodes: TreeNode[] = [];
+
+    try {
+      const { GitOperations } = await import('../analysis/git');
+      const { getDatabaseManager } = await import('../storage/database');
+      const git = new GitOperations();
+      const db = getDatabaseManager().getDatabase();
+
+      if (!db) {
+        console.warn('Database not initialized, cannot load commits');
+        return nodes;
+      }
+
+      const headSha = git.getHeadSha();
+
+      // 1. Show HEAD commit
+      if (headSha) {
+        const headCommit = git.getCommitInfo(headSha);
+        const isSelected = this.selectedCommits.has(headSha);
+        nodes.push({
+          id: `select-commit-${headSha}`,
+          type: 'commit' as const,
+          sha: headSha,
+          message: headCommit.message,
+          author: headCommit.author,
+          date: headCommit.date,
+          label: this.getCheckboxLabel(isSelected, `HEAD - ${headCommit.message.split('\n')[0]}`),
+          description: `${headCommit.author} · ${new Date(headCommit.date).toLocaleDateString()}`,
+          tooltip: `HEAD commit`,
+          contextValue: 'selection-commit'
+        });
+      }
+
+      // 2. Load initial 3 commits + any additional from "Add More" clicks
+      const INITIAL_LOAD = 3;
+      const totalToLoad = INITIAL_LOAD + this.loadMoreOffset;
+
+      // 3. Query: Get commits excluding HEAD and manual ones, ordered by date DESC
+      const manualShas = Array.from(this.manualCommits);
+      const excludeShas = [headSha, ...manualShas].filter(sha => sha); // Filter out any undefined
+
+      // Build dynamic WHERE clause to exclude commits
+      const placeholders = excludeShas.map(() => '?').join(',');
+      const whereClause = excludeShas.length > 0
+        ? `WHERE sha NOT IN (${placeholders})`
+        : '';
+
+      const stmt = db.prepare(`
+        SELECT sha, author, date, message
+        FROM commits
+        ${whereClause}
+        ORDER BY date DESC
+        LIMIT ?
+      `);
+
+      const autoCommits = excludeShas.length > 0
+        ? stmt.all(...excludeShas, totalToLoad)
+        : stmt.all(totalToLoad);
+
+      // 4. Add auto-loaded commits to tree
+      for (const commit of autoCommits) {
+        const isSelected = this.selectedCommits.has(commit.sha);
+        nodes.push({
+          id: `select-commit-${commit.sha}`,
+          type: 'commit' as const,
+          sha: commit.sha,
+          message: commit.message,
+          author: commit.author,
+          date: commit.date,
+          label: this.getCheckboxLabel(isSelected, `${commit.sha.substring(0, 8)} - ${commit.message.split('\n')[0]}`),
+          description: `${commit.author} · ${new Date(commit.date).toLocaleDateString()}`,
+          tooltip: `Commit ${commit.sha.substring(0, 8)}`,
+          contextValue: 'selection-commit'
+        });
+      }
+
+      // 5. Add manually selected commits (always visible at bottom with [Manual] label)
+      const manualCommitsToShow = manualShas.filter(sha => sha !== headSha);
+      for (const sha of manualCommitsToShow) {
+        try {
+          const commitInfo = git.getCommitInfo(sha);
+          const isSelected = this.selectedCommits.has(sha);
+          nodes.push({
+            id: `select-commit-${sha}`,
+            type: 'commit' as const,
+            sha: sha,
+            message: commitInfo.message,
+            author: commitInfo.author,
+            date: commitInfo.date,
+            label: this.getCheckboxLabel(isSelected, `[Manual] ${sha.substring(0, 8)} - ${commitInfo.message.split('\n')[0]}`),
+            description: `${commitInfo.author} · ${new Date(commitInfo.date).toLocaleDateString()}`,
+            tooltip: `Manually added commit`,
+            contextValue: 'selection-commit'
+          });
+        } catch (error) {
+          console.warn(`Manual commit ${sha} not found in git history`);
+        }
+      }
+
+      // 6. "Add More..." button - check if more commits exist
+      const countStmt = db.prepare(`
+        SELECT COUNT(*) as count FROM commits ${whereClause}
+      `);
+
+      const countResult = excludeShas.length > 0
+        ? countStmt.get(...excludeShas)
+        : countStmt.get();
+      const totalAvailable = countResult ? countResult.count : 0;
+
+      if (autoCommits.length < totalAvailable) {
+        nodes.push({
+          id: 'selection-more',
+          type: 'category' as const,
+          categoryType: 'added' as const,
+          parentId: 'selection-commits',
+          count: 0,
+          label: 'Add More...',
+          description: 'Load next 3 commits',
+          tooltip: 'Click to load 3 more commits from history',
+          contextValue: 'action-add-more',
+          command: {
+            command: 'git-context.addMoreCommits',
+            title: 'Add More Commits'
+          }
+        });
+      }
+
+      // 7. "Add by Commit" button (always visible)
+      nodes.push({
+        id: 'selection-add-by-sha',
+        type: 'category' as const,
+        categoryType: 'added' as const,
+        parentId: 'selection-commits',
+        count: 0,
+        label: '🔍 Add by Commit',
+        description: 'Add commit by SHA or branch',
+        tooltip: 'Click to add a commit by SHA or branch name',
+        contextValue: 'action-add-commit',
+        command: {
+          command: 'git-context.addCommitBySha',
+          title: 'Add Commit by SHA'
+        }
+      });
+    } catch (error) {
+      console.error('Failed to get commit selection nodes:', error);
+    }
+
+    return nodes;
+  }
+
+  /**
+   * Get report children (workspace summary + commit summaries)
+   */
+  private getReportChildren(reportId: string): TreeNode[] {
+    try {
+      const { getReportManager } = require('../storage/reportManager');
+      const reportManager = getReportManager();
+      const report = reportManager.load(reportId);
+
+      if (!report) {
+        return [];
+      }
+
+      const nodes: TreeNode[] = [];
+
+      // Workspace summary
+      if (report.selectedFiles.length > 0) {
+        nodes.push({
+          id: `report-${reportId}-workspace`,
+          type: 'category' as const,
+          categoryType: 'added' as const,
+          parentId: `report-${reportId}`,
+          count: report.criticalCount + report.warningCount,
+          label: `Workspace (${report.workspaceScope}) - ${report.criticalCount > 0 ? '❗' : ''}${report.criticalCount} Critical Issues`,
+          description: '',
+          tooltip: `Workspace analysis: ${report.selectedFiles.length} files`,
+          contextValue: 'report-workspace-summary'
+        });
+      }
+
+      // Commit summaries
+      for (const sha of report.commitShas) {
+        // Extract issue count from facts if available
+        const issueCount = report.facts?.findings?.incompleteness?.missing || 0;
+        const driftStatus = report.facts?.findings?.patternDrift ? 'Drift Detected' : 'Clean ✓';
+
+        nodes.push({
+          id: `report-${reportId}-commit-${sha}`,
+          type: 'category' as const,
+          categoryType: 'added' as const,
+          parentId: `report-${reportId}`,
+          count: issueCount,
+          label: `${sha.substring(0, 8)} - ${issueCount > 0 ? 'Major Drift Detected' : 'Clean ✓'}`,
+          description: '',
+          tooltip: `Commit ${sha.substring(0, 8)}\nIssues: ${issueCount}\nDrift: ${driftStatus}`,
+          contextValue: 'report-commit-summary',
+          command: {
+            command: 'git-context.openReportSection',
+            title: 'Open Report Section',
+            arguments: [reportId, sha]
+          }
+        });
+      }
+
+      return nodes;
+    } catch (error) {
+      console.error('Failed to get report children:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get report workspace files
+   */
+  private getReportWorkspaceFiles(reportId: string): TreeNode[] {
+    try {
+      const { getReportManager } = require('../storage/reportManager');
+      const reportManager = getReportManager();
+      const report = reportManager.load(reportId);
+
+      if (!report || !report.facts) {
+        return [];
+      }
+
+      // Extract files with issues from facts
+      const filesWithIssues = new Map<string, number>();
+
+      // Count issues per file from evidence
+      const evidence = report.facts.evidence || {};
+      const missing = evidence['findings.incompleteness.missing'] || [];
+      const zombies = evidence['findings.incompleteness.zombies'] || [];
+
+      for (const item of missing) {
+        const filePath = item.symbol_id?.split(':')[0] || '';
+        if (filePath) {
+          filesWithIssues.set(filePath, (filesWithIssues.get(filePath) || 0) + 1);
+        }
+      }
+
+      for (const item of zombies) {
+        const filePath = item.found?.path || item.symbol_id?.split(':')[0] || '';
+        if (filePath) {
+          filesWithIssues.set(filePath, (filesWithIssues.get(filePath) || 0) + 1);
+        }
+      }
+
+      return Array.from(filesWithIssues.entries()).map(([filePath, issueCount]) => ({
+        id: `report-${reportId}-file-${filePath}`,
+        type: 'file' as const,
+        path: filePath,
+        sha: '',
+        stats: { added: 0, modified: 0, removed: 0 },
+        label: `${path.basename(filePath)} - ${issueCount} issues`,
+        description: '',
+        tooltip: `${filePath}\n${issueCount} issues`,
+        contextValue: 'report-file',
+        command: {
+          command: 'vscode.open',
+          title: 'Open File',
+          arguments: [vscode.Uri.file(path.join(require('../utils/config').getGitRoot() || '', filePath))]
+        }
+      }));
+    } catch (error) {
+      console.error('Failed to get report workspace files:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get report commit findings
+   */
+  private getReportCommitFindings(reportId: string, commitSha: string): TreeNode[] {
+    try {
+      const { getReportManager } = require('../storage/reportManager');
+      const reportManager = getReportManager();
+      const report = reportManager.load(reportId);
+
+      if (!report || !report.facts) {
+        return [];
+      }
+
+      const nodes: TreeNode[] = [];
+
+      // Extract commit-specific findings from facts
+      // Look for commit-related drift, missing symbols, etc.
+
+      // Check for commit-specific issues in the evidence
+      const evidence = report.facts.evidence || {};
+      const commitKey = `commit-${commitSha.substring(0, 8)}`;
+
+      // Look for missing symbols introduced by this commit
+      const missingSymbols = evidence['findings.incompleteness.missing']?.filter(
+        (item: any) => item.commit_sha === commitSha || item.expected?.lastSha === commitSha
+      ) || [];
+
+      if (missingSymbols.length > 0) {
+        nodes.push({
+          id: `report-${reportId}-commit-${commitSha}-missing`,
+          type: 'category' as const,
+          categoryType: 'removed' as const,
+          parentId: `report-${reportId}-commit-${commitSha}`,
+          count: missingSymbols.length,
+          label: `Missing Symbols (${missingSymbols.length})`,
+          description: 'Symbols that should exist but are missing',
+          tooltip: `This commit should have introduced ${missingSymbols.length} symbols that are not found`,
+          contextValue: 'report-finding'
+        });
+      }
+
+      // Look for zombie symbols removed by this commit
+      const zombieSymbols = evidence['findings.incompleteness.zombies']?.filter(
+        (item: any) => item.commit_sha === commitSha
+      ) || [];
+
+      if (zombieSymbols.length > 0) {
+        nodes.push({
+          id: `report-${reportId}-commit-${commitSha}-zombies`,
+          type: 'category' as const,
+          categoryType: 'removed' as const,
+          parentId: `report-${reportId}-commit-${commitSha}`,
+          count: zombieSymbols.length,
+          label: `Unexpected Removals (${zombieSymbols.length})`,
+          description: 'Symbols removed that should still exist',
+          tooltip: `This commit removed ${zombieSymbols.length} symbols that are still referenced elsewhere`,
+          contextValue: 'report-finding'
+        });
+      }
+
+      // Look for drift patterns introduced by this commit
+      const driftChanges = evidence['findings.patternDrift.mixedTargets']?.filter(
+        (item: any) => item.commit_sha === commitSha
+      ) || [];
+
+      if (driftChanges.length > 0) {
+        nodes.push({
+          id: `report-${reportId}-commit-${commitSha}-drift`,
+          type: 'category' as const,
+          categoryType: 'modified' as const,
+          parentId: `report-${reportId}-commit-${commitSha}`,
+          count: driftChanges.length,
+          label: `Pattern Drift (${driftChanges.length})`,
+          description: 'Inconsistent patterns introduced',
+          tooltip: `This commit introduced ${driftChanges.length} instances of pattern inconsistency`,
+          contextValue: 'report-finding'
+        });
+      }
+
+      // If no specific findings, show a summary
+      if (nodes.length === 0) {
+        nodes.push({
+          id: `report-${reportId}-commit-${commitSha}-clean`,
+          type: 'category' as const,
+          categoryType: 'added' as const,
+          parentId: `report-${reportId}-commit-${commitSha}`,
+          count: 0,
+          label: '✓ Clean Commit',
+          description: 'No issues detected for this commit',
+          tooltip: 'This commit appears to be clean with no detected issues',
+          contextValue: 'report-finding'
+        });
+      }
+
+      return nodes;
+    } catch (error) {
+      console.error('Failed to get report commit findings:', error);
+      return [];
+    }
   }
 
   private async getRecentCommits(): Promise<TreeNode[]> {

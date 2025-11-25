@@ -1,7 +1,7 @@
 ### Comprehensive Implementation Plan for Live Change Tracker Feature
 
 #### Executive Summary
-**Goal**: Implement a live refactor detection system in the Commit Tracker VS Code extension. Track unsaved edits in real-time using `onDidChangeTextDocument`, buffer changes, compute change scores against configurable thresholds, and auto-trigger summary generation (facts assembly + LLM analysis + webview report) when thresholds are met. Integrate seamlessly with existing post-commit analysis without disrupting Git flow.
+**Goal**: Implement a live refactor detection system in the Commit Tracker VS Code extension. Track unsaved edits in real-time using `onDidChangeTextDocument`, buffer changes, compute change scores against configurable thresholds, and auto-trigger summary generation (facts assembly + LLM analysis + report) when thresholds are met. Integrate seamlessly with existing post-commit analysis without disrupting Git flow.
 
 **Key Benefits**:
 - Proactive UX: Detects refactors "in progress" before commit.

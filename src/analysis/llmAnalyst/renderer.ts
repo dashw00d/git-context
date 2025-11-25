@@ -196,6 +196,11 @@ export class AnalysisRenderer {
       content += `\n`;
     }
 
+    // Convention drift section
+    if (facts.findings.patternDrift.conventionDrift) {
+      content += this.renderConventionDriftSection(facts);
+    }
+
     // Legacy section
     if (facts.findings.legacyAudit.dead > 0 || facts.findings.legacyAudit.replacedLeftovers.length > 0) {
       content += `### {#legacy} Legacy Audit\n\n`;
@@ -439,9 +444,11 @@ export class AnalysisRenderer {
    */
   private renderClaims(claims: any[], facts: RefactorBundleFacts): string {
     // Sort by severity (critical > high > medium > low) then confidence
-    const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
-    const sortedClaims = [...claims].sort((a, b) => {
-      const severityDiff = severityOrder[b.severity] - severityOrder[a.severity];
+    const severityOrder: Record<'critical' | 'high' | 'medium' | 'low', number> = { critical: 4, high: 3, medium: 2, low: 1 };
+    const sortedClaims = [...claims].sort((a: any, b: any) => {
+      const aSeverity = a.severity as 'critical' | 'high' | 'medium' | 'low';
+      const bSeverity = b.severity as 'critical' | 'high' | 'medium' | 'low';
+      const severityDiff = severityOrder[bSeverity] - severityOrder[aSeverity];
       if (severityDiff !== 0) return severityDiff;
       return b.confidence - a.confidence;
     });
@@ -537,30 +544,57 @@ export class AnalysisRenderer {
       args.filePath = AnalysisBlockUtils.extractFilePath(args.symbolId);
     }
 
-    // VS Code command URIs require arguments to be a JSON array, URI encoded
-    const encodedArgs = encodeURIComponent(JSON.stringify([args]));
-    const linkText = evidence.description;
-
-    // Add file/symbol info if available for display text
-    let extraInfo = '';
-    if (evidence.filePath) {
-      extraInfo += ` in ${evidence.filePath}`;
-      if (evidence.lineNumber) {
-        extraInfo += `:${evidence.lineNumber}`;
-      }
-    } else if (evidence.symbolId) {
-      const filePath = AnalysisBlockUtils.extractFilePath(evidence.symbolId);
-      const symbolName = AnalysisBlockUtils.extractSymbolName(evidence.symbolId);
-      extraInfo += ` ${symbolName} in ${filePath}`;
+    // Try to extract file path from evidence path if not already set
+    if (!args.filePath) {
+      const parsed = AnalysisBlockUtils.parseEvidencePath(evidence.path);
+      if (parsed.filePath) args.filePath = parsed.filePath;
+      if (parsed.symbolId && !args.symbolId) args.symbolId = parsed.symbolId;
     }
 
+    // VS Code command URIs require arguments to be a JSON array, URI encoded
+    const encodedArgs = encodeURIComponent(JSON.stringify([args]));
+    
+    // Generate smart link text
+    let linkText = evidence.description;
+    
+    // If description looks like a raw path, generate a better one
+    if (this.looksLikeRawPath(evidence.description)) {
+      linkText = AnalysisBlockUtils.parseEvidencePathToDescription(evidence.path);
+    }
+
+    // Build additional context info
+    let extraInfo = '';
+    
     // Try to resolve count from facts
     const count = this.resolveEvidenceCount(evidence.path, facts);
     if (count !== null) {
-      extraInfo += ` (${count} items)`;
+      extraInfo = ` (${count} items)`;
+    } else if (evidence.filePath && !linkText.includes(evidence.filePath)) {
+      // Only add file info if not already in the link text
+      const shortFile = evidence.filePath.split('/').pop() || evidence.filePath;
+      extraInfo = ` in ${shortFile}`;
+      if (evidence.lineNumber) {
+        extraInfo += `:${evidence.lineNumber}`;
+      }
     }
 
     return `[${linkText}${extraInfo}](command:git-context.openEvidence?${encodedArgs})`;
+  }
+
+  /**
+   * Check if a string looks like a raw JSON path rather than a description
+   */
+  private looksLikeRawPath(text: string): boolean {
+    if (!text) return true;
+    // Looks like path if it contains dots with no spaces, or starts with common path prefixes
+    return (
+      text === 'Example' ||
+      /^(findings|intended|working|scope|bundle|evidence|diff|ast|graph)\./.test(text) ||
+      /^diff\[/.test(text) ||
+      /^ast\[/.test(text) ||
+      /^graph\.(nodes|edges)\[/.test(text) ||
+      (text.includes('.') && !text.includes(' '))
+    );
   }
 
   /**
@@ -658,5 +692,57 @@ export class AnalysisRenderer {
     }
 
     return stats;
+  }
+
+  /**
+   * Render convention drift section
+   */
+  private renderConventionDriftSection(facts: RefactorBundleFacts): string {
+    const conventionDrift = facts.findings.patternDrift.conventionDrift;
+    if (!conventionDrift) {
+      return '';
+    }
+
+    let content = `### {#convention-drift} Naming Convention Analysis\n\n`;
+    
+    content += `**Dominant Convention:** \`${conventionDrift.dominantConvention}\`\n`;
+    content += `**Drift:** ${conventionDrift.driftPercent.toFixed(1)}% of symbols use different conventions\n\n`;
+
+    // Show drift symbols with suggestions
+    const driftSymbols = facts.evidence?.['findings.patternDrift.conventionDrift']?.driftSymbols || [];
+    if (driftSymbols.length > 0) {
+      content += `#### Symbols to Migrate (${driftSymbols.length})\n\n`;
+      content += `| Current Name | Convention | Suggested Name | Path |\n`;
+      content += `|-------------|------------|----------------|------|\n`;
+      
+      for (const ds of driftSymbols.slice(0, 30)) {
+        content += `| \`${ds.name}\` | ${ds.convention} | \`${ds.suggestedName}\` | \`${ds.path}\` |\n`;
+      }
+      
+      if (driftSymbols.length > 30) {
+        content += `\n*... and ${driftSymbols.length - 30} more symbols*\n`;
+      }
+      content += `\n`;
+    }
+
+    // Show files with mixed conventions
+    const mixedFiles = facts.findings.patternDrift.mixedConventionFiles || 0;
+    if (mixedFiles > 0) {
+      const mixedFilesList = facts.evidence?.['findings.patternDrift.mixedConventionFiles'] || [];
+      content += `#### Files with Mixed Conventions (${mixedFiles})\n\n`;
+      content += `Files containing symbols using multiple naming conventions:\n\n`;
+      
+      for (const file of (mixedFilesList as any[]).slice(0, 15)) {
+        const conventions = file.conventions?.join(', ') || 'unknown';
+        content += `- \`${file.path}\` - ${conventions} (${file.symbolCount} symbols, ${file.driftPercent.toFixed(1)}% drift)\n`;
+      }
+      
+      if (mixedFilesList.length > 15) {
+        content += `\n*... and ${mixedFilesList.length - 15} more files*\n`;
+      }
+      content += `\n`;
+    }
+
+    return content;
   }
 }

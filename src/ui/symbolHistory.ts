@@ -39,7 +39,7 @@ export class SymbolHistoryProvider implements vscode.TreeDataProvider<TreeNode> 
         // Search mode - show matching symbols
         const { getSearchIndex } = await import('../storage/index');
         const searchIndex = getSearchIndex();
-        const results = searchIndex.searchSymbols(this.searchQuery, 20);
+        const results = await searchIndex.searchSymbols(this.searchQuery, 20);
 
         if (results.length === 0) {
           return [{

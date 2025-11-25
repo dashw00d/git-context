@@ -7,6 +7,9 @@ import { LLMSummarizer } from '../llm/summarizer';
 import { getDifftasticIntegration } from '../analysis/difftastic';
 import { getDatabaseManager, ensureDatabaseInitialized } from '../storage/database';
 import { AnalysisResult, SymbolInfo, SymbolDelta } from '../types';
+import { detectNamingConvention, analyzeConventionDrift } from '../analysis/namingConventions';
+import { extractImportPaths, analyzeImportPathDrift, detectFileNamingConvention } from '../analysis/conventionEnhancements';
+import { detectLanguage } from '../analysis/tree-sitter';
 
 export async function analyzeLastCommits(count: number): Promise<void> {
   await ensureDatabaseInitialized();
@@ -140,6 +143,12 @@ export async function analyzeCommit(sha: string): Promise<void> {
   // Store in database
   await storeAnalysisResult(analysis, symbols);
 
+  // Sync symbols to Qdrant if enabled
+  await syncSymbolsToQdrant(symbols, sha);
+
+  // Sync commit to Qdrant if enabled
+  await syncCommitToQdrant(analysis);
+
   console.log(`Stored analysis for ${sha}`);
 }
 
@@ -194,12 +203,13 @@ async function storeAnalysisResult(
   // Insert symbols with enhanced semantic information
   const symbolStmt = db.prepare(`
     INSERT OR REPLACE INTO symbols
-    (sha, path, symbol_id, name, kind, signature_pre, signature_post, loc_pre, loc_post, change_type, mod_reason, diff_snippet_pre, diff_snippet_post, confidence)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (sha, path, symbol_id, name, kind, signature_pre, signature_post, loc_pre, loc_post, change_type, mod_reason, diff_snippet_pre, diff_snippet_post, confidence, naming_convention, convention_confidence)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   // Added symbols
   for (const symbol of symbols.added) {
+    const convention = detectNamingConvention(symbol.name);
     symbolStmt.run(
       analysis.commit.sha,
       symbol.id.split(':')[0], // Extract path from ID
@@ -214,12 +224,15 @@ async function storeAnalysisResult(
       null,
       null,
       null,
-      1.0
+      1.0,
+      convention.convention,
+      convention.confidence
     );
   }
 
   // Removed symbols
   for (const symbol of symbols.removed) {
+    const convention = detectNamingConvention(symbol.name);
     symbolStmt.run(
       analysis.commit.sha,
       symbol.id.split(':')[0],
@@ -234,12 +247,15 @@ async function storeAnalysisResult(
       null,
       null,
       null,
-      1.0
+      1.0,
+      convention.convention,
+      convention.confidence
     );
   }
 
   // Modified symbols with semantic enhancement
   for (const delta of symbols.modified) {
+    const convention = detectNamingConvention(delta.symbol.name);
     symbolStmt.run(
       analysis.commit.sha,
       delta.symbol.id.split(':')[0],
@@ -254,12 +270,15 @@ async function storeAnalysisResult(
       delta.modReason || null,
       delta.diffSnippetPre || null,
       delta.diffSnippetPost || null,
-      1.0
+      1.0,
+      convention.convention,
+      convention.confidence
     );
   }
 
   // Store renames as special symbol entries
   for (const rename of symbols.renames) {
+    const convention = detectNamingConvention(rename.newSymbol.name);
     // Store the new symbol with rename metadata
     symbolStmt.run(
       analysis.commit.sha,
@@ -275,7 +294,9 @@ async function storeAnalysisResult(
       null,
       null,
       null,
-      rename.confidence
+      rename.confidence,
+      convention.convention,
+      convention.confidence
     );
   }
 
@@ -309,6 +330,7 @@ async function storeAnalysisResult(
 
   // Store moves as special symbol entries
   for (const move of symbols.moves) {
+    const convention = detectNamingConvention(move.symbol.name);
     symbolStmt.run(
       analysis.commit.sha,
       move.newPath,
@@ -323,7 +345,9 @@ async function storeAnalysisResult(
       null,
       null,
       null,
-      move.confidence
+      move.confidence,
+      convention.convention,
+      convention.confidence
     );
   }
 
@@ -342,5 +366,288 @@ async function storeAnalysisResult(
       edge.type,
       changeType
     );
+  }
+
+  // Analyze and store file-level convention drift
+  await storeFileConventions(analysis.commit.sha, symbols, db);
+}
+
+/**
+ * Analyze and store file-level naming convention data
+ */
+async function storeFileConventions(
+  sha: string,
+  symbols: {
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  },
+  db: any
+): Promise<void> {
+  try {
+    // Group symbols by file path
+    const symbolsByFile = new Map<string, Array<{ name: string; kind: string; path: string }>>();
+
+    // Collect all symbols (added, modified)
+    for (const symbol of symbols.added) {
+      const path = symbol.id.split(':')[0];
+      if (!symbolsByFile.has(path)) {
+        symbolsByFile.set(path, []);
+      }
+      symbolsByFile.get(path)!.push({
+        name: symbol.name,
+        kind: symbol.kind,
+        path
+      });
+    }
+
+    for (const delta of symbols.modified) {
+      const path = delta.symbol.id.split(':')[0];
+      if (!symbolsByFile.has(path)) {
+        symbolsByFile.set(path, []);
+      }
+      symbolsByFile.get(path)!.push({
+        name: delta.symbol.name,
+        kind: delta.symbol.kind,
+        path
+      });
+    }
+
+    // Analyze convention drift per file
+    const fileConventionStmt = db.prepare(`
+      INSERT OR REPLACE INTO file_conventions
+      (sha, path, dominant_convention, convention_counts, drift_percent, symbol_count)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const [filePath, fileSymbols] of symbolsByFile.entries()) {
+      if (fileSymbols.length === 0) continue;
+
+      const driftResult = analyzeConventionDrift(fileSymbols);
+      
+      fileConventionStmt.run(
+        sha,
+        filePath,
+        driftResult.dominantConvention,
+        JSON.stringify(driftResult.conventionCounts),
+        driftResult.driftPercent,
+        fileSymbols.length
+      );
+    }
+  } catch (error) {
+    console.warn('[Conventions] Failed to store file conventions:', error);
+    // Don't throw - convention tracking is optional
+  }
+
+  // Store import path conventions
+  await storeImportConventions(sha, symbols, db);
+}
+
+/**
+ * Analyze and store import path conventions
+ */
+async function storeImportConventions(
+  sha: string,
+  symbols: {
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  },
+  db: any
+): Promise<void> {
+  try {
+    const { GitOperations } = await import('../analysis/git');
+    const git = new GitOperations();
+
+    // Get unique file paths from symbols
+    const filePaths = new Set<string>();
+    for (const symbol of symbols.added) {
+      filePaths.add(symbol.id.split(':')[0]);
+    }
+    for (const delta of symbols.modified) {
+      filePaths.add(delta.symbol.id.split(':')[0]);
+    }
+
+    const importStmt = db.prepare(`
+      INSERT INTO import_conventions
+      (sha, path, import_path, import_style, line_number)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    for (const filePath of filePaths) {
+      try {
+        const content = git.safeGetFileContent(sha, filePath);
+        const language = detectLanguage(filePath);
+        if (!language) continue;
+
+        const imports = extractImportPaths(content, language);
+        for (const imp of imports) {
+          importStmt.run(
+            sha,
+            filePath,
+            imp.path,
+            imp.style,
+            imp.line
+          );
+        }
+      } catch (error) {
+        // Skip files that can't be read
+        continue;
+      }
+    }
+  } catch (error) {
+    console.warn('[Conventions] Failed to store import conventions:', error);
+    // Don't throw - convention tracking is optional
+  }
+}
+
+/**
+ * Sync symbols to Qdrant for semantic search
+ */
+async function syncSymbolsToQdrant(
+  symbols: {
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  },
+  sha: string
+): Promise<void> {
+  try {
+    const { getQdrantClient } = await import('../storage/qdrantClient');
+    const { generateEmbedding, symbolToEmbeddingText } = await import('../storage/embeddings');
+    
+    const qdrant = getQdrantClient();
+    if (!(await qdrant.isEnabled())) {
+      return; // Skip if Qdrant not available
+    }
+
+    await qdrant.ensureCollections();
+    const client = await qdrant.getClient();
+    if (!client) {
+      return;
+    }
+
+    const { stringToPointId } = await import('../storage/embeddings');
+    const { detectNamingConvention } = await import('../analysis/namingConventions');
+    const points: any[] = [];
+
+    // Process added symbols
+    for (const symbol of symbols.added) {
+      const convention = detectNamingConvention(symbol.name);
+      const embeddingText = symbolToEmbeddingText({
+        name: symbol.name,
+        kind: symbol.kind,
+        signature: symbol.signature,
+        path: symbol.id.split(':')[0],
+        naming_convention: convention.convention
+      });
+      const embedding = await generateEmbedding(embeddingText);
+
+      points.push({
+        id: stringToPointId(symbol.id), // Hash to numeric ID
+        vector: embedding,
+        payload: {
+          symbol_id: symbol.id,
+          name: symbol.name,
+          kind: symbol.kind,
+          path: symbol.id.split(':')[0],
+          sha,
+          change_type: 'added',
+          naming_convention: convention.convention
+        }
+      });
+    }
+
+    // Process modified symbols
+    for (const delta of symbols.modified) {
+      const convention = detectNamingConvention(delta.symbol.name);
+      const embeddingText = symbolToEmbeddingText({
+        name: delta.symbol.name,
+        kind: delta.symbol.kind,
+        signature: delta.symbol.signature,
+        path: delta.symbol.id.split(':')[0],
+        diff_snippet_post: delta.diffSnippetPost,
+        naming_convention: convention.convention
+      });
+      const embedding = await generateEmbedding(embeddingText);
+
+      points.push({
+        id: stringToPointId(delta.symbol.id), // Hash to numeric ID
+        vector: embedding,
+        payload: {
+          symbol_id: delta.symbol.id,
+          name: delta.symbol.name,
+          kind: delta.symbol.kind,
+          path: delta.symbol.id.split(':')[0],
+          sha,
+          change_type: 'modified',
+          naming_convention: convention.convention
+        }
+      });
+    }
+
+    // Batch upsert to Qdrant
+    if (points.length > 0) {
+      await client.upsert('symbols', {
+        wait: true,
+        points
+      });
+      console.log(`[Qdrant] Synced ${points.length} symbols to Qdrant`);
+    }
+  } catch (error) {
+    console.warn('[Qdrant] Failed to sync symbols:', error);
+    // Don't throw - Qdrant sync is optional
+  }
+}
+
+/**
+ * Sync commit to Qdrant for semantic search
+ */
+async function syncCommitToQdrant(analysis: AnalysisResult): Promise<void> {
+  try {
+    const { getQdrantClient } = await import('../storage/qdrantClient');
+    const { generateEmbedding, commitToEmbeddingText, stringToPointId } = await import('../storage/embeddings');
+    
+    const qdrant = getQdrantClient();
+    if (!(await qdrant.isEnabled())) {
+      return; // Skip if Qdrant not available
+    }
+
+    await qdrant.ensureCollections();
+    const client = await qdrant.getClient();
+    if (!client) {
+      return;
+    }
+
+    const embeddingText = commitToEmbeddingText({
+      message: analysis.commit.message,
+      summary_md: analysis.llmSummary?.summary_md,
+      risks: analysis.risks
+    });
+
+    const embedding = await generateEmbedding(embeddingText);
+
+    await client.upsert('commits', {
+      wait: true,
+      points: [{
+        id: stringToPointId(analysis.commit.sha),
+        vector: embedding,
+        payload: {
+          sha: analysis.commit.sha,
+          author: analysis.commit.author,
+          date: analysis.commit.date,
+          message: analysis.commit.message,
+          files_changed: analysis.files.length,
+          symbols_added: analysis.symbols.added.length,
+          symbols_modified: analysis.symbols.modified.length,
+          symbols_removed: analysis.symbols.removed.length,
+          risks: analysis.risks
+        }
+      }]
+    });
+    console.log(`[Qdrant] Synced commit ${analysis.commit.sha.substring(0, 8)} to Qdrant`);
+  } catch (error) {
+    console.warn('[Qdrant] Failed to sync commit:', error);
+    // Don't throw - Qdrant sync is optional
   }
 }

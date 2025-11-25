@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { SymbolExtractor } from '../analysis/symbols';
 import { DependencyExtractor } from '../analysis/dependencies';
 import { RiskDetector } from '../analysis/heuristics';
@@ -17,6 +18,32 @@ import { LlmAnalyst } from '../analysis/llmAnalyst/runner';
 import { AnalysisRenderer } from '../analysis/llmAnalyst/renderer';
 import { RefactorReportProvider } from '../webview/refactorReportProvider';
 import { logInfo, logDebug, logError } from '../utils/logger';
+
+/**
+ * Generate report title from workspace scope and commit SHAs
+ */
+function generateReportTitle(
+    workspaceScope: string,
+    commitShas: string[],
+    git: any
+): string {
+    const parts: string[] = [];
+    
+    // Workspace part
+    if (workspaceScope !== 'none') {
+        parts.push(`Workspace (${workspaceScope})`);
+    }
+    
+    // Commits part
+    if (commitShas.length === 1) {
+        const isHead = commitShas[0] === git.getHeadSha();
+        parts.push(isHead ? 'HEAD' : commitShas[0].substring(0, 8));
+    } else if (commitShas.length > 1) {
+        parts.push(`HEAD+${commitShas.length - 1}`);
+    }
+    
+    return parts.join(' vs ');
+}
 
 // Types for refactor bundle analysis
 interface IntendedState {
@@ -62,7 +89,10 @@ export async function generateRefactorBundleReport(
     commitShas: string[],
     refactorReportProvider?: RefactorReportProvider,
     cancellationToken?: vscode.CancellationToken,
-    commitTracker?: any
+    commitTracker?: any,
+    selectedFiles?: string[],
+    workspaceScope?: 'full' | 'staged' | 'unstaged' | 'partial',
+    existingReportId?: string
 ): Promise<void> {
     const startTime = Date.now();
     console.log(`[REPORT] ========== Starting Refactor Bundle Report Generation ==========`);
@@ -96,7 +126,28 @@ export async function generateRefactorBundleReport(
             // Phase 1: Compute scoped analysis set
             console.log('[REPORT] Phase 1: Computing scope...');
             const scopeStartTime = Date.now();
-            const scope = await computeScope(commitShas, commitTracker?.workspaceParts);
+            
+            // Convert workspaceScope to workspaceParts format if needed
+            let workspaceParts: Set<'staged' | 'unstaged'> | undefined;
+            if (workspaceScope === 'staged') {
+              workspaceParts = new Set(['staged']);
+            } else if (workspaceScope === 'unstaged') {
+              workspaceParts = new Set(['unstaged']);
+            } else if (workspaceScope === 'full') {
+              workspaceParts = new Set(['staged', 'unstaged']);
+            } else {
+              workspaceParts = commitTracker?.workspaceParts;
+            }
+            
+            const scope = await computeScope(commitShas, workspaceParts);
+            
+            // Filter scope to only selected files if provided
+            if (selectedFiles && selectedFiles.length > 0) {
+              const selectedFilesSet = new Set(selectedFiles);
+              scope.allPaths = new Set([...scope.allPaths].filter(p => selectedFilesSet.has(p)));
+              scope.workingChanged = new Set([...scope.workingChanged].filter(p => selectedFilesSet.has(p)));
+            }
+            
             console.log(`[REPORT] Scope computed in ${Date.now() - scopeStartTime}ms`);
             console.log(`[REPORT] Scope - commit files: ${scope.commitFiles.size}, working changed: ${scope.workingChanged.size}, blast radius: ${scope.blastRadius.size}, total: ${scope.allPaths.size}`);
 
@@ -244,6 +295,11 @@ export async function generateRefactorBundleReport(
                 try {
                     const fullPath = path.join(getGitRoot() || '', filePath);
                     if (fs.existsSync(fullPath)) {
+                        const stat = fs.statSync(fullPath);
+                        if (!stat.isFile()) {
+                            console.log(`[REPORT] Skipping non-file path for AST serialization: ${filePath}`);
+                            continue;
+                        }
                         const content = fs.readFileSync(fullPath, 'utf8');
                         const ast = await astSerializer.serializeFile(content, filePath);
                         if (ast) {
@@ -301,6 +357,31 @@ export async function generateRefactorBundleReport(
             console.log(`[REPORT] LLM analysis completed in ${Date.now() - llmStartTime}ms`);
             console.log(`[REPORT] LLM analysis keys: ${llmAnalysis ? Object.keys(llmAnalysis).join(', ') : 'null'}`);
 
+            // Store patterns in Qdrant if discovery block exists
+            if (llmAnalysis && llmAnalysis.blocks) {
+                const discoveryBlock = llmAnalysis.blocks.find(b => b.type === 'discovery');
+                if (discoveryBlock && discoveryBlock.claims.length > 0) {
+                    try {
+                        const { getSearchIndex } = await import('../storage/index');
+                        const searchIndex = getSearchIndex();
+                        
+                        // Extract patterns from claims (they contain pattern info)
+                        const patterns = discoveryBlock.claims.map(claim => ({
+                            name: claim.text.split(':')[0] || claim.text.substring(0, 50),
+                            description: claim.text,
+                            examples: claim.evidence.map(e => e.description).slice(0, 5),
+                            count: 0, // Will be extracted from claim if available
+                            pct: Math.round(claim.confidence * 100)
+                        }));
+                        
+                        await searchIndex.storePatterns(patterns, commitShas);
+                        console.log(`[REPORT] Stored ${patterns.length} patterns to Qdrant`);
+                    } catch (error) {
+                        console.warn('[REPORT] Failed to store patterns:', error);
+                    }
+                }
+            }
+
             if (!llmAnalysis) {
                 console.warn('[REPORT] LLM analysis returned null or empty');
             } else {
@@ -318,6 +399,53 @@ export async function generateRefactorBundleReport(
                 } catch (error) {
                     console.error('[REPORT] Failed to save analysis:', error);
                 }
+            }
+
+            // Save report to database
+            try {
+                const { getReportManager } = await import('../storage/reportManager');
+                const { GitOperations } = await import('../analysis/git');
+                const reportManager = getReportManager();
+                const git = new GitOperations();
+                
+                // Generate report title
+                const reportTitle = generateReportTitle(
+                    workspaceScope || 'full',
+                    commitShas,
+                    git
+                );
+                
+                // Calculate summary
+                const criticalCount = facts.findings.incompleteness.missing + 
+                                    facts.findings.incompleteness.zombies +
+                                    (facts.findings.legacyAudit?.dead || 0);
+                const warningCount = facts.findings.patternDrift.mixedTargets +
+                                   facts.findings.patternDrift.oldNamespaces +
+                                   (facts.findings.legacyAudit?.legacyUsed || 0);
+                const summary = `${criticalCount} Critical Issues`;
+                
+                // Create report
+                const report = {
+                    id: existingReportId || require('crypto').randomUUID(),
+                    title: reportTitle,
+                    commitShas: commitShas,
+                    selectedFiles: selectedFiles || [],
+                    workspaceScope: workspaceScope || 'full',
+                    createdAt: new Date(),
+                    workspaceHash: reportManager.computeWorkspaceHash(),
+                    facts: facts,
+                    analysis: llmAnalysis,
+                    summary: summary,
+                    criticalCount: criticalCount,
+                    warningCount: warningCount,
+                    isPinned: existingReportId ? (reportManager.load(existingReportId)?.isPinned || false) : false
+                };
+                
+                reportManager.save(report);
+                console.log('[REPORT] Report saved to database:', report.id);
+            } catch (error) {
+                console.error('[REPORT] Failed to save report to database:', error);
+                // Don't fail the whole operation if saving fails
             }
 
             if (effectiveToken.isCancellationRequested) {
@@ -338,13 +466,32 @@ export async function generateRefactorBundleReport(
             const markdown = renderer.renderAnalysis(llmAnalysis, facts);
             console.log(`[REPORT] Rendered markdown (${markdown.length} chars)`);
 
-            const doc = await vscode.workspace.openTextDocument({
-                content: markdown,
-                language: 'markdown'
-            });
-            await vscode.window.showTextDocument(doc, { preview: false });
+            // Save to file and open in markdown preview
+            const gitRoot = getGitRoot();
+            let reportPath: string;
+            
+            if (gitRoot) {
+                // Save to .git/commit-tracker/report.md
+                const reportDir = path.join(gitRoot, '.git', 'commit-tracker');
+                reportPath = path.join(reportDir, 'commit-report.md');
+                
+                // Ensure directory exists
+                if (!fs.existsSync(reportDir)) {
+                    fs.mkdirSync(reportDir, { recursive: true });
+                }
+            } else {
+                // Fallback to temp directory if not in git repo
+                reportPath = path.join(os.tmpdir(), 'git-context-report.md');
+            }
+            
+            // Write file
+            fs.writeFileSync(reportPath, markdown, 'utf8');
+            
+            // Open in markdown preview
+            await vscode.commands.executeCommand('markdown.showPreviewToSide', vscode.Uri.file(reportPath));
+            
             console.log(`[REPORT] Total report generation time: ${Date.now() - startTime}ms`);
-            vscode.window.showInformationMessage(`Refactor bundle analysis complete - see markdown report`);
+            vscode.window.showInformationMessage(`Refactor bundle analysis complete - see markdown preview`);
         });
 
     } catch (error) {
@@ -563,34 +710,29 @@ export async function generateCommitReport(commitShas?: string[]): Promise<void>
         const { getGitRoot } = await import('../utils/config');
         const gitRoot = getGitRoot();
 
+        let reportPath: string;
+        
         if (gitRoot) {
             // Save to .git/commit-tracker/report.md
-            const fs = require('fs');
-            const path = require('path');
             const reportDir = path.join(gitRoot, '.git', 'commit-tracker');
-            const reportPath = path.join(reportDir, 'commit-report.md');
+            reportPath = path.join(reportDir, 'commit-report.md');
 
             // Ensure directory exists
             if (!fs.existsSync(reportDir)) {
                 fs.mkdirSync(reportDir, { recursive: true });
             }
-
-            // Write file
-            fs.writeFileSync(reportPath, markdown, 'utf8');
-
-            // Open the file
-            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(reportPath));
-            await vscode.window.showTextDocument(doc, { preview: false });
-
-            vscode.window.showInformationMessage(`Report saved to ${reportPath}`);
         } else {
-            // Fallback to untitled document if not in git repo
-            const doc = await vscode.workspace.openTextDocument({
-                content: markdown,
-                language: 'markdown'
-            });
-            await vscode.window.showTextDocument(doc, { preview: false });
+            // Fallback to temp directory if not in git repo
+            reportPath = path.join(os.tmpdir(), 'git-context-report.md');
         }
+
+        // Write file
+        fs.writeFileSync(reportPath, markdown, 'utf8');
+
+        // Open in markdown preview
+        await vscode.commands.executeCommand('markdown.showPreviewToSide', vscode.Uri.file(reportPath));
+
+        vscode.window.showInformationMessage(`Report saved to ${reportPath}`);
 
     } catch (error) {
         vscode.window.showErrorMessage(`Failed to generate report: ${error}`);

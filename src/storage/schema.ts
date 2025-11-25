@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS symbols (
   diff_snippet_pre TEXT, -- Before diff snippet (truncated)
   diff_snippet_post TEXT, -- After diff snippet (truncated)
   confidence REAL DEFAULT 1.0, -- Confidence in change detection (0.0-1.0)
+  naming_convention TEXT, -- camelCase, PascalCase, snake_case, etc.
+  convention_confidence REAL, -- Confidence in convention detection (0.0-1.0)
   FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
   UNIQUE(sha, symbol_id)
 );
@@ -89,11 +91,112 @@ CREATE TABLE IF NOT EXISTS renames (
 
 CREATE INDEX IF NOT EXISTS idx_renames_sha ON renames(sha);
 CREATE INDEX IF NOT EXISTS idx_renames_path ON renames(path);
+
+-- File-level naming convention tracking
+CREATE TABLE IF NOT EXISTS file_conventions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  dominant_convention TEXT,
+  convention_counts TEXT, -- JSON object with counts per convention
+  drift_percent REAL,
+  symbol_count INTEGER,
+  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
+  UNIQUE(sha, path)
+);
+
+CREATE INDEX IF NOT EXISTS idx_symbols_convention ON symbols(naming_convention);
+CREATE INDEX IF NOT EXISTS idx_file_conventions_sha ON file_conventions(sha);
+CREATE INDEX IF NOT EXISTS idx_file_conventions_path ON file_conventions(path);
+
+-- Import path convention tracking
+CREATE TABLE IF NOT EXISTS import_conventions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  import_path TEXT NOT NULL,
+  import_style TEXT NOT NULL,
+  line_number INTEGER,
+  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_import_conventions_sha ON import_conventions(sha);
+CREATE INDEX IF NOT EXISTS idx_import_conventions_path ON import_conventions(path);
+CREATE INDEX IF NOT EXISTS idx_import_conventions_style ON import_conventions(import_style);
+`;
+
+export const MIGRATION_V2 = `
+-- Add naming convention columns to symbols table
+ALTER TABLE symbols ADD COLUMN naming_convention TEXT;
+ALTER TABLE symbols ADD COLUMN convention_confidence REAL;
+
+-- Create file_conventions table
+CREATE TABLE IF NOT EXISTS file_conventions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  dominant_convention TEXT,
+  convention_counts TEXT,
+  drift_percent REAL,
+  symbol_count INTEGER,
+  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
+  UNIQUE(sha, path)
+);
+
+-- Add indexes for convention queries
+CREATE INDEX IF NOT EXISTS idx_symbols_convention ON symbols(naming_convention);
+CREATE INDEX IF NOT EXISTS idx_file_conventions_sha ON file_conventions(sha);
+CREATE INDEX IF NOT EXISTS idx_file_conventions_path ON file_conventions(path);
+`;
+
+export const MIGRATION_V3 = `
+-- Create import_conventions table
+CREATE TABLE IF NOT EXISTS import_conventions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  import_path TEXT NOT NULL,
+  import_style TEXT NOT NULL,
+  line_number INTEGER,
+  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_import_conventions_sha ON import_conventions(sha);
+CREATE INDEX IF NOT EXISTS idx_import_conventions_path ON import_conventions(path);
+CREATE INDEX IF NOT EXISTS idx_import_conventions_style ON import_conventions(import_style);
+`;
+
+export const MIGRATION_V4 = `
+-- Create reports table for saved analysis reports
+CREATE TABLE IF NOT EXISTS reports (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  commit_shas TEXT,              -- JSON array of SHAs
+  selected_files TEXT,           -- JSON array of selected file paths
+  workspace_scope TEXT,          -- 'full'|'staged'|'unstaged'|'partial'
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  workspace_hash TEXT,           -- Hash for staleness detection
+  facts_json TEXT,               -- Cached RefactorBundleFacts
+  analysis_json TEXT,            -- Cached LLM analysis
+  summary TEXT,                  -- "6 Critical Issues"
+  critical_count INTEGER DEFAULT 0,
+  warning_count INTEGER DEFAULT 0,
+  is_pinned INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
+CREATE INDEX IF NOT EXISTS idx_reports_is_pinned ON reports(is_pinned);
 `;
 
 export const MIGRATIONS = [
   // Version 1: Initial schema
-  DATABASE_SCHEMA
+  DATABASE_SCHEMA,
+  // Version 2: Naming convention tracking
+  MIGRATION_V2,
+  // Version 3: Import path convention tracking
+  MIGRATION_V3,
+  // Version 4: Reports table
+  MIGRATION_V4
 ];
 
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 4;

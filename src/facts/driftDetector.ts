@@ -2,6 +2,7 @@ import { SymbolContext, EdgeContext } from '../contracts/llmContext';
 import { IntendedState } from './intendedMap';
 import { WorkingSnapshot } from './workingSnapshot';
 import { getDatabaseManager } from '../storage/database';
+import { NamingConvention, analyzeConventionDrift, suggestConventionName } from '../analysis/namingConventions';
 
 export interface DriftFindings {
   missing_symbols: Array<{symbol_id: string, expected: IntendedState}>;
@@ -10,6 +11,23 @@ export interface DriftFindings {
   missing_edges: Array<{from: string, to: string, type: string, expected: IntendedState}>;
   zombie_edges: Array<{from: string, to: string, type: string, found: EdgeContext}>;
   hotspots: Array<{path: string, drift_count: number}>;
+  conventionDrift?: {
+    dominantConvention: NamingConvention;
+    driftPercent: number;
+    driftSymbols: Array<{
+      symbolId: string;
+      name: string;
+      convention: NamingConvention;
+      suggestedName: string;
+      path: string;
+    }>;
+  };
+  mixedConventionFiles?: Array<{
+    path: string;
+    conventions: NamingConvention[];
+    symbolCount: number;
+    driftPercent: number;
+  }>;
 }
 
 /**
@@ -150,5 +168,118 @@ export function detectDrift(
     .sort((a, b) => b.drift_count - a.drift_count)
     .slice(0, 10);
 
+  // Detect convention drift
+  const conventionDrift = detectConventionDrift(working, commitShas);
+  if (conventionDrift) {
+    findings.conventionDrift = conventionDrift.conventionDrift;
+    findings.mixedConventionFiles = conventionDrift.mixedConventionFiles;
+  }
+
   return findings;
+}
+
+/**
+ * Detect naming convention drift across working symbols
+ */
+function detectConventionDrift(
+  working: WorkingSnapshot,
+  commitShas?: string[]
+): {
+  conventionDrift?: {
+    dominantConvention: NamingConvention;
+    driftPercent: number;
+    driftSymbols: Array<{
+      symbolId: string;
+      name: string;
+      convention: NamingConvention;
+      suggestedName: string;
+      path: string;
+    }>;
+  };
+  mixedConventionFiles?: Array<{
+    path: string;
+    conventions: NamingConvention[];
+    symbolCount: number;
+    driftPercent: number;
+  }>;
+} | null {
+  try {
+    // Get symbols from working snapshot
+    const symbols = Array.from(working.symbolsById.values()).map(s => ({
+      name: s.name,
+      kind: s.kind,
+      path: s.symbol_id.split(':')[0]
+    }));
+
+    if (symbols.length === 0) {
+      return null;
+    }
+
+    // Analyze overall convention drift
+    const driftResult = analyzeConventionDrift(symbols);
+
+    // Build drift symbols with suggestions
+    const driftSymbols = driftResult.driftSymbols.map(ds => {
+      const symbolId = Array.from(working.symbolsById.entries())
+        .find(([, s]) => s.name === ds.name && s.symbol_id.split(':')[0] === ds.path)?.[0] || '';
+      
+      return {
+        symbolId,
+        name: ds.name,
+        convention: ds.convention,
+        suggestedName: ds.suggestedName,
+        path: ds.path
+      };
+    }).filter(ds => ds.symbolId !== ''); // Only include symbols we found
+
+    // Analyze file-level convention mixing
+    const symbolsByFile = new Map<string, Array<{ name: string; kind: string; path: string }>>();
+    for (const symbol of symbols) {
+      if (!symbolsByFile.has(symbol.path)) {
+        symbolsByFile.set(symbol.path, []);
+      }
+      symbolsByFile.get(symbol.path)!.push(symbol);
+    }
+
+    const mixedConventionFiles: Array<{
+      path: string;
+      conventions: NamingConvention[];
+      symbolCount: number;
+      driftPercent: number;
+    }> = [];
+
+    for (const [filePath, fileSymbols] of symbolsByFile.entries()) {
+      if (fileSymbols.length < 2) continue; // Need at least 2 symbols to have mixing
+
+      const fileDrift = analyzeConventionDrift(fileSymbols);
+      const uniqueConventions = new Set(
+        fileSymbols.map(s => {
+          const { detectNamingConvention } = require('../analysis/namingConventions');
+          return detectNamingConvention(s.name).convention;
+        })
+      );
+
+      // Only include files with multiple conventions
+      if (uniqueConventions.size > 1 && fileDrift.driftPercent > 0) {
+        mixedConventionFiles.push({
+          path: filePath,
+          conventions: Array.from(uniqueConventions) as NamingConvention[],
+          symbolCount: fileSymbols.length,
+          driftPercent: fileDrift.driftPercent
+        });
+      }
+    }
+
+    return {
+      conventionDrift: {
+        dominantConvention: driftResult.dominantConvention,
+        driftPercent: driftResult.driftPercent,
+        driftSymbols
+      },
+      mixedConventionFiles: mixedConventionFiles.length > 0 ? mixedConventionFiles : undefined
+    };
+  } catch (error) {
+    console.warn('Failed to detect convention drift:', error);
+    return null;
+  }
 }

@@ -1,5 +1,5 @@
 import { RefactorBundleFacts } from '../../facts/types';
-import { LlmAnalysis, AnalysisBlock, AnalysisBlockUtils } from './blocks';
+import { LlmAnalysis, AnalysisBlock, AnalysisBlockUtils, Claim, Action } from './blocks';
 import { PROMPT_INTENT_AND_STORY, PROMPT_DRIFT_VERIFICATION, PROMPT_CLEANUP_PLAN, PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT } from './prompts';
 import { getLLMClient } from '../../llm/openrouter';
 import { getExtensionConfig } from '../../utils/config';
@@ -240,7 +240,9 @@ export class LlmAnalyst {
         text: `${p.name}: ${p.desc} (Impact: ${p.impact}, Coverage: ${p.coverage_pct}%)`,
         confidence: 0.9,
         severity: p.impact === 'high' ? 'high' : 'medium',
-        evidence: (p.examples || []).map((ex: string) => AnalysisBlockUtils.createEvidence(ex, 'Example'))
+        evidence: (p.examples || []).map((ex: string) => 
+          AnalysisBlockUtils.createEvidenceAuto(ex, `${p.name} example`)
+        )
       }));
     }
 
@@ -251,7 +253,12 @@ export class LlmAnalyst {
         priority: 'high',
         effort: 'medium',
         risk: 'medium',
-        evidence: [],
+        evidence: (p.fixes || []).slice(0, 3).map((fix: any) => 
+          AnalysisBlockUtils.createEvidenceAuto(
+            fix.file || p.pattern,
+            `${fix.before ? `Change: ${fix.before.substring(0, 30)}...` : p.pattern}`
+          )
+        ),
         dependsOn: []
       }));
     }
@@ -342,7 +349,7 @@ export class LlmAnalyst {
         confidence: claim.confidence || 0.8,
         severity: claim.severity || 'medium',
         evidence: (claim.evidence || []).map((path: string) =>
-          AnalysisBlockUtils.createEvidence(path, path)
+          AnalysisBlockUtils.createEvidenceAuto(path)
         )
       }));
     }
@@ -398,7 +405,7 @@ export class LlmAnalyst {
         confidence: claim.confidence || 0.8,
         severity: claim.severity || 'medium',
         evidence: (claim.evidence || []).map((path: string) =>
-          AnalysisBlockUtils.createEvidence(path, path)
+          AnalysisBlockUtils.createEvidenceAuto(path)
         )
       })));
     }
@@ -410,7 +417,7 @@ export class LlmAnalyst {
         effort: action.effort || 'medium',
         risk: action.risk || 'low',
         evidence: (action.evidence || []).map((path: string) =>
-          AnalysisBlockUtils.createEvidence(path, path)
+          AnalysisBlockUtils.createEvidenceAuto(path)
         ),
         dependsOn: action.dependsOn || []
       })));
@@ -478,7 +485,7 @@ export class LlmAnalyst {
         effort: action.effort || 'medium',
         risk: action.risk || 'low',
         evidence: (action.evidence || []).map((path: string) =>
-          AnalysisBlockUtils.createEvidence(path, path)
+          AnalysisBlockUtils.createEvidenceAuto(path)
         ),
         dependsOn: action.dependsOn || []
       })));
@@ -545,7 +552,7 @@ export class LlmAnalyst {
     );
 
     // Sort by severity (critical > high > medium > low) then confidence
-    const severityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+    const severityOrder: Record<'critical' | 'high' | 'medium' | 'low', number> = { critical: 4, high: 3, medium: 2, low: 1 };
     valuableClaims.sort((a, b) => {
       const severityDiff = severityOrder[b.severity] - severityOrder[a.severity];
       if (severityDiff !== 0) return severityDiff;
@@ -565,8 +572,8 @@ export class LlmAnalyst {
     });
 
     // Calculate value score for each action
-    const priorityWeight = { urgent: 10, high: 5, medium: 2, low: 1 };
-    const effortWeight = { xs: 5, s: 4, m: 3, l: 2, xl: 1 };
+    const priorityWeight: Record<'urgent' | 'high' | 'medium' | 'low', number> = { urgent: 10, high: 5, medium: 2, low: 1 };
+    const effortWeight: Record<'xs' | 's' | 'm' | 'l' | 'xl', number> = { xs: 5, s: 4, m: 3, l: 2, xl: 1 };
     
     const scoredActions = allActions.map(action => ({
       action,

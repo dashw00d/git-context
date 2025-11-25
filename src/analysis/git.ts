@@ -342,6 +342,33 @@ export class GitOperations {
   }
 
   /**
+   * Get diff stats for a specific file (added/removed lines)
+   */
+  getFileDiffStats(filePath: string, staged: boolean = false): { added: number; removed: number } {
+    try {
+      const args = staged ? ['diff', '--cached', '--numstat', '--', filePath] : ['diff', '--numstat', '--', filePath];
+      const output = this.execGit(args);
+
+      if (!output.trim()) {
+        return { added: 0, removed: 0 };
+      }
+
+      // --numstat output format: "added<TAB>removed<TAB>file"
+      const parts = output.trim().split('\t');
+      if (parts.length >= 2) {
+        const added = parseInt(parts[0], 10) || 0;
+        const removed = parseInt(parts[1], 10) || 0;
+        return { added, removed };
+      }
+
+      return { added: 0, removed: 0 };
+    } catch (error) {
+      // If git diff fails (e.g., file not tracked), return zero stats
+      return { added: 0, removed: 0 };
+    }
+  }
+
+  /**
    * Spawn a git command asynchronously
    */
   async spawnGit(args: string[]): Promise<{ stdout: string; stderr: string }> {

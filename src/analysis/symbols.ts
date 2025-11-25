@@ -88,8 +88,15 @@ export class SymbolExtractor {
         return { added, removed, modified };
       }
 
-      // Get current file content
-      const currentContent = this.git.getFileContent(sha, file.path);
+      // Get current file content (use safe method to handle path mismatches)
+      console.log(`[SYMBOLS] Extracting ${file.path} at ${sha.substring(0, 8)} (status: ${file.status})`);
+      const currentContent = this.git.safeGetFileContent(sha, file.path);
+
+      // Skip if file doesn't exist at this SHA (path mismatch, rename, or file added later)
+      if (!currentContent) {
+        console.log(`[SYMBOLS] Skipping ${file.path} at ${sha.substring(0, 8)} - not found in commit`);
+        return { added, removed, modified };
+      }
 
       // Get previous file content (if it exists)
       let previousContent: string | null = null;
@@ -97,7 +104,7 @@ export class SymbolExtractor {
         try {
           const parentSha = this.git.getCommitInfo(sha).parent;
           if (parentSha) {
-            previousContent = this.git.getFileContent(parentSha, file.oldPath);
+            previousContent = this.git.safeGetFileContent(parentSha, file.oldPath);
           }
         } catch {
           // File didn't exist in parent, treat as new
@@ -106,7 +113,7 @@ export class SymbolExtractor {
         try {
           const parentSha = this.git.getCommitInfo(sha).parent;
           if (parentSha) {
-            previousContent = this.git.getFileContent(parentSha, file.path);
+            previousContent = this.git.safeGetFileContent(parentSha, file.path);
           }
         } catch {
           // File didn't exist in parent, treat as new
