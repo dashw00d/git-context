@@ -98,7 +98,7 @@ export class SymbolHistoryProvider implements vscode.TreeDataProvider<TreeNode> 
         const stmt = db.prepare(`
           SELECT s.path, s.name, s.kind, s.change_type, c.date, s.sha
           FROM symbols s
-          JOIN commits c ON s.sha = c.sha
+          JOIN commits_metadata c ON s.sha = c.sha
           ORDER BY c.date DESC, s.path, s.name
           LIMIT 100
         `);
@@ -144,6 +144,7 @@ export class SymbolHistoryProvider implements vscode.TreeDataProvider<TreeNode> 
             label: filePath.split('/').pop() || filePath,
             description: `${changeSummary.join(' ')} · ${filePath}`,
             tooltip: `${symbols.length} total symbols\nAdded: ${added}, Modified: ${modified}, Removed: ${removed}`,
+            contextValue: 'gitContextSymbolFile',
             children: symbols.map(s => ({
               id: `${filePath}-${s.sha}-${s.name}`,
               type: 'symbol' as const,
@@ -156,7 +157,8 @@ export class SymbolHistoryProvider implements vscode.TreeDataProvider<TreeNode> 
               label: `${s.change_type === 'added' ? '➕' : s.change_type === 'removed' ? '➖' : '✏️'} ${s.name}`,
               description: `${s.kind}`,
               tooltip: `${s.change_type} in ${s.sha.substring(0, 8)}`,
-              icon: `symbol-${s.kind}`
+              icon: `symbol-${s.kind}`,
+              contextValue: 'gitContextSymbol'
             })),
             icon: 'file'
           });

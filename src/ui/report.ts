@@ -17,6 +17,7 @@ import { assembleFacts, saveFacts } from '../facts/factsAssembler';
 import { LlmAnalyst } from '../analysis/llmAnalyst/runner';
 import { AnalysisRenderer } from '../analysis/llmAnalyst/renderer';
 import { RefactorReportProvider } from '../webview/refactorReportProvider';
+import { ActiveBundleProvider } from './activeBundleProvider';
 import { logInfo, logDebug, logError } from '../utils/logger';
 
 /**
@@ -89,7 +90,7 @@ export async function generateRefactorBundleReport(
     commitShas: string[],
     refactorReportProvider?: RefactorReportProvider,
     cancellationToken?: vscode.CancellationToken,
-    commitTracker?: any,
+    activeBundleProvider?: ActiveBundleProvider,
     selectedFiles?: string[],
     workspaceScope?: 'full' | 'staged' | 'unstaged' | 'partial',
     existingReportId?: string
@@ -106,6 +107,28 @@ export async function generateRefactorBundleReport(
     }
 
     console.log(`[REPORT] Commit SHAs: ${commitShas.map(s => s.substring(0, 8)).join(', ')}`);
+
+    // Ensure all commits are analyzed before proceeding
+    const { getAnalysisPipeline } = await import('../analysis/pipeline');
+    const pipeline = await getAnalysisPipeline();
+
+    const unanalyzed: string[] = [];
+    for (const sha of commitShas) {
+      if (!(await pipeline.isCommitAnalyzed(sha))) {
+        unanalyzed.push(sha);
+      }
+    }
+
+    if (unanalyzed.length > 0) {
+      console.log(`[REPORT] Analyzing ${unanalyzed.length} unanalyzed commits: ${unanalyzed.map(s => s.substring(0, 8)).join(', ')}`);
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: 'Analyzing commits for report...',
+        cancellable: false
+      }, async () => {
+        await pipeline.analyzeCommits(unanalyzed);
+      });
+    }
 
     try {
         await vscode.window.withProgress({
@@ -136,7 +159,8 @@ export async function generateRefactorBundleReport(
             } else if (workspaceScope === 'full') {
               workspaceParts = new Set(['staged', 'unstaged']);
             } else {
-              workspaceParts = commitTracker?.workspaceParts;
+              // Default to full workspace for any other scope
+              workspaceParts = new Set(['staged', 'unstaged']);
             }
             
             const scope = await computeScope(commitShas, workspaceParts);
@@ -243,12 +267,11 @@ export async function generateRefactorBundleReport(
             console.log(`[REPORT] Facts saved to: ${factsPath}`);
             console.log(`[REPORT] Facts keys: ${Object.keys(facts).join(', ')}`);
 
-            // Update commit tracker with latest facts (triggers tree refresh)
-            if (commitTracker) {
-                commitTracker.lastBundleFacts = facts;
-                commitTracker.clearCaches(); // Clear caches when facts update
-                commitTracker.refresh();
-                console.log('[REPORT] Commit tracker refreshed with latest facts');
+            // Update active bundle provider with latest facts (triggers tree refresh)
+            if (activeBundleProvider) {
+                activeBundleProvider.lastBundleFacts = facts;
+                activeBundleProvider.refresh();
+                console.log('[REPORT] Active bundle provider refreshed with latest facts');
             }
 
             // Guard: Check if facts are empty
@@ -264,11 +287,11 @@ export async function generateRefactorBundleReport(
                 console.log('[REPORT] Facts object:', JSON.stringify(facts, null, 2));
             }
 
-            // Store facts in commit tracker for UI updates
-            if (commitTracker) {
-                commitTracker.lastBundleFacts = facts;
-                commitTracker.refresh();
-                console.log('[REPORT] Facts stored in commit tracker');
+            // Store facts in active bundle provider for UI updates
+            if (activeBundleProvider) {
+                activeBundleProvider.lastBundleFacts = facts;
+                activeBundleProvider.refresh();
+                console.log('[REPORT] Facts stored in active bundle provider');
             }
 
             if (effectiveToken.isCancellationRequested) {
@@ -517,20 +540,26 @@ export async function generateCommitReport(commitShas?: string[]): Promise<void>
             // Generate report for specific commits
             const placeholders = commitShas.map(() => '?').join(',');
             const commitsStmt = db.prepare(`
-            SELECT sha, author, date, message, summary_md, files_changed,
-    symbols_added, symbols_modified, symbols_removed, risks
-            FROM commits
-            WHERE sha IN(${placeholders})
-            ORDER BY date DESC
+            SELECT
+                m.sha, m.author, m.date, m.message,
+                a.summary_md, m.files_changed,
+                a.symbols_added, a.symbols_modified, a.symbols_removed, a.risks
+            FROM commits_metadata m
+            LEFT JOIN commits_analysis a ON m.sha = a.sha
+            WHERE m.sha IN(${placeholders})
+            ORDER BY m.date DESC
     `);
             commits = commitsStmt.all(...commitShas) as any[];
         } else {
             // Fetch all commits
             const commitsStmt = db.prepare(`
-            SELECT sha, author, date, message, summary_md, files_changed,
-    symbols_added, symbols_modified, symbols_removed, risks
-            FROM commits
-            ORDER BY date DESC
+            SELECT
+                m.sha, m.author, m.date, m.message,
+                a.summary_md, m.files_changed,
+                a.symbols_added, a.symbols_modified, a.symbols_removed, a.risks
+            FROM commits_metadata m
+            LEFT JOIN commits_analysis a ON m.sha = a.sha
+            ORDER BY m.date DESC
             LIMIT 20
           `);
             commits = commitsStmt.all() as any[];

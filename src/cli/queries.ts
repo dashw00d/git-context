@@ -8,7 +8,7 @@ export async function showCommit(sha: string): Promise<void> {
 
   // Get commit data
   const commitStmt = db.prepare(`
-    SELECT * FROM commits WHERE sha = ?
+    SELECT * FROM commits_metadata WHERE sha = ?
   `);
 
   const commit = commitStmt.get(sha) as any;
@@ -110,9 +110,13 @@ export async function showLastCommits(count: number): Promise<void> {
   const db = getDatabaseManager().getDatabase();
 
   const commitsStmt = db.prepare(`
-    SELECT sha, author, date, message, files_changed, symbols_added, symbols_modified, symbols_removed
-    FROM commits
-    ORDER BY date DESC
+    SELECT m.sha, m.author, m.date, m.message, m.files_changed,
+           COALESCE(a.symbols_added, 0) as symbols_added,
+           COALESCE(a.symbols_modified, 0) as symbols_modified,
+           COALESCE(a.symbols_removed, 0) as symbols_removed
+    FROM commits_metadata m
+    LEFT JOIN commits_analysis a ON m.sha = a.sha
+    ORDER BY m.date DESC
     LIMIT ?
   `);
 

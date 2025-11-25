@@ -377,6 +377,91 @@ export function getDatabase(): any {
 }
 
 /**
+ * Database helper functions for the new schema
+ */
+export const DatabaseHelpers = {
+  /**
+   * Insert commit metadata
+   */
+  insertCommitMetadata(db: any, metadata: any): void {
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO commits_metadata
+      (sha, author, date, message, parent, files_changed, loaded_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      metadata.sha,
+      metadata.author,
+      metadata.date,
+      metadata.message,
+      metadata.parent || null,
+      metadata.filesChanged?.length || 0,
+      metadata.loadedAt || new Date().toISOString()
+    );
+  },
+
+  /**
+   * Insert commit analysis results
+   */
+  insertCommitAnalysis(db: any, analysis: any): void {
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO commits_analysis
+      (sha, summary_md, raw_llm_json, symbols_added, symbols_removed, symbols_modified,
+       edges_added, edges_removed, risks, blast_radius, analyzed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const llmJson = analysis.llmSummary ? JSON.stringify(analysis.llmSummary) : null;
+    const risksJson = JSON.stringify(analysis.risks || []);
+
+    stmt.run(
+      analysis.sha,
+      analysis.llmSummary?.summary_md || '',
+      llmJson,
+      analysis.symbols?.added?.length || 0,
+      analysis.symbols?.removed?.length || 0,
+      analysis.symbols?.modified?.length || 0,
+      analysis.edges?.added?.length || 0,
+      analysis.edges?.removed?.length || 0,
+      risksJson,
+      analysis.blastRadius || 0,
+      analysis.analyzedAt || new Date().toISOString()
+    );
+  },
+
+  /**
+   * Get commit metadata
+   */
+  getCommitMetadata(db: any, sha: string): any {
+    const stmt = db.prepare(`
+      SELECT * FROM commits_metadata WHERE sha = ?
+    `);
+    return stmt.get(sha);
+  },
+
+  /**
+   * Get commit analysis results
+   */
+  getCommitAnalysis(db: any, sha: string): any {
+    const stmt = db.prepare(`
+      SELECT * FROM commits_analysis WHERE sha = ?
+    `);
+    return stmt.get(sha);
+  },
+
+  /**
+   * Check if commit is analyzed
+   */
+  isCommitAnalyzed(db: any, sha: string): boolean {
+    const stmt = db.prepare(`
+      SELECT 1 FROM commits_analysis WHERE sha = ? LIMIT 1
+    `);
+    const result = stmt.get(sha);
+    return !!result;
+  }
+};
+
+/**
  * Close database connection and cleanup resources.
  * Should be called on extension deactivation.
  */

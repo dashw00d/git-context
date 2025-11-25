@@ -248,7 +248,7 @@ export class SearchIndex {
     const historyStmt = db.prepare(`
       SELECT s.sha, c.message, c.date, s.change_type, s.mod_reason
       FROM symbols s
-      JOIN commits c ON s.sha = c.sha
+      JOIN commits_metadata c ON s.sha = c.sha
       WHERE s.symbol_id = ?
       ORDER BY c.date DESC
       LIMIT ?
@@ -327,7 +327,7 @@ export class SearchIndex {
     const stmt = db.prepare(`
       SELECT s.sha, c.message, c.date, s.change_type, s.mod_reason, s.path
       FROM symbols s
-      JOIN commits c ON s.sha = c.sha
+      JOIN commits_metadata c ON s.sha = c.sha
       WHERE s.symbol_id = ?
       ORDER BY c.date DESC
       LIMIT ?
@@ -833,12 +833,12 @@ export class SearchIndex {
     const db = getDatabase();
     
     let query = `
-      SELECT 
+      SELECT
         c.sha,
         c.date,
         COUNT(DISTINCT s.id) as total_symbols,
         SUM(CASE WHEN s.naming_convention = ? THEN 1 ELSE 0 END) as convention_symbols
-      FROM commits c
+      FROM commits_metadata c
       LEFT JOIN symbols s ON s.sha = c.sha
     `;
     
@@ -908,7 +908,7 @@ export class SearchIndex {
         s.naming_convention,
         c.date as last_modified
       FROM symbols s
-      JOIN commits c ON s.sha = c.sha
+      JOIN commits_metadata c ON s.sha = c.sha
       WHERE s.naming_convention = ?
     `;
     
@@ -962,7 +962,7 @@ export class SearchIndex {
         fc.drift_percent,
         fc.symbol_count
       FROM file_conventions fc
-      JOIN commits c ON fc.sha = c.sha
+      JOIN commits_metadata c ON fc.sha = c.sha
       WHERE fc.path = ?
       ORDER BY c.date ASC
     `);

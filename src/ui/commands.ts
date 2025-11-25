@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
-import { CommitTrackerProvider } from './commitTracker';
+import { CommitsProvider } from './commitsProvider';
+import { ActiveBundleProvider } from './activeBundleProvider';
 import { SymbolHistoryProvider } from './symbolHistory';
-import { analyzeLastCommits, analyzeStagedChanges, analyzeCommit } from '../cli/analyze';
+import { ReportsProvider } from './reportsProvider';
+// Analysis functions moved to AnalysisPipeline service
 import { showCommit, searchSymbol } from '../cli/queries';
 import { getExtensionConfig } from '../utils/config';
 import { LLMSummarizer } from '../llm/summarizer';
@@ -12,10 +14,15 @@ import * as path from 'path';
 
 export function registerCommands(
   context: vscode.ExtensionContext,
-  commitTracker: CommitTrackerProvider,
+  commitsProvider: CommitsProvider,
+  activeBundleProvider: ActiveBundleProvider,
   symbolHistory: SymbolHistoryProvider,
-  refactorReportProvider?: RefactorReportProvider
+  refactorReportProvider?: RefactorReportProvider,
+  reportsProvider?: ReportsProvider
 ) {
+  // Set context keys for when clauses
+  vscode.commands.executeCommand('setContext', 'gitContext.hasSelection', false);
+  vscode.commands.executeCommand('setContext', 'gitContext.hasActiveBundle', !!activeBundleProvider.lastBundleFacts);
   try {
     // Analyze last N commits
     const analyzeLastCommitsCmd = vscode.commands.registerCommand(
@@ -42,9 +49,17 @@ export function registerCommands(
           }, async (progress) => {
             try {
               // Ensure database is initialized before analyzing
-              await commitTracker.initializeDatabase();
-              await analyzeLastCommits(parseInt(count));
-              commitTracker.refresh();
+              await commitsProvider.initializeDatabase();
+
+              const { getAnalysisPipeline } = await import('../analysis/pipeline');
+              const pipeline = await getAnalysisPipeline();
+
+              // Load metadata first, then analyze
+              const commits = await pipeline.loadRecentCommits(parseInt(count));
+              const shas = commits.map(c => c.sha);
+              await pipeline.analyzeCommits(shas);
+
+              commitsProvider.refresh();
               vscode.window.showInformationMessage(`Analyzed last ${count} commits`);
             } catch (error) {
               vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
@@ -65,9 +80,13 @@ export function registerCommands(
         }, async (progress) => {
           try {
             // Ensure database is initialized before analyzing
-            await commitTracker.initializeDatabase();
-            await analyzeStagedChanges();
-            commitTracker.refresh();
+            await commitsProvider.initializeDatabase();
+
+            const { getAnalysisPipeline } = await import('../analysis/pipeline');
+            const pipeline = await getAnalysisPipeline();
+            await pipeline.analyzeStagedChanges();
+
+            commitsProvider.refresh();
             vscode.window.showInformationMessage('Analyzed staged changes');
           } catch (error) {
             vscode.window.showErrorMessage(`Failed to analyze staged changes: ${error}`);
@@ -221,7 +240,7 @@ export function registerCommands(
           cancellable: false
         }, async (progress) => {
           try {
-            await commitTracker.initializeDatabase();
+            await commitsProvider.initializeDatabase();
             vscode.window.showInformationMessage('Database initialized successfully');
           } catch (error) {
             vscode.window.showErrorMessage(`Failed to initialize database: ${error}`);
@@ -260,23 +279,23 @@ export function registerCommands(
     const generateReportCmd = vscode.commands.registerCommand(
       'git-context.generateReport',
       async () => {
-        if (commitTracker.runningTask) {
+        if (commitsProvider.runningTask) {
           vscode.window.showWarningMessage('Analysis already running');
           return;
         }
 
-        const selectedCount = commitTracker.selectedCommits.size;
+        const selectedCount = commitsProvider.selectedCommits.size;
         if (selectedCount > 0) {
           // Generate report for selected commits
-          const shas = Array.from(commitTracker.selectedCommits) as string[];
+          const shas = Array.from(commitsProvider.selectedCommits) as string[];
           const cancellationTokenSource = new vscode.CancellationTokenSource();
-          commitTracker.runningTask = { cancel: () => cancellationTokenSource.cancel(), token: cancellationTokenSource.token };
+          commitsProvider.runningTask = { cancel: () => cancellationTokenSource.cancel(), token: cancellationTokenSource.token };
 
           try {
-            await generateRefactorBundleReport(shas, refactorReportProvider, cancellationTokenSource.token, commitTracker);
+            await generateRefactorBundleReport(shas, refactorReportProvider, cancellationTokenSource.token, activeBundleProvider);
           } finally {
-            commitTracker.runningTask = null;
-            commitTracker.refresh();
+            commitsProvider.runningTask = null;
+            commitsProvider.refresh();
           }
           // Selection persists after bundle generation for iterative workflow
         } else {
@@ -292,7 +311,7 @@ export function registerCommands(
         // Handle both direct SHA string and object with id property
         const sha = typeof shaOrItem === 'string' ? shaOrItem : (shaOrItem?.id || shaOrItem?.sha);
         if (sha) {
-          commitTracker.toggleCommitSelection(sha);
+          commitsProvider.toggleCommitSelection(sha);
         }
       }
     );
@@ -301,7 +320,7 @@ export function registerCommands(
     const clearSelectionCmd = vscode.commands.registerCommand(
       'git-context.clearSelection',
       () => {
-        commitTracker.clearSelection();
+        commitsProvider.clearSelection();
       }
     );
 
@@ -309,7 +328,7 @@ export function registerCommands(
     const exportContextCmd = vscode.commands.registerCommand(
       'git-context.exportLlmContext',
       async () => {
-        const selectedShas = Array.from(commitTracker.selectedCommits);
+        const selectedShas = Array.from(commitsProvider.selectedCommits);
         if (selectedShas.length === 0) {
           vscode.window.showErrorMessage('Please select commits first (use checkboxes in tree view)');
           return;
@@ -395,7 +414,7 @@ export function registerCommands(
             await vscode.commands.executeCommand('markdown.showPreviewToSide', vscode.Uri.file(reportPath));
           } else {
             // If no cached report, check if commits are selected to generate one
-            if (commitTracker.selectedCommits.size >= 2) {
+            if (commitsProvider.selectedCommits.size >= 2) {
               vscode.commands.executeCommand('git-context.generateReport');
             } else {
               vscode.window.showInformationMessage('No report available. Select commits in the sidebar and click "Generate Report".');
@@ -408,82 +427,6 @@ export function registerCommands(
       }
     );
 
-    // Regenerate bundle command
-    const regenerateBundleCmd = vscode.commands.registerCommand(
-      'commit-tracker.regenerateBundle',
-      async () => {
-        if (commitTracker.runningTask) {
-          vscode.window.showWarningMessage('Analysis already running');
-          return;
-        }
-
-        const selectedCount = commitTracker.selectedCommits.size;
-        if (selectedCount >= 2) {
-          const shas = Array.from(commitTracker.selectedCommits) as string[];
-          const cancellationTokenSource = new vscode.CancellationTokenSource();
-          commitTracker.runningTask = { cancel: () => cancellationTokenSource.cancel(), token: cancellationTokenSource.token };
-
-          try {
-            await generateRefactorBundleReport(shas, refactorReportProvider, cancellationTokenSource.token, commitTracker);
-          } finally {
-            commitTracker.runningTask = null;
-            commitTracker.refresh();
-          }
-        } else {
-          vscode.window.showWarningMessage('Select at least 2 commits to regenerate bundle analysis.');
-        }
-      }
-    );
-
-    // Clear bundle command
-    const clearBundleCmd = vscode.commands.registerCommand(
-      'commit-tracker.clearBundle',
-      () => {
-        commitTracker.selectedCommits.clear();
-        commitTracker.lastBundleFacts = null;
-        commitTracker.runningTask = null;
-        commitTracker.persistState();
-        commitTracker.refresh();
-        vscode.window.showInformationMessage('Refactor bundle cleared');
-      }
-    );
-
-    // Cancel analysis command
-    const cancelAnalysisCmd = vscode.commands.registerCommand(
-      'commit-tracker.cancelAnalysis',
-      () => {
-        if (commitTracker.runningTask) {
-          commitTracker.runningTask.cancel();
-          commitTracker.runningTask = null;
-          commitTracker.refresh();
-          vscode.window.showInformationMessage('Analysis cancelled');
-        } else {
-          vscode.window.showInformationMessage('No analysis currently running');
-        }
-      }
-    );
-
-    // Add to bundle command
-    const addToBundleCmd = vscode.commands.registerCommand(
-      'commit-tracker.addToBundle',
-      async (item: any) => {
-        if (item && item.id) {
-          commitTracker.toggleCommitSelection(item.id);
-          vscode.window.showInformationMessage(`Added commit to bundle (${commitTracker.selectedCommits.size} selected)`);
-        }
-      }
-    );
-
-    // Remove from bundle command
-    const removeFromBundleCmd = vscode.commands.registerCommand(
-      'commit-tracker.removeFromBundle',
-      async (item: any) => {
-        if (item && item.id) {
-          commitTracker.toggleCommitSelection(item.id);
-          vscode.window.showInformationMessage(`Removed commit from bundle (${commitTracker.selectedCommits.size} remaining)`);
-        }
-      }
-    );
 
     // Open evidence command
     const openEvidenceCmd = vscode.commands.registerCommand(
@@ -543,14 +486,14 @@ export function registerCommands(
     const toggleWorkspaceFullCmd = vscode.commands.registerCommand(
       'git-context.toggleWorkspaceFull',
       () => {
-        const full = commitTracker.workspaceParts.size === 2;
-        commitTracker.workspaceParts.clear();
+        const full = commitsProvider.workspaceParts.size === 2;
+        commitsProvider.workspaceParts.clear();
         if (!full) {
-          commitTracker.workspaceParts.add('staged');
-          commitTracker.workspaceParts.add('unstaged');
+          commitsProvider.workspaceParts.add('staged');
+          commitsProvider.workspaceParts.add('unstaged');
         }
-        commitTracker.persistState();
-        commitTracker.refresh();
+        commitsProvider.persistState();
+        commitsProvider.refresh();
       }
     );
 
@@ -558,13 +501,13 @@ export function registerCommands(
     const toggleWorkspacePartCmd = vscode.commands.registerCommand(
       'git-context.toggleWorkspacePart',
       (part: 'staged' | 'unstaged') => {
-        if (commitTracker.workspaceParts.has(part)) {
-          commitTracker.workspaceParts.delete(part);
+        if (commitsProvider.workspaceParts.has(part)) {
+          commitsProvider.workspaceParts.delete(part);
         } else {
-          commitTracker.workspaceParts.add(part);
+          commitsProvider.workspaceParts.add(part);
         }
-        commitTracker.persistState();
-        commitTracker.refresh();
+        commitsProvider.persistState();
+        commitsProvider.refresh();
       }
     );
 
@@ -658,8 +601,8 @@ export function registerCommands(
           }
           
           // Get files changed in workspace (based on workspaceParts filter)
-          const includeStaged = commitTracker.workspaceParts.has('staged');
-          const includeUnstaged = commitTracker.workspaceParts.has('unstaged');
+          const includeStaged = commitsProvider.workspaceParts.has('staged');
+          const includeUnstaged = commitsProvider.workspaceParts.has('unstaged');
           
           const workspaceFiles: string[] = [];
           if (includeStaged) {
@@ -778,12 +721,12 @@ export function registerCommands(
       'git-context.showGroupingOptions',
       async () => {
         try {
-          const selectedShas = Array.from(commitTracker.selectedCommits);
-          const workspaceLabel = commitTracker.workspaceParts.has('staged') && commitTracker.workspaceParts.has('unstaged')
+          const selectedShas = Array.from(commitsProvider.selectedCommits);
+          const workspaceLabel = commitsProvider.workspaceParts.has('staged') && commitsProvider.workspaceParts.has('unstaged')
             ? 'Full Workspace'
-            : commitTracker.workspaceParts.has('staged')
+            : commitsProvider.workspaceParts.has('staged')
             ? 'Staged Only'
-            : commitTracker.workspaceParts.has('unstaged')
+            : commitsProvider.workspaceParts.has('unstaged')
             ? 'Unstaged Only'
             : 'No Workspace';
           
@@ -968,12 +911,12 @@ export function registerCommands(
       'git-context.copySectionJson',
       async (sectionId: string) => {
         try {
-          if (!commitTracker.lastBundleFacts) {
+          if (!activeBundleProvider.lastBundleFacts) {
             vscode.window.showWarningMessage('No bundle facts available');
             return;
           }
           
-          const facts = commitTracker.lastBundleFacts;
+          const facts = activeBundleProvider.lastBundleFacts;
           let jsonData: any = null;
           
           // Extract relevant section data
@@ -1008,12 +951,12 @@ export function registerCommands(
       'git-context.generateLlmContext',
       async (elementId: string) => {
         try {
-          if (!commitTracker.lastBundleFacts) {
+          if (!activeBundleProvider.lastBundleFacts) {
             vscode.window.showWarningMessage('No bundle facts available');
             return;
           }
           
-          const facts = commitTracker.lastBundleFacts;
+          const facts = activeBundleProvider.lastBundleFacts;
           let context = '';
           
           // Generate context based on element type
@@ -1087,12 +1030,12 @@ export function registerCommands(
       'git-context.copyDriftTable',
       async () => {
         try {
-          if (!commitTracker.lastBundleFacts) {
+          if (!activeBundleProvider.lastBundleFacts) {
             vscode.window.showWarningMessage('No bundle facts available');
             return;
           }
           
-          const facts = commitTracker.lastBundleFacts;
+          const facts = activeBundleProvider.lastBundleFacts;
           const drift = facts.findings.patternDrift;
           
           // Create markdown table
@@ -1261,14 +1204,14 @@ export function registerCommands(
           const searchIndex = getSearchIndex();
 
           // Get current bundle or workspace
-          const selectedShas = Array.from(commitTracker.selectedCommits);
+          const selectedShas = Array.from(commitsProvider.selectedCommits);
           if (selectedShas.length === 0) {
             vscode.window.showInformationMessage('Select commits or generate a bundle to analyze convention drift');
             return;
           }
 
           // Get drift data from facts if available
-          const facts = commitTracker.lastBundleFacts;
+          const facts = activeBundleProvider.lastBundleFacts;
           if (facts?.findings?.patternDrift?.conventionDrift) {
             const drift = facts.findings.patternDrift.conventionDrift;
             const driftSymbols = (facts.evidence?.['findings.patternDrift.conventionDrift']?.driftSymbols || []) as Array<{
@@ -1381,11 +1324,6 @@ export function registerCommands(
       clearSelectionCmd,
       exportContextCmd,
       showRefactorReportCmd,
-      regenerateBundleCmd,
-      clearBundleCmd,
-      cancelAnalysisCmd,
-      addToBundleCmd,
-      removeFromBundleCmd,
       openEvidenceCmd,
       toggleWorkspaceFullCmd,
       toggleWorkspacePartCmd,
@@ -1412,26 +1350,26 @@ export function registerCommands(
     const analyzeCmd = vscode.commands.registerCommand(
       'git-context.analyze',
       async () => {
-        const selectedFiles = commitTracker.getSelectedFiles();
-        const selectedCommits = Array.from(commitTracker.selectedCommits);
-        const workspaceScope = commitTracker.getWorkspaceScope();
+        const selectedFiles = commitsProvider.getSelectedFiles();
+        const selectedCommits = Array.from(commitsProvider.selectedCommits);
+        const workspaceScope = commitsProvider.getWorkspaceScope();
 
-        if (selectedFiles.length === 0 && selectedCommits.length === 0) {
+        if (selectedFiles.size === 0 && selectedCommits.length === 0) {
           vscode.window.showWarningMessage('Please select files and/or commits to analyze');
           return;
         }
 
         try {
-          await commitTracker.initializeDatabase();
+          await commitsProvider.initializeDatabase();
           await generateRefactorBundleReport(
             selectedCommits,
             refactorReportProvider,
             undefined,
-            commitTracker,
-            selectedFiles,
-            workspaceScope
+            activeBundleProvider,
+            Array.from(selectedFiles),
+            workspaceScope === 'workspace' ? 'full' : workspaceScope
           );
-          commitTracker.refresh();
+          commitsProvider.refresh();
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to analyze: ${error}`);
         }
@@ -1472,17 +1410,17 @@ export function registerCommands(
         }
 
         try {
-          await commitTracker.initializeDatabase();
+          await commitsProvider.initializeDatabase();
           await generateRefactorBundleReport(
             report.commitShas,
             refactorReportProvider,
             undefined,
-            commitTracker,
+            activeBundleProvider,
             report.selectedFiles,
             report.workspaceScope,
             reportId  // Pass existing report ID to update instead of create new
           );
-          commitTracker.refresh();
+          commitsProvider.refresh();
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to regenerate report: ${error}`);
         }
@@ -1502,7 +1440,7 @@ export function registerCommands(
           const { getReportManager } = await import('../storage/reportManager');
           const reportManager = getReportManager();
           reportManager.delete(reportId);
-          commitTracker.refresh();
+          commitsProvider.refresh();
         }
       }
     );
@@ -1510,20 +1448,25 @@ export function registerCommands(
     const toggleFileSelectionCmd = vscode.commands.registerCommand(
       'git-context.toggleFileSelection',
       async (filePath: string) => {
-        commitTracker.toggleFileSelection(filePath);
+        commitsProvider.toggleFileSelection(filePath);
       }
     );
 
     const toggleSelectionCmd = vscode.commands.registerCommand(
       'git-context.toggleSelection',
-      async (elementId: string) => {
-        // Parse element ID to determine if file or commit
-        if (elementId.startsWith('select-file-')) {
-          const filePath = elementId.replace('select-file-', '');
-          commitTracker.toggleFileSelection(filePath);
-        } else if (elementId.startsWith('select-commit-')) {
-          const sha = elementId.replace('select-commit-', '');
-          commitTracker.toggleCommitSelection(sha);
+      async (elementIdOrItem: string | any) => {
+        // Handle both direct string and object with id property
+        const elementId = typeof elementIdOrItem === 'string' ? elementIdOrItem : elementIdOrItem?.id;
+
+        if (elementId && typeof elementId === 'string') {
+          // Parse element ID to determine if file or commit
+          if (elementId.startsWith('select-file-')) {
+            const filePath = elementId.replace('select-file-', '');
+            commitsProvider.toggleFileSelection(filePath);
+          } else if (elementId.startsWith('select-commit-')) {
+            const sha = elementId.replace('select-commit-', '');
+            commitsProvider.toggleCommitSelection(sha);
+          }
         }
       }
     );
@@ -1534,7 +1477,7 @@ export function registerCommands(
         const { getReportManager } = await import('../storage/reportManager');
         const reportManager = getReportManager();
         reportManager.togglePin(reportId);
-        commitTracker.refresh();
+        commitsProvider.refresh();
       }
     );
 
@@ -1562,13 +1505,15 @@ export function registerCommands(
 
         if (input) {
           try {
-            const { GitOperations } = await import('../analysis/git');
-            const git = new GitOperations();
-            // getCommitInfo returns the full SHA
-            const commitInfo = git.getCommitInfo(input);
-            commitTracker.toggleCommitSelection(commitInfo.sha);
+            const { getAnalysisPipeline } = await import('../analysis/pipeline');
+            const pipeline = await getAnalysisPipeline();
+
+            // Load metadata only (no analysis)
+            const metadata = await pipeline.loadCommitMetadata(input);
+
+            commitsProvider.toggleCommitSelection(metadata.sha);
             // Mark as manually added to preserve during Pull Latest
-            commitTracker.markCommitAsManual(commitInfo.sha);
+            commitsProvider.markCommitAsManual(metadata.sha);
           } catch (error) {
             vscode.window.showErrorMessage(`Failed to add commit: ${error}`);
           }
@@ -1622,24 +1567,41 @@ export function registerCommands(
     const selectAllStagedCmd = vscode.commands.registerCommand(
       'git-context.selectAllStaged',
       async () => {
-        commitTracker.selectAllStaged();
+        commitsProvider.selectAllStaged();
       }
     );
 
     const selectAllUnstagedCmd = vscode.commands.registerCommand(
       'git-context.selectAllUnstaged',
       async () => {
-        commitTracker.selectAllUnstaged();
+        commitsProvider.selectAllUnstaged();
       }
     );
 
     // Add More Commits command (cumulative loading)
     const addMoreCommitsCmd = vscode.commands.registerCommand(
       'git-context.addMoreCommits',
-      () => {
-        commitTracker.loadMoreOffset += commitTracker.PAGE_SIZE;
-        commitTracker.persistState();
-        commitTracker.refresh();
+      async () => {
+        const { getAnalysisPipeline } = await import('../analysis/pipeline');
+        const pipeline = await getAnalysisPipeline();
+
+        // Calculate which commits to load
+        const nextOffset = commitsProvider.loadMoreOffset;
+        const { GitOperations } = await import('../analysis/git');
+        const git = new GitOperations();
+
+        // Get the next batch of commits from git
+        const recentCommits = git.getRecentCommits(nextOffset + commitsProvider.PAGE_SIZE);
+        const startIndex = nextOffset;
+        const endIndex = Math.min(nextOffset + commitsProvider.PAGE_SIZE, recentCommits.length);
+        const nextShas = recentCommits.slice(startIndex, endIndex).map(c => c.sha);
+
+        // Load metadata only (no analysis)
+        await pipeline.loadCommitsMetadata(nextShas);
+
+        commitsProvider.loadMoreOffset += commitsProvider.PAGE_SIZE;
+        commitsProvider.persistState();
+        commitsProvider.refresh();
       }
     );
 
@@ -1657,21 +1619,23 @@ export function registerCommands(
             const configCount = config.defaultCommitCount;
 
             // Preserve manual commits
-            const manualShas = Array.from(commitTracker.manualCommits);
+            const manualShas = Array.from(commitsProvider.manualCommits);
 
-            // Re-analyze latest N commits from git (populates database)
-            await analyzeLastCommits(configCount);
+            // Load metadata for latest N commits from git (no analysis)
+            const { getAnalysisPipeline } = await import('../analysis/pipeline');
+            const pipeline = await getAnalysisPipeline();
+            await pipeline.loadRecentCommits(configCount);
 
             // Restore manual commits to selection (they're preserved)
             manualShas.forEach(sha => {
-              commitTracker.selectedCommits.add(sha);
+              commitsProvider.selectedCommits.add(sha);
             });
-            commitTracker.manualCommits = new Set(manualShas);
+            commitsProvider.manualCommits = new Set(manualShas);
 
             // Reset offset since we've refreshed the list
-            commitTracker.loadMoreOffset = 0;
-            commitTracker.persistState();
-            commitTracker.refresh();
+            commitsProvider.loadMoreOffset = 0;
+            commitsProvider.persistState();
+            commitsProvider.refresh();
 
             vscode.window.showInformationMessage(`Analyzed ${configCount} latest commits`);
           });
@@ -1696,15 +1660,20 @@ export function registerCommands(
             const configCount = config.defaultCommitCount;
 
             // Clear state
-            commitTracker.selectedCommits.clear();
-            commitTracker.manualCommits.clear();
-            commitTracker.selectedFiles.clear();
-            commitTracker.loadMoreOffset = 0;
+            commitsProvider.selectedCommits.clear();
+            commitsProvider.manualCommits.clear();
+            commitsProvider.selectedFiles.clear();
+            commitsProvider.loadMoreOffset = 0;
 
-            // Pull fresh commits
-            await analyzeLastCommits(configCount);
-            commitTracker.persistState();
-            commitTracker.refresh();
+            // Pull fresh commits (load metadata and analyze)
+            const { getAnalysisPipeline } = await import('../analysis/pipeline');
+            const pipeline = await getAnalysisPipeline();
+            const commits = await pipeline.loadRecentCommits(configCount);
+            const shas = commits.map(c => c.sha);
+            await pipeline.analyzeCommits(shas);
+
+            commitsProvider.persistState();
+            commitsProvider.refresh();
 
             vscode.window.showInformationMessage('Analysis reset complete');
           });
@@ -1738,34 +1707,45 @@ export function registerCommands(
               const reports = reportManager.list();
               reports.forEach(r => reportManager.delete(r.id));
 
-              // 2. Clear database tables in correct order (reverse of foreign keys)
-              const { getDatabaseManager } = await import('../storage/database');
-              const db = getDatabaseManager().getDatabase();
+              // 2. FORCE database reset by deleting the file and reinitializing
+              const { getDatabaseManager, closeDatabase } = await import('../storage/database');
+              const manager = getDatabaseManager();
 
-              // Clear tables in dependency order
-              db.exec('DELETE FROM edges');           // Dependencies first
-              db.exec('DELETE FROM renames');
-              db.exec('DELETE FROM file_conventions');
-              db.exec('DELETE FROM import_conventions');
-              db.exec('DELETE FROM symbols');         // Then symbols
-              db.exec('DELETE FROM files');           // Then files
-              db.exec('DELETE FROM reports');         // Then reports
-              db.exec('DELETE FROM commits');         // Finally commits
+              // Close and delete the database file to force complete rebuild
+              closeDatabase();
+              const fs = require('fs');
+              const path = require('path');
+              const { getGitRoot } = await import('../utils/config');
+              const gitRoot = getGitRoot();
+              if (gitRoot) {
+                const dbPath = path.join(gitRoot, '.git', 'commit-tracker', 'commit_tracker.sqlite');
+                if (fs.existsSync(dbPath)) {
+                  fs.unlinkSync(dbPath);
+                  console.log('Deleted database file for complete reset');
+                }
+              }
 
               // 3. Clear state
-              commitTracker.selectedCommits.clear();
-              commitTracker.manualCommits.clear();
-              commitTracker.selectedFiles.clear();
-              commitTracker.loadMoreOffset = 0;
+              commitsProvider.selectedCommits.clear();
+              commitsProvider.manualCommits.clear();
+              commitsProvider.selectedFiles.clear();
+              commitsProvider.loadMoreOffset = 0;
+              commitsProvider.persistState();
 
-              // 4. Pull fresh commits
+              // 4. Force database reinitialization with new schema
+              await commitsProvider.initializeDatabase();
+
+              // 5. Pull fresh commits with new pipeline
               const config = getExtensionConfig();
-              await analyzeLastCommits(config.defaultCommitCount);
+              const { getAnalysisPipeline } = await import('../analysis/pipeline');
+              const pipeline = await getAnalysisPipeline();
+              const commits = await pipeline.loadRecentCommits(config.defaultCommitCount);
+              const shas = commits.map(c => c.sha);
+              await pipeline.analyzeCommits(shas);
 
-              commitTracker.persistState();
-              commitTracker.refresh();
+              commitsProvider.refresh();
 
-              vscode.window.showInformationMessage('Reset complete');
+              vscode.window.showInformationMessage('Complete database reset and reload finished');
             });
           } catch (error) {
             vscode.window.showErrorMessage(`Failed to reset all: ${error}`);
@@ -1794,6 +1774,7 @@ export function registerCommands(
       resetAnalysisCmd,
       resetAllCmd
     );
+
 
     console.log('Git Context commands registered successfully');
   } catch (error) {

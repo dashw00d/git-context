@@ -39,19 +39,27 @@ export async function exportCommitContext(commitShas?: string[]): Promise<LlmCon
     if (commitShas && commitShas.length > 0) {
         const placeholders = commitShas.map(() => '?').join(',');
         const stmt = db.prepare(`
-      SELECT sha, author, date, message, summary_md, files_changed,
-             symbols_added, symbols_modified, symbols_removed, risks
-      FROM commits
-      WHERE sha IN (${placeholders})
-      ORDER BY date DESC
+      SELECT m.sha, m.author, m.date, m.message, a.summary_md, m.files_changed,
+             COALESCE(a.symbols_added, 0) as symbols_added,
+             COALESCE(a.symbols_modified, 0) as symbols_modified,
+             COALESCE(a.symbols_removed, 0) as symbols_removed,
+             a.risks
+      FROM commits_metadata m
+      LEFT JOIN commits_analysis a ON m.sha = a.sha
+      WHERE m.sha IN (${placeholders})
+      ORDER BY m.date DESC
     `);
         commits = stmt.all(...commitShas) as any[];
     } else {
         const stmt = db.prepare(`
-      SELECT sha, author, date, message, summary_md, files_changed,
-             symbols_added, symbols_modified, symbols_removed, risks
-      FROM commits
-      ORDER BY date DESC
+      SELECT m.sha, m.author, m.date, m.message, a.summary_md, m.files_changed,
+             COALESCE(a.symbols_added, 0) as symbols_added,
+             COALESCE(a.symbols_modified, 0) as symbols_modified,
+             COALESCE(a.symbols_removed, 0) as symbols_removed,
+             a.risks
+      FROM commits_metadata m
+      LEFT JOIN commits_analysis a ON m.sha = a.sha
+      ORDER BY m.date DESC
       LIMIT 20
     `);
         commits = stmt.all() as any[];

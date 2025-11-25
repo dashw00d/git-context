@@ -1,9 +1,13 @@
 import * as vscode from 'vscode';
-import type { CommitTrackerProvider } from './ui/commitTracker';
+import type { ActiveBundleProvider } from './ui/activeBundleProvider';
+import type { CommitsProvider } from './ui/commitsProvider';
 import type { SymbolHistoryProvider } from './ui/symbolHistory';
+import type { ReportsProvider } from './ui/reportsProvider';
 
-let commitTrackerProvider: CommitTrackerProvider;
+let activeBundleProvider: ActiveBundleProvider;
+let commitsProvider: CommitsProvider;
 let symbolHistoryProvider: SymbolHistoryProvider;
+let reportsProvider: ReportsProvider;
 let outputChannel: vscode.OutputChannel;
 let debugChannel: vscode.OutputChannel;
 
@@ -21,6 +25,23 @@ export function getDebugChannel(): vscode.OutputChannel {
   return debugChannel;
 }
 
+async function updateContextKeys() {
+  try {
+    // Check if there's an active bundle
+    const hasActiveBundle = activeBundleProvider?.lastBundleFacts !== null;
+    await vscode.commands.executeCommand('setContext', 'gitContext.hasActiveBundle', hasActiveBundle);
+
+    // Check if current selection is in bundle (simplified - could be enhanced)
+    const inBundle = false; // TODO: Implement bundle membership checking
+    await vscode.commands.executeCommand('setContext', 'gitContext.inBundle', inBundle);
+
+    console.log('Context keys updated:', { hasActiveBundle, inBundle });
+  } catch (error) {
+    console.error('Failed to update context keys:', error);
+  }
+}
+
+
 export async function activate(context: vscode.ExtensionContext) {
   try {
     outputChannel = vscode.window.createOutputChannel('Git Context');
@@ -30,8 +51,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Dynamically import providers and commands to prevent load-time errors
     // from native dependencies or ESM issues
-    const { CommitTrackerProvider } = await import('./ui/commitTracker');
+    const { ActiveBundleProvider } = await import('./ui/activeBundleProvider');
+    const { CommitsProvider } = await import('./ui/commitsProvider');
     const { SymbolHistoryProvider } = await import('./ui/symbolHistory');
+    const { ReportsProvider } = await import('./ui/reportsProvider');
     const { registerCommands } = await import('./ui/commands');
     const { RefactorReportProvider } = await import('./webview/refactorReportProvider');
     const { getDebtMeter, disposeDebtMeter } = await import('./ui/refactorDebtMeter');
@@ -39,12 +62,19 @@ export async function activate(context: vscode.ExtensionContext) {
     console.log('Modules loaded successfully');
 
     // Initialize providers
-    commitTrackerProvider = new CommitTrackerProvider(context);
+    activeBundleProvider = new ActiveBundleProvider(context);
+    commitsProvider = new CommitsProvider(context);
     symbolHistoryProvider = new SymbolHistoryProvider(context);
+    reportsProvider = new ReportsProvider(context);
 
     // Register tree data providers
-    vscode.window.registerTreeDataProvider('commitTracker', commitTrackerProvider);
-    vscode.window.registerTreeDataProvider('symbolHistory', symbolHistoryProvider);
+    vscode.window.registerTreeDataProvider('bundle', activeBundleProvider);
+    vscode.window.registerTreeDataProvider('commits', commitsProvider);
+    vscode.window.registerTreeDataProvider('symbols', symbolHistoryProvider);
+    vscode.window.registerTreeDataProvider('reports', reportsProvider);
+
+    // Initialize context keys
+    await updateContextKeys();
 
     // Register webview provider for refactor reports
     const refactorReportProvider = new RefactorReportProvider(context.extensionUri);
@@ -62,9 +92,9 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.workspace.registerTextDocumentContentProvider('evidence', evidenceProvider)
     );
 
-    // Initialize debt meter and wire it to commit tracker
+    // Initialize debt meter and wire it to commits provider
     const debtMeter = getDebtMeter();
-    debtMeter.setCommitTracker(commitTrackerProvider);
+    debtMeter.setCommitTracker(commitsProvider);
     context.subscriptions.push({
       dispose: () => disposeDebtMeter()
     });
@@ -108,11 +138,17 @@ export async function activate(context: vscode.ExtensionContext) {
         refreshTimeout = setTimeout(() => {
           try {
             // Only refresh if providers are initialized
-            if (commitTrackerProvider) {
-              commitTrackerProvider.refresh();
+            if (activeBundleProvider) {
+              activeBundleProvider.refresh();
+            }
+            if (commitsProvider) {
+              commitsProvider.refresh();
             }
             if (symbolHistoryProvider) {
               symbolHistoryProvider.refresh();
+            }
+            if (reportsProvider) {
+              reportsProvider.refresh();
             }
 
             // Only refresh debt meter if facts file exists (defensive check)
@@ -177,20 +213,15 @@ export async function activate(context: vscode.ExtensionContext) {
             
             const factsPath = vscode.Uri.file(`${gitRoot}/.git/commit-tracker/last-bundle-facts.json`);
             
-            // Refresh commit tracker to pick up latest facts
-            if (commitTrackerProvider) {
-              // Load latest facts into tracker
-              const fs = require('fs');
-              if (fs.existsSync(factsPath.fsPath)) {
-                try {
-                  const factsContent = fs.readFileSync(factsPath.fsPath, 'utf8');
-                  const facts = JSON.parse(factsContent);
-                  commitTrackerProvider.lastBundleFacts = facts;
-                } catch (err) {
-                  console.debug('Failed to load facts for tree refresh:', err);
-                }
-              }
-              commitTrackerProvider.refresh();
+            // Refresh bundle provider to pick up latest facts
+            if (activeBundleProvider) {
+              activeBundleProvider.refresh();
+            }
+            if (commitsProvider) {
+              commitsProvider.refresh();
+            }
+            if (reportsProvider) {
+              reportsProvider.refresh();
             }
           } catch (error) {
             console.warn('Error refreshing tree after facts update:', error);
@@ -214,16 +245,22 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     // Register commands
-    registerCommands(context, commitTrackerProvider, symbolHistoryProvider, refactorReportProvider);
+    registerCommands(context, commitsProvider, activeBundleProvider, symbolHistoryProvider, refactorReportProvider, reportsProvider);
 
     // Refresh providers when workspace changes
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        if (commitTrackerProvider) {
-          commitTrackerProvider.refresh();
+        if (activeBundleProvider) {
+          activeBundleProvider.refresh();
+        }
+        if (commitsProvider) {
+          commitsProvider.refresh();
         }
         if (symbolHistoryProvider) {
           symbolHistoryProvider.refresh();
+        }
+        if (reportsProvider) {
+          reportsProvider.refresh();
         }
       })
     );

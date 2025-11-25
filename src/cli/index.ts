@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { analyzeLastCommits, analyzeStagedChanges, analyzeCommit } from './analyze';
+// Analysis functions moved to AnalysisPipeline service
 import { showCommit, searchSymbol, showLastCommits } from './queries';
 import { installHooks } from './hooks';
 import chalk from 'chalk';
@@ -22,7 +22,16 @@ program
     console.log(chalk.blue(`Analyzing last ${count} commits...`));
 
     try {
-      await analyzeLastCommits(count);
+      const { getAnalysisPipeline } = await import('../analysis/pipeline');
+      const pipeline = await getAnalysisPipeline();
+
+      // Load metadata first
+      const commits = await pipeline.loadRecentCommits(count);
+      const shas = commits.map(c => c.sha);
+
+      // Then analyze
+      await pipeline.analyzeCommits(shas);
+
       console.log(chalk.green('Analysis complete!'));
     } catch (error) {
       console.error(chalk.red(`Analysis failed: ${error}`));
@@ -37,7 +46,10 @@ program
     console.log(chalk.blue('Analyzing staged changes...'));
 
     try {
-      await analyzeStagedChanges();
+      const { getAnalysisPipeline } = await import('../analysis/pipeline');
+      const pipeline = await getAnalysisPipeline();
+      await pipeline.analyzeStagedChanges();
+
       console.log(chalk.green('Staged analysis complete!'));
     } catch (error) {
       console.error(chalk.red(`Staged analysis failed: ${error}`));
@@ -52,7 +64,13 @@ program
     console.log(chalk.blue(`Analyzing commit ${sha}...`));
 
     try {
-      await analyzeCommit(sha);
+      const { getAnalysisPipeline } = await import('../analysis/pipeline');
+      const pipeline = await getAnalysisPipeline();
+
+      // Load metadata first, then analyze
+      await pipeline.loadCommitMetadata(sha);
+      await pipeline.analyzeCommit(sha);
+
       console.log(chalk.green(`Commit ${sha} analysis complete!`));
     } catch (error) {
       console.error(chalk.red(`Commit analysis failed: ${error}`));

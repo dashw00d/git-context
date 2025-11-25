@@ -16,7 +16,11 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:commitTracker"
+    "onView:bundle",
+    "onView:commits",
+    "onView:symbols",
+    "onView:reports",
+    "onCommand:git-context.*"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -95,6 +99,11 @@
         "category": "Git Context"
       },
       {
+        "command": "git-context.addMoreCommits",
+        "title": "Add More Commits",
+        "category": "Git Context"
+      },
+      {
         "command": "git-context.openReportSection",
         "title": "Open Report Section",
         "category": "Git Context"
@@ -132,29 +141,64 @@
         "icon": "$(trash)"
       },
       {
-        "command": "commit-tracker.regenerateBundle",
-        "title": "Regenerate Bundle",
+        "command": "git-context.pullLatest",
+        "title": "Pull Latest Commits",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.bundle.regenerate",
+        "title": "Bundle: Regenerate",
         "icon": "$(refresh)"
       },
       {
-        "command": "commit-tracker.clearBundle",
-        "title": "Clear Bundle",
+        "command": "git-context.bundle.clear",
+        "title": "Bundle: Clear",
         "icon": "$(clear-all)"
       },
       {
-        "command": "commit-tracker.cancelAnalysis",
-        "title": "Cancel Analysis",
+        "command": "git-context.bundle.cancel",
+        "title": "Bundle: Cancel Analysis",
         "icon": "$(stop)"
       },
       {
-        "command": "commit-tracker.addToBundle",
-        "title": "Add to Current Bundle",
+        "command": "git-context.bundle.addCommit",
+        "title": "Bundle: Add Commit",
         "icon": "$(add)"
       },
       {
-        "command": "commit-tracker.removeFromBundle",
-        "title": "Remove from Bundle",
+        "command": "git-context.bundle.removeCommit",
+        "title": "Bundle: Remove Commit",
         "icon": "$(remove)"
+      },
+      {
+        "command": "git-context.bundle.export",
+        "title": "Bundle: Export Context",
+        "icon": "$(export)"
+      },
+      {
+        "command": "commit-tracker.regenerateBundle",
+        "title": " ",
+        "enablement": "false"
+      },
+      {
+        "command": "commit-tracker.clearBundle",
+        "title": " ",
+        "enablement": "false"
+      },
+      {
+        "command": "commit-tracker.cancelAnalysis",
+        "title": " ",
+        "enablement": "false"
+      },
+      {
+        "command": "commit-tracker.addToBundle",
+        "title": " ",
+        "enablement": "false"
+      },
+      {
+        "command": "commit-tracker.removeFromBundle",
+        "title": " ",
+        "enablement": "false"
       },
       {
         "command": "git-context.findSimilarCommits",
@@ -190,109 +234,145 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "commit-tracker",
-          "title": "Commit Tracker",
-          "icon": "$(git-commit)"
+          "id": "gitContext",
+          "title": "Git Context",
+          "icon": "resources/git-context.svg"
         }
       ]
     },
     "views": {
-      "explorer": [
+      "gitContext": [
         {
-          "id": "symbolHistory",
-          "name": "Symbol History",
-          "icon": "$(search)",
-          "contextualTitle": "Symbol History",
-          "visibility": "visible"
-        }
-      ],
-      "commit-tracker": [
+          "id": "bundle",
+          "name": "Active Bundle",
+          "type": "tree"
+        },
         {
-          "id": "commitTracker",
-          "name": "Refactor Intelligence",
+          "id": "commits",
+          "name": "Commits",
           "type": "tree",
           "showCollapseAll": true
+        },
+        {
+          "id": "symbols",
+          "name": "Symbols",
+          "type": "tree"
+        },
+        {
+          "id": "reports",
+          "name": "Reports",
+          "type": "tree"
         }
       ]
     },
     "menus": {
       "view/title": [
         {
+          "command": "git-context.bundle.regenerate",
+          "when": "view == bundle && gitContext.hasActiveBundle",
+          "group": "navigation@1"
+        },
+        {
+          "command": "git-context.bundle.clear",
+          "when": "view == bundle && gitContext.hasActiveBundle",
+          "group": "navigation@2"
+        },
+        {
+          "command": "git-context.bundle.export",
+          "when": "view == bundle && gitContext.hasActiveBundle",
+          "group": "navigation@3"
+        },
+        {
           "command": "git-context.analyze",
-          "when": "view == commitTracker",
+          "when": "view == commits",
           "group": "navigation@1"
         },
         {
           "command": "git-context.viewLatestReport",
-          "when": "view == commitTracker",
-          "group": "navigation@2"
-        },
-        {
-          "command": "git-context.clearSelection",
-          "when": "view == commitTracker && git-context.hasSelection",
-          "group": "navigation@3"
-        },
-        {
-          "command": "git-context.resetAll",
-          "when": "view == commitTracker",
-          "group": "navigation@4"
+          "when": "view == reports",
+          "group": "navigation@1"
         },
         {
           "command": "git-context.searchSymbols",
-          "when": "view == symbolHistory",
-          "group": "navigation"
+          "when": "view == symbols",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [
         {
           "command": "git-context.toggleCommitSelection",
-          "when": "view == commitTracker && viewItem == commit",
-          "group": "inline"
+          "when": "view == commits && viewItem == gitContextCommit",
+          "group": "inline@1"
         },
         {
-          "command": "git-context.toggleSelection",
-          "when": "view == commitTracker && viewItem =~ /^selection-/",
-          "group": "inline"
+          "command": "git-context.bundle.addCommit",
+          "when": "view == commits && viewItem == gitContextCommit && !gitContext.inBundle",
+          "group": "bundle@1"
         },
         {
-          "command": "git-context.selectAllStaged",
-          "when": "view == commitTracker && viewItem == selection-staged",
-          "group": "inline"
-        },
-        {
-          "command": "git-context.selectAllUnstaged",
-          "when": "view == commitTracker && viewItem == selection-unstaged",
-          "group": "inline"
-        },
-        {
-          "command": "commit-tracker.addToBundle",
-          "when": "view == commitTracker && viewItem == commit && !inRefactorBundle",
-          "group": "7_modification"
-        },
-        {
-          "command": "commit-tracker.removeFromBundle",
-          "when": "view == commitTracker && viewItem == commit && inRefactorBundle",
-          "group": "7_modification"
+          "command": "git-context.bundle.removeCommit",
+          "when": "view == commits && viewItem == gitContextCommit && gitContext.inBundle",
+          "group": "bundle@1"
         },
         {
           "command": "git-context.compareFilesToCommit",
-          "when": "view == commitTracker && viewItem == commit",
-          "group": "8_analysis"
+          "when": "view == commits && viewItem == gitContextCommit",
+          "group": "analysis@1"
         },
         {
-          "command": "commit-tracker.regenerateBundle",
-          "when": "view == commitTracker && viewItem == activeBundle",
-          "group": "7_modification"
+          "command": "git-context.selectAllStaged",
+          "when": "view == commits && viewItem == gitContextSelectionStaged",
+          "group": "selection@1"
         },
         {
-          "command": "commit-tracker.clearBundle",
-          "when": "view == commitTracker && viewItem == activeBundle",
-          "group": "7_modification"
+          "command": "git-context.selectAllUnstaged",
+          "when": "view == commits && viewItem == gitContextSelectionUnstaged",
+          "group": "selection@2"
         },
         {
-          "command": "git-context.exportLlmContext",
-          "when": "view == commitTracker && viewItem == activeBundle",
-          "group": "8_analysis"
+          "command": "git-context.pullLatest",
+          "when": "view == commits && viewItem == gitContextSelectionHeader",
+          "group": "inline@1"
+        },
+        {
+          "command": "git-context.resetAll",
+          "when": "view == commits && viewItem == gitContextSelectionHeader",
+          "group": "inline@2"
+        },
+        {
+          "command": "git-context.addMoreCommits",
+          "when": "view == commits && viewItem == gitContextActionLoadMore",
+          "group": "inline@1"
+        },
+        {
+          "command": "git-context.addCommitBySha",
+          "when": "view == commits && viewItem == gitContextActionAddBySha",
+          "group": "inline@1"
+        },
+        {
+          "command": "git-context.openReport",
+          "when": "view == reports && viewItem == gitContextReport",
+          "group": "inline@1"
+        },
+        {
+          "command": "git-context.deleteReport",
+          "when": "view == reports && viewItem == gitContextReport",
+          "group": "modification@2"
+        },
+        {
+          "command": "git-context.bundle.regenerate",
+          "when": "view == bundle && viewItem == gitContextActiveBundle",
+          "group": "modification@1"
+        },
+        {
+          "command": "git-context.bundle.clear",
+          "when": "view == bundle && viewItem == gitContextActiveBundle",
+          "group": "modification@2"
+        },
+        {
+          "command": "git-context.bundle.export",
+          "when": "view == bundle && viewItem == gitContextActiveBundle",
+          "group": "export@1"
         }
       ]
     },

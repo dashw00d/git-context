@@ -18,7 +18,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
   // Sort SHAs oldest → newest (reverse chronological order)
   const placeholders = commitShas.map(() => '?').join(',');
   const shaOrderStmt = db.prepare(`
-    SELECT sha FROM commits
+    SELECT sha FROM commits_metadata
     WHERE sha IN (${placeholders})
     ORDER BY date ASC
   `);

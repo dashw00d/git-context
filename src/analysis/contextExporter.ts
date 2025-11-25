@@ -87,7 +87,7 @@ export class ContextExporter {
 
     // Get commit info
     const commitStmt = db.prepare(`
-      SELECT * FROM commits WHERE sha = ?
+      SELECT * FROM commits_metadata WHERE sha = ?
     `);
     const commitRow = commitStmt.get(sha) as any;
 
@@ -215,7 +215,7 @@ export class ContextExporter {
     const hotspotsStmt = db.prepare(`
       SELECT symbol_id, name, COUNT(DISTINCT sha) as change_count, MAX(date) as last_changed
       FROM symbols s
-      JOIN commits c ON s.sha = c.sha
+      JOIN commits_metadata c ON s.sha = c.sha
       WHERE s.sha IN (${placeholders})
       GROUP BY symbol_id
       HAVING change_count >= 2
@@ -228,7 +228,7 @@ export class ContextExporter {
     const fileRollupsStmt = db.prepare(`
       SELECT path, COUNT(*) as total_changes, MAX(c.date) as last_commit
       FROM symbols s
-      JOIN commits c ON s.sha = c.sha
+      JOIN commits_metadata c ON s.sha = c.sha
       WHERE s.sha IN (${placeholders})
       GROUP BY path
       ORDER BY total_changes DESC

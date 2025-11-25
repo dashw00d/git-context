@@ -188,6 +188,59 @@ CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
 CREATE INDEX IF NOT EXISTS idx_reports_is_pinned ON reports(is_pinned);
 `;
 
+export const MIGRATION_V5 = `
+-- Split commits table into commits_metadata and commits_analysis
+
+-- Create lightweight metadata table
+CREATE TABLE IF NOT EXISTS commits_metadata (
+  sha TEXT PRIMARY KEY,
+  author TEXT NOT NULL,
+  date TEXT NOT NULL,
+  message TEXT NOT NULL,
+  parent TEXT,
+  files_changed INTEGER DEFAULT 0,
+  loaded_at TEXT NOT NULL  -- ISO timestamp when loaded
+);
+
+-- Create heavyweight analysis results table
+CREATE TABLE IF NOT EXISTS commits_analysis (
+  sha TEXT PRIMARY KEY,
+  summary_md TEXT,
+  raw_llm_json TEXT,
+  symbols_added INTEGER DEFAULT 0,
+  symbols_removed INTEGER DEFAULT 0,
+  symbols_modified INTEGER DEFAULT 0,
+  edges_added INTEGER DEFAULT 0,
+  edges_removed INTEGER DEFAULT 0,
+  risks TEXT DEFAULT '[]',  -- JSON array
+  blast_radius INTEGER DEFAULT 0,
+  analyzed_at TEXT NOT NULL,  -- ISO timestamp when analyzed
+  FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE
+);
+
+-- Migrate existing data from commits table
+INSERT OR IGNORE INTO commits_metadata (sha, author, date, message, parent, files_changed, loaded_at)
+SELECT sha, author, date, message, NULL, files_changed, datetime('now')
+FROM commits;
+
+INSERT OR IGNORE INTO commits_analysis (sha, summary_md, raw_llm_json, symbols_added, symbols_removed,
+  symbols_modified, edges_added, edges_removed, risks, blast_radius, analyzed_at)
+SELECT sha, summary_md, raw_llm_json, symbols_added, symbols_removed, symbols_modified,
+  edges_added, edges_removed, risks, 0, datetime('now')
+FROM commits
+WHERE summary_md IS NOT NULL OR raw_llm_json IS NOT NULL;
+
+-- Create indexes for new tables
+CREATE INDEX IF NOT EXISTS idx_commits_metadata_date ON commits_metadata(date DESC);
+CREATE INDEX IF NOT EXISTS idx_commits_analysis_analyzed_at ON commits_analysis(analyzed_at DESC);
+
+-- Drop the old commits table (AGGRESSIVE: since nobody is using the plugin)
+DROP TABLE IF EXISTS commits;
+
+-- Note: Foreign key constraints may not be enforced in sql.js, but the relationships are defined
+-- for future compatibility with SQLite databases that support FKs
+`;
+
 export const MIGRATIONS = [
   // Version 1: Initial schema
   DATABASE_SCHEMA,
@@ -196,7 +249,9 @@ export const MIGRATIONS = [
   // Version 3: Import path convention tracking
   MIGRATION_V3,
   // Version 4: Reports table
-  MIGRATION_V4
+  MIGRATION_V4,
+  // Version 5: Split commits table
+  MIGRATION_V5
 ];
 
-export const CURRENT_VERSION = 4;
+export const CURRENT_VERSION = 5;

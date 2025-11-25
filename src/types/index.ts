@@ -135,6 +135,61 @@ export interface TreeNodeBase {
 export type ChangeType = "added" | "modified" | "signature_changed" | "removed" | "renamed" | "moved";
 export type ModReason = "body_changed" | "signature_changed" | "doc_changed" | "visibility_changed" | "annotation_changed";
 
+// Analysis Pipeline Types
+export interface CommitMetadata {
+  sha: string;
+  author: string;
+  date: string;
+  message: string;
+  parent?: string;
+  filesChanged: FileChange[];  // Basic file list from git
+  loadedAt?: string;  // ISO timestamp when loaded
+}
+
+export interface CommitAnalysis {
+  sha: string;
+  symbols: {
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  };
+  edges: {
+    added: EdgeInfo[];
+    removed: EdgeInfo[];
+  };
+  risks: RiskFlag[];
+  difftasticHighlights: DifftasticResult[];
+  llmSummary?: LLMResponse;
+  blastRadius: number;
+  analyzedAt: string;  // ISO timestamp
+}
+
+export interface AnalysisOptions {
+  skipDifftastic?: boolean;
+  skipLLM?: boolean;
+  skipQdrant?: boolean;
+  forceReanalyze?: boolean;  // Re-analyze even if already analyzed
+}
+
+export interface StagedAnalysis {
+  files: FileChange[];
+  symbols: {
+    added: SymbolInfo[];
+    modified: SymbolDelta[];
+  };
+  edges: {
+    added: EdgeInfo[];
+  };
+  risks: RiskFlag[];
+  blastRadius: number;
+}
+
+// Difftastic result type (placeholder for now)
+export interface DifftasticResult {
+  file: string;
+  highlights: string[];
+}
+
 export interface ExtensionConfig {
   openRouterApiKey?: string;
   openRouterModel: string;
