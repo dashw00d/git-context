@@ -9,8 +9,9 @@ import { showCommit, searchSymbol } from '../cli/queries';
 import { getExtensionConfig } from '../utils/config';
 import { LLMSummarizer } from '../llm/summarizer';
 import { generateRefactorBundleReport } from './report';
+import { getCockpitProvider } from '../extension';
 import { RefactorReportProvider } from '../webview/refactorReportProvider';
-import { updateContexts } from '../extension';
+import { updateContexts, syncCockpitState } from '../extension';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -28,9 +29,9 @@ export async function registerCommands(
     // Analyze last N commits
     const analyzeLastCommitsCmd = vscode.commands.registerCommand(
       'git-context.analyzeLastCommits',
-      async () => {
+      async (countArg?: string) => {
         const config = getExtensionConfig();
-        const count = await vscode.window.showInputBox({
+        const count = countArg || await vscode.window.showInputBox({
           prompt: 'Number of commits to analyze',
           value: config.defaultCommitCount.toString(),
           validateInput: (value) => {
@@ -46,8 +47,8 @@ export async function registerCommands(
           vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: 'Analyzing commits...',
-            cancellable: false
-          }, async (progress) => {
+            cancellable: true
+          }, async (progress, token) => {
             try {
               // Ensure database is initialized before analyzing
               await commitsProvider.initializeDatabase();
@@ -60,8 +61,22 @@ export async function registerCommands(
               const shas = commits.map(c => c.sha);
               await pipeline.analyzeCommits(shas);
 
+              // Generate bundle report for analyzed commits
+              const { generateRefactorBundleReport } = await import('./report');
+              await generateRefactorBundleReport(
+                shas,
+                refactorReportProvider,
+                token,
+                activeBundleProvider,
+                undefined, // selectedFiles - analyze all files in commits
+                'full',
+                undefined // existingReportId - create new report
+              );
+
               commitsProvider.refresh();
-              vscode.window.showInformationMessage(`Analyzed last ${count} commits`);
+              const { syncCockpitState } = await import('../extension');
+              await syncCockpitState();
+              vscode.window.showInformationMessage(`Analyzed last ${count} commits and generated report`);
             } catch (error) {
               vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
             }
@@ -77,9 +92,19 @@ export async function registerCommands(
         vscode.window.withProgress({
           location: vscode.ProgressLocation.Notification,
           title: 'Analyzing staged changes...',
-          cancellable: false
-        }, async (progress) => {
+          cancellable: true
+        }, async (progress, token) => {
           try {
+            // Check if there are staged files first
+            const { GitOperations } = await import('../analysis/git');
+            const git = new GitOperations();
+            const stagedFiles = git.getStagedFiles();
+
+            if (stagedFiles.length === 0) {
+              vscode.window.showWarningMessage('No staged files to analyze');
+              return;
+            }
+
             // Ensure database is initialized before analyzing
             await commitsProvider.initializeDatabase();
 
@@ -88,9 +113,82 @@ export async function registerCommands(
             await pipeline.analyzeStagedChanges();
 
             commitsProvider.refresh();
-            vscode.window.showInformationMessage('Analyzed staged changes');
+            const { syncCockpitState } = await import('../extension');
+            await syncCockpitState();
+
+            // Generate report for staged changes
+            const { generateRefactorBundleReport } = await import('./report');
+            const headSha = git.getHeadSha();
+            // Use HEAD as the base commit for staged analysis
+            const commitShas = headSha ? [headSha] : [];
+
+            await generateRefactorBundleReport(
+              commitShas,
+              refactorReportProvider,
+              token,
+              activeBundleProvider,
+              undefined, // selectedFiles - analyze all staged files
+              'staged' as const,
+              undefined // existingReportId - create new report
+            );
+
+            vscode.window.showInformationMessage('Analyzed staged changes and generated report');
           } catch (error) {
             vscode.window.showErrorMessage(`Failed to analyze staged changes: ${error}`);
+          }
+        });
+      }
+    );
+
+    const analyzeUnstagedCmd = vscode.commands.registerCommand(
+      'git-context.analyzeUnstagedChanges',
+      async () => {
+        vscode.window.withProgress({
+          location: vscode.ProgressLocation.Notification,
+          title: 'Analyzing unstaged changes...',
+          cancellable: true
+        }, async (progress, token) => {
+          try {
+            // Check if there are unstaged files first
+            const { GitOperations } = await import('../analysis/git');
+            const git = new GitOperations();
+            const unstagedFiles = git.getUnstagedFiles();
+
+            if (unstagedFiles.length === 0) {
+              vscode.window.showWarningMessage('No unstaged files to analyze');
+              return;
+            }
+
+            // Ensure database is initialized before analyzing
+            await commitsProvider.initializeDatabase();
+
+            const { getAnalysisPipeline } = await import('../analysis/pipeline');
+            const pipeline = await getAnalysisPipeline();
+            await pipeline.analyzeUnstagedChanges();
+
+            commitsProvider.refresh();
+            const { syncCockpitState } = await import('../extension');
+            await syncCockpitState();
+
+            // Generate report for unstaged changes
+            const { generateRefactorBundleReport } = await import('./report');
+            const headSha = git.getHeadSha();
+            // Use HEAD as the base commit for unstaged analysis
+            const commitShas = headSha ? [headSha] : [];
+
+            await generateRefactorBundleReport(
+              commitShas,
+              refactorReportProvider,
+              token,
+              activeBundleProvider,
+              undefined, // selectedFiles - analyze all unstaged files
+              'unstaged' as const,
+              undefined // existingReportId - create new report
+            );
+
+            vscode.window.showInformationMessage('Analyzed unstaged changes and generated report');
+          } catch (error) {
+            vscode.window.showErrorMessage(`Failed to analyze unstaged changes: ${error}`);
           }
         });
       }
@@ -200,7 +298,7 @@ export async function registerCommands(
             try {
               const { getDatabaseManager } = await import('../storage/database');
               const db = getDatabaseManager().getDatabase();
-              
+
               // Query for symbol diff snippets
               const symbolStmt = db.prepare(`
                 SELECT diff_snippet_pre, diff_snippet_post, change_type
@@ -209,9 +307,9 @@ export async function registerCommands(
                 ORDER BY id DESC
                 LIMIT 1
               `);
-              
+
               const symbolRow = symbolStmt.get(commitSha, symbol.file, symbol.name) as any;
-              
+
               if (symbolRow) {
                 codeBefore = symbolRow.diff_snippet_pre || codeBefore;
                 codeAfter = symbolRow.diff_snippet_post || codeAfter;
@@ -322,7 +420,7 @@ export async function registerCommands(
           commitsProvider.runningTask = { cancel: () => cancellationTokenSource.cancel(), token: cancellationTokenSource.token };
 
           try {
-            await generateRefactorBundleReport(shas, refactorReportProvider, cancellationTokenSource.token, activeBundleProvider);
+            await generateRefactorBundleReport(shas, refactorReportProvider, cancellationTokenSource.token, activeBundleProvider, undefined, undefined, undefined);
             await updateContexts();
           } finally {
             commitsProvider.runningTask = null;
@@ -405,10 +503,10 @@ export async function registerCommands(
         try {
           const { getDebtMeter } = await import('./refactorDebtMeter');
           const debtMeter = getDebtMeter();
-          
+
           // Refresh tree and reveal bundle
           await debtMeter.refreshTreeAndRevealBundle();
-          
+
           // Also open the report
           await vscode.commands.executeCommand('git-context.showRefactorReport');
         } catch (error) {
@@ -525,7 +623,6 @@ export async function registerCommands(
           commitsProvider.workspaceParts.add('staged');
           commitsProvider.workspaceParts.add('unstaged');
         }
-        commitsProvider.persistState();
         commitsProvider.refresh();
       }
     );
@@ -539,7 +636,6 @@ export async function registerCommands(
         } else {
           commitsProvider.workspaceParts.add(part);
         }
-        commitsProvider.persistState();
         commitsProvider.refresh();
       }
     );
@@ -569,16 +665,16 @@ export async function registerCommands(
           const { getGitRoot } = await import('../utils/config');
           const git = new GitOperations();
           const gitRoot = getGitRoot();
-          
+
           if (!gitRoot) {
             vscode.window.showErrorMessage('Git root not found');
             return;
           }
-          
+
           if (filePath) {
             // Show diff for specific file
             const uri = vscode.Uri.parse(`git:${filePath}?${sha}`);
-            await vscode.commands.executeCommand('vscode.diff', 
+            await vscode.commands.executeCommand('vscode.diff',
               vscode.Uri.file(path.join(gitRoot, filePath)),
               uri,
               `${path.basename(filePath)} (workspace vs ${sha.substring(0, 8)})`
@@ -590,7 +686,7 @@ export async function registerCommands(
               vscode.window.showInformationMessage('No changes found');
               return;
             }
-            
+
             // Open first file diff, or show list
             if (files.length === 1) {
               const uri = vscode.Uri.parse(`git:${files[0].path}?${sha}`);
@@ -627,16 +723,16 @@ export async function registerCommands(
           const { getGitRoot } = await import('../utils/config');
           const git = new GitOperations();
           const gitRoot = getGitRoot();
-          
+
           if (!gitRoot) {
             vscode.window.showErrorMessage('Git root not found');
             return;
           }
-          
+
           // Get files changed in workspace (based on workspaceParts filter)
           const includeStaged = commitsProvider.workspaceParts.has('staged');
           const includeUnstaged = commitsProvider.workspaceParts.has('unstaged');
-          
+
           const workspaceFiles: string[] = [];
           if (includeStaged) {
             const staged = git.getStagedFiles();
@@ -646,20 +742,20 @@ export async function registerCommands(
             const unstaged = git.getUnstagedFiles();
             workspaceFiles.push(...unstaged.map(f => f.path));
           }
-          
+
           // Get files changed in commit
           const commitFiles = git.getFileChanges(commitSha);
           const commitFilePaths = commitFiles.map(f => f.path);
-          
+
           // Find common files or show all
           const commonFiles = workspaceFiles.filter(f => commitFilePaths.includes(f));
           const filesToShow = commonFiles.length > 0 ? commonFiles : [...new Set([...workspaceFiles, ...commitFilePaths])];
-          
+
           if (filesToShow.length === 0) {
             vscode.window.showInformationMessage('No overlapping files to compare');
             return;
           }
-          
+
           // Show diff for first file (or let user pick)
           if (filesToShow.length === 1) {
             const filePath = filesToShow[0];
@@ -676,11 +772,11 @@ export async function registerCommands(
               description: fp,
               filePath: fp
             }));
-            
+
             const selected = await vscode.window.showQuickPick(items, {
               placeHolder: `Select file to compare (workspace vs ${commitSha.substring(0, 8)})`
             });
-            
+
             if (selected) {
               const uri = vscode.Uri.parse(`git:${selected.filePath}?${commitSha}`);
               await vscode.commands.executeCommand('vscode.diff',
@@ -733,7 +829,7 @@ export async function registerCommands(
           const { GitOperations } = await import('../analysis/git');
           const git = new GitOperations();
           const headSha = git.getHeadSha();
-          
+
           // HEAD is just another commit - use general compare command
           await vscode.commands.executeCommand('git-context.compareCommits', headSha, commitSha);
         } catch (error) {
@@ -758,21 +854,21 @@ export async function registerCommands(
           const workspaceLabel = commitsProvider.workspaceParts.has('staged') && commitsProvider.workspaceParts.has('unstaged')
             ? 'Full Workspace'
             : commitsProvider.workspaceParts.has('staged')
-            ? 'Staged Only'
-            : commitsProvider.workspaceParts.has('unstaged')
-            ? 'Unstaged Only'
-            : 'No Workspace';
-          
+              ? 'Staged Only'
+              : commitsProvider.workspaceParts.has('unstaged')
+                ? 'Unstaged Only'
+                : 'No Workspace';
+
           if (selectedShas.length === 0) {
             vscode.window.showInformationMessage('Select at least 1 commit to compare with workspace (root/base)');
             return;
           }
-          
+
           // Generate comparison options:
           // 1. Workspace (root/base) vs each commit
           // 2. Commit vs commit pairs (HEAD is just another commit here)
           const items: vscode.QuickPickItem[] = [];
-          
+
           // Workspace (root/base) vs each selected commit
           for (const sha of selectedShas) {
             items.push({
@@ -781,7 +877,7 @@ export async function registerCommands(
               detail: `Compare workspace state with ${sha.substring(0, 8)}`
             });
           }
-          
+
           // Commit vs commit pairs
           for (let i = 0; i < selectedShas.length; i++) {
             for (let j = i + 1; j < selectedShas.length; j++) {
@@ -794,11 +890,11 @@ export async function registerCommands(
               });
             }
           }
-          
+
           const selected = await vscode.window.showQuickPick(items, {
             placeHolder: 'Select comparison to perform'
           });
-          
+
           if (selected) {
             if (selected.label.startsWith('Workspace vs')) {
               // Extract SHA from "Workspace vs abc12345"
@@ -850,7 +946,7 @@ export async function registerCommands(
             'refactor-bundle-legacy': 'legacy',
             'refactor-bundle-timeline': 'timeline'
           };
-          
+
           // Decode section ID if it's encoded (handle URL encoding)
           let decodedSectionId = sectionId;
           try {
@@ -858,20 +954,20 @@ export async function registerCommands(
           } catch {
             // If decoding fails, use original
           }
-          
+
           const anchorId = anchorMap[decodedSectionId] || decodedSectionId;
-          
+
           // Find open markdown document (check for report content)
           let doc = vscode.window.activeTextEditor?.document;
           if (!doc || !doc.fileName.endsWith('.md')) {
             // Search all open documents
-            const docs = vscode.workspace.textDocuments.filter(d => 
-              d.fileName.endsWith('.md') && 
-              (d.getText().includes(`{#${anchorId}}`) || 
-               d.getText().includes(`#${anchorId}`) ||
-               d.getText().includes('Findings Overview'))
+            const docs = vscode.workspace.textDocuments.filter(d =>
+              d.fileName.endsWith('.md') &&
+              (d.getText().includes(`{#${anchorId}}`) ||
+                d.getText().includes(`#${anchorId}`) ||
+                d.getText().includes('Findings Overview'))
             );
-            
+
             if (docs.length > 0) {
               doc = docs[0];
             } else {
@@ -881,24 +977,24 @@ export async function registerCommands(
               doc = vscode.window.activeTextEditor?.document;
             }
           }
-          
+
           if (!doc) {
             vscode.window.showWarningMessage('No markdown report found. Generate a refactor bundle report first.');
             return;
           }
-          
+
           const text = doc.getText();
-          
+
           // Try Pandoc-style anchor first: {#anchor-id}
           let anchorPattern = new RegExp(`(?:^|\\n)#+\\s+[^\\n]*\\{#${anchorId}\\}`, 'i');
           let match = text.match(anchorPattern);
-          
+
           // If not found, try standard markdown anchor: # anchor-id
           if (!match) {
             anchorPattern = new RegExp(`(?:^|\\n)#+\\s+[^\\n]*${anchorId.replace(/-/g, '[\\s-]')}`, 'i');
             match = text.match(anchorPattern);
           }
-          
+
           // If still not found, try finding section header with anchor ID nearby
           if (!match) {
             const lines = text.split('\n');
@@ -907,7 +1003,7 @@ export async function registerCommands(
               const line = lines[i];
               // Check for header with anchor on same or next line
               if ((line.match(/^#+\s+.*$/i) && lines[i + 1]?.includes(`{#${anchorId}}`)) ||
-                  (line.includes(`{#${anchorId}}`) && lines[i - 1]?.match(/^#+\s+.*$/i))) {
+                (line.includes(`{#${anchorId}}`) && lines[i - 1]?.match(/^#+\s+.*$/i))) {
                 foundIndex = text.indexOf(line);
                 break;
               }
@@ -922,7 +1018,7 @@ export async function registerCommands(
               }
             }
           }
-          
+
           if (match && match.index !== undefined) {
             const lineNumber = text.substring(0, match.index).split('\n').length - 1;
             const editor = await vscode.window.showTextDocument(doc);
@@ -948,10 +1044,10 @@ export async function registerCommands(
             vscode.window.showWarningMessage('No bundle facts available');
             return;
           }
-          
+
           const facts = activeBundleProvider.lastBundleFacts;
           let jsonData: any = null;
-          
+
           // Extract relevant section data
           switch (sectionId) {
             case 'incompleteness-missing':
@@ -969,7 +1065,7 @@ export async function registerCommands(
             default:
               jsonData = facts.evidence?.[sectionId] || facts.findings;
           }
-          
+
           const jsonString = JSON.stringify(jsonData, null, 2);
           await vscode.env.clipboard.writeText(jsonString);
           vscode.window.showInformationMessage(`Copied ${sectionId} JSON to clipboard`);
@@ -988,10 +1084,10 @@ export async function registerCommands(
             vscode.window.showWarningMessage('No bundle facts available');
             return;
           }
-          
+
           const facts = activeBundleProvider.lastBundleFacts;
           let context = '';
-          
+
           // Generate context based on element type
           if (elementId.startsWith('file:')) {
             const filePath = elementId.replace('file:', '');
@@ -1022,7 +1118,7 @@ export async function registerCommands(
             const sectionData = facts.evidence?.[elementId] || facts.evidence?.[`findings.${elementId}`] || {};
             context = `Section: ${elementId}\n\n${JSON.stringify(sectionData, null, 2)}`;
           }
-          
+
           await vscode.env.clipboard.writeText(context);
           vscode.window.showInformationMessage('LLM context copied to clipboard');
         } catch (error) {
@@ -1038,12 +1134,12 @@ export async function registerCommands(
         try {
           const { getGitRoot } = await import('../utils/config');
           const gitRoot = getGitRoot();
-          
+
           if (!gitRoot) {
             vscode.window.showErrorMessage('Git root not found');
             return;
           }
-          
+
           if (sha) {
             // Open file at specific commit
             const uri = vscode.Uri.parse(`git:${filePath}?${sha}`);
@@ -1067,13 +1163,13 @@ export async function registerCommands(
             vscode.window.showWarningMessage('No bundle facts available');
             return;
           }
-          
+
           const facts = activeBundleProvider.lastBundleFacts;
           const drift = facts.findings.patternDrift;
-          
+
           // Create markdown table
           const table = `| Metric | Count |\n|--------|-------|\n| Mixed Targets | ${drift.mixedTargets} |\n| Old Namespaces | ${drift.oldNamespaces} |`;
-          
+
           await vscode.env.clipboard.writeText(table);
           vscode.window.showInformationMessage('Drift table copied to clipboard');
         } catch (error) {
@@ -1302,7 +1398,7 @@ export async function registerCommands(
       async () => {
         try {
           type NamingConvention = 'camelCase' | 'PascalCase' | 'snake_case' | 'SCREAMING_SNAKE' | 'kebab-case' | 'hungarian' | 'mixed' | 'unknown';
-          
+
           const convention = await vscode.window.showQuickPick([
             { label: 'camelCase', value: 'camelCase' as NamingConvention },
             { label: 'PascalCase', value: 'PascalCase' as NamingConvention },
@@ -1347,6 +1443,7 @@ export async function registerCommands(
     context.subscriptions.push(
       analyzeLastCommitsCmd,
       analyzeStagedCmd,
+      analyzeUnstagedCmd,
       compareFilesCmd,
       explainSymbolCmd,
       searchSymbolsCmd,
@@ -1400,7 +1497,8 @@ export async function registerCommands(
             undefined,
             activeBundleProvider,
             Array.from(selectedFiles),
-            workspaceScope === 'workspace' ? 'full' : workspaceScope
+            workspaceScope === 'workspace' ? 'full' : workspaceScope,
+            undefined,
           );
           commitsProvider.refresh();
         } catch (error) {
@@ -1482,6 +1580,8 @@ export async function registerCommands(
       'git-context.toggleFileSelection',
       async (filePath: string) => {
         commitsProvider.toggleFileSelection(filePath);
+        const { syncCockpitState } = await import('../extension');
+        await syncCockpitState();
       }
     );
 
@@ -1500,6 +1600,8 @@ export async function registerCommands(
             const sha = elementId.replace('select-commit-', '');
             commitsProvider.toggleCommitSelection(sha);
           }
+          const { syncCockpitState } = await import('../extension');
+          await syncCockpitState();
         }
       }
     );
@@ -1547,6 +1649,10 @@ export async function registerCommands(
             commitsProvider.toggleCommitSelection(metadata.sha);
             // Mark as manually added to preserve during Pull Latest
             commitsProvider.markCommitAsManual(metadata.sha);
+
+            // Sync UI
+            const { syncCockpitState } = await import('../extension');
+            await syncCockpitState();
           } catch (error) {
             vscode.window.showErrorMessage(`Failed to add commit: ${error}`);
           }
@@ -1608,6 +1714,8 @@ export async function registerCommands(
       'git-context.selectAllStaged',
       async () => {
         commitsProvider.selectAllStaged();
+        const { syncCockpitState } = await import('../extension');
+        await syncCockpitState();
       }
     );
 
@@ -1615,6 +1723,8 @@ export async function registerCommands(
       'git-context.selectAllUnstaged',
       async () => {
         commitsProvider.selectAllUnstaged();
+        const { syncCockpitState } = await import('../extension');
+        await syncCockpitState();
       }
     );
 
@@ -1640,7 +1750,6 @@ export async function registerCommands(
         await pipeline.loadCommitsMetadata(nextShas);
 
         commitsProvider.loadMoreOffset += commitsProvider.PAGE_SIZE;
-        commitsProvider.persistState();
         commitsProvider.refresh();
       }
     );
@@ -1674,7 +1783,6 @@ export async function registerCommands(
 
             // Reset offset since we've refreshed the list
             commitsProvider.loadMoreOffset = 0;
-            commitsProvider.persistState();
             commitsProvider.refresh();
 
             vscode.window.showInformationMessage(`Analyzed ${configCount} latest commits`);
@@ -1712,7 +1820,6 @@ export async function registerCommands(
             const shas = commits.map(c => c.sha);
             await pipeline.analyzeCommits(shas);
 
-            commitsProvider.persistState();
             commitsProvider.refresh();
 
             vscode.window.showInformationMessage('Analysis reset complete');
@@ -1770,7 +1877,6 @@ export async function registerCommands(
               commitsProvider.manualCommits.clear();
               commitsProvider.selectedFiles.clear();
               commitsProvider.loadMoreOffset = 0;
-              commitsProvider.persistState();
               await updateContexts();
 
               // 4. Force database reinitialization with new schema
@@ -1804,6 +1910,69 @@ export async function registerCommands(
       }
     );
 
+    // Bundle commands
+    const bundleRegenerateCmd = vscode.commands.registerCommand(
+      'git-context.bundle.regenerate',
+      async () => {
+        if (activeBundleProvider?.lastBundleFacts) {
+          // Trigger regeneration of the current bundle
+          await vscode.commands.executeCommand('git-context.generateReport');
+        } else {
+          vscode.window.showWarningMessage('No active bundle to regenerate');
+        }
+      }
+    );
+
+    const bundleClearCmd = vscode.commands.registerCommand(
+      'git-context.bundle.clear',
+      async () => {
+        if (activeBundleProvider) {
+          activeBundleProvider.lastBundleFacts = null;
+          activeBundleProvider.refresh();
+          commitsProvider.clearSelection();
+          await syncCockpitState();
+          vscode.window.showInformationMessage('Bundle cleared');
+        }
+      }
+    );
+
+    const bundleCancelCmd = vscode.commands.registerCommand(
+      'git-context.bundle.cancel',
+      async () => {
+        if (commitsProvider.runningTask) {
+          commitsProvider.runningTask.cancel();
+          commitsProvider.runningTask = null;
+          const cockpitProvider = getCockpitProvider();
+          cockpitProvider?.updateAnalysisProgress(false);
+          vscode.window.showInformationMessage('Analysis cancelled');
+        } else {
+          vscode.window.showWarningMessage('No analysis currently running');
+        }
+      }
+    );
+
+    const bundleAddCommitCmd = vscode.commands.registerCommand(
+      'git-context.bundle.addCommit',
+      async (commitSha: string) => {
+        if (commitSha) {
+          commitsProvider.selectedCommits.add(commitSha);
+          commitsProvider.refresh();
+          await syncCockpitState();
+        }
+      }
+    );
+
+    const bundleRemoveCommitCmd = vscode.commands.registerCommand(
+      'git-context.bundle.removeCommit',
+      async (commitSha: string) => {
+        if (commitSha) {
+          commitsProvider.selectedCommits.delete(commitSha);
+          commitsProvider.refresh();
+          await syncCockpitState();
+        }
+      }
+    );
+
     // Bundle export command (alias to exportLlmContext)
     const bundleExportCmd = vscode.commands.registerCommand(
       'git-context.bundle.export',
@@ -1812,13 +1981,32 @@ export async function registerCommands(
       }
     );
 
+    // Scroll to report section command
+    const scrollToReportSectionCmd = vscode.commands.registerCommand(
+      'git-context.scrollToReportSection',
+      async (sectionId: string) => {
+        if (refactorReportProvider && sectionId) {
+          refactorReportProvider.scrollToSection(sectionId);
+        }
+      }
+    );
+
     // Open symbol history command
     const openSymbolHistoryCmd = vscode.commands.registerCommand(
       'git-context.openSymbolHistory',
       async (symbolId: string) => {
-        // TODO: Implement symbol history opening logic
-        // For now, just show a message
-        vscode.window.showInformationMessage(`Opening symbol history for: ${symbolId}`);
+        if (!symbolId) {
+          vscode.window.showWarningMessage('No symbol ID provided');
+          return;
+        }
+
+        try {
+          // Focus the Symbol History view (which shows recent symbols)
+          await vscode.commands.executeCommand('symbolHistory.focus');
+          vscode.window.showInformationMessage(`Showing symbol history. Search for "${symbolId.split(':').pop()}" to find this symbol.`);
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to open symbol history: ${error}`);
+        }
       }
     );
 
@@ -1841,7 +2029,13 @@ export async function registerCommands(
       resetAnalysisCmd,
       resetAllCmd,
       viewBundleCmd,
+      bundleRegenerateCmd,
+      bundleClearCmd,
+      bundleCancelCmd,
+      bundleAddCommitCmd,
+      bundleRemoveCommitCmd,
       bundleExportCmd,
+      scrollToReportSectionCmd,
       openSymbolHistoryCmd
     );
 
@@ -1866,7 +2060,7 @@ async function getRecentCommits(): Promise<vscode.QuickPickItem[]> {
       ORDER BY date DESC
       LIMIT 20
     `);
-    
+
     const commits = stmt.all() as Array<{
       sha: string;
       message: string;
@@ -1928,4 +2122,3 @@ async function getSymbolAtCursor(): Promise<{ name: string, file: string, line: 
     line
   };
 }
-

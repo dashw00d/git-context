@@ -207,18 +207,40 @@ export class ReportsProvider implements vscode.TreeDataProvider<TreeNode> {
     return 0;
   }
 
-  async exportReportsDto(): Promise<Array<{ id: string; title: string; summary: string; createdAt: string; pinned?: boolean }>> {
+  async exportReportsDto(
+    filterText?: string,
+    filterBranch?: string | 'all',
+    showPinnedOnly?: boolean
+  ): Promise<Array<{ id: string; title: string; summary: string; createdAt: string; pinned?: boolean; branch?: string }>> {
     try {
       const { getReportManager } = await import('../storage/reportManager');
       const reportManager = getReportManager();
-      const reports = reportManager.list();
+      let reports = reportManager.list();
+
+      // Apply filters
+      if (filterText && filterText.trim()) {
+        const searchTerm = filterText.trim().toLowerCase();
+        reports = reports.filter((report: any) =>
+          (report.title || '').toLowerCase().includes(searchTerm) ||
+          (report.summary || '').toLowerCase().includes(searchTerm)
+        );
+      }
+
+      if (filterBranch && filterBranch !== 'all') {
+        reports = reports.filter((report: any) => report.branch === filterBranch);
+      }
+
+      if (showPinnedOnly) {
+        reports = reports.filter((report: any) => !!report.isPinned);
+      }
 
       return reports.map((report: any) => ({
         id: report.id,
         title: report.title,
         summary: report.summary || '',
         createdAt: (report.createdAt instanceof Date ? report.createdAt : new Date(report.createdAt)).toISOString(),
-        pinned: !!report.isPinned
+        pinned: !!report.isPinned,
+        branch: report.branch
       }));
     } catch (error) {
       logError('Failed to export reports for cockpit', error);

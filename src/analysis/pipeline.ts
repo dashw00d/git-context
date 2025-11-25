@@ -14,7 +14,8 @@ import {
   FileChange,
   AnalysisResult,
   SymbolInfo,
-  SymbolDelta
+  SymbolDelta,
+  EdgeInfo
 } from '../types';
 
 /**
@@ -112,7 +113,11 @@ export class AnalysisPipeline {
   async analyzeCommit(sha: string, options: AnalysisOptions = {}): Promise<CommitAnalysis> {
     // Check if already analyzed (unless force reanalyze)
     if (!options.forceReanalyze && await this.isCommitAnalyzed(sha)) {
-      throw new Error(`Commit ${sha} is already analyzed. Use forceReanalyze option to re-analyze.`);
+      logDebug(`Commit ${sha} already analyzed; skipping (use forceReanalyze to refresh)`);
+      const existing = await this.getAnalysisResults(sha);
+      if (existing) {
+        return existing;
+      }
     }
 
     // Get metadata first
@@ -240,18 +245,59 @@ export class AnalysisPipeline {
    * Analyze staged changes (not yet committed).
    */
   async analyzeStagedChanges(): Promise<StagedAnalysis> {
-    // For staged changes, we create a temporary analysis
-    // This is more complex and would require comparing staged vs HEAD
-    logInfo('Staged changes analysis not yet implemented');
-    logInfo('Use "ct analyze" to analyze committed changes');
+    const files = this.git.getStagedFiles();
+    logInfo(`[PIPELINE] Analyzing staged changes (${files.length} files)`);
 
-    // Return empty result for now
+    // Extract symbols from staged changes compared to HEAD
+    const symbols = await this.symbolExtractor.extractWorkingTreeSymbols(files, { staged: true });
+    const edges = await this.dependencyExtractor.extractWorkingTreeEdges(files, symbols, this.git);
+    const risks = this.riskDetector.detectRisks(
+      files,
+      symbols,
+      edges
+    );
+    const blastRadiusResult = this.dependencyExtractor.calculateBlastRadius(
+      [...symbols.added, ...symbols.modified.map(m => m.symbol)],
+      edges.added
+    );
+    const blastRadius = blastRadiusResult.impactScore.size; // Use number of impacted symbols
+
     return {
-      files: [],
-      symbols: { added: [], modified: [] },
-      edges: { added: [] },
-      risks: [],
-      blastRadius: 0
+      files,
+      symbols,
+      edges,
+      risks,
+      blastRadius
+    };
+  }
+
+  /**
+   * Analyze unstaged changes (working directory vs HEAD).
+   */
+  async analyzeUnstagedChanges(): Promise<StagedAnalysis> {
+    const files = this.git.getUnstagedFiles();
+    logInfo(`[PIPELINE] Analyzing unstaged changes (${files.length} files)`);
+
+    // Extract symbols from unstaged changes compared to HEAD
+    const symbols = await this.symbolExtractor.extractWorkingTreeSymbols(files, { staged: false });
+    const edges = await this.dependencyExtractor.extractWorkingTreeEdges(files, symbols, this.git);
+    const risks = this.riskDetector.detectRisks(
+      files,
+      symbols,
+      edges
+    );
+    const blastRadiusResult = this.dependencyExtractor.calculateBlastRadius(
+      [...symbols.added, ...symbols.modified.map(m => m.symbol)],
+      edges.added
+    );
+    const blastRadius = blastRadiusResult.impactScore.size; // Use number of impacted symbols
+
+    return {
+      files,
+      symbols,
+      edges,
+      risks,
+      blastRadius
     };
   }
 

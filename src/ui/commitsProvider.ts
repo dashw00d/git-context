@@ -429,7 +429,8 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
 
   // Methods for compatibility with commands.ts
   async initializeDatabase(): Promise<void> {
-    // TODO: Implement database initialization if needed
+    const { ensureDatabaseInitialized } = await import('../storage/database');
+    await ensureDatabaseInitialized();
   }
 
   getWorkspaceScope(): 'workspace' | 'staged' | 'unstaged' {
@@ -437,45 +438,72 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   toggleCommitSelection(commit: any): void {
-    const sha = commit.sha || commit.id;
+    const sha = typeof commit === 'string' ? commit : (commit.sha || commit.id);
     if (this.selectedCommits.has(sha)) {
       this.selectedCommits.delete(sha);
     } else {
       this.selectedCommits.add(sha);
     }
+    // Persist state
+    this.context.workspaceState.update('selectedCommits', Array.from(this.selectedCommits));
     this.refresh();
   }
 
   clearSelection(): void {
     this.selectedCommits.clear();
     this.selectedFiles.clear();
+    // Persist cleared state
+    this.context.workspaceState.update('selectedCommits', []);
+    this.context.workspaceState.update('selectedFiles', []);
     this.refresh();
   }
 
   toggleFileSelection(file: any): void {
-    const path = file.path || file.id;
+    const path = typeof file === 'string' ? file : (file.path || file.id);
     if (this.selectedFiles.has(path)) {
       this.selectedFiles.delete(path);
     } else {
       this.selectedFiles.add(path);
     }
+    // Persist state
+    this.context.workspaceState.update('selectedFiles', Array.from(this.selectedFiles));
     this.refresh();
   }
 
   selectAllStaged(): void {
-    // TODO: Implement select all staged files
+    try {
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const staged = git.getStagedFiles();
+      staged.forEach((file: { path: string; status: any }) => {
+        this.selectedFiles.add(file.path);
+      });
+      // Persist state
+      this.context.workspaceState.update('selectedFiles', Array.from(this.selectedFiles));
+      this.refresh();
+    } catch (error) {
+      console.error('Failed to select all staged files:', error);
+    }
   }
 
   selectAllUnstaged(): void {
-    // TODO: Implement select all unstaged files
+    try {
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const unstaged = git.getUnstagedFiles();
+      unstaged.forEach((file: { path: string; status: any }) => {
+        this.selectedFiles.add(file.path);
+      });
+      // Persist state
+      this.context.workspaceState.update('selectedFiles', Array.from(this.selectedFiles));
+      this.refresh();
+    } catch (error) {
+      console.error('Failed to select all unstaged files:', error);
+    }
   }
 
   markCommitAsManual(sha: string): void {
     this.manualCommits.add(sha);
-  }
-
-  persistState(): void {
-    // TODO: Implement state persistence
   }
 
   get workspaceParts(): Set<string> {
@@ -567,26 +595,73 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
     return isChecked ? `☑ ${label}` : `☐ ${label}`;
   }
 
-  async exportCommitsDto(limit = 20): Promise<Array<{ sha: string; message: string; author?: string; date?: string }>> {
+  async exportCommitsDto(
+    limit = 20,
+    filterText?: string,
+    filterScopes?: { staged?: boolean; unstaged?: boolean; history?: boolean }
+  ): Promise<Array<{ sha: string; message: string; author?: string; date?: string; changes?: number }>> {
     try {
+      // Ensure database is initialized before accessing it
+      await this.initializeDatabase();
       const { getDatabaseManager } = await import('../storage/database');
       const db = getDatabaseManager().getDatabase();
       const limitValue = Math.max(1, Number(limit) || 20);
-      const commitsStmt = db.prepare(`
-        SELECT m.sha, m.author, m.date, m.message
+
+      let query = `
+        SELECT m.sha, m.author, m.date, m.message, m.files_changed
         FROM commits_metadata m
-        ORDER BY m.date DESC
-        LIMIT ${limitValue}
-      `);
-      const commits = commitsStmt.all() as any[];
+      `;
+      const conditions: string[] = [];
+      const params: any[] = [];
+
+      // Apply text filter if provided
+      if (filterText && filterText.trim()) {
+        conditions.push(`(m.message LIKE ? OR m.sha LIKE ?)`);
+        const searchTerm = `%${filterText.trim()}%`;
+        params.push(searchTerm, searchTerm);
+      }
+
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
+      }
+
+      query += ` ORDER BY m.date DESC LIMIT ${this.loadMoreOffset + limitValue}`;
+
+      const commitsStmt = db.prepare(query);
+      const commits = commitsStmt.all(...params) as any[];
       commitsStmt.free?.();
 
-      return commits.map((commit) => ({
-        sha: commit.sha,
-        message: commit.message,
-        author: commit.author,
-        date: commit.date
-      }));
+      // Note: Scope filtering (staged/unstaged/history) is handled client-side
+      // since all commits from DB are 'history' scope. If we add virtual commits
+      // for staged/unstaged in the future, we'd filter here.
+
+      // Fetch files for each commit
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+
+      return commits.map((commit) => {
+        let files: Array<{ path: string; status: any }> = [];
+        try {
+          // Only fetch files if we have a valid SHA
+          if (commit.sha) {
+            files = git.getFileChanges(commit.sha).map((f: any) => ({
+              path: f.path,
+              status: f.status
+            }));
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch files for commit ${commit.sha}:`, e);
+        }
+
+        return {
+          sha: commit.sha,
+          message: commit.message,
+          author: commit.author,
+          date: commit.date,
+          changes: commit.files_changed ?? 0,
+          files: files
+        };
+      });
     } catch (error) {
       console.error('Failed to export commits for cockpit:', error);
       return [];
@@ -599,5 +674,21 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
       selectedFiles: Array.from(this.selectedFiles),
       workspaceScope: this.workspaceScope
     };
+  }
+
+  exportWorkspaceFilesDto(): {
+    staged: Array<{ path: string; status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' }>;
+    unstaged: Array<{ path: string; status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' }>;
+  } {
+    try {
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const staged = git.getStagedFiles().map((f: { path: string; status: any }) => ({ path: f.path, status: f.status }));
+      const unstaged = git.getUnstagedFiles().map((f: { path: string; status: any }) => ({ path: f.path, status: f.status }));
+      return { staged, unstaged };
+    } catch (error) {
+      console.error('Failed to export workspace files for cockpit:', error);
+      return { staged: [], unstaged: [] };
+    }
   }
 }

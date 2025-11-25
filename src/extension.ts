@@ -5,6 +5,16 @@ import type { CommitsProvider } from './ui/commitsProvider';
 import type { SymbolHistoryProvider } from './ui/symbolHistory';
 import type { ReportsProvider } from './ui/reportsProvider';
 import type { CockpitProvider } from './webview/CockpitProvider';
+import type {
+  BundleSummaryDTO,
+  CockpitState,
+  CommitDTO,
+  FileStatus,
+  ReportDTO,
+  StagedFileDTO,
+  SymbolDTO,
+  UnstagedFileDTO
+} from './types/cockpit';
 
 let activeBundleProvider: ActiveBundleProvider;
 let commitsProvider: CommitsProvider;
@@ -19,23 +29,203 @@ async function syncCockpitState() {
     return;
   }
   try {
-    const [commits, selection, bundleFacts, symbols, reports] = await Promise.all([
-      commitsProvider.exportCommitsDto(),
+    // Ensure database is initialized before trying to export data
+    await commitsProvider.initializeDatabase();
+
+    const currentState = cockpitProvider.getState();
+    const [commits, selection, bundleFacts, symbols, reports, workspaceFiles] = await Promise.all([
+      commitsProvider.exportCommitsDto(
+        20 + commitsProvider.loadMoreOffset
+      ),
       Promise.resolve(commitsProvider.exportSelectionDto()),
       Promise.resolve(activeBundleProvider?.exportBundleFacts?.() ?? null),
-      symbolHistoryProvider?.exportRecentSymbols ? symbolHistoryProvider.exportRecentSymbols() : Promise.resolve([]),
-      reportsProvider?.exportReportsDto ? reportsProvider.exportReportsDto() : Promise.resolve([])
+      symbolHistoryProvider?.exportRecentSymbols
+        ? symbolHistoryProvider.exportRecentSymbols(
+            50,
+            currentState.symbolFilterText || undefined,
+            currentState.symbolKindFilter !== 'all' ? currentState.symbolKindFilter : undefined,
+            currentState.symbolChangeFilter !== 'all' ? currentState.symbolChangeFilter : undefined
+          )
+        : Promise.resolve([]),
+      reportsProvider?.exportReportsDto
+        ? reportsProvider.exportReportsDto(
+            currentState.reportsFilterText || undefined,
+            currentState.reportsBranchFilter !== 'all' ? currentState.reportsBranchFilter : undefined,
+            currentState.reportsShowPinnedOnly
+          )
+        : Promise.resolve([]),
+      Promise.resolve(commitsProvider.exportWorkspaceFilesDto())
     ]);
 
-    cockpitProvider.updateState({
-      commits,
+    let repoName: string | null = null;
+    let branchName: string | null = null;
+    try {
+      const { getGitRoot } = await import('./utils/config');
+      const gitRoot = getGitRoot();
+      if (gitRoot) {
+        const path = await import('path');
+        repoName = path.basename(gitRoot);
+        const { promisify } = await import('util');
+        const { exec } = await import('child_process');
+        const execAsync = promisify(exec);
+        try {
+          const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', {
+            cwd: gitRoot,
+            encoding: 'utf8',
+            timeout: 2000
+          });
+          branchName = stdout.trim();
+        } catch {
+          // Silently fail if git command times out or fails
+        }
+      }
+    } catch {
+      // best-effort repo/branch detection
+    }
+
+    const mapStatus = (status: string): FileStatus => {
+      switch (status) {
+        case 'A':
+          return 'added';
+        case 'M':
+          return 'modified';
+        case 'D':
+          return 'deleted';
+        case 'R':
+          return 'renamed';
+        default:
+          return 'unknown';
+      }
+    };
+
+    const stagedFiles: StagedFileDTO[] = workspaceFiles.staged.map((file: { path: string; status: string }) => ({
+      path: file.path,
+      status: mapStatus(file.status)
+    }));
+    const unstagedFiles: UnstagedFileDTO[] = workspaceFiles.unstaged.map((file: { path: string; status: string }) => ({
+      path: file.path,
+      status: mapStatus(file.status)
+    }));
+
+    const stagedPaths = new Set(stagedFiles.map((file) => file.path));
+    const unstagedPaths = new Set(unstagedFiles.map((file) => file.path));
+    const selectedFiles = selection.selectedFiles || [];
+
+    const bundleShaSet = new Set(bundleFacts?.bundle?.shas ?? []);
+
+    // Check analyzed status for commits
+    const { getAnalysisPipeline } = await import('./analysis/pipeline');
+    const pipeline = await getAnalysisPipeline();
+    const analyzedStatuses = await Promise.all(
+      commits.map(async (commit: any) => ({
+        sha: commit.sha,
+        analyzed: await pipeline.isCommitAnalyzed(commit.sha)
+      }))
+    );
+    const analyzedMap = new Map(analyzedStatuses.map(s => [s.sha, s.analyzed]));
+
+    // Map commits to DTOs with scope information
+    // Note: All commits from the database are 'history' commits.
+    // Staged/unstaged are working directory files, not commits.
+    // If we need to show virtual commits for staged/unstaged in the future,
+    // we would create them here with appropriate scope.
+    const commitDtos: CommitDTO[] = commits.map((commit: any) => {
+      // Determine scope: all commits from DB are history
+      // Future: could check if commit affects staged/unstaged files to tag scope
+      const scope: 'staged' | 'unstaged' | 'history' = 'history';
+      
+      return {
+        sha: commit.sha,
+        shortSha: (commit.sha || '').slice(0, 8),
+        message: commit.message,
+        author: commit.author || 'Unknown',
+        authoredAt: commit.date || '',
+        changes: typeof commit.changes === 'number' ? commit.changes : 0,
+        inBundle: bundleShaSet.has(commit.sha),
+        scope,
+        analyzed: analyzedMap.get(commit.sha) || false
+      };
+    });
+
+    const bundleSummary: BundleSummaryDTO | null = bundleFacts
+      ? {
+          id: bundleFacts.bundle?.newestSha || bundleFacts.bundle?.oldestSha || 'bundle',
+          commitCount: bundleFacts.bundle?.shas?.length ?? 0,
+          fileCount: bundleFacts.scope?.files ?? (bundleFacts.evidence?.['bundle.files']?.length ?? 0),
+          symbolCount: bundleFacts.working?.symbols ?? 0,
+          createdAt: bundleFacts.generated_at
+        }
+      : null;
+
+    const symbolDtos: SymbolDTO[] = symbols.map((symbol: any) => {
+      // Map change_type from DB to SymbolChangeType
+      const changeType: 'added' | 'modified' | 'removed' | undefined = 
+        symbol.change_type || symbol.changeType || undefined;
+      
+      return {
+        id: `${symbol.path}:${symbol.name}`,
+        name: symbol.name,
+        path: symbol.path,
+        kind: symbol.kind,
+        language: symbol.language || '',
+        changeType: changeType as 'added' | 'modified' | 'removed' | undefined,
+        commitCount: symbol.commitCount ?? 1,
+        lastChangedAt: symbol.date || ''
+      };
+    });
+
+    const reportDtos: ReportDTO[] = reports.map((report: any) => ({
+      id: report.id,
+      title: report.title,
+      summary: report.summary,
+      createdAt: report.createdAt,
+      branch: report.branch,
+      pinned: report.pinned,
+      bundleSummary: report.bundleSummary
+    }));
+
+    // Get the latest report ID (reports are sorted by date DESC, so first is latest)
+    // Only set if we have bundle facts (active bundle) and reports exist
+    const latestReportId = bundleFacts && reportDtos.length > 0 
+      ? reportDtos[0].id 
+      : (currentState.bundleReportId ?? null);
+
+    const cockpitState: Partial<CockpitState> = {
+      repoName,
+      branchName,
+      commits: commitDtos,
       selectedCommitShas: selection.selectedCommitShas,
+      selectedStagedPaths: selectedFiles.filter((path: string) => stagedPaths.has(path)),
+      selectedUnstagedPaths: selectedFiles.filter((path: string) => unstagedPaths.has(path)),
       selectedFiles: selection.selectedFiles,
+      hasMoreCommits: commitDtos.length >= 20,
+      commitsFilterText: currentState.commitsFilterText ?? '',
+      commitsFilterScopes: currentState.commitsFilterScopes ?? { staged: true, unstaged: true, history: true },
+      lastNCommits: currentState.lastNCommits ?? 20,
       workspaceScope: selection.workspaceScope,
       bundleFacts,
-      symbols,
-      reports
-    });
+      bundleSummary,
+      bundleReportId: latestReportId,
+      symbols: symbolDtos,
+      symbolFilterText: currentState.symbolFilterText ?? '',
+      symbolKindFilter: currentState.symbolKindFilter ?? 'all',
+      symbolChangeFilter: currentState.symbolChangeFilter ?? 'all',
+      activeSymbolId: currentState.activeSymbolId ?? null,
+      activeSymbolHistory: currentState.activeSymbolHistory ?? [],
+      reports: reportDtos,
+      reportsFilterText: currentState.reportsFilterText ?? '',
+      reportsBranchFilter: currentState.reportsBranchFilter ?? 'all',
+      reportsShowPinnedOnly: currentState.reportsShowPinnedOnly ?? false,
+      stagedFiles,
+      unstagedFiles,
+      activeSection: currentState.activeSection ?? 'commits',
+      isAnalyzing: currentState.isAnalyzing && !bundleFacts ? true : false,
+      analysisStep: currentState.isAnalyzing && !bundleFacts ? currentState.analysisStep : undefined,
+      analysisProgress: currentState.isAnalyzing && !bundleFacts ? currentState.analysisProgress : undefined
+    };
+
+    cockpitProvider.updateState(cockpitState);
+    logInfo('[Cockpit] Synced state to webview');
   } catch (error) {
     logError('Failed to sync cockpit state', error);
   }
@@ -62,6 +252,12 @@ export function getDebugChannel(): vscode.OutputChannel {
     debugChannel = vscode.window.createOutputChannel('Git Context (Debug)');
   }
   return debugChannel;
+}
+
+export { syncCockpitState };
+
+export function getCockpitProvider(): CockpitProvider | undefined {
+  return cockpitProvider;
 }
 
 async function updateContextKeys() {

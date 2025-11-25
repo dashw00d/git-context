@@ -158,6 +158,92 @@ export class SymbolExtractor {
   }
 
   /**
+   * Extract symbols from working tree files (staged or unstaged) compared to HEAD
+   */
+  async extractWorkingTreeSymbols(files: FileChange[], options: { staged?: boolean } = {}): Promise<{
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  }> {
+    const added: SymbolInfo[] = [];
+    const removed: SymbolInfo[] = [];
+    const modified: SymbolDelta[] = [];
+
+    for (const file of files) {
+      if (this.shouldAnalyzeFile(file.path)) {
+        const fileSymbols = await this.extractWorkingTreeFileSymbols(file, options);
+        added.push(...fileSymbols.added);
+        removed.push(...fileSymbols.removed);
+        modified.push(...fileSymbols.modified);
+      }
+    }
+
+    return { added, removed, modified };
+  }
+
+  /**
+   * Extract symbols from a single working tree file
+   */
+  private async extractWorkingTreeFileSymbols(file: FileChange, options: { staged?: boolean }): Promise<{
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  }> {
+    const added: SymbolInfo[] = [];
+    const removed: SymbolInfo[] = [];
+    const modified: SymbolDelta[] = [];
+
+    try {
+      // Get current working tree content (staged or unstaged)
+      const currentContent = options.staged
+        ? this.git.safeGetStagedContent(file.path)
+        : this.git.safeGetWorkingContent(file.path);
+
+      if (!currentContent) {
+        console.log(`[SYMBOLS] Skipping ${file.path} - no content available`);
+        return { added, removed, modified };
+      }
+
+      // Get HEAD content for comparison
+      const headContent = this.git.safeGetFileContent('HEAD', file.path);
+
+      // Extract symbols from both versions
+      const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
+      const headSymbols = headContent
+        ? await this.extractSymbolsFromContent(headContent, file.path)
+        : [];
+
+      // Compare and categorize changes
+      const changes = this.compareSymbolSets(headSymbols, currentSymbols, file.path);
+
+      // Enhance modified symbols with semantic information
+      for (const delta of changes.modified) {
+        delta.modReason = this.semanticDetector.classifyModificationReason(delta);
+
+        // Capture diff snippets if content available
+        if (headContent && currentContent) {
+          const snippets = this.semanticDetector.extractDiffSnippets(
+            headContent,
+            currentContent,
+            delta.symbol
+          );
+          delta.diffSnippetPre = snippets.pre;
+          delta.diffSnippetPost = snippets.post;
+        }
+      }
+
+      added.push(...changes.added);
+      removed.push(...changes.removed);
+      modified.push(...changes.modified);
+
+    } catch (error) {
+      console.warn(`Failed to extract working tree symbols from ${file.path}:`, error);
+    }
+
+    return { added, removed, modified };
+  }
+
+  /**
    * Extract symbols from file content
    */
   public async extractSymbolsFromContent(content: string, filePath: string): Promise<SymbolInfo[]> {

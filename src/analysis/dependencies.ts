@@ -228,6 +228,50 @@ export class DependencyExtractor {
   }
 
   /**
+   * Extract edges from working tree files
+   */
+  async extractWorkingTreeEdges(files: FileChange[], symbols: { added: SymbolInfo[]; removed: SymbolInfo[]; modified: any[] }, git: any): Promise<{
+    added: EdgeInfo[];
+    removed: EdgeInfo[];
+  }> {
+    const currentEdges: EdgeInfo[] = [];
+
+    // Group symbols by file path
+    const symbolsByFile = new Map<string, SymbolInfo[]>();
+    for (const symbol of [...symbols.added, ...symbols.modified.map(m => m.symbol)]) {
+      const filePath = symbol.id.split(':')[0];
+      if (!symbolsByFile.has(filePath)) {
+        symbolsByFile.set(filePath, []);
+      }
+      symbolsByFile.get(filePath)!.push(symbol);
+    }
+
+    // Extract edges from each file
+    for (const [filePath, fileSymbols] of symbolsByFile) {
+      try {
+        // Get current working content
+        const isStaged = files.some(f => f.path === filePath && f.status !== 'U');
+        const content = isStaged
+          ? git.safeGetStagedContent(filePath)
+          : git.safeGetWorkingContent(filePath);
+
+        if (content) {
+          const edges = this.extractDependencies(content, filePath, fileSymbols);
+          currentEdges.push(...edges);
+        }
+      } catch (error) {
+        console.warn(`Failed to extract edges from working tree file ${filePath}:`, error);
+      }
+    }
+
+    // For working tree, we consider all edges as "added" since we're comparing against HEAD
+    return {
+      added: currentEdges,
+      removed: []
+    };
+  }
+
+  /**
    * Extract edges for an entire commit
    */
   async extractCommitEdges(

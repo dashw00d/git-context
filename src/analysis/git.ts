@@ -172,6 +172,54 @@ export class GitOperations {
   }
 
   /**
+   * Get staged file content (from index)
+   */
+  getStagedContent(filePath: string): string {
+    return this.execGit(['show', `:${filePath}`]);
+  }
+
+  /**
+   * Safely get staged file content, returning empty string if file doesn't exist in index
+   */
+  safeGetStagedContent(filePath: string): string {
+    try {
+      return this.getStagedContent(filePath);
+    } catch (error: any) {
+      const msg = error.message || String(error);
+      if (
+        msg.includes('exists on disk, but not in') ||
+        msg.includes('did not match any file') ||
+        msg.includes('does not exist in')
+      ) {
+        return '';
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get working directory file content
+   */
+  getWorkingContent(filePath: string): string {
+    const fs = require('fs');
+    const path = require('path');
+    const fullPath = path.join(this.gitRoot, filePath);
+    return fs.readFileSync(fullPath, 'utf8');
+  }
+
+  /**
+   * Safely get working directory file content, returning empty string if file doesn't exist
+   */
+  safeGetWorkingContent(filePath: string): string {
+    try {
+      return this.getWorkingContent(filePath);
+    } catch (error: any) {
+      // File doesn't exist in working directory
+      return '';
+    }
+  }
+
+  /**
    * Check if a file is ignored by git
    */
   isIgnored(filePath: string): boolean {

@@ -64,7 +64,7 @@ export class DatabaseManager {
       throw new Error('Not in a git repository');
     }
 
-    this.dbPath = path.join(gitRoot, '.git', 'commit-tracker', 'commit_tracker.sqlite');
+    this.dbPath = path.join(gitRoot, '.git', 'commit-tracker', 'commit_tracker.db');
     console.log(`DatabaseManager initialized with path: ${this.dbPath}`);
   }
 

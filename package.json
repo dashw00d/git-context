@@ -37,6 +37,11 @@
         "category": "Git Context"
       },
       {
+        "command": "git-context.analyzeUnstagedChanges",
+        "title": "Analyze Unstaged Changes",
+        "category": "Git Context"
+      },
+      {
         "command": "git-context.compareFilesToCommit",
         "title": "Compare Files to Commit",
         "category": "Git Context"
@@ -107,6 +112,11 @@
       {
         "command": "git-context.openReportSection",
         "title": "Open Report Section",
+        "category": "Git Context"
+      },
+      {
+        "command": "git-context.scrollToReportSection",
+        "title": "Scroll to Report Section",
         "category": "Git Context"
       },
       {

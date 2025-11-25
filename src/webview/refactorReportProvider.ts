@@ -138,6 +138,22 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * Scroll to a specific section in the report (e.g., "overview", "incompleteness", "drift", "legacy", "timeline")
+   */
+  public scrollToSection(sectionId: string): void {
+    const webview = this._panel?.webview;
+    if (!webview) {
+      return;
+    }
+
+    // Send scroll message to webview
+    webview.postMessage({
+      type: 'scrollToSection',
+      sectionId
+    });
+  }
+
+  /**
    * Handle evidence click from the webview
    */
   private async _handleEvidenceClick(evidence: EvidenceLink): Promise<void> {
@@ -218,6 +234,17 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to open evidence: ${error}`);
     }
+  }
+
+  /**
+   * Post a message to the report webview (helper for external callers)
+   */
+  public postMessage(message: any): void {
+    const webview = this._panel?.webview;
+    if (!webview) {
+      return;
+    }
+    webview.postMessage(message);
   }
 
   /**

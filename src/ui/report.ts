@@ -19,6 +19,7 @@ import { AnalysisRenderer } from '../analysis/llmAnalyst/renderer';
 import { RefactorReportProvider } from '../webview/refactorReportProvider';
 import { ActiveBundleProvider } from './activeBundleProvider';
 import { logInfo, logDebug, logError } from '../utils/logger';
+import { getCockpitProvider } from '../extension';
 
 /**
  * Generate report title from workspace scope and commit SHAs
@@ -29,12 +30,12 @@ function generateReportTitle(
     git: any
 ): string {
     const parts: string[] = [];
-    
+
     // Workspace part
     if (workspaceScope !== 'none') {
         parts.push(`Workspace (${workspaceScope})`);
     }
-    
+
     // Commits part
     if (commitShas.length === 1) {
         const isHead = commitShas[0] === git.getHeadSha();
@@ -42,7 +43,7 @@ function generateReportTitle(
     } else if (commitShas.length > 1) {
         parts.push(`HEAD+${commitShas.length - 1}`);
     }
-    
+
     return parts.join(' vs ');
 }
 
@@ -108,26 +109,34 @@ export async function generateRefactorBundleReport(
 
     console.log(`[REPORT] Commit SHAs: ${commitShas.map(s => s.substring(0, 8)).join(', ')}`);
 
+    // Start analysis progress
+    const cockpitProvider = getCockpitProvider();
+    if (cockpitProvider) {
+        cockpitProvider.updateAnalysisProgress(true, 'scope', 0.1);
+    } else {
+        logDebug('[REPORT] Cockpit provider not available for progress updates');
+    }
+
     // Ensure all commits are analyzed before proceeding
     const { getAnalysisPipeline } = await import('../analysis/pipeline');
     const pipeline = await getAnalysisPipeline();
 
     const unanalyzed: string[] = [];
     for (const sha of commitShas) {
-      if (!(await pipeline.isCommitAnalyzed(sha))) {
-        unanalyzed.push(sha);
-      }
+        if (!(await pipeline.isCommitAnalyzed(sha))) {
+            unanalyzed.push(sha);
+        }
     }
 
     if (unanalyzed.length > 0) {
-      console.log(`[REPORT] Analyzing ${unanalyzed.length} unanalyzed commits: ${unanalyzed.map(s => s.substring(0, 8)).join(', ')}`);
-      await vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title: 'Analyzing commits for report...',
-        cancellable: false
-      }, async () => {
-        await pipeline.analyzeCommits(unanalyzed);
-      });
+        console.log(`[REPORT] Analyzing ${unanalyzed.length} unanalyzed commits: ${unanalyzed.map(s => s.substring(0, 8)).join(', ')}`);
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Analyzing commits for report...',
+            cancellable: false
+        }, async () => {
+            await pipeline.analyzeCommits(unanalyzed);
+        });
     }
 
     try {
@@ -138,9 +147,14 @@ export async function generateRefactorBundleReport(
         }, async (progress, token) => {
             // Merge provided token with the one from progress
             const effectiveToken = cancellationToken || token;
+            // Get cockpit provider once for progress updates
+            const cockpitProvider = getCockpitProvider();
 
             // Check for cancellation at the start
             if (effectiveToken.isCancellationRequested) {
+                if (cockpitProvider) {
+                    cockpitProvider.updateAnalysisProgress(false);
+                }
                 return;
             }
 
@@ -149,29 +163,29 @@ export async function generateRefactorBundleReport(
             // Phase 1: Compute scoped analysis set
             console.log('[REPORT] Phase 1: Computing scope...');
             const scopeStartTime = Date.now();
-            
+
             // Convert workspaceScope to workspaceParts format if needed
             let workspaceParts: Set<'staged' | 'unstaged'> | undefined;
             if (workspaceScope === 'staged') {
-              workspaceParts = new Set(['staged']);
+                workspaceParts = new Set(['staged']);
             } else if (workspaceScope === 'unstaged') {
-              workspaceParts = new Set(['unstaged']);
+                workspaceParts = new Set(['unstaged']);
             } else if (workspaceScope === 'full') {
-              workspaceParts = new Set(['staged', 'unstaged']);
+                workspaceParts = new Set(['staged', 'unstaged']);
             } else {
-              // Default to full workspace for any other scope
-              workspaceParts = new Set(['staged', 'unstaged']);
+                // Default to full workspace for any other scope
+                workspaceParts = new Set(['staged', 'unstaged']);
             }
-            
+
             const scope = await computeScope(commitShas, workspaceParts);
-            
+
             // Filter scope to only selected files if provided
             if (selectedFiles && selectedFiles.length > 0) {
-              const selectedFilesSet = new Set(selectedFiles);
-              scope.allPaths = new Set([...scope.allPaths].filter(p => selectedFilesSet.has(p)));
-              scope.workingChanged = new Set([...scope.workingChanged].filter(p => selectedFilesSet.has(p)));
+                const selectedFilesSet = new Set(selectedFiles);
+                scope.allPaths = new Set([...scope.allPaths].filter(p => selectedFilesSet.has(p)));
+                scope.workingChanged = new Set([...scope.workingChanged].filter(p => selectedFilesSet.has(p)));
             }
-            
+
             console.log(`[REPORT] Scope computed in ${Date.now() - scopeStartTime}ms`);
             console.log(`[REPORT] Scope - commit files: ${scope.commitFiles.size}, working changed: ${scope.workingChanged.size}, blast radius: ${scope.blastRadius.size}, total: ${scope.allPaths.size}`);
 
@@ -182,27 +196,78 @@ export async function generateRefactorBundleReport(
             }
 
             if (effectiveToken.isCancellationRequested) {
+                if (cockpitProvider) {
+                    cockpitProvider.updateAnalysisProgress(false);
+                }
                 return;
             }
-
-            progress.report({ increment: 10, message: `Analyzing ${scope.allPaths.size} scoped files...` });
 
             // Phase 2: Get working tree snapshot
             console.log(`[REPORT] Phase 2: Analyzing ${scope.allPaths.size} files in working tree...`);
             const workingStartTime = Date.now();
-            const working = await getWorkingSnapshot(scope.allPaths);
+
+            let working;
+
+            // Use change detection for staged/unstaged analysis
+            if (workspaceScope === 'staged' || workspaceScope === 'unstaged') {
+                console.log(`[REPORT] Using change detection for ${workspaceScope} analysis`);
+
+                const { SymbolExtractor } = await import('../analysis/symbols');
+                const { GitOperations } = await import('../analysis/git');
+                const { convertDeltasToSnapshot } = await import('../facts/deltaConverter');
+
+                const git = new GitOperations();
+                const symbolExtractor = new SymbolExtractor(git);
+
+                // Convert scope paths to FileChange format
+                // Get actual file status from git
+                const stagedFiles = git.getStagedFiles();
+                const unstagedFiles = git.getUnstagedFiles();
+
+                const relevantFiles = workspaceScope === 'staged' ? stagedFiles : unstagedFiles;
+                const files = relevantFiles
+                    .filter(f => scope.workingChanged.has(f.path))
+                    .map(f => ({
+                        path: f.path,
+                        status: f.status
+                    }));
+
+                console.log(`[REPORT] Extracting symbols from ${files.length} ${workspaceScope} files with change detection`);
+
+                // Extract with proper change detection vs HEAD!
+                const deltas = await symbolExtractor.extractWorkingTreeSymbols(
+                    files,
+                    { staged: workspaceScope === 'staged' }
+                );
+
+                console.log(`[REPORT] Change deltas - added: ${deltas.added.length}, modified: ${deltas.modified.length}, removed: ${deltas.removed.length}`);
+
+                // Convert deltas to WorkingSnapshot format
+                working = convertDeltasToSnapshot(deltas, scope.allPaths);
+
+            } else {
+                // Full workspace analysis - use current approach
+                console.log('[REPORT] Using full workspace snapshot (no change detection)');
+                working = await getWorkingSnapshot(scope.allPaths);
+            }
+
             console.log(`[REPORT] Working snapshot completed in ${Date.now() - workingStartTime}ms`);
             console.log(`[REPORT] Working tree - symbols: ${working.symbolsById.size}, edges: ${working.edges.length}, analyzed paths: ${working.analyzedPaths.size}`);
+
+            if (cockpitProvider) {
+                cockpitProvider.updateAnalysisProgress(true, 'symbols', 0.4);
+            }
 
             if (working.symbolsById.size === 0) {
                 console.warn('[REPORT] No symbols found in working tree');
             }
 
             if (effectiveToken.isCancellationRequested) {
+                if (cockpitProvider) {
+                    cockpitProvider.updateAnalysisProgress(false);
+                }
                 return;
             }
-
-            progress.report({ increment: 30, message: 'Building intended refactor map...' });
 
             // Build intended refactor map
             console.log('[REPORT] Phase 3: Building intended refactor map...');
@@ -216,10 +281,11 @@ export async function generateRefactorBundleReport(
             }
 
             if (effectiveToken.isCancellationRequested) {
+                if (cockpitProvider) {
+                    cockpitProvider.updateAnalysisProgress(false);
+                }
                 return;
             }
-
-            progress.report({ increment: 50, message: 'Detecting drift...' });
 
             // Detect drift
             console.log('[REPORT] Phase 4: Detecting drift...');
@@ -235,11 +301,16 @@ export async function generateRefactorBundleReport(
                 console.log('[REPORT] No drift detected - refactor appears complete');
             }
 
-            if (effectiveToken.isCancellationRequested) {
-                return;
+            if (cockpitProvider) {
+                cockpitProvider.updateAnalysisProgress(true, 'risks', 0.6);
             }
 
-            progress.report({ increment: 70, message: 'Auditing legacy code...' });
+            if (effectiveToken.isCancellationRequested) {
+                if (cockpitProvider) {
+                    cockpitProvider.updateAnalysisProgress(false);
+                }
+                return;
+            }
 
             // Audit legacy code
             console.log('[REPORT] Phase 5: Auditing legacy code...');
@@ -253,10 +324,11 @@ export async function generateRefactorBundleReport(
             }
 
             if (effectiveToken.isCancellationRequested) {
+                if (cockpitProvider) {
+                    cockpitProvider.updateAnalysisProgress(false);
+                }
                 return;
             }
-
-            progress.report({ increment: 85, message: 'Assembling facts...' });
 
             // Assemble facts into JSON
             console.log('[REPORT] Phase 6: Assembling facts...');
@@ -295,10 +367,15 @@ export async function generateRefactorBundleReport(
             }
 
             if (effectiveToken.isCancellationRequested) {
+                if (cockpitProvider) {
+                    cockpitProvider.updateAnalysisProgress(false);
+                }
                 return;
             }
 
-            progress.report({ increment: 90, message: 'Running LLM analysis...' });
+            if (cockpitProvider) {
+                cockpitProvider.updateAnalysisProgress(true, 'llm', 0.9);
+            }
 
             // Run LLM analyst on facts
             console.log('[REPORT] Phase 7: Running LLM analysis...');
@@ -387,7 +464,7 @@ export async function generateRefactorBundleReport(
                     try {
                         const { getSearchIndex } = await import('../storage/index');
                         const searchIndex = getSearchIndex();
-                        
+
                         // Extract patterns from claims (they contain pattern info)
                         const patterns = discoveryBlock.claims.map(claim => ({
                             name: claim.text.split(':')[0] || claim.text.substring(0, 50),
@@ -396,7 +473,7 @@ export async function generateRefactorBundleReport(
                             count: 0, // Will be extracted from claim if available
                             pct: Math.round(claim.confidence * 100)
                         }));
-                        
+
                         await searchIndex.storePatterns(patterns, commitShas);
                         console.log(`[REPORT] Stored ${patterns.length} patterns to Qdrant`);
                     } catch (error) {
@@ -430,23 +507,23 @@ export async function generateRefactorBundleReport(
                 const { GitOperations } = await import('../analysis/git');
                 const reportManager = getReportManager();
                 const git = new GitOperations();
-                
+
                 // Generate report title
                 const reportTitle = generateReportTitle(
                     workspaceScope || 'full',
                     commitShas,
                     git
                 );
-                
+
                 // Calculate summary
-                const criticalCount = facts.findings.incompleteness.missing + 
-                                    facts.findings.incompleteness.zombies +
-                                    (facts.findings.legacyAudit?.dead || 0);
+                const criticalCount = facts.findings.incompleteness.missing +
+                    facts.findings.incompleteness.zombies +
+                    (facts.findings.legacyAudit?.dead || 0);
                 const warningCount = facts.findings.patternDrift.mixedTargets +
-                                   facts.findings.patternDrift.oldNamespaces +
-                                   (facts.findings.legacyAudit?.legacyUsed || 0);
+                    facts.findings.patternDrift.oldNamespaces +
+                    (facts.findings.legacyAudit?.legacyUsed || 0);
                 const summary = `${criticalCount} Critical Issues`;
-                
+
                 // Create report
                 const report = {
                     id: existingReportId || require('crypto').randomUUID(),
@@ -463,7 +540,7 @@ export async function generateRefactorBundleReport(
                     warningCount: warningCount,
                     isPinned: existingReportId ? (reportManager.load(existingReportId)?.isPinned || false) : false
                 };
-                
+
                 reportManager.save(report);
                 console.log('[REPORT] Report saved to database:', report.id);
             } catch (error) {
@@ -472,10 +549,11 @@ export async function generateRefactorBundleReport(
             }
 
             if (effectiveToken.isCancellationRequested) {
+                if (cockpitProvider) {
+                    cockpitProvider.updateAnalysisProgress(false);
+                }
                 return;
             }
-
-            progress.report({ increment: 95, message: 'Generating report...' });
 
             // Update debt meter with new facts
             console.log('[REPORT] Phase 8: Updating debt meter...');
@@ -489,15 +567,16 @@ export async function generateRefactorBundleReport(
             const markdown = renderer.renderAnalysis(llmAnalysis, facts);
             console.log(`[REPORT] Rendered markdown (${markdown.length} chars)`);
 
-            // Save to file and open in markdown preview
+            // Determine report path
             const gitRoot = getGitRoot();
             let reportPath: string;
-            
+
             if (gitRoot) {
-                // Save to .git/commit-tracker/report.md
+                // Save to .git/commit-tracker/report-{id}.md
                 const reportDir = path.join(gitRoot, '.git', 'commit-tracker');
-                reportPath = path.join(reportDir, 'commit-report.md');
-                
+                const reportId = existingReportId || require('crypto').randomUUID();
+                reportPath = path.join(reportDir, `report-${reportId}.md`);
+
                 // Ensure directory exists
                 if (!fs.existsSync(reportDir)) {
                     fs.mkdirSync(reportDir, { recursive: true });
@@ -506,15 +585,20 @@ export async function generateRefactorBundleReport(
                 // Fallback to temp directory if not in git repo
                 reportPath = path.join(os.tmpdir(), 'git-context-report.md');
             }
-            
+
             // Write file
             fs.writeFileSync(reportPath, markdown, 'utf8');
-            
+
             // Open in markdown preview
             await vscode.commands.executeCommand('markdown.showPreviewToSide', vscode.Uri.file(reportPath));
-            
+
             console.log(`[REPORT] Total report generation time: ${Date.now() - startTime}ms`);
             vscode.window.showInformationMessage(`Refactor bundle analysis complete - see markdown preview`);
+
+            // Mark analysis as complete
+            if (cockpitProvider) {
+                cockpitProvider.updateAnalysisProgress(false);
+            }
         });
 
     } catch (error) {
@@ -740,7 +824,7 @@ export async function generateCommitReport(commitShas?: string[]): Promise<void>
         const gitRoot = getGitRoot();
 
         let reportPath: string;
-        
+
         if (gitRoot) {
             // Save to .git/commit-tracker/report.md
             const reportDir = path.join(gitRoot, '.git', 'commit-tracker');
@@ -763,7 +847,18 @@ export async function generateCommitReport(commitShas?: string[]): Promise<void>
 
         vscode.window.showInformationMessage(`Report saved to ${reportPath}`);
 
+        // Mark analysis as complete
+        const cockpitProvider = getCockpitProvider();
+        if (cockpitProvider) {
+            cockpitProvider.updateAnalysisProgress(false);
+        }
+
     } catch (error) {
+        // Mark analysis as failed/complete on error
+        const cockpitProvider = getCockpitProvider();
+        if (cockpitProvider) {
+            cockpitProvider.updateAnalysisProgress(false);
+        }
         vscode.window.showErrorMessage(`Failed to generate report: ${error}`);
         console.error('Report generation error:', error);
     }

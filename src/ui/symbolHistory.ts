@@ -187,21 +187,53 @@ export class SymbolHistoryProvider implements vscode.TreeDataProvider<TreeNode> 
     return symbol.children || [];
   }
 
-  async exportRecentSymbols(limit = 20): Promise<Array<{ path: string; name: string; kind: string; changeType: string; sha: string; date: string }>> {
+  async exportRecentSymbols(
+    limit = 20,
+    filterText?: string,
+    filterKind?: string | 'all',
+    filterChange?: 'all' | 'added' | 'modified' | 'removed'
+  ): Promise<Array<{ path: string; name: string; kind: string; changeType: string; sha: string; date: string }>> {
     try {
       const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
       await ensureDatabaseInitialized();
       const db = getDatabaseManager().getDatabase();
       const safeLimit = Math.max(1, Number(limit) || 20);
-      const stmt = db.prepare(`
+      
+      let query = `
         SELECT s.path, s.name, s.kind, s.change_type, c.date, s.sha
         FROM symbols s
         JOIN commits_metadata c ON s.sha = c.sha
-        ORDER BY c.date DESC
-        LIMIT ${safeLimit}
-      `);
-
-      const rows = stmt.all() as any[];
+      `;
+      const conditions: string[] = [];
+      const params: any[] = [];
+      
+      // Apply text filter if provided
+      if (filterText && filterText.trim()) {
+        conditions.push(`(s.name LIKE ? OR s.path LIKE ?)`);
+        const searchTerm = `%${filterText.trim()}%`;
+        params.push(searchTerm, searchTerm);
+      }
+      
+      // Apply kind filter if provided
+      if (filterKind && filterKind !== 'all') {
+        conditions.push(`s.kind = ?`);
+        params.push(filterKind);
+      }
+      
+      // Apply change type filter if provided
+      if (filterChange && filterChange !== 'all') {
+        conditions.push(`s.change_type = ?`);
+        params.push(filterChange);
+      }
+      
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
+      }
+      
+      query += ` ORDER BY c.date DESC LIMIT ${safeLimit}`;
+      
+      const stmt = db.prepare(query);
+      const rows = stmt.all(...params) as any[];
       stmt.free?.();
 
       return rows.map((row) => ({
