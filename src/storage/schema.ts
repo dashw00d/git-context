@@ -1,197 +1,10 @@
 export const DATABASE_SCHEMA = `
--- Main commits table
-CREATE TABLE IF NOT EXISTS commits (
-  sha TEXT PRIMARY KEY,
-  author TEXT NOT NULL,
-  date TEXT NOT NULL,
-  message TEXT NOT NULL,
-  summary_md TEXT,
-  raw_llm_json TEXT,
-  files_changed INTEGER DEFAULT 0,
-  symbols_added INTEGER DEFAULT 0,
-  symbols_removed INTEGER DEFAULT 0,
-  symbols_modified INTEGER DEFAULT 0,
-  edges_added INTEGER DEFAULT 0,
-  edges_removed INTEGER DEFAULT 0,
-  risks TEXT DEFAULT '[]', -- JSON array of risk flags
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+-- Schema v11: Clean rewrite with workspace + branch tracking
+-- Improvements: versioning, proper renames tracking, branch-aware metadata, comprehensive indexes
 
--- Files changed in each commit
-CREATE TABLE IF NOT EXISTS files (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sha TEXT NOT NULL,
-  path TEXT NOT NULL,
-  status TEXT NOT NULL, -- A, M, D, R, C, U
-  lang TEXT, -- Detected language
-  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
-  UNIQUE(sha, path)
-);
+-- === CORE TABLES ===
 
--- Symbols extracted from files
-CREATE TABLE IF NOT EXISTS symbols (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sha TEXT NOT NULL,
-  path TEXT NOT NULL,
-  symbol_id TEXT NOT NULL, -- Unique identifier for the symbol
-  name TEXT NOT NULL,
-  kind TEXT NOT NULL, -- function, class, method, const, interface, type, variable
-  signature_pre TEXT, -- Signature before change (for modified symbols)
-  signature_post TEXT, -- Signature after change
-  loc_pre TEXT, -- JSON location before change
-  loc_post TEXT, -- JSON location after change
-  change_type TEXT, -- added, removed, modified, signature_changed, body_changed, renamed, moved
-  mod_reason TEXT, -- body_changed, signature_changed, doc_changed, visibility_changed, annotation_changed
-  diff_snippet_pre TEXT, -- Before diff snippet (truncated)
-  diff_snippet_post TEXT, -- After diff snippet (truncated)
-  confidence REAL DEFAULT 1.0, -- Confidence in change detection (0.0-1.0)
-  naming_convention TEXT, -- camelCase, PascalCase, snake_case, etc.
-  convention_confidence REAL, -- Confidence in convention detection (0.0-1.0)
-  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
-  UNIQUE(sha, symbol_id)
-);
-
--- Dependency edges between symbols
-CREATE TABLE IF NOT EXISTS edges (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sha TEXT NOT NULL,
-  from_symbol_id TEXT NOT NULL,
-  to_symbol_id TEXT NOT NULL,
-  edge_type TEXT NOT NULL, -- imports, calls, extends, implements, uses
-  change_type TEXT, -- added, removed, modified (NULL for current state)
-  confidence REAL DEFAULT 1.0, -- Confidence in edge detection (0.0-1.0)
-  is_resolved INTEGER DEFAULT 1, -- Whether target symbol was resolved
-  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE
-);
-
--- Full-text search removed due to sql.js limitations
--- We will use standard LIKE queries on the symbols table instead
-
--- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_files_sha ON files(sha);
-CREATE INDEX IF NOT EXISTS idx_symbols_sha ON symbols(sha);
-CREATE INDEX IF NOT EXISTS idx_symbols_path ON symbols(path);
-CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
-CREATE INDEX IF NOT EXISTS idx_edges_sha ON edges(sha);
-CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_symbol_id);
-CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_symbol_id);
-
--- Renames table for tracking symbol evolution
-CREATE TABLE IF NOT EXISTS renames (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sha TEXT NOT NULL,
-  path TEXT NOT NULL,
-  old_symbol_id TEXT NOT NULL,
-  new_symbol_id TEXT NOT NULL,
-  old_name TEXT NOT NULL,
-  new_name TEXT NOT NULL,
-  confidence REAL DEFAULT 1.0,
-  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_renames_sha ON renames(sha);
-CREATE INDEX IF NOT EXISTS idx_renames_path ON renames(path);
-
--- File-level naming convention tracking
-CREATE TABLE IF NOT EXISTS file_conventions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sha TEXT NOT NULL,
-  path TEXT NOT NULL,
-  dominant_convention TEXT,
-  convention_counts TEXT, -- JSON object with counts per convention
-  drift_percent REAL,
-  symbol_count INTEGER,
-  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
-  UNIQUE(sha, path)
-);
-
-CREATE INDEX IF NOT EXISTS idx_symbols_convention ON symbols(naming_convention);
-CREATE INDEX IF NOT EXISTS idx_file_conventions_sha ON file_conventions(sha);
-CREATE INDEX IF NOT EXISTS idx_file_conventions_path ON file_conventions(path);
-
--- Import path convention tracking
-CREATE TABLE IF NOT EXISTS import_conventions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sha TEXT NOT NULL,
-  path TEXT NOT NULL,
-  import_path TEXT NOT NULL,
-  import_style TEXT NOT NULL,
-  line_number INTEGER,
-  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_import_conventions_sha ON import_conventions(sha);
-CREATE INDEX IF NOT EXISTS idx_import_conventions_path ON import_conventions(path);
-CREATE INDEX IF NOT EXISTS idx_import_conventions_style ON import_conventions(import_style);
-`;
-
-export const MIGRATION_V2 = `
--- Add naming convention columns to symbols table
-ALTER TABLE symbols ADD COLUMN naming_convention TEXT;
-ALTER TABLE symbols ADD COLUMN convention_confidence REAL;
-
--- Create file_conventions table
-CREATE TABLE IF NOT EXISTS file_conventions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sha TEXT NOT NULL,
-  path TEXT NOT NULL,
-  dominant_convention TEXT,
-  convention_counts TEXT,
-  drift_percent REAL,
-  symbol_count INTEGER,
-  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE,
-  UNIQUE(sha, path)
-);
-
--- Add indexes for convention queries
-CREATE INDEX IF NOT EXISTS idx_symbols_convention ON symbols(naming_convention);
-CREATE INDEX IF NOT EXISTS idx_file_conventions_sha ON file_conventions(sha);
-CREATE INDEX IF NOT EXISTS idx_file_conventions_path ON file_conventions(path);
-`;
-
-export const MIGRATION_V3 = `
--- Create import_conventions table
-CREATE TABLE IF NOT EXISTS import_conventions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sha TEXT NOT NULL,
-  path TEXT NOT NULL,
-  import_path TEXT NOT NULL,
-  import_style TEXT NOT NULL,
-  line_number INTEGER,
-  FOREIGN KEY (sha) REFERENCES commits(sha) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_import_conventions_sha ON import_conventions(sha);
-CREATE INDEX IF NOT EXISTS idx_import_conventions_path ON import_conventions(path);
-CREATE INDEX IF NOT EXISTS idx_import_conventions_style ON import_conventions(import_style);
-`;
-
-export const MIGRATION_V4 = `
--- Create reports table for saved analysis reports
-CREATE TABLE IF NOT EXISTS reports (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  commit_shas TEXT,              -- JSON array of SHAs
-  selected_files TEXT,           -- JSON array of selected file paths
-  workspace_scope TEXT,          -- 'full'|'staged'|'unstaged'|'partial'
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  workspace_hash TEXT,           -- Hash for staleness detection
-  facts_json TEXT,               -- Cached RefactorBundleFacts
-  analysis_json TEXT,            -- Cached LLM analysis
-  summary TEXT,                  -- "6 Critical Issues"
-  critical_count INTEGER DEFAULT 0,
-  warning_count INTEGER DEFAULT 0,
-  is_pinned INTEGER DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
-CREATE INDEX IF NOT EXISTS idx_reports_is_pinned ON reports(is_pinned);
-`;
-
-export const MIGRATION_V5 = `
--- Split commits table into commits_metadata and commits_analysis
-
--- Create lightweight metadata table
+-- Lightweight commit metadata
 CREATE TABLE IF NOT EXISTS commits_metadata (
   sha TEXT PRIMARY KEY,
   author TEXT NOT NULL,
@@ -199,10 +12,10 @@ CREATE TABLE IF NOT EXISTS commits_metadata (
   message TEXT NOT NULL,
   parent TEXT,
   files_changed INTEGER DEFAULT 0,
-  loaded_at TEXT NOT NULL  -- ISO timestamp when loaded
+  loaded_at TEXT NOT NULL
 );
 
--- Create heavyweight analysis results table
+-- Heavyweight analysis results with versioning
 CREATE TABLE IF NOT EXISTS commits_analysis (
   sha TEXT PRIMARY KEY,
   summary_md TEXT,
@@ -212,134 +25,237 @@ CREATE TABLE IF NOT EXISTS commits_analysis (
   symbols_modified INTEGER DEFAULT 0,
   edges_added INTEGER DEFAULT 0,
   edges_removed INTEGER DEFAULT 0,
-  risks TEXT DEFAULT '[]',  -- JSON array
+  risks TEXT DEFAULT '[]',
   blast_radius INTEGER DEFAULT 0,
-  difftastic_highlights TEXT,  -- JSON array of difftastic highlight strings
-  analyzed_at TEXT NOT NULL,  -- ISO timestamp when analyzed
+  difftastic_highlights TEXT,
+  analyzed_at TEXT NOT NULL,
+  pipeline_version TEXT DEFAULT '1.0',
+  prompt_version TEXT DEFAULT '1.0',
+  model TEXT,
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE
 );
 
--- Migrate existing data from commits table
-INSERT OR IGNORE INTO commits_metadata (sha, author, date, message, parent, files_changed, loaded_at)
-SELECT sha, author, date, message, NULL, files_changed, datetime('now')
-FROM commits;
+-- Files changed in each commit
+CREATE TABLE IF NOT EXISTS files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  status TEXT NOT NULL,
+  lang TEXT,
+  FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
+  UNIQUE(sha, path)
+);
 
-INSERT OR IGNORE INTO commits_analysis (sha, summary_md, raw_llm_json, symbols_added, symbols_removed,
-  symbols_modified, edges_added, edges_removed, risks, blast_radius, analyzed_at)
-SELECT sha, summary_md, raw_llm_json, symbols_added, symbols_removed, symbols_modified,
-  edges_added, edges_removed, risks, 0, datetime('now')
-FROM commits
-WHERE summary_md IS NOT NULL OR raw_llm_json IS NOT NULL;
+-- Symbols extracted from files
+CREATE TABLE IF NOT EXISTS symbols (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  symbol_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  signature TEXT,
+  change_type TEXT,
+  mod_reason TEXT,
+  diff_snippet_pre TEXT,
+  diff_snippet_post TEXT,
+  confidence REAL DEFAULT 1.0,
+  naming_convention TEXT,
+  convention_confidence REAL,
+  FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
+  UNIQUE(sha, symbol_id)
+);
 
--- Create indexes for new tables
-CREATE INDEX IF NOT EXISTS idx_commits_metadata_date ON commits_metadata(date DESC);
-CREATE INDEX IF NOT EXISTS idx_commits_analysis_analyzed_at ON commits_analysis(analyzed_at DESC);
+-- Dependency edges between symbols
+CREATE TABLE IF NOT EXISTS edges (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  from_symbol_id TEXT NOT NULL,
+  to_symbol_id TEXT NOT NULL,
+  change_type TEXT,
+  confidence REAL DEFAULT 1.0,
+  is_resolved INTEGER DEFAULT 1,
+  FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE
+);
 
--- Drop the old commits table (AGGRESSIVE: since nobody is using the plugin)
-DROP TABLE IF EXISTS commits;
+-- Symbol renames/moves tracking with explicit paths
+CREATE TABLE IF NOT EXISTS renames (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  old_symbol_id TEXT NOT NULL,
+  new_symbol_id TEXT NOT NULL,
+  old_name TEXT NOT NULL,
+  new_name TEXT NOT NULL,
+  old_path TEXT,
+  new_path TEXT,
+  confidence REAL DEFAULT 1.0,
+  FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE
+);
 
--- Note: Foreign key constraints may not be enforced in sql.js, but the relationships are defined
--- for future compatibility with SQLite databases that support FKs
-`;
+-- File-level naming convention tracking
+CREATE TABLE IF NOT EXISTS file_conventions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  dominant_convention TEXT,
+  convention_counts TEXT,
+  drift_percent REAL,
+  symbol_count INTEGER,
+  FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
+  UNIQUE(sha, path)
+);
 
-export const MIGRATION_V6 = `
--- Add difftastic_highlights column to commits_analysis table
-ALTER TABLE commits_analysis ADD COLUMN difftastic_highlights TEXT;
-`;
+-- Import path convention tracking
+CREATE TABLE IF NOT EXISTS import_conventions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sha TEXT NOT NULL,
+  path TEXT NOT NULL,
+  import_path TEXT NOT NULL,
+  import_style TEXT NOT NULL,
+  line_number INTEGER,
+  FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE
+);
 
-export const MIGRATION_V7 = `
--- Symbol DNA: Stable identity for symbols
+-- Branch awareness
+CREATE TABLE IF NOT EXISTS commit_branches (
+  sha TEXT NOT NULL,
+  branch TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL,
+  is_head INTEGER DEFAULT 0,
+  PRIMARY KEY (sha, branch),
+  FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS branches (
+  name TEXT PRIMARY KEY,
+  head_sha TEXT,
+  parent_branch TEXT,
+  created_at TEXT NOT NULL,
+  last_analyzed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS squash_mappings (
+  squash_sha TEXT NOT NULL,
+  source_branch TEXT NOT NULL,
+  source_shas TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (squash_sha, source_branch)
+);
+
+CREATE INDEX IF NOT EXISTS idx_commit_branches_branch ON commit_branches(branch);
+CREATE INDEX IF NOT EXISTS idx_commit_branches_sha ON commit_branches(sha);
+CREATE INDEX IF NOT EXISTS idx_branches_parent ON branches(parent_branch);
+CREATE INDEX IF NOT EXISTS idx_squash_mappings_squash ON squash_mappings(squash_sha);
+
+-- Saved analysis reports with fingerprint caching
+CREATE TABLE IF NOT EXISTS reports (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  commit_shas TEXT NOT NULL,
+  selected_files TEXT,
+  workspace_scope TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  workspace_hash TEXT NOT NULL,
+  facts_json TEXT,
+  analysis_json TEXT,
+  summary TEXT,
+  critical_count INTEGER DEFAULT 0,
+  warning_count INTEGER DEFAULT 0,
+  is_pinned INTEGER DEFAULT 0,
+  fingerprint TEXT,
+  pipeline_version TEXT DEFAULT '2.0',
+  prompt_version TEXT DEFAULT '1.0',
+  mode TEXT DEFAULT 'selection'
+);
+
+-- Symbol DNA: Stable identity tracking
 CREATE TABLE IF NOT EXISTS symbol_dna (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  dna_id TEXT UNIQUE NOT NULL, -- UUID or hash
+  dna_id TEXT UNIQUE NOT NULL,
   first_seen_sha TEXT NOT NULL,
   first_seen_path TEXT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Symbol Versions: Links DNA to specific commits/files
+-- Symbol version history (links DNA to commits)
 CREATE TABLE IF NOT EXISTS symbol_versions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   dna_id TEXT NOT NULL,
-  sha TEXT NOT NULL, -- 'live' for pending changes
+  sha TEXT NOT NULL,
   path TEXT NOT NULL,
-  symbol_id TEXT NOT NULL, -- The transient ID (path:name)
+  symbol_id TEXT NOT NULL,
   name TEXT NOT NULL,
   kind TEXT NOT NULL,
-  signature_hash TEXT NOT NULL,
-  body_hash TEXT NOT NULL,
+  signature_hash TEXT,
+  body_hash TEXT,
   FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE,
   UNIQUE(sha, path, symbol_id)
 );
 
--- Decision Log: Why we matched this symbol to this DNA
+-- DNA matching decision log for debugging
 CREATE TABLE IF NOT EXISTS dna_decision_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   sha TEXT NOT NULL,
   symbol_id TEXT NOT NULL,
   dna_id TEXT NOT NULL,
-  decision_type TEXT NOT NULL, -- 'exact_match', 'signature_match', 'llm_tie_breaker'
+  decision_type TEXT NOT NULL,
   confidence REAL NOT NULL,
-  reasoning TEXT, -- JSON or text explanation
+  reasoning TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- === INDEXES FOR PERFORMANCE ===
+
+-- Commit queries
+CREATE INDEX IF NOT EXISTS idx_commits_metadata_date ON commits_metadata(date DESC);
+CREATE INDEX IF NOT EXISTS idx_commits_analysis_analyzed_at ON commits_analysis(analyzed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_commits_analysis_version ON commits_analysis(pipeline_version, prompt_version);
+
+-- File queries
+CREATE INDEX IF NOT EXISTS idx_files_sha ON files(sha);
+CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);
+
+-- Symbol queries
+CREATE INDEX IF NOT EXISTS idx_symbols_sha ON symbols(sha);
+CREATE INDEX IF NOT EXISTS idx_symbols_path ON symbols(path);
+CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+CREATE INDEX IF NOT EXISTS idx_symbols_symbol_id ON symbols(symbol_id);
+CREATE INDEX IF NOT EXISTS idx_symbols_convention ON symbols(naming_convention);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_sha_symbol_id ON symbols(sha, symbol_id);
+
+-- Edge queries
+CREATE INDEX IF NOT EXISTS idx_edges_sha ON edges(sha);
+CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_symbol_id);
+CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_symbol_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_unique ON edges(sha, from_symbol_id, to_symbol_id, change_type);
+
+-- Renames queries
+CREATE INDEX IF NOT EXISTS idx_renames_sha ON renames(sha);
+CREATE INDEX IF NOT EXISTS idx_renames_old_path ON renames(old_path);
+CREATE INDEX IF NOT EXISTS idx_renames_new_path ON renames(new_path);
+
+-- Convention queries
+CREATE INDEX IF NOT EXISTS idx_file_conventions_sha ON file_conventions(sha);
+CREATE INDEX IF NOT EXISTS idx_file_conventions_path ON file_conventions(path);
+CREATE INDEX IF NOT EXISTS idx_import_conventions_sha ON import_conventions(sha);
+CREATE INDEX IF NOT EXISTS idx_import_conventions_path ON import_conventions(path);
+CREATE INDEX IF NOT EXISTS idx_import_conventions_style ON import_conventions(import_style);
+
+-- Report queries
+CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at);
+CREATE INDEX IF NOT EXISTS idx_reports_is_pinned ON reports(is_pinned);
+CREATE INDEX IF NOT EXISTS idx_reports_mode ON reports(mode);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_fingerprint ON reports(fingerprint);
+
+-- DNA queries
+CREATE INDEX IF NOT EXISTS idx_symbol_dna_dna_id ON symbol_dna(dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_versions_dna ON symbol_versions(dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_versions_sha ON symbol_versions(sha);
 CREATE INDEX IF NOT EXISTS idx_symbol_versions_lookup ON symbol_versions(sha, path, symbol_id);
 `;
 
-export const MIGRATION_V8 = `
--- Layer 2 Caching: Add symbol_version_id for embedding deduplication
--- This enables "never regenerate embeddings for same symbol version"
-
-ALTER TABLE symbol_dna ADD COLUMN symbol_version_id TEXT;
-ALTER TABLE symbol_dna ADD COLUMN embedding_model TEXT DEFAULT 'text-embedding-3-small';
-ALTER TABLE symbol_dna ADD COLUMN embedding BLOB;
-
--- Create unique index on symbol_version_id for cache lookups
-CREATE UNIQUE INDEX IF NOT EXISTS idx_symbol_dna_version ON symbol_dna(symbol_version_id);
-
--- Keep existing indexes
-CREATE INDEX IF NOT EXISTS idx_symbol_dna_dna_id ON symbol_dna(dna_id);
-`;
-
-export const MIGRATION_V9 = `
--- Layer 3 Caching: Add bundle fingerprint for report deduplication
--- This enables "never reanalyze same selection"
-
-ALTER TABLE reports ADD COLUMN fingerprint TEXT;
-ALTER TABLE reports ADD COLUMN pipeline_version TEXT DEFAULT '2.0';
-ALTER TABLE reports ADD COLUMN prompt_version TEXT DEFAULT '1.0';
-ALTER TABLE reports ADD COLUMN mode TEXT DEFAULT 'selection';
-
--- Create unique index on fingerprint for cache lookups
-CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_fingerprint ON reports(fingerprint);
-
--- Add index on mode for filtering
-CREATE INDEX IF NOT EXISTS idx_reports_mode ON reports(mode);
-`;
-
 export const MIGRATIONS = [
-  // Version 1: Initial schema
-  DATABASE_SCHEMA,
-  // Version 2: Naming convention tracking
-  MIGRATION_V2,
-  // Version 3: Import path convention tracking
-  MIGRATION_V3,
-  // Version 4: Reports table
-  MIGRATION_V4,
-  // Version 5: Split commits table
-  MIGRATION_V5,
-  // Version 6: Add difftastic highlights storage
-  MIGRATION_V6,
-  // Version 7: Symbol DNA tables
-  MIGRATION_V7,
-  // Version 8: Symbol version caching (Layer 2)
-  MIGRATION_V8,
-  // Version 9: Bundle fingerprint caching (Layer 3)
-  MIGRATION_V9
+  DATABASE_SCHEMA
 ];
 
-export const CURRENT_VERSION = 9;
-
+export const CURRENT_VERSION = 10;

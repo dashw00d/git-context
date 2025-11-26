@@ -163,6 +163,9 @@ export interface CommitAnalysis {
   llmSummary?: LLMResponse;
   blastRadius: number;
   analyzedAt: string;  // ISO timestamp
+  pipelineVersion?: string;
+  promptVersion?: string;
+  model?: string;
 }
 
 export interface AnalysisOptions {
@@ -170,6 +173,8 @@ export interface AnalysisOptions {
   skipLLM?: boolean;
   skipQdrant?: boolean;
   forceReanalyze?: boolean;  // Re-analyze even if already analyzed
+  promptVersion?: string;
+  model?: string;
 }
 
 export interface StagedAnalysis {

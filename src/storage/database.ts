@@ -57,6 +57,7 @@ class StatementWrapper {
 export class DatabaseManager {
   private db: Database | null = null;
   private dbPath: string;
+  private transactionDepth = 0;
 
   constructor() {
     const gitRoot = getGitRoot();
@@ -160,17 +161,25 @@ export class DatabaseManager {
           console.warn('PRAGMA failed:', e);
         }
       },
-      transaction: (fn: () => any) => {
-        return () => {
+      transaction: (fn: (...args: any[]) => any) => {
+        return (...args: any[]) => {
           if (!this.db) {
             console.warn('Database not initialized, cannot start transaction');
-            return fn();
+            return fn(...args);
           }
+
+          // Nested transaction support: flatten
+          if (this.transactionDepth > 0) {
+            return fn(...args);
+          }
+
           try {
+            this.transactionDepth++;
             this.db.exec('BEGIN TRANSACTION');
-            const result = fn();
+            const result = fn(...args);
             this.db.exec('COMMIT');
-            this.save();
+            this.transactionDepth--;
+            this.save(); // Save only after top-level transaction commits
             return result;
           } catch (e) {
             try {
@@ -178,6 +187,7 @@ export class DatabaseManager {
             } catch (rollbackError) {
               console.error('Rollback failed:', rollbackError);
             }
+            this.transactionDepth = 0; // Reset depth on error
             throw e;
           }
         };
@@ -300,10 +310,14 @@ export class DatabaseManager {
     } catch (error) {
       console.warn('[DB-INIT] Failed to set version pragma:', error);
     }
+
+    // Cleanup stale metadata
+    DatabaseHelpers.cleanupStaleMetadata(this.db);
   }
 
   save(): void {
     if (!this.db) return;
+    if (this.transactionDepth > 0) return; // Don't save during transaction
 
     try {
       const data = this.db.export();
@@ -407,8 +421,9 @@ export const DatabaseHelpers = {
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO commits_analysis
       (sha, summary_md, raw_llm_json, symbols_added, symbols_removed, symbols_modified,
-       edges_added, edges_removed, risks, blast_radius, analyzed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       edges_added, edges_removed, risks, blast_radius, analyzed_at, 
+       pipeline_version, prompt_version, model)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const llmJson = analysis.llmSummary ? JSON.stringify(analysis.llmSummary) : null;
@@ -425,7 +440,10 @@ export const DatabaseHelpers = {
       analysis.edges?.removed?.length || 0,
       risksJson,
       analysis.blastRadius || 0,
-      analysis.analyzedAt || new Date().toISOString()
+      analysis.analyzedAt || new Date().toISOString(),
+      analysis.pipelineVersion || '1.0',
+      analysis.promptVersion || '1.0',
+      analysis.model || null
     );
   },
 
@@ -450,16 +468,67 @@ export const DatabaseHelpers = {
   },
 
   /**
-   * Check if commit is analyzed
+   * Check if commit is analyzed with compatible version
    */
-  isCommitAnalyzed(db: any, sha: string): boolean {
+  isCommitAnalyzed(db: any, sha: string, minPipelineVersion?: string): boolean {
+    if (!minPipelineVersion) {
+      // If no version specified, just check if analyzed
+      const stmt = db.prepare(`
+        SELECT 1 FROM commits_analysis WHERE sha = ? LIMIT 1
+      `);
+      return !!stmt.get(sha);
+    }
+
+    // Check if analyzed with compatible version
     const stmt = db.prepare(`
-      SELECT 1 FROM commits_analysis WHERE sha = ? LIMIT 1
+      SELECT pipeline_version FROM commits_analysis WHERE sha = ?
     `);
-    const result = stmt.get(sha);
-    return !!result;
+    const row = stmt.get(sha);
+    if (!row) return false;
+
+    // Compare versions (simple major.minor comparison)
+    const analyzed = row.pipeline_version || '0.0';
+    return compareVersions(analyzed, minPipelineVersion) >= 0;
+  },
+
+  /**
+   * Cleanup stale metadata (0 changes, old, no analysis)
+   */
+  cleanupStaleMetadata(db: any): void {
+    try {
+      // Delete commits with 0 files changed, loaded > 7 days ago, and no analysis
+      // SQLite datetime('now', '-7 days') works if dates are ISO strings
+      const stmt = db.prepare(`
+        DELETE FROM commits_metadata 
+        WHERE files_changed = 0 
+          AND loaded_at < datetime('now', '-7 days')
+          AND sha NOT IN (SELECT sha FROM commits_analysis)
+      `);
+      const result = stmt.run();
+      if (result.changes > 0) {
+        console.log(`[DB-CLEANUP] Removed ${result.changes} stale commit metadata entries`);
+      }
+    } catch (error) {
+      console.error('[DB-CLEANUP] Failed to cleanup stale metadata:', error);
+    }
   }
 };
+
+/**
+ * Simple semver comparison: returns -1 if a < b, 0 if equal, 1 if a > b
+ */
+function compareVersions(a: string, b: string): number {
+  const aParts = a.split('.').map(Number);
+  const bParts = b.split('.').map(Number);
+
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const aVal = aParts[i] || 0;
+    const bVal = bParts[i] || 0;
+    if (aVal < bVal) return -1;
+    if (aVal > bVal) return 1;
+  }
+  return 0;
+}
 
 /**
  * Close database connection and cleanup resources.

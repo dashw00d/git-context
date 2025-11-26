@@ -25,6 +25,10 @@ export const Header: React.FC<HeaderProps> = ({ state, vscode, bundleSummaryText
         vscode.postMessage({ type: 'generateReport', mode: 'lastN' });
     };
 
+    const handleAnalyzeForce = () => {
+        vscode.postMessage({ type: 'generateReport', mode: 'selection', force: true });
+    };
+
     return (
         <header className="cockpit__header">
             <div>
@@ -60,6 +64,9 @@ export const Header: React.FC<HeaderProps> = ({ state, vscode, bundleSummaryText
             <div className="cockpit__header-actions">
                 <button className="cockpit__button" onClick={handleAnalyze} disabled={state.isAnalyzing}>
                     {state.isAnalyzing ? 'Analyzing...' : 'Analyze'}
+                </button>
+                <button className="cockpit__button ghost" onClick={handleAnalyzeForce} disabled={state.isAnalyzing}>
+                    Force Reanalyze
                 </button>
                 <button className="cockpit__button ghost" onClick={handleAnalyzeStaged} disabled={state.isAnalyzing}>
                     Analyze staged

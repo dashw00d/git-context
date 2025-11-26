@@ -171,6 +171,7 @@ export type CockpitClientMessage =
     type: 'generateReport';
     mode: 'selection' | 'lastN' | 'staged' | 'unstaged';
     lastN?: number;          // required when mode === 'lastN'
+    force?: boolean;         // force reanalysis
   }
   | {
     type: 'cancelAnalysis';

@@ -8,6 +8,8 @@ import { getCockpitProvider } from '../extension';
 import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
 import { updateContexts, refreshCockpitState } from '../extension';
 import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
+import { makeWorkspaceSha, parseWorkspaceSha, isWorkspaceSha } from '../utils/workspace';
+import { GitOperations } from '../analysis/git';
 
 export async function registerCommands(
   context: vscode.ExtensionContext,
@@ -71,77 +73,46 @@ export async function registerCommands(
     const analyzeStagedCmd = vscode.commands.registerCommand(
       'git-context.analyzeStagedChanges',
       async () => {
-        vscode.window.withProgress({
-          location: vscode.ProgressLocation.Notification,
-          title: 'Analyzing staged changes...',
-          cancellable: true
-        }, async (progress, token) => {
-          try {
-            const { GitOperations } = await import('../analysis/git');
-            const git = new GitOperations();
-            const stagedFiles = await git.getStagedFiles();
-            if (stagedFiles.length === 0) {
-              vscode.window.showWarningMessage('No staged files to analyze');
-              return;
-            }
-            await commitsProvider.initializeDatabase();
-            const { getAnalysisPipeline } = await import('../analysis/pipeline');
-            const pipeline = await getAnalysisPipeline();
-            await pipeline.analyzeStagedChanges();
-            commitsProvider.refresh();
-            await refreshCockpitState();
-            const headSha = git.getHeadSha();
-            const commitShas = headSha ? [headSha] : [];
-            const reportService = await getReportService();
-            await reportService.generateReport(
-              commitShas,
-              'staged',
-              { cancellationToken: token }
-            );
-            vscode.window.showInformationMessage('Analyzed staged changes and generated report');
-          } catch (error) {
-            vscode.window.showErrorMessage(`Failed to analyze staged changes: ${error}`);
+        try {
+          await commitsProvider.initializeDatabase();
+          const { getAnalysisPipeline } = await import('../analysis/pipeline');
+          const pipeline = await getAnalysisPipeline();
+          const analysis = await pipeline.analyzeWorkspace('staged');
+          if (!analysis) {
+            vscode.window.showInformationMessage('No staged files to analyze');
+            return;
           }
-        });
+          commitsProvider.refresh();
+          await refreshCockpitState('command:analyzeStaged');
+          vscode.window.showInformationMessage(
+            `Analyzed ${analysis.symbols.added.length} new symbols in staged changes`
+          );
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to analyze staged changes: ${error}`);
+        }
       }
     );
 
-    // Analyze unstaged changes
     const analyzeUnstagedCmd = vscode.commands.registerCommand(
       'git-context.analyzeUnstagedChanges',
       async () => {
-        vscode.window.withProgress({
-          location: vscode.ProgressLocation.Notification,
-          title: 'Analyzing unstaged changes...',
-          cancellable: true
-        }, async (progress, token) => {
-          try {
-            const { GitOperations } = await import('../analysis/git');
-            const git = new GitOperations();
-            const unstagedFiles = await git.getUnstagedFiles();
-            if (unstagedFiles.length === 0) {
-              vscode.window.showWarningMessage('No unstaged files to analyze');
-              return;
-            }
-            await commitsProvider.initializeDatabase();
-            const { getAnalysisPipeline } = await import('../analysis/pipeline');
-            const pipeline = await getAnalysisPipeline();
-            await pipeline.analyzeUnstagedChanges();
-            commitsProvider.refresh();
-            await refreshCockpitState();
-            const headSha = git.getHeadSha();
-            const commitShas = headSha ? [headSha] : [];
-            const reportService = await getReportService();
-            await reportService.generateReport(
-              commitShas,
-              'unstaged',
-              { cancellationToken: token }
-            );
-            vscode.window.showInformationMessage('Analyzed unstaged changes and generated report');
-          } catch (error) {
-            vscode.window.showErrorMessage(`Failed to analyze unstaged changes: ${error}`);
+        try {
+          await commitsProvider.initializeDatabase();
+          const { getAnalysisPipeline } = await import('../analysis/pipeline');
+          const pipeline = await getAnalysisPipeline();
+          const analysis = await pipeline.analyzeWorkspace('unstaged');
+          if (!analysis) {
+            vscode.window.showInformationMessage('No unstaged files to analyze');
+            return;
           }
-        });
+          commitsProvider.refresh();
+          await refreshCockpitState('command:analyzeUnstaged');
+          vscode.window.showInformationMessage(
+            `Analyzed ${analysis.symbols.added.length} new symbols in unstaged changes`
+          );
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to analyze unstaged changes: ${error}`);
+        }
       }
     );
 
@@ -253,28 +224,128 @@ export async function registerCommands(
       }
     );
 
+
     // Main analyze command (Cockpit)
     const analyzeCmd = vscode.commands.registerCommand(
       'git-context.analyze',
-      async () => {
-        const state = orchestrator.getState();
-        const selectedCount = state.selectedCommitShas.length;
-        if (selectedCount > 0) {
-          const shas = state.selectedCommitShas;
+      async (forceReanalyze = false) => {
+        try {
+          const state = orchestrator.getState();
+          const selected = new Set(state.selectedCommitShas);
+          const { getAnalysisPipeline } = await import('../analysis/pipeline');
+          const pipeline = await getAnalysisPipeline();
+
+          let branchLoaded = false;
+          let branchName: string | null = null;
+          const ensureBranch = async (): Promise<string | null> => {
+            if (!branchLoaded) {
+              const { GitOperations } = await import('../analysis/git');
+              const git = new GitOperations();
+              branchName = git.getCurrentBranch();
+              branchLoaded = true;
+            }
+            return branchName;
+          };
+
+          type WorkspaceRequest = {
+            sha?: string;
+            fromPaths: boolean;
+          };
+          const workspaceRequests = new Map<'staged' | 'unstaged', WorkspaceRequest>();
+
+          if (state.selectedStagedPaths.length > 0) {
+            workspaceRequests.set('staged', { sha: undefined, fromPaths: true });
+          }
+          if (state.selectedUnstagedPaths.length > 0) {
+            workspaceRequests.set('unstaged', { sha: undefined, fromPaths: true });
+          }
+
+          for (const sha of Array.from(selected).filter(isWorkspaceSha)) {
+            const parsed = parseWorkspaceSha(sha);
+            if (parsed) {
+              const existing = workspaceRequests.get(parsed.mode) || { sha: undefined, fromPaths: false };
+              workspaceRequests.set(parsed.mode, { sha, fromPaths: existing.fromPaths });
+            }
+          }
+
+          for (const [mode, request] of workspaceRequests.entries()) {
+            if (!request.sha) {
+              const currentBranch = await ensureBranch();
+              request.sha = makeWorkspaceSha(mode, currentBranch);
+            }
+            // Normalize legacy workspace SHAs to include branch for lookup consistency
+            const parsed = request.sha ? parseWorkspaceSha(request.sha) : null;
+            if (parsed && !request.sha.includes('@')) {
+              const currentBranch = await ensureBranch();
+              request.sha = makeWorkspaceSha(mode, currentBranch);
+            }
+
+            const analysis = await pipeline.analyzeWorkspace(mode);
+            if (analysis) {
+              selected.add(analysis.sha);
+              request.sha = analysis.sha;
+            } else {
+              const existing = await pipeline.getAnalysisResults(request.sha!);
+              if (existing) {
+                selected.add(request.sha!);
+              } else if (request.fromPaths) {
+                vscode.window.showInformationMessage(`No ${mode} files to analyze`);
+              }
+            }
+          }
+
+          const shas = Array.from(selected);
+          if (shas.length === 0) {
+            vscode.window.showWarningMessage('Please select commits or workspace changes to analyze.');
+            return;
+          }
+
+          // Auto-include HEAD if selection has few files
+          const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
+          if (commitShas.length > 0) {
+            const git = new GitOperations();
+            let estFiles = 0;
+            for (const sha of commitShas) {
+              try {
+                const files = git.getFileChanges(sha);
+                estFiles += files.length;
+              } catch (error) {
+                // Skip on error
+              }
+            }
+            if (estFiles < 10) {
+              try {
+                const headSha = git.getHeadSha();
+                if (!shas.includes(headSha)) {
+                  logInfo(`[Auto-include] Adding HEAD (${headSha.substring(0, 8)}) to selection (${estFiles} files < 10 threshold)`);
+                  shas.push(headSha);
+                }
+              } catch (error) {
+                // Skip HEAD inclusion on error
+              }
+            }
+          }
+
           const cancellationTokenSource = new vscode.CancellationTokenSource();
           try {
             const reportService = await getReportService();
             await reportService.generateReport(
               shas,
               'full',
-              { cancellationToken: cancellationTokenSource.token }
+              { force: forceReanalyze, cancellationToken: cancellationTokenSource.token }
             );
             await updateContexts();
+            await refreshCockpitState('command:analyze');
           } finally {
             commitsProvider.refresh();
           }
-        } else {
-          vscode.window.showWarningMessage('Please select commits first to analyze as a refactor bundle.');
+        } catch (error) {
+          // Update UI state on error
+          orchestrator.updateState({ isAnalyzing: false, error: error instanceof Error ? error.message : String(error) }, 'command:analyze:error');
+          vscode.window.showErrorMessage(`Failed to analyze selection: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+          // Ensure UI state is reset
+          orchestrator.updateState({ isAnalyzing: false }, 'command:analyze:complete');
         }
       }
     );

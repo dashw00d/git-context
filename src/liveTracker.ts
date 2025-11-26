@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import { debounce } from 'lodash';
-import { SymbolExtractor } from './analysis/symbols';
 import { GitOperations } from './analysis/git';
-import { logDebug, logInfo, logError } from './utils/logger';
+import { logDebug, logInfo } from './utils/logger';
 
 interface ThresholdConfig {
     lines: number;
@@ -10,26 +9,17 @@ interface ThresholdConfig {
     extensions: string[];
 }
 
-interface LiveChange {
-    uri: string;
-    content: string; // Full content (snapshot)
-    originalContent: string; // From HEAD
-    deltas: vscode.TextDocumentContentChangeEvent[];
-}
-
 export class LiveDiffTracker {
     private changeBuffers = new Map<string, vscode.TextDocumentContentChangeEvent[]>();
     private threshold: ThresholdConfig = { lines: 50, symbols: 5, extensions: ['php', 'js', 'ts', 'tsx', 'jsx'] };
     private disposables: vscode.Disposable[] = [];
     private watcher: vscode.FileSystemWatcher | undefined;
-    private symbolExtractor: SymbolExtractor;
     private git: GitOperations;
     private autoRunAfterEdits: number = 50;
     private editCounts = new Map<string, number>();
 
     constructor() {
         this.git = new GitOperations();
-        this.symbolExtractor = new SymbolExtractor(this.git);
 
         this.disposables.push(
             vscode.workspace.onDidChangeTextDocument(this.handleChange, this),
@@ -107,23 +97,39 @@ export class LiveDiffTracker {
         const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri);
         if (!doc) return;
 
-        // If we hit thresholds, notify orchestrator
         logDebug(`[LiveTracker] Threshold reached for ${uri} (lines: ${linesChanged}, edits: ${editCount})`);
 
-        // Notify orchestrator about pending changes
-        // We'll implement the actual analysis trigger later in Phase 3
-        vscode.commands.executeCommand('git-context.live.thresholdReached', {
-            uri,
-            linesChanged,
-            editCount
-        });
+        const relativePath = vscode.workspace.asRelativePath(doc.uri, false);
+        const stagedFiles = await this.git.getStagedFiles();
+        const isStaged = stagedFiles.some(f => f.path === relativePath);
+        const commandId = isStaged ? 'git-context.analyzeStagedChanges' : 'git-context.analyzeUnstagedChanges';
+        const mode = isStaged ? 'staged' : 'unstaged';
 
+        if (this.autoRunAfterEdits > 0) {
+            logInfo(`Live threshold reached for ${mode} changes, triggering analysis`);
+            await vscode.commands.executeCommand(commandId);
+            this.clearBuffer(doc.uri);
+        } else {
+            const choice = await vscode.window.showInformationMessage(
+                `${mode} changes threshold reached. Analyze now?`,
+                'Analyze',
+                'Later'
+            );
+            if (choice === 'Analyze') {
+                await vscode.commands.executeCommand(commandId);
+                this.clearBuffer(doc.uri);
+            }
+        }
     }, 500);
 
     private resetBuffer(doc: vscode.TextDocument) {
-        this.changeBuffers.delete(doc.uri.toString());
-        this.editCounts.delete(doc.uri.toString());
-        logDebug(`[LiveTracker] Reset buffer for ${doc.uri.toString()}`);
+        this.clearBuffer(doc.uri);
+    }
+
+    private clearBuffer(uri: vscode.Uri) {
+        this.changeBuffers.delete(uri.toString());
+        this.editCounts.delete(uri.toString());
+        logDebug(`[LiveTracker] Cleared buffer for ${uri.toString()}`);
     }
 
     public clearAllBuffers() {

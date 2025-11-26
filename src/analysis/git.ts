@@ -17,15 +17,30 @@ export class GitOperations {
   /**
    * Execute a git command and return the output
    */
-  private execGit(args: string[]): string {
+  /**
+   * Execute a git command and return the output
+   */
+  private execGit(args: string[], options: { suppressLog?: boolean } = {}): string {
+    const start = Date.now();
+    const cmd = `git ${args.join(' ')}`;
     try {
-      return execSync(`git ${args.join(' ')}`, {
+      const out = execSync(cmd, {
         cwd: this.gitRoot,
         encoding: 'utf8',
         maxBuffer: 1024 * 1024 * 10 // 10MB buffer
       }).trim();
+      const duration = Date.now() - start;
+      // Log slow commands or errors (optional: could be verbose logging)
+      if (duration > 1000 && !options.suppressLog) {
+        console.log(`[Git] Slow command: ${cmd} (${duration}ms)`);
+      }
+      return out;
     } catch (error: any) {
-      throw new Error(`Git command failed: git ${args.join(' ')}\n${error.message}`);
+      const duration = Date.now() - start;
+      if (!options.suppressLog) {
+        console.error(`[Git] Command failed: ${cmd} (${duration}ms)`);
+      }
+      throw new Error(`Git command failed: ${cmd}\n${error.message}`);
     }
   }
 
@@ -79,7 +94,20 @@ export class GitOperations {
    * Get file changes for a commit
    */
   getFileChanges(sha: string): FileChange[] {
-    const output = this.execGit(['show', '--name-status', '--pretty=format:', sha]);
+    // git diff-tree -r --no-commit-id --name-status sha : changes vs parent(s)
+    let output: string;
+    try {
+      output = this.execGit(['diff-tree', '-r', '--no-commit-id', '--name-status', sha]);
+    } catch (e) {
+      // Fallback for root commits - compare with empty tree
+      try {
+        // 4b825dc642cb6eb9a060e54bf8d69288fbee4904 is the hash of an empty tree in git
+        output = this.execGit(['diff-tree', '-r', '--no-commit-id', '--name-status', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', sha]);
+      } catch (innerError) {
+        console.warn(`Failed to get file changes for ${sha} (even with empty tree fallback):`, innerError);
+        return [];
+      }
+    }
 
     const changes: FileChange[] = [];
     const lines = output.split('\n').filter(line => line.trim());
@@ -91,14 +119,14 @@ export class GitOperations {
         const filePath = parts[1];
         let oldPath: string | undefined;
 
-        // Handle renamed files
-        if (status.startsWith('R')) {
+        // Handle renamed and copied files
+        if (status.startsWith('R') || status.startsWith('C')) {
           oldPath = parts[2];
         }
 
         changes.push({
           path: filePath,
-          status: status.charAt(0) as FileChange['status'],
+          status: status.charAt(0) as FileChange['status'],  // A/M/D/R/C
           oldPath
         });
       }
@@ -156,15 +184,16 @@ export class GitOperations {
    */
   safeGetFileContent(sha: string, filePath: string): string {
     try {
-      return this.getFileContent(sha, filePath);
+      return this.execGit(['show', `${sha}:${filePath}`], { suppressLog: true });
     } catch (error: any) {
       const msg = error.message || String(error);
       // Check for common git errors indicating file doesn't exist
-      if (
+      if (msg.includes('path') && (
+        msg.includes('does not exist') ||
+        msg.includes('did not match any file(s)') ||
         msg.includes('exists on disk, but not in') ||
-        msg.includes('did not match any file') ||
-        msg.includes('does not exist in')
-      ) {
+        msg.includes('neither on disk nor in the index')
+      )) {
         return '';
       }
       throw error;
@@ -186,11 +215,14 @@ export class GitOperations {
       return this.getStagedContent(filePath);
     } catch (error: any) {
       const msg = error.message || String(error);
-      if (
+
+
+      if (msg.includes('path') && (
+        msg.includes('does not exist') ||
+        msg.includes('did not match any file(s)') ||
         msg.includes('exists on disk, but not in') ||
-        msg.includes('did not match any file') ||
-        msg.includes('does not exist in')
-      ) {
+        msg.includes('neither on disk nor in the index')
+      )) {
         return '';
       }
       throw error;
@@ -237,6 +269,33 @@ export class GitOperations {
    */
   getHeadSha(): string {
     return this.execGit(['rev-parse', 'HEAD']);
+  }
+
+  /**
+   * Get current branch name (null when detached)
+   */
+  getCurrentBranch(): string | null {
+    try {
+      const branch = this.execGit(['branch', '--show-current']);
+      if (!branch || branch === 'HEAD') {
+        return null;
+      }
+      return branch;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get commits reachable from a branch (newest first)
+   */
+  getBranchCommits(branch: string, limit: number = 100): string[] {
+    try {
+      const output = this.execGit(['log', branch, `--max-count=${limit}`, '--format=%H']);
+      return output.split('\n').map(line => line.trim()).filter(Boolean);
+    } catch {
+      return [];
+    }
   }
 
   /**

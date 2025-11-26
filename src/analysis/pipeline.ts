@@ -1,10 +1,15 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { GitOperations } from './git';
 import { SymbolExtractor } from './symbols';
 import { DependencyExtractor } from './dependencies';
 import { RiskDetector } from './heuristics';
 import { LLMSummarizer } from '../llm/summarizer';
 import { getDifftasticIntegration } from './difftastic';
-import { getDatabaseManager } from '../storage/database';
+import { getDatabaseManager, DatabaseHelpers } from '../storage/database';
+import { BranchManager } from '../storage/branchManager';
+import { makeWorkspaceSha, isWorkspaceSha } from '../utils/workspace';
+import { getGitRoot } from '../utils/config';
 import { logInfo, logDebug, logError } from '../utils/logger';
 import {
   CommitMetadata,
@@ -25,6 +30,11 @@ import {
  * lightweight metadata loading and heavyweight analysis operations.
  */
 export class AnalysisPipeline {
+  private static readonly LOG_THRESHOLD = 50;
+  private branchManager: BranchManager;
+  private pendingProgress: Record<string, { count: number; shas: string[] }> = {};
+  private analyzedThisRun: Set<string> = new Set();
+
   constructor(
     private git: GitOperations,
     private db: any, // Database instance
@@ -33,7 +43,66 @@ export class AnalysisPipeline {
     private difftastic: any, // Difftastic integration
     private riskDetector: RiskDetector,
     private llmSummarizer?: LLMSummarizer
-  ) { }
+  ) {
+    this.branchManager = new BranchManager(this.db);
+  }
+
+  private upsertFileMetadata(sha: string, files: FileChange[]): void {
+    const deleteStmt = this.db.prepare(`DELETE FROM files WHERE sha = ?`);
+    deleteStmt.run(sha);
+    if (!files || files.length === 0) {
+      return;
+    }
+    const insertStmt = this.db.prepare(`
+      INSERT INTO files (sha, path, status, lang)
+      VALUES (?, ?, ?, NULL)
+    `);
+    const insertMany = this.db.transaction((entries: FileChange[]) => {
+      for (const file of entries) {
+        insertStmt.run(sha, file.path, file.status);
+      }
+    });
+    insertMany(files);
+  }
+
+  private getCachePath(sha: string): string | null {
+    const gitRoot = getGitRoot();
+    if (!gitRoot) return null;
+    return path.join(gitRoot, '.git', 'commit-tracker', 'cache', `analysis-${sha}.json`);
+  }
+
+  private loadCachedAnalysis(sha: string): CommitAnalysis | null {
+    const cachePath = this.getCachePath(sha);
+    if (!cachePath || !fs.existsSync(cachePath)) return null;
+
+    try {
+      const raw = fs.readFileSync(cachePath, 'utf8');
+      return JSON.parse(raw) as CommitAnalysis;
+    } catch (error) {
+      logDebug(`[PIPELINE] Failed to read cache for ${sha}: ${error}`);
+      return null;
+    }
+  }
+
+  private saveAnalysisCache(analysis: CommitAnalysis): void {
+    const cachePath = this.getCachePath(analysis.sha);
+    if (!cachePath) return;
+
+    try {
+      fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+      fs.writeFileSync(cachePath, JSON.stringify(analysis), 'utf8');
+    } catch (error) {
+      logDebug(`[PIPELINE] Failed to write cache for ${analysis.sha}: ${error}`);
+    }
+  }
+
+  private isAnalysisEmpty(analysis: CommitAnalysis): boolean {
+    const symbolCount = (analysis.symbols?.added?.length || 0) +
+      (analysis.symbols?.removed?.length || 0) +
+      (analysis.symbols?.modified?.length || 0);
+    const edgeCount = (analysis.edges?.added?.length || 0) + (analysis.edges?.removed?.length || 0);
+    return symbolCount === 0 && edgeCount === 0;
+  }
 
   // ====== METADATA ONLY (Lightweight) ======
 
@@ -71,6 +140,7 @@ export class AnalysisPipeline {
       files.length,
       metadata.loadedAt
     );
+    this.upsertFileMetadata(metadata.sha, files);
 
     return metadata;
   }
@@ -100,6 +170,13 @@ export class AnalysisPipeline {
   async loadRecentCommits(count: number): Promise<CommitMetadata[]> {
     const recentCommits = this.git.getRecentCommits(count);
     const shas = recentCommits.map(c => c.sha);
+    const branch = this.git.getCurrentBranch();
+    if (branch && recentCommits.length > 0) {
+      for (const commit of recentCommits) {
+        this.branchManager.recordCommit(commit.sha, branch);
+      }
+      this.branchManager.updateBranchHead(branch, recentCommits[0].sha);
+    }
     return this.loadCommitsMetadata(shas);
   }
 
@@ -111,19 +188,41 @@ export class AnalysisPipeline {
    * Idempotent: Safe to call multiple times.
    */
   async analyzeCommit(sha: string, options: AnalysisOptions = {}): Promise<CommitAnalysis> {
-    // Check if already analyzed (unless force reanalyze)
-    if (!options.forceReanalyze && await this.isCommitAnalyzed(sha)) {
-      logDebug(`Commit ${sha} already analyzed; skipping (use forceReanalyze to refresh)`);
+    const { PIPELINE_VERSION, PROMPT_VERSION } = await import('../utils/fingerprint');
+
+    const headSha = (() => {
+      try {
+        return this.git.getHeadSha();
+      } catch {
+        return null;
+      }
+    })();
+    const isCacheable = !isWorkspaceSha(sha) && sha !== headSha;
+
+    // Skip if already analyzed in this run (dedupe across workspace + commits overlap)
+    if (this.analyzedThisRun.has(sha) && !options.forceReanalyze) {
+      logDebug(`Commit ${sha} already analyzed this run; skipping`);
       const existing = await this.getAnalysisResults(sha);
       if (existing) {
         return existing;
       }
     }
 
-    // Get metadata first
+    // Get metadata first (ensures files table is populated)
     const metadata = await this.getCommitMetadata(sha);
     if (!metadata) {
       throw new Error(`Metadata not found for commit ${sha}. Load metadata first.`);
+    }
+    const hasFilesRecorded = Array.isArray(metadata.filesChanged) && metadata.filesChanged.length > 0;
+
+    // Check if already analyzed (unless force reanalyze) AND metadata is complete
+    if (!options.forceReanalyze && hasFilesRecorded && isCacheable && await this.isCommitAnalyzed(sha)) {
+      logDebug(`Commit ${sha} already analyzed; skipping (use forceReanalyze to refresh)`);
+      const existing = await this.getAnalysisResults(sha);
+      if (existing) {
+        this.analyzedThisRun.add(sha); // Mark as analyzed this run
+        return existing;
+      }
     }
 
     const files = metadata.filesChanged;
@@ -180,7 +279,10 @@ export class AnalysisPipeline {
       risks,
       difftasticHighlights,
       blastRadius: totalImpact,
-      analyzedAt: new Date().toISOString()
+      analyzedAt: new Date().toISOString(),
+      pipelineVersion: PIPELINE_VERSION,
+      promptVersion: options.promptVersion ?? PROMPT_VERSION,
+      model: options.model
     };
 
     // Generate LLM summary
@@ -208,8 +310,14 @@ export class AnalysisPipeline {
       }
     }
 
-    // Store in database
+    // Store in database + cache
     await this.storeCommitAnalysis(analysis);
+    if (isCacheable) {
+      this.saveAnalysisCache(analysis);
+    }
+
+    // Mark as analyzed this run
+    this.analyzedThisRun.add(sha);
 
     // Sync to Qdrant if enabled
     if (!options.skipQdrant) {
@@ -242,32 +350,78 @@ export class AnalysisPipeline {
   }
 
   /**
-   * Analyze staged changes (not yet committed).
+   * Analyze staged or unstaged workspace changes and store them like commits.
    */
-  async analyzeStagedChanges(): Promise<StagedAnalysis> {
-    const files = await this.git.getStagedFiles();
-    logInfo(`[PIPELINE] Analyzing staged changes (${files.length} files)`);
+  async analyzeWorkspace(
+    mode: 'staged' | 'unstaged',
+    options: AnalysisOptions = {}
+  ): Promise<CommitAnalysis | null> {
+    const { PIPELINE_VERSION, PROMPT_VERSION } = await import('../utils/fingerprint');
+    const branch = this.git.getCurrentBranch();
+    const sha = makeWorkspaceSha(mode, branch);
 
-    // Extract symbols from staged changes compared to HEAD
-    const symbols = await this.symbolExtractor.extractWorkingTreeSymbols(files, { staged: true });
+    if (!options.forceReanalyze && await this.isCommitAnalyzed(sha)) {
+      logDebug(`Workspace ${mode} already analyzed`);
+      const existing = await this.getAnalysisResults(sha);
+      if (existing) {
+        return existing;
+      }
+    }
+
+    const files = mode === 'staged'
+      ? await this.git.getStagedFiles()
+      : await this.git.getUnstagedFiles();
+
+    if (files.length === 0) {
+      logDebug(`No ${mode} files to analyze`);
+      return null;
+    }
+
+    const symbols = await this.symbolExtractor.extractWorkingTreeSymbols(files, { staged: mode === 'staged' });
     const edges = await this.dependencyExtractor.extractWorkingTreeEdges(files, symbols, this.git);
-    const risks = this.riskDetector.detectRisks(
-      files,
-      symbols,
-      edges
-    );
+    const risks = this.riskDetector.detectRisks(files, symbols, edges);
     const blastRadiusResult = this.dependencyExtractor.calculateBlastRadius(
       [...symbols.added, ...symbols.modified.map(m => m.symbol)],
       edges.added
     );
-    const blastRadius = blastRadiusResult.impactScore.size; // Use number of impacted symbols
 
-    return {
-      files,
+    const analysis: CommitAnalysis = {
+      sha,
       symbols,
       edges,
       risks,
-      blastRadius
+      difftasticHighlights: [],
+      blastRadius: blastRadiusResult.impactScore.size,
+      analyzedAt: new Date().toISOString(),
+      pipelineVersion: PIPELINE_VERSION,
+      promptVersion: options.promptVersion ?? PROMPT_VERSION,
+      model: options.model
+    };
+
+    await this.ensureWorkspaceMetadata(sha, branch, files, mode);
+    await this.storeCommitAnalysis(analysis);
+
+    logInfo(`[PIPELINE] Workspace ${mode} analyzed on ${branch || 'detached'} (${files.length} files)`);
+    return analysis;
+  }
+
+  /**
+   * Analyze staged changes (not yet committed).
+   */
+  async analyzeStagedChanges(): Promise<StagedAnalysis> {
+    const analysis = await this.analyzeWorkspace('staged', { forceReanalyze: true });
+    const files = await this.git.getStagedFiles();
+    return {
+      files,
+      symbols: {
+        added: analysis?.symbols.added || [],
+        modified: analysis?.symbols.modified || []
+      },
+      edges: {
+        added: analysis?.edges.added || []
+      },
+      risks: analysis?.risks || [],
+      blastRadius: analysis?.blastRadius || 0
     };
   }
 
@@ -275,72 +429,114 @@ export class AnalysisPipeline {
    * Analyze unstaged changes (working directory vs HEAD).
    */
   async analyzeUnstagedChanges(): Promise<StagedAnalysis> {
+    const analysis = await this.analyzeWorkspace('unstaged', { forceReanalyze: true });
     const files = await this.git.getUnstagedFiles();
-    logInfo(`[PIPELINE] Analyzing unstaged changes (${files.length} files)`);
-
-    // Extract symbols from unstaged changes compared to HEAD
-    const symbols = await this.symbolExtractor.extractWorkingTreeSymbols(files, { staged: false });
-    const edges = await this.dependencyExtractor.extractWorkingTreeEdges(files, symbols, this.git);
-    const risks = this.riskDetector.detectRisks(
-      files,
-      symbols,
-      edges
-    );
-    const blastRadiusResult = this.dependencyExtractor.calculateBlastRadius(
-      [...symbols.added, ...symbols.modified.map(m => m.symbol)],
-      edges.added
-    );
-    const blastRadius = blastRadiusResult.impactScore.size; // Use number of impacted symbols
-
     return {
       files,
-      symbols,
-      edges,
-      risks,
-      blastRadius
+      symbols: {
+        added: analysis?.symbols.added || [],
+        modified: analysis?.symbols.modified || []
+      },
+      edges: {
+        added: analysis?.edges.added || []
+      },
+      risks: analysis?.risks || [],
+      blastRadius: analysis?.blastRadius || 0
     };
+  }
+
+  /**
+   * Migrate workspace analysis to a real commit SHA after git commit.
+   */
+  async migrateWorkspaceToCommit(newSha: string): Promise<void> {
+    const branch = this.git.getCurrentBranch();
+    if (!branch || !newSha) {
+      return;
+    }
+    const workspaceSha = makeWorkspaceSha('staged', branch);
+    const analyzed = await this.isCommitAnalyzed(workspaceSha);
+    if (!analyzed) {
+      return;
+    }
+
+    this.db.exec('BEGIN TRANSACTION');
+    try {
+      const tables = ['commits_analysis', 'symbols', 'edges', 'files', 'commits_metadata'];
+      for (const table of tables) {
+        this.db.prepare(`UPDATE ${table} SET sha = ? WHERE sha = ?`).run(newSha, workspaceSha);
+      }
+
+      this.branchManager.recordCommit(newSha, branch);
+      this.branchManager.updateBranchHead(branch, newSha);
+
+      this.db.exec('COMMIT');
+      logInfo(`[PIPELINE] Migrated ${workspaceSha} → ${newSha}`);
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      logError('[PIPELINE] Failed to migrate workspace analysis', error);
+    }
   }
 
   // ====== QUERY ======
 
   /**
-   * Check if a commit has been analyzed.
+   * Check if a commit has been analyzed with compatible pipeline version.
    */
   async isCommitAnalyzed(sha: string): Promise<boolean> {
-    const stmt = this.db.prepare(`
-      SELECT 1 FROM commits_analysis WHERE sha = ? LIMIT 1
-    `);
-    const result = stmt.get(sha);
-    return !!result;
+    const { PIPELINE_VERSION } = await import('../utils/fingerprint');
+    const { DatabaseHelpers } = await import('../storage/database');
+    return DatabaseHelpers.isCommitAnalyzed(this.db, sha, PIPELINE_VERSION);
   }
 
   /**
    * Get analysis results for a commit (returns null if not analyzed).
    */
   async getAnalysisResults(sha: string): Promise<CommitAnalysis | null> {
+    const cached = this.loadCachedAnalysis(sha);
+    if (cached) {
+      this.analyzedThisRun.add(sha);
+      return cached;
+    }
+
     const stmt = this.db.prepare(`
       SELECT * FROM commits_analysis WHERE sha = ?
     `);
     const row = stmt.get(sha);
     if (!row) return null;
 
+    const parseArray = (value: any) => {
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    };
+
     // Parse JSON fields
     return {
       sha: row.sha,
       symbols: {
-        added: JSON.parse(row.symbols_added || '[]'),
-        removed: JSON.parse(row.symbols_removed || '[]'),
-        modified: JSON.parse(row.symbols_modified || '[]')
+        added: parseArray(row.symbols_added),
+        removed: parseArray(row.symbols_removed),
+        modified: parseArray(row.symbols_modified)
       },
       edges: {
-        added: JSON.parse(row.edges_added || '[]'),
-        removed: JSON.parse(row.edges_removed || '[]')
+        added: parseArray(row.edges_added),
+        removed: parseArray(row.edges_removed)
       },
-      risks: JSON.parse(row.risks || '[]'),
+      risks: row.risks ? JSON.parse(row.risks) : [],
       difftasticHighlights: row.difftastic_highlights ? JSON.parse(row.difftastic_highlights) : [],
       llmSummary: row.raw_llm_json ? JSON.parse(row.raw_llm_json) : undefined,
       blastRadius: row.blast_radius || 0,
-      analyzedAt: row.analyzed_at
+      analyzedAt: row.analyzed_at,
+      pipelineVersion: row.pipeline_version,
+      promptVersion: row.prompt_version,
+      model: row.model
     };
   }
 
@@ -363,11 +559,21 @@ export class AnalysisPipeline {
         lang: string | null;
       }>;
 
-      const filesChanged = fileRows.map(fileRow => ({
+      let filesChanged: FileChange[] = fileRows.map(fileRow => ({
         path: fileRow.path,
-        status: fileRow.status as any,
-        oldPath: undefined // Could be enhanced to track renames
+        status: fileRow.status as FileChange['status'],
+        oldPath: undefined
       }));
+
+      if (filesChanged.length === 0) {
+        try {
+          const files = this.git.getFileChanges(sha);
+          filesChanged = files;
+          this.upsertFileMetadata(sha, files);
+        } catch {
+          filesChanged = [];
+        }
+      }
 
       return {
         sha: row.sha,
@@ -390,12 +596,32 @@ export class AnalysisPipeline {
 
   // ====== PRIVATE METHODS ======
 
+  private ensureWorkspaceMetadata(
+    sha: string,
+    branch: string | null,
+    files: FileChange[],
+    mode: 'staged' | 'unstaged'
+  ): void {
+    const metadata: CommitMetadata = {
+      sha,
+      author: 'workspace',
+      date: new Date().toISOString(),
+      message: `[Workspace:${mode}] ${branch || 'detached'}`,
+      parent: this.git.getHeadSha(),
+      filesChanged: files,
+      loadedAt: new Date().toISOString()
+    };
+    DatabaseHelpers.insertCommitMetadata(this.db, metadata);
+    this.upsertFileMetadata(sha, files);
+  }
+
   private async storeCommitAnalysis(analysis: CommitAnalysis): Promise<void> {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO commits_analysis
       (sha, summary_md, raw_llm_json, symbols_added, symbols_removed, symbols_modified,
-       edges_added, edges_removed, risks, blast_radius, difftastic_highlights, analyzed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       edges_added, edges_removed, risks, blast_radius, difftastic_highlights, analyzed_at,
+       pipeline_version, prompt_version, model)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const llmJson = analysis.llmSummary ? JSON.stringify(analysis.llmSummary) : null;
@@ -403,6 +629,11 @@ export class AnalysisPipeline {
     const difftasticJson = analysis.difftasticHighlights && analysis.difftasticHighlights.length > 0
       ? JSON.stringify(analysis.difftasticHighlights)
       : null;
+
+    // Normalize metadata fields to avoid undefined bindings
+    const pipelineVersion = analysis.pipelineVersion || '0.0';
+    const promptVersion = analysis.promptVersion || '0.0';
+    const model = analysis.model || null;
 
     stmt.run(
       analysis.sha,
@@ -416,8 +647,40 @@ export class AnalysisPipeline {
       risksJson,
       analysis.blastRadius,
       difftasticJson,
-      analysis.analyzedAt
+      analysis.analyzedAt,
+      pipelineVersion,
+      promptVersion,
+      model
     );
+
+    const totalSymbols = analysis.symbols.added.length + analysis.symbols.modified.length + analysis.symbols.removed.length;
+    if (totalSymbols > 0) {
+      this.trackProgress('symbols', totalSymbols, analysis.sha);
+    }
+    const totalEdges = analysis.edges.added.length + analysis.edges.removed.length;
+    if (totalEdges > 0) {
+      this.trackProgress('edges', totalEdges, analysis.sha);
+    }
+  }
+
+  private trackProgress(kind: 'symbols' | 'edges' | 'dna', delta: number, sha?: string): void {
+    if (delta <= 0) {
+      return;
+    }
+
+    const entry = this.pendingProgress[kind] ?? { count: 0, shas: [] };
+    entry.count += delta;
+    if (sha) {
+      entry.shas.push(sha);
+    }
+
+    if (entry.count >= AnalysisPipeline.LOG_THRESHOLD) {
+      const recent = entry.shas.slice(-3).map((s) => s.substring(0, 8)).join(', ');
+      logInfo(`[PIPELINE] ${entry.count} ${kind} persisted to DB (recent SHAs: ${recent || 'n/a'})`);
+      this.pendingProgress[kind] = { count: 0, shas: [] };
+    } else {
+      this.pendingProgress[kind] = entry;
+    }
   }
 
   private async syncSymbolsToQdrant(

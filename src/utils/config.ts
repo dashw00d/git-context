@@ -14,7 +14,7 @@ export function getExtensionConfig(): ExtensionConfig {
     const config = vscode.workspace.getConfiguration('git-context');
     const apiEndpoint = config.get('apiEndpoint', 'https://openrouter.ai/api/v1');
     const embeddingProvider = config.get('embeddingProvider', ''); // Blank = use LLM provider
-    
+
     return {
       openRouterApiKey: config.get('openRouterApiKey') || process.env.OPENROUTER_API_KEY,
       openRouterModel: config.get('openRouterModel', 'anthropic/claude-3-haiku:beta'),
@@ -35,7 +35,7 @@ export function getExtensionConfig(): ExtensionConfig {
     // CLI fallback
     const apiEndpoint = process.env.API_ENDPOINT || 'https://openrouter.ai/api/v1';
     const embeddingProvider = process.env.EMBEDDING_PROVIDER || '';
-    
+
     return {
       openRouterApiKey: process.env.OPENROUTER_API_KEY,
       openRouterModel: process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku:beta',
@@ -65,16 +65,26 @@ export function getWorkspaceRoot(): string | undefined {
 }
 
 export function getGitRoot(): string | undefined {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) return undefined;
+  if (vscode && vscode.workspace.workspaceFolders) {
+    // Check all workspace folders
+    for (const folder of vscode.workspace.workspaceFolders) {
+      const root = findGitRootForPath(folder.uri.fsPath);
+      if (root) return root;
+    }
+    return undefined;
+  } else {
+    // CLI fallback
+    return findGitRootForPath(process.cwd());
+  }
+}
 
-  // Walk up directory tree to find .git directory
-  let currentPath = workspaceRoot;
+function findGitRootForPath(startPath: string): string | undefined {
+  let currentPath = startPath;
   const rootPath = path.parse(currentPath).root;
 
   while (currentPath !== rootPath) {
     const gitPath = path.join(currentPath, '.git');
-    
+
     // Check if .git exists (as directory or file for worktrees/submodules)
     if (fs.existsSync(gitPath)) {
       return currentPath;
@@ -83,12 +93,10 @@ export function getGitRoot(): string | undefined {
     // Move up one directory
     const parentPath = path.dirname(currentPath);
     if (parentPath === currentPath) {
-      // Reached filesystem root without finding .git
       break;
     }
     currentPath = parentPath;
   }
 
-  // Fallback: return workspace root if .git not found
-  return workspaceRoot;
+  return undefined;
 }

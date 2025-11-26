@@ -2435,7 +2435,7 @@
           var HostPortal = 4;
           var HostComponent = 5;
           var HostText = 6;
-          var Fragment5 = 7;
+          var Fragment4 = 7;
           var Mode = 8;
           var ContextConsumer = 9;
           var ContextProvider = 10;
@@ -3592,7 +3592,7 @@
                 return "DehydratedFragment";
               case ForwardRef:
                 return getWrappedName$1(type, type.render, "ForwardRef");
-              case Fragment5:
+              case Fragment4:
                 return "Fragment";
               case HostComponent:
                 return type;
@@ -12021,7 +12021,7 @@
               }
             }
             function updateFragment2(returnFiber, current2, fragment, lanes, key) {
-              if (current2 === null || current2.tag !== Fragment5) {
+              if (current2 === null || current2.tag !== Fragment4) {
                 var created = createFiberFromFragment(fragment, returnFiber.mode, lanes, key);
                 created.return = returnFiber;
                 return created;
@@ -12424,7 +12424,7 @@
                 if (child.key === key) {
                   var elementType = element.type;
                   if (elementType === REACT_FRAGMENT_TYPE) {
-                    if (child.tag === Fragment5) {
+                    if (child.tag === Fragment4) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var existing = useFiber(child, element.props.children);
                       existing.return = returnFiber;
@@ -17900,7 +17900,7 @@
                 var _resolvedProps2 = workInProgress2.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current2, workInProgress2, type, _resolvedProps2, renderLanes2);
               }
-              case Fragment5:
+              case Fragment4:
                 return updateFragment(current2, workInProgress2, renderLanes2);
               case Mode:
                 return updateMode(current2, workInProgress2, renderLanes2);
@@ -18172,7 +18172,7 @@
               case SimpleMemoComponent:
               case FunctionComponent:
               case ForwardRef:
-              case Fragment5:
+              case Fragment4:
               case Mode:
               case Profiler:
               case ContextConsumer:
@@ -22433,7 +22433,7 @@
             return fiber;
           }
           function createFiberFromFragment(elements, mode, lanes, key) {
-            var fiber = createFiber(Fragment5, elements, key, mode);
+            var fiber = createFiber(Fragment4, elements, key, mode);
             fiber.lanes = lanes;
             return fiber;
           }
@@ -23601,6 +23601,9 @@
     const handleAnalyzeLast = () => {
       vscode2.postMessage({ type: "generateReport", mode: "lastN" });
     };
+    const handleAnalyzeForce = () => {
+      vscode2.postMessage({ type: "generateReport", mode: "selection", force: true });
+    };
     return /* @__PURE__ */ React.createElement("header", { className: "cockpit__header" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "cockpit__title" }, "Cockpit"), /* @__PURE__ */ React.createElement("p", { className: "cockpit__subtitle" }, state.repoName || "Repo", " \u2022 ", state.branchName || "branch"), state.error && /* @__PURE__ */ React.createElement("div", { className: "cockpit__error", style: { marginTop: "4px", padding: "6px 8px", background: "#3a1f1f", border: "1px solid #b73a3a", borderRadius: "4px", color: "#ffb3b3", fontSize: "12px" } }, "\u26A0\uFE0F ", state.error, /* @__PURE__ */ React.createElement(
       "button",
       {
@@ -23609,7 +23612,7 @@
         style: { marginLeft: "8px", padding: "2px 6px" }
       },
       "Dismiss"
-    )), /* @__PURE__ */ React.createElement("div", { className: "cockpit__status-pill" }, state.isAnalyzing ? /* @__PURE__ */ React.createElement("span", { className: "cockpit__status-pill--analyzing" }, "Analyzing", state.analysisStep ? ` \u2014 ${state.analysisStep}` : "", state.analysisProgress !== void 0 ? ` (${Math.round(state.analysisProgress * 100)}%)` : "") : /* @__PURE__ */ React.createElement("span", { className: "cockpit__status-pill--bundle" }, bundleSummaryText))), /* @__PURE__ */ React.createElement("div", { className: "cockpit__header-actions" }, /* @__PURE__ */ React.createElement("button", { className: "cockpit__button", onClick: handleAnalyze, disabled: state.isAnalyzing }, state.isAnalyzing ? "Analyzing..." : "Analyze"), /* @__PURE__ */ React.createElement("button", { className: "cockpit__button ghost", onClick: handleAnalyzeStaged, disabled: state.isAnalyzing }, "Analyze staged"), /* @__PURE__ */ React.createElement("button", { className: "cockpit__button ghost", onClick: handleAnalyzeUnstaged, disabled: state.isAnalyzing }, "Analyze unstaged"), /* @__PURE__ */ React.createElement("button", { className: "cockpit__button ghost", onClick: handleAnalyzeLast, disabled: state.isAnalyzing }, "Analyze last N"), /* @__PURE__ */ React.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "bundleExport" }), disabled: state.isAnalyzing }, "Export bundle"), /* @__PURE__ */ React.createElement(
+    )), /* @__PURE__ */ React.createElement("div", { className: "cockpit__status-pill" }, state.isAnalyzing ? /* @__PURE__ */ React.createElement("span", { className: "cockpit__status-pill--analyzing" }, "Analyzing", state.analysisStep ? ` \u2014 ${state.analysisStep}` : "", state.analysisProgress !== void 0 ? ` (${Math.round(state.analysisProgress * 100)}%)` : "") : /* @__PURE__ */ React.createElement("span", { className: "cockpit__status-pill--bundle" }, bundleSummaryText))), /* @__PURE__ */ React.createElement("div", { className: "cockpit__header-actions" }, /* @__PURE__ */ React.createElement("button", { className: "cockpit__button", onClick: handleAnalyze, disabled: state.isAnalyzing }, state.isAnalyzing ? "Analyzing..." : "Analyze"), /* @__PURE__ */ React.createElement("button", { className: "cockpit__button ghost", onClick: handleAnalyzeForce, disabled: state.isAnalyzing }, "Force Reanalyze"), /* @__PURE__ */ React.createElement("button", { className: "cockpit__button ghost", onClick: handleAnalyzeStaged, disabled: state.isAnalyzing }, "Analyze staged"), /* @__PURE__ */ React.createElement("button", { className: "cockpit__button ghost", onClick: handleAnalyzeUnstaged, disabled: state.isAnalyzing }, "Analyze unstaged"), /* @__PURE__ */ React.createElement("button", { className: "cockpit__button ghost", onClick: handleAnalyzeLast, disabled: state.isAnalyzing }, "Analyze last N"), /* @__PURE__ */ React.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "bundleExport" }), disabled: state.isAnalyzing }, "Export bundle"), /* @__PURE__ */ React.createElement(
       "button",
       {
         className: "cockpit__button ghost danger",
@@ -23769,6 +23772,8 @@
       setExpandedCommits(newSet);
     };
     const filter = state.commitsFilterText.toLowerCase();
+    const selectedCommits = state.commits.filter((c) => state.selectedCommitShas.includes(c.sha));
+    const alreadyAnalyzedSelection = selectedCommits.length > 0 && selectedCommits.every((c) => c.analyzed);
     let scopedCommits = state.commits.filter((c) => {
       if (c.scope === "staged" && !state.commitsFilterScopes.staged) return false;
       if (c.scope === "unstaged" && !state.commitsFilterScopes.unstaged) return false;
@@ -23782,7 +23787,7 @@
       const hasScopeFilters = !state.commitsFilterScopes.staged || !state.commitsFilterScopes.unstaged || !state.commitsFilterScopes.history;
       return /* @__PURE__ */ React6.createElement("div", { className: "cockpit__empty" }, hasScopeFilters ? /* @__PURE__ */ React6.createElement(React6.Fragment, null, /* @__PURE__ */ React6.createElement("div", null, "No commits match current filters"), /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Try adjusting scope toggles or clearing the search filter")) : /* @__PURE__ */ React6.createElement(React6.Fragment, null, /* @__PURE__ */ React6.createElement("div", null, "No commits yet"), /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, 'Start by clicking "Analyze last N" to analyze recent commits')));
     }
-    return /* @__PURE__ */ React6.createElement("ul", { className: "cockpit__list" }, list.map((c) => {
+    return /* @__PURE__ */ React6.createElement(React6.Fragment, null, alreadyAnalyzedSelection && /* @__PURE__ */ React6.createElement("div", { className: "cockpit__warning", style: { marginBottom: "12px", padding: "8px 12px", background: "#3a1f1f", border: "1px solid #b73a3a", borderRadius: "4px", color: "#ffb3b3", fontSize: "12px" } }, "\u26A0\uFE0F Selected commits have already been analyzed. Reanalyzing will regenerate report only."), /* @__PURE__ */ React6.createElement("ul", { className: "cockpit__list" }, list.map((c) => {
       const isExpanded = expandedCommits.has(c.sha);
       const isSelected = state.selectedCommitShas.includes(c.sha);
       return /* @__PURE__ */ React6.createElement(
@@ -23803,7 +23808,7 @@
         /* @__PURE__ */ React6.createElement("div", { className: "cockpit__message", style: { paddingLeft: "20px" } }, c.message),
         isExpanded && c.files && /* @__PURE__ */ React6.createElement("div", { className: "cockpit__file-list", style: { paddingLeft: "20px", marginTop: "4px" } }, c.files.length > 0 ? c.files.map((f, i) => /* @__PURE__ */ React6.createElement("div", { key: i, className: "cockpit__row", style: { fontSize: "12px", padding: "2px 0" } }, /* @__PURE__ */ React6.createElement("span", { className: `cockpit__file-status status-${f.status.toLowerCase()}`, style: { width: "12px", display: "inline-block", textAlign: "center" } }, f.status), /* @__PURE__ */ React6.createElement("span", { className: "cockpit__dim" }, f.path))) : /* @__PURE__ */ React6.createElement("div", { className: "cockpit__dim", style: { fontSize: "12px", fontStyle: "italic" } }, "No files changed"))
       );
-    }));
+    })));
   };
 
   // src/webview/cockpit/components/CommitsTabContent.tsx
@@ -23814,7 +23819,7 @@
     toggleCommitsScope,
     formatDate: formatDate2
   }) => {
-    return /* @__PURE__ */ React7.createElement("div", { className: "cockpit__tab-body" }, /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "selectAllStaged" }) }, "Select all staged"), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "selectAllUnstaged" }) }, "Select all unstaged"), /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "clearSelection" }) }, "Clear selection"), /* @__PURE__ */ React7.createElement(
+    return /* @__PURE__ */ React7.createElement("div", { className: "cockpit__tab-body" }, /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "clearSelection" }) }, "Clear selection"), /* @__PURE__ */ React7.createElement(
       "button",
       {
         className: "cockpit__button ghost",
@@ -23858,7 +23863,7 @@
         title: "Show history commits"
       },
       state.commitsFilterScopes.history ? "History \u2713" : "History \u2715"
-    )), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__message" }, "Staged files: ", state.stagedFiles.length ? /* @__PURE__ */ React7.createElement(React7.Fragment, null, state.stagedFiles.map((f) => f.path).slice(0, 5).join(", "), state.stagedFiles.length > 5 && ` (+${state.stagedFiles.length - 5} more)`) : /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "No staged files")), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__message" }, "Unstaged files:", " ", state.unstagedFiles.length ? /* @__PURE__ */ React7.createElement(React7.Fragment, null, state.unstagedFiles.map((f) => f.path).slice(0, 5).join(", "), state.unstagedFiles.length > 5 && ` (+${state.unstagedFiles.length - 5} more)`) : /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "No unstaged files")), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, state.hasMoreCommits ? /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "loadMoreCommits" }) }, "Load more") : /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "Showing ", state.commits.length, " commits")), /* @__PURE__ */ React7.createElement(CommitList, { state, vscode: vscode2, formatDate: formatDate2 }));
+    )), /* @__PURE__ */ React7.createElement("div", { className: "cockpit__actions" }, state.hasMoreCommits ? /* @__PURE__ */ React7.createElement("button", { className: "cockpit__button ghost", onClick: () => vscode2.postMessage({ type: "loadMoreCommits" }) }, "Load more") : /* @__PURE__ */ React7.createElement("span", { className: "cockpit__dim" }, "Showing ", state.commits.length, " commits")), /* @__PURE__ */ React7.createElement(CommitList, { state, vscode: vscode2, formatDate: formatDate2 }));
   };
 
   // src/webview/cockpit/components/BundleTabContent.tsx
@@ -23890,8 +23895,8 @@
   // src/webview/cockpit/components/BundleTabContent.tsx
   var BundleTabContent = ({ state, vscode: vscode2, formatDate: formatDate2 }) => {
     const facts = state.bundleFacts;
-    if (!facts) {
-      return /* @__PURE__ */ React9.createElement("div", { className: "cockpit__tab-body cockpit__empty" }, /* @__PURE__ */ React9.createElement("div", { style: { textAlign: "center", padding: "40px 20px" } }, /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "48px", opacity: 0.3 } }, "\u{1F4CA}"), /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "12px", fontSize: "14px" } }, "No bundle analyzed yet"), /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "8px", fontSize: "12px", color: "#8a8f98" } }, "Run an analysis to see bundle details")));
+    if (!facts || facts.scope.files === 0) {
+      return /* @__PURE__ */ React9.createElement("div", { className: "cockpit__tab-body" }, /* @__PURE__ */ React9.createElement("div", { className: "cockpit__warning", style: { padding: "20px", textAlign: "center" } }, state.analysisStep ? /* @__PURE__ */ React9.createElement("div", null, /* @__PURE__ */ React9.createElement("span", { className: "codicon codicon-loading spin" }), " ", state.analysisStep) : /* @__PURE__ */ React9.createElement(React9.Fragment, null, /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "32px", opacity: 0.3 } }, "\u{1F4ED}"), /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "12px" } }, "No symbols indexed"), /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "8px", color: "#8a8f98" } }, "CLI: ct analyze ", state.bundleFacts?.bundle?.shas[0]?.slice(0, 8), "...")), /* @__PURE__ */ React9.createElement("button", { className: "cockpit__button primary", onClick: () => vscode2.postMessage({ type: "bundleRegenerate" }) }, "Reanalyze")));
     }
     const evidence = facts.evidence || {};
     const findings = facts.findings;

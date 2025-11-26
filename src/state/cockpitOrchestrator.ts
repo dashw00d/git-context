@@ -110,6 +110,14 @@ export class CockpitOrchestrator extends EventEmitter {
     if (!partial || Object.keys(partial).length === 0) {
       return;
     }
+
+    // Ensure selectedCommitShas is always an array
+    if (partial.selectedCommitShas) {
+      partial.selectedCommitShas = Array.isArray(partial.selectedCommitShas)
+        ? partial.selectedCommitShas
+        : Array.from(new Set(partial.selectedCommitShas || []));
+    }
+
     this.state = { ...this.state, ...partial };
     this.queueEmit(partial, reason);
   }

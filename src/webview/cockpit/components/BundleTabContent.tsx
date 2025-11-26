@@ -11,15 +11,22 @@ interface BundleTabContentProps {
 export const BundleTabContent: React.FC<BundleTabContentProps> = ({ state, vscode, formatDate }) => {
   const facts = state.bundleFacts;
 
-  if (!facts) {
+  if (!facts || facts.scope.files === 0) {
     return (
-      <div className="cockpit__tab-body cockpit__empty">
-        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: '48px', opacity: 0.3 }}>📊</div>
-          <div style={{ marginTop: '12px', fontSize: '14px' }}>No bundle analyzed yet</div>
-          <div style={{ marginTop: '8px', fontSize: '12px', color: '#8a8f98' }}>
-            Run an analysis to see bundle details
-          </div>
+      <div className="cockpit__tab-body">
+        <div className="cockpit__warning" style={{padding: '20px', textAlign: 'center'}}>
+          {state.analysisStep ? (
+            <div><span className="codicon codicon-loading spin" /> {state.analysisStep}</div>
+          ) : (
+            <>
+              <div style={{fontSize: '32px', opacity: 0.3}}>📭</div>
+              <div style={{marginTop: '12px'}}>No symbols indexed</div>
+              <div style={{marginTop: '8px', color: '#8a8f98'}}>CLI: ct analyze {state.bundleFacts?.bundle?.shas[0]?.slice(0,8)}...</div>
+            </>
+          )}
+          <button className="cockpit__button primary" onClick={() => vscode.postMessage({type: 'bundleRegenerate'})}>
+            Reanalyze
+          </button>
         </div>
       </div>
     );

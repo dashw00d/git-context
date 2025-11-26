@@ -141,6 +141,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         break;
       case 'generateReport': {
         const mode = msg.mode as 'selection' | 'lastN' | 'staged' | 'unstaged' | undefined;
+        const force = msg.force as boolean | undefined;
         try {
           if (mode === 'staged') {
             await vscode.commands.executeCommand('git-context.analyzeStagedChanges');
@@ -172,9 +173,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
               await vscode.commands.executeCommand('git-context.analyzeLastCommits', count);
             }
           } else {
-            await vscode.commands.executeCommand('git-context.analyze');
+            await vscode.commands.executeCommand('git-context.analyze', force);
           }
-          this.orchestrator.updateState({ isAnalyzing: true, error: null }, 'ui:generateReport:start');
+          if (mode !== 'staged' && mode !== 'unstaged') {
+            this.orchestrator.updateState({ isAnalyzing: true, error: null }, 'ui:generateReport:start');
+          } else {
+            this.orchestrator.updateState({ isAnalyzing: false, error: null }, 'ui:generateReport:start');
+          }
           logInfo(`[Cockpit] Triggered analysis (${mode || 'selection'})`);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -219,6 +224,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         await vscode.commands.executeCommand('git-context.clearSelection');
         break;
       case 'resetAll':
+        this.orchestrator.reset(undefined, 'ui:resetAll');
         await vscode.commands.executeCommand('git-context.resetAll');
         break;
       case 'openActiveReport':

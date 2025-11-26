@@ -15,17 +15,11 @@ export const CommitsTabContent: React.FC<CommitsTabContentProps> = ({
   vscode,
   updateCommitsFilterText,
   toggleCommitsScope,
-  formatDate
+      formatDate
 }) => {
   return (
     <div className="cockpit__tab-body">
       <div className="cockpit__actions">
-        <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'selectAllStaged' })}>
-          Select all staged
-        </button>
-        <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'selectAllUnstaged' })}>
-          Select all unstaged
-        </button>
         <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'clearSelection' })}>
           Clear selection
         </button>
@@ -69,27 +63,6 @@ export const CommitsTabContent: React.FC<CommitsTabContentProps> = ({
         >
           {state.commitsFilterScopes.history ? 'History ✓' : 'History ✕'}
         </button>
-      </div>
-      <div className="cockpit__message">
-        Staged files: {state.stagedFiles.length ? (
-          <>
-            {state.stagedFiles.map((f) => f.path).slice(0, 5).join(', ')}
-            {state.stagedFiles.length > 5 && ` (+${state.stagedFiles.length - 5} more)`}
-          </>
-        ) : (
-          <span className="cockpit__dim">No staged files</span>
-        )}
-      </div>
-      <div className="cockpit__message">
-        Unstaged files:{' '}
-        {state.unstagedFiles.length ? (
-          <>
-            {state.unstagedFiles.map((f) => f.path).slice(0, 5).join(', ')}
-            {state.unstagedFiles.length > 5 && ` (+${state.unstagedFiles.length - 5} more)`}
-          </>
-        ) : (
-          <span className="cockpit__dim">No unstaged files</span>
-        )}
       </div>
       <div className="cockpit__actions">
         {state.hasMoreCommits ? (

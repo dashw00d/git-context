@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import { logInfo, logDebug, logError } from './utils/logger';
+import { parseWorkspaceSha } from './utils/workspace';
 import type { ActiveBundleProvider } from './providers/activeBundleProvider';
 import type { CommitsProvider } from './providers/commitsProvider';
 import type { SymbolHistoryProvider } from './providers/symbolHistoryProvider';
 import type { CockpitProvider } from './webview/cockpit/CockpitProvider';
 import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
 import { LiveDiffTracker } from './liveTracker';
+import { GitCommitWatcher } from './watchers/gitCommitWatcher';
 import type {
   BundleSummaryDTO,
   CockpitState,
@@ -69,6 +71,12 @@ const mapStatus = (status: string): FileStatus => {
     default:
       return 'unknown';
   }
+};
+
+const mapScope = (sha: string): CommitDTO['scope'] => {
+  const parsed = parseWorkspaceSha(sha);
+  if (parsed) return parsed.mode;
+  return 'history';
 };
 
 async function updateWorkspaceFilesState(reason = 'workspace:update') {
@@ -142,17 +150,26 @@ async function updateCommitsState(reason = 'commits:update') {
   );
   const analyzedMap = new Map(analyzedStatuses.map((s) => [s.sha, s.analyzed]));
 
-  const commitDtos: CommitDTO[] = commits.map((commit: any) => ({
-    sha: commit.sha,
-    shortSha: (commit.sha || '').slice(0, 8),
-    message: commit.message,
-    author: commit.author || 'Unknown',
-    authoredAt: commit.date || '',
-    changes: typeof commit.changes === 'number' ? commit.changes : 0,
-    inBundle: bundleShaSet.has(commit.sha),
-    scope: 'history',
-    analyzed: analyzedMap.get(commit.sha) || false
-  }));
+  const commitDtos: CommitDTO[] = commits.map((commit: any) => {
+    const files = Array.isArray(commit.files)
+      ? commit.files.map((file: any) => ({ path: file.path, status: mapStatus(file.status) }))
+      : undefined;
+
+    const scope = mapScope(commit.sha);
+
+    return {
+      sha: commit.sha,
+      shortSha: (commit.sha || '').slice(0, 8),
+      message: commit.message,
+      author: commit.author || 'Unknown',
+      authoredAt: commit.date || '',
+      changes: typeof commit.changes === 'number' ? commit.changes : (files?.length ?? 0),
+      inBundle: bundleShaSet.has(commit.sha),
+      scope,
+      files,
+      analyzed: scope === 'history' ? (analyzedMap.get(commit.sha) || false) : false
+    };
+  });
 
   orchestrator.updateState(
     {
@@ -306,33 +323,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const liveTracker = new LiveDiffTracker();
     context.subscriptions.push(liveTracker);
 
-    // Initialize LiveAnalysisEngine
-    const { LiveAnalysisEngine } = await import('./analysis/liveAnalysis');
-    const liveAnalysisEngine = new LiveAnalysisEngine(liveTracker, orchestrator);
+    const commitWatcher = new GitCommitWatcher(async () => {
+      await refreshCockpitState('git:commit');
+    });
+    await commitWatcher.start();
+    context.subscriptions.push(commitWatcher);
 
-    // Register live analysis command
-    context.subscriptions.push(
-      vscode.commands.registerCommand('git-context.live.thresholdReached', async (data: { uri: string; linesChanged: number; editCount: number }) => {
-        logDebug(`[Extension] Live threshold reached for ${data.uri}`);
-
-        // Update state to show tracking
-        orchestrator.updateLiveState({
-          isTracking: true,
-          pendingChanges: liveTracker.hasPendingChanges().files,
-          totalEdits: data.editCount,
-          status: 'analyzing'
-        });
-
-        // Trigger analysis
-        await liveAnalysisEngine.analyze();
-      })
-    );
-
-    // LEGACY: Tree data providers (deprecated in favor of Cockpit UI)
-    // Keeping providers for data export but not registering tree views
-    // vscode.window.registerTreeDataProvider('bundle', activeBundleProvider);
-    // vscode.window.registerTreeDataProvider('commits', commitsProvider);
-    // vscode.window.registerTreeDataProvider('symbols', symbolHistoryProvider);
 
     // Initialize context keys
     await updateContextKeys();
@@ -349,19 +345,6 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.window.registerWebviewViewProvider('cockpit', cockpitProvider)
     );
 
-    // LEGACY: Tree provider change listeners (deprecated)
-    // commitsProvider.onDidChangeTreeData(async () => {
-    //   await updateCommitsState('commits:treeChange');
-    // });
-    // activeBundleProvider.onDidChangeTreeData(async () => {
-    //   await updateBundleState('bundle:treeChange');
-    // });
-    // symbolHistoryProvider.onDidChangeTreeData(async () => {
-    //   await updateSymbolsState('symbols:treeChange');
-    // });
-    // reportsProvider.onDidChangeTreeData(async () => {
-    //   await updateReportsState('reports:treeChange');
-    // });
     // Lightweight working directory watcher (debounced)
     const scheduleWorkspaceRefresh = (reason: string) => {
       if (workspaceRefreshTimeout) {

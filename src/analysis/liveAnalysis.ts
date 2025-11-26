@@ -65,8 +65,7 @@ export class LiveAnalysisEngine {
 
             // 3. Reconstruct Scope
             const scopePaths = new Set<string>();
-            // @ts-ignore
-            const scopeFiles = state.bundleFacts.evidence?.["scope.files"] as string[] || [];
+            const scopeFiles = (state.bundleFacts?.evidence?.['scope.files'] as string[] | undefined) || [];
             scopeFiles.forEach(f => scopePaths.add(f));
 
             // 4. Get Working Snapshot (with Live Overrides)
@@ -170,4 +169,3 @@ export class LiveAnalysisEngine {
         return intended;
     }
 }
-

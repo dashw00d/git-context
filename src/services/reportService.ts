@@ -1,20 +1,24 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import { getAnalysisPipeline } from '../analysis/pipeline';
+import { GitOperations } from '../analysis/git';
 import { getReportManager } from '../storage/reportManager';
 import { getDatabaseManager } from '../storage/database';
 import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { LlmAnalyst } from '../analysis/llmAnalyst/runner';
 import { getExtensionConfig } from '../utils/config';
 import { RefactorBundleFacts } from '../facts/types';
-import { CommitAnalysis, StagedAnalysis } from '../types';
+import { CommitAnalysis } from '../types';
 import { makeBundleFingerprint, PIPELINE_VERSION, PROMPT_VERSION } from '../utils/fingerprint';
 import { logInfo, logError, logDebug } from '../utils/logger';
+import { isWorkspaceSha } from '../utils/workspace';
 
 export class ReportService {
     private static instance: ReportService;
 
-    private constructor() { }
+    private constructor() {
+        // Singleton: use getInstance()
+    }
 
     static getInstance(): ReportService {
         if (!ReportService.instance) {
@@ -49,19 +53,30 @@ export class ReportService {
             PROMPT_VERSION
         );
 
+        const tempAnalyzed: Set<string> = new Set();
+
         if (!options.force && !options.existingReportId) {
             const cachedReport = reportManager.loadByFingerprint(fingerprint);
             if (cachedReport) {
-                logInfo(`[ReportService] Cache hit for fingerprint ${fingerprint}`);
-                orchestrator.updateState({
-                    bundleFacts: cachedReport.facts,
-                    bundleSummary: cachedReport.analysis, // Using analysis as summary for now
-                    bundleReportId: cachedReport.id,
-                    isAnalyzing: false
-                }, 'report:cached');
-
-                // Show report in webview (if provider available - handled by caller usually, but we can emit event)
-                return cachedReport.id;
+                const facts = cachedReport.facts;
+                const isEmpty = !facts || facts.scope.files === 0 && facts.working.symbols === 0;
+                if (isEmpty) {
+                    logInfo(`[ReportService] Empty cache hit for ${fingerprint}; forcing reanalysis...`);
+                    orchestrator.updateState({analysisStep: 'Reindexing empty commits...'}, 'report:reindexStart');
+                    const commitShas = shas.filter(s => !isWorkspaceSha(s));
+                    await pipeline.analyzeCommits(commitShas, {forceReanalyze: true});
+                    commitShas.forEach(s => tempAnalyzed.add(s));
+                    // Fall through to full generation (cache bypassed)
+                } else {
+                    logInfo(`[ReportService] Cache hit for ${fingerprint}`);
+                    orchestrator.updateState({
+                        bundleFacts: facts,
+                        bundleSummary: cachedReport.analysis,
+                        bundleReportId: cachedReport.id,
+                        isAnalyzing: false
+                    }, 'report:cached');
+                    return cachedReport.id;
+                }
             }
         }
 
@@ -69,18 +84,67 @@ export class ReportService {
 
         try {
             // 2. Run Analysis (Layer 1 & 2 handled by pipeline)
+            const workspaceShas = shas.filter(isWorkspaceSha);
+            const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
             let analysisResults: CommitAnalysis[] = [];
-            let stagedAnalysis: StagedAnalysis | undefined;
 
             if (scope === 'staged') {
-                stagedAnalysis = await pipeline.analyzeStagedChanges();
-            } else if (scope === 'unstaged') {
-                stagedAnalysis = await pipeline.analyzeUnstagedChanges();
-            } else {
-                // Analyze commits
-                analysisResults = await pipeline.analyzeCommits(shas, {
-                    forceReanalyze: options.force
-                });
+                const analysis = await pipeline.analyzeWorkspace('staged', { forceReanalyze: options.force });
+            if (analysis) {
+                analysisResults.push(analysis);
+            }
+        } else if (scope === 'unstaged') {
+                const analysis = await pipeline.analyzeWorkspace('unstaged', { forceReanalyze: options.force });
+                if (analysis) {
+                    analysisResults.push(analysis);
+                }
+            } else if (commitShas.length > 0) {
+                const git = new GitOperations();
+                let headSha: string | null = null;
+                try {
+                    headSha = git.getHeadSha();
+                } catch {
+                    headSha = null;
+                }
+
+                const cachedAnalyses: CommitAnalysis[] = [];
+                const shasToAnalyze: string[] = [];
+
+                for (const sha of commitShas.filter(s => !tempAnalyzed.has(s))) {
+                    const isHead = headSha ? sha === headSha : false;
+                    if (options.force || isWorkspaceSha(sha) || isHead) {
+                        shasToAnalyze.push(sha);
+                        continue;
+                    }
+
+                    const existing = await pipeline.getAnalysisResults(sha);
+                    if (existing && !this.isEmptyAnalysis(existing)) {
+                        cachedAnalyses.push(existing);
+                    } else {
+                        if (existing) {
+                            logInfo(`[ReportService] Empty analysis cache for ${sha}; reanalyzing...`);
+                        }
+                        shasToAnalyze.push(sha);
+                    }
+                }
+
+                if (shasToAnalyze.length > 0) {
+                    const fresh = await pipeline.analyzeCommits(shasToAnalyze, {
+                        forceReanalyze: options.force
+                    });
+                    analysisResults = [...cachedAnalyses, ...fresh];
+                } else {
+                    analysisResults = [...cachedAnalyses];
+                }
+            }
+
+            if (workspaceShas.length > 0) {
+                for (const workspaceSha of workspaceShas) {
+                    const workspace = await pipeline.getAnalysisResults(workspaceSha);
+                    if (workspace) {
+                        analysisResults.push(workspace);
+                    }
+                }
             }
 
             if (options.cancellationToken?.isCancellationRequested) {
@@ -89,7 +153,7 @@ export class ReportService {
             }
 
             // 3. Aggregate Facts
-            const facts = this.aggregateFacts(analysisResults, stagedAnalysis, shas);
+            const facts = this.aggregateFacts(analysisResults, [...commitShas, ...workspaceShas]);
 
             // 4. Generate Summary (LLM)
             let summary: string;
@@ -155,7 +219,7 @@ export class ReportService {
 
             // 5. Save Report
             const reportId = options.existingReportId || crypto.randomUUID();
-            const title = options.title || `Refactor Analysis ${new Date().toLocaleTimeString()}`;
+            const title = options.title || this.generateTitle([...commitShas, ...workspaceShas]);
 
             const report = {
                 id: reportId,
@@ -206,9 +270,16 @@ export class ReportService {
         }
     }
 
+    private isEmptyAnalysis(analysis: CommitAnalysis): boolean {
+        const symbolCount = (analysis.symbols?.added?.length || 0) +
+            (analysis.symbols?.modified?.length || 0) +
+            (analysis.symbols?.removed?.length || 0);
+        const edgeCount = (analysis.edges?.added?.length || 0) + (analysis.edges?.removed?.length || 0);
+        return symbolCount === 0 && edgeCount === 0;
+    }
+
     private aggregateFacts(
         commits: CommitAnalysis[],
-        staged?: StagedAnalysis,
         shas: string[] = []
     ): RefactorBundleFacts {
         // Simple aggregation for now - can be expanded
@@ -217,30 +288,21 @@ export class ReportService {
         let addedSymbols = 0;
         let addedEdges = 0;
 
-        const process = (c: CommitAnalysis | StagedAnalysis) => {
+        const process = (c: CommitAnalysis) => {
             // Blast radius
             totalBlastRadius += c.blastRadius;
 
             // Symbols
-            if ('symbols' in c) {
-                addedSymbols += c.symbols.added.length;
-            }
+            addedSymbols += c.symbols.added.length;
 
             // Edges
-            if ('edges' in c) {
-                addedEdges += c.edges.added.length;
-            }
+            addedEdges += c.edges.added.length;
         };
 
         commits.forEach(process);
-        if (staged) {
-            process(staged);
-            // Add staged files to set
-            staged.files.forEach(f => totalFiles.add(f.path));
-        }
 
         // For commit-based analysis, query database to get file lists
-        if (commits.length > 0 && !staged) {
+        if (commits.length > 0) {
             try {
                 const db = getDatabaseManager().getDatabase();
                 if (db && shas.length > 0) {
@@ -299,6 +361,22 @@ export class ReportService {
                 "scope.files": Array.from(totalFiles)
             }
         };
+    }
+
+    private generateTitle(shas: string[]): string {
+        const workspaceCount = shas.filter(isWorkspaceSha).length;
+        const commitCount = shas.length - workspaceCount;
+        const parts: string[] = [];
+        if (commitCount > 0) {
+            parts.push(`${commitCount} commits`);
+        }
+        if (workspaceCount > 0) {
+            parts.push(`${workspaceCount} workspace`);
+        }
+        if (parts.length === 0) {
+            return 'Workspace Analysis';
+        }
+        return `Analysis: ${parts.join(' + ')}`;
     }
 
     private generateFallbackSummary(facts: RefactorBundleFacts, shas: string[]): string {

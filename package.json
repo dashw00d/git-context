@@ -68,6 +68,11 @@
         "category": "Git Context"
       },
       {
+        "command": "git-context.toggleBranchFilter",
+        "title": "Toggle Branch Filter",
+        "category": "Git Context"
+      },
+      {
         "command": "git-context.bundle.regenerate",
         "title": "Bundle: Regenerate",
         "icon": "$(refresh)"

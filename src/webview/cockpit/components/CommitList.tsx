@@ -23,6 +23,10 @@ export const CommitList: React.FC<CommitListProps> = ({ state, vscode, formatDat
 
     const filter = state.commitsFilterText.toLowerCase();
 
+    const selectedCommits = state.commits.filter((c) => state.selectedCommitShas.includes(c.sha));
+
+    const alreadyAnalyzedSelection = selectedCommits.length > 0 && selectedCommits.every((c) => c.analyzed);
+
     // Filter by scope first
     let scopedCommits = state.commits.filter((c) => {
         if (c.scope === 'staged' && !state.commitsFilterScopes.staged) return false;
@@ -64,6 +68,12 @@ export const CommitList: React.FC<CommitListProps> = ({ state, vscode, formatDat
     }
 
     return (
+        <>
+            {alreadyAnalyzedSelection && (
+                <div className="cockpit__warning" style={{ marginBottom: '12px', padding: '8px 12px', background: '#3a1f1f', border: '1px solid #b73a3a', borderRadius: '4px', color: '#ffb3b3', fontSize: '12px' }}>
+                    ⚠️ Selected commits have already been analyzed. Reanalyzing will regenerate report only.
+                </div>
+            )}
         <ul className="cockpit__list">
             {list.map((c) => {
                 const isExpanded = expandedCommits.has(c.sha);
@@ -111,5 +121,6 @@ export const CommitList: React.FC<CommitListProps> = ({ state, vscode, formatDat
                 );
             })}
         </ul>
+        </>
     );
 };

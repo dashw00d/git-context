@@ -2,101 +2,94 @@
 
 ## Overview
 
-Git Context is a VS Code extension that provides intelligent analysis of Git commits, refactoring patterns, and code evolution. It helps developers understand refactor completeness, identify technical debt, and make data-driven decisions about code quality.
+Git Context is a comprehensive VS Code extension that provides intelligent analysis of Git commits, refactoring patterns, and code evolution through a modern webview-based UI called the "Cockpit". It combines static analysis with LLM-powered insights to help developers understand refactor completeness, identify technical debt, track symbol evolution, and make data-driven decisions about code quality.
+
+The extension features a rich Cockpit interface with live analysis capabilities, persistent report management, and a command-line interface for automation. It analyzes code using Tree-sitter for precise symbol extraction and Difftastic for structural diffs, then applies LLM analysis to generate actionable insights about refactoring progress and code health.
 
 ## Recent Changes
 
-### Value-Focused LLM Analysis (Latest)
+### Cockpit UI and State Management (Latest)
 
-The LLM analysis system has been redesigned to prioritize high-value insights over generic information. Key improvements:
+The extension has been completely redesigned with a modern webview-based "Cockpit" interface that provides a unified, real-time view of all Git context analysis. Key architectural improvements:
 
-#### Value Scoring System
-- **Block Value Calculation**: Each analysis block is scored based on:
-  - Claim severity (critical=10, high=5, medium=2, low=1) weighted by confidence
-  - Action priority/effort ratio (urgent + low effort = high value)
-  - Risk factors (low-risk actions get 1.5x multiplier)
-  - Actionability bonus (has evidence paths = 1.2x multiplier)
-- **Health Score**: Calculates refactor health (0-100) based on issue rate and critical problems
-- **Smart Sorting**: Blocks sorted by value score (descending), not just type
+#### Cockpit Webview Interface
+- **Unified UI**: Single webview panel replacing multiple tree views with accordion-style sections
+- **Real-time Updates**: Live synchronization between VS Code and webview through message passing
+- **Responsive Design**: Modern React-based UI with collapsible sections and contextual actions
+- **State Orchestrator**: Centralized state management with debounced updates and single source of truth
 
-#### Enhanced Executive Summary
-- Extracts top 3 critical claims and top 5 immediate actions
-- Shows most critical finding prominently
-- Displays refactor health score with visual indicator (✅/⚠️/🔴)
-- Provides quick stats (commits, symbols, issues, high-priority actions)
+#### Live Analysis Capabilities
+- **Real-time Tracking**: Continuous analysis of workspace changes with live diff tracking
+- **Incremental Updates**: Efficient analysis of only changed files/symbols
+- **Live Diff Viewer**: Real-time visualization of pending changes and their impact
+- **Status Monitoring**: Live status indicators for analysis progress and pending changes
 
-#### Value-Focused Prompts
-- **Intent & Story**: Asks for SINGLE most important insight first
-- **Drift Verification**: Emphasizes real issues vs false positives, prioritizes high-severity findings
-- **Cleanup Plan**: Orders by value (priority/effort ratio), groups high-value actions first
+#### Enhanced Report Management
+- **Persistent Reports**: Saved analysis reports with metadata (branch, creation date, pins)
+- **Report Browser**: Filter and search through historical reports
+- **Export Capabilities**: JSON export for LLM context and external tools
+- **Report Comparison**: Side-by-side comparison of different analysis reports
 
-#### Filtering and Rendering
-- Filters out low-value content:
-  - Claims: Exclude low severity unless confidence >= 0.8
-  - Actions: Exclude low priority unless (xs effort AND low risk)
-- Value-based rendering:
-  - Critical/high claims in "Critical Findings" section first
-  - Urgent/high actions in "Immediate Actions" section first
-  - High Value badge for blocks with score > 20
-  - Evidence limited to top 5 per claim/action
-
-#### Health Score Integration
-- Calculated during analysis generation
-- Stored in `LlmAnalysis.metadata.healthScore`
-- Displayed in report header and footer
-- Visual indicators: ✅ (>=80), ⚠️ (60-79), 🔴 (<60)
+#### Command-Line Interface (CLI)
+- **Analysis Automation**: CLI tools for automated analysis workflows
+- **Batch Processing**: Process multiple commits or workspaces from command line
+- **Integration Hooks**: Git hooks and CI/CD integration capabilities
+- **Query Interface**: Programmatic access to analysis data and results
 
 ## Architecture
 
 ### Core Components
 
-#### 1. Commit Tracker Sidebar (`src/ui/commitTracker.ts`)
+#### 1. Cockpit Webview (`src/webview/cockpit/`)
 
-The main UI component that displays commits, workspace state, and refactor bundles.
+The main UI component providing a unified webview interface for all Git context analysis and management.
 
 **Key Features:**
-- **Workspace State Selector**: Filter analysis scope (Full/Staged/Unstaged)
-- **Commit Selection**: Select commits for bundle analysis
-- **Bundle Display**: Shows refactor bundle with 5 categories:
-  - Net Effect vs Working Tree
-  - Incompleteness (missing symbols, zombies)
-  - Pattern Drift (hotspots, mixed targets)
-  - Legacy Audit (dead code, replaced leftovers)
-  - Timeline Rewind (commit evolution)
-- **Deep Drilldowns**: Expand categories to see files → symbols → evidence
-- **Action Buttons**: Contextual buttons on nodes (copy, diff, LLM context, scroll to MD)
+- **Accordion Sections**: Five main sections (Commits, Bundle, Symbols, Reports, Live Analysis)
+- **Real-time Synchronization**: Bidirectional message passing between VS Code host and webview
+- **Contextual Actions**: Dynamic action buttons based on current selections and state
+- **Responsive Design**: Modern React-based UI with collapsible panels and status indicators
+- **State Orchestrator Integration**: Centralized state management with debounced updates
 
-**State Management:**
-- `selectedCommits`: Set of commit SHAs selected for bundle
-- `workspaceParts`: Set<'staged' | 'unstaged'> - controls workspace scope
-- `lastBundleFacts`: Latest refactor bundle facts JSON
-- Persisted to VS Code workspace state
+**Sections:**
+- **Commits**: Browse, filter, and select commits for analysis
+- **Bundle**: View active refactor bundle with drilldown capabilities
+- **Symbols**: Track symbol evolution and history across commits
+- **Reports**: Browse, filter, and manage saved analysis reports
+- **Live Analysis**: Monitor real-time workspace changes and analysis status
 
-**Performance Optimizations:**
-- Caching: Commit summaries and info cached to avoid repeated DB queries
-- Batch Loading: Multiple commits loaded in single query
-- Lazy Loading: Children computed on expand, "Load more..." nodes for long lists
+#### 2. State Orchestrator (`src/state/cockpitOrchestrator.ts`)
 
-#### 2. LLM Analyst (`src/analysis/llmAnalyst/`)
+Centralized state management system that maintains the single source of truth for the Cockpit UI.
 
-Analyzes refactor bundle facts using LLM to generate insights.
+**Key Features:**
+- **Singleton Pattern**: Single orchestrator instance shared across the extension
+- **Debounced Updates**: Batches and debounces state changes to prevent UI thrashing
+- **Event-driven Architecture**: Emits state change events for UI synchronization
+- **Metrics Calculation**: Computes derived metrics like debt scores and symbol counts
+- **Partial Updates**: Supports efficient partial state updates with change tracking
 
-**Analysis Pipeline:**
-1. **Intent & Story**: Understands what refactor was attempting
-2. **Drift Verification**: Validates incompleteness/drift flags (real issues vs false positives)
-3. **Cleanup Plan**: Produces ordered checklist of deletions/migrations needed
-4. **Pattern Discovery** (optional): Scans raw AST/diff/graph for emergent patterns
+**State Structure:**
+- **Global Context**: Repository name, branch, workspace scope
+- **Analysis Status**: Current analysis progress, errors, and step tracking
+- **Selections**: Commit SHAs, staged/unstaged paths, file selections
+- **Bundle Data**: Active bundle facts and summary information
+- **UI State**: Active sections, filters, and user preferences
 
-**Value Prioritization:**
-- Blocks scored by value (severity × confidence + priority/effort ratio)
-- High-value blocks appear first
-- Low-value content filtered out
-- Executive summary highlights top insights
+#### 3. Data Providers (`src/providers/`)
 
-**Output:**
-- Structured `LlmAnalysis` with blocks, claims, actions
-- Markdown report with clickable evidence links
-- Health score (0-100) indicating refactor completeness
+Modular data providers that encapsulate data access and business logic.
+
+**Provider Types:**
+- **CommitsProvider**: Manages commit data, selection, and database operations
+- **ActiveBundleProvider**: Handles refactor bundle facts and analysis results
+- **SymbolHistoryProvider**: Tracks symbol evolution and change history
+
+**Key Features:**
+- **Database Integration**: SQLite-backed persistent storage for commits and analysis
+- **Lazy Loading**: On-demand data loading with caching and batch operations
+- **Change Notifications**: VS Code tree data provider interface for UI updates
+- **Export DTOs**: Clean data transfer objects for cockpit state synchronization
 
 #### 3. Facts Assembly (`src/facts/`)
 
@@ -126,167 +119,221 @@ Assembles structured JSON facts from analysis results.
 
 #### 4. Analysis Pipeline (`src/analysis/`)
 
-Runs various analyses on the codebase:
+Comprehensive analysis system combining static analysis with LLM-powered insights.
 
-- **Drift Analysis** (`drift.ts`): Detects pattern inconsistencies
-- **Legacy Audit** (`legacy.ts`): Finds dead code and replaced leftovers
-- **Symbol Extraction** (`symbols.ts`): Extracts symbols from AST
-- **Git Operations** (`git.ts`): Git commands wrapper
-- **AST Serialization** (`astSerializer.ts`): Converts code to AST JSON
+**Core Analysis Components:**
+- **AST Analysis** (`astSerializer.ts`): Tree-sitter powered AST extraction and serialization
+- **Symbol Extraction** (`symbols.ts`): Precise symbol identification and metadata extraction
+- **Semantic Analysis** (`semanticChanges.ts`): Understanding of code changes and their meaning
+- **Dependency Analysis** (`dependencies.ts`): Import/export relationship mapping
+- **Convention Analysis** (`namingConventions.ts`, `conventionEnhancements.ts`): Code style and pattern detection
 
-#### 5. Report Generation (`src/ui/report.ts`)
+**Specialized Analyses:**
+- **Drift Detection** (`drift.ts`): Pattern inconsistency identification
+- **Legacy Auditing** (`legacy.ts`): Dead code and deprecated pattern detection
+- **Live Analysis** (`liveAnalysis.ts`): Real-time workspace change tracking
+- **Heuristics** (`heuristics.ts`): Rule-based analysis for common patterns
 
-Generates the refactor bundle report.
+**LLM Integration:**
+- **LLM Analyst** (`llmAnalyst/`): Generates insights from analysis facts
+- **Context Export** (`contextExporter.ts`): Prepares data for LLM consumption
+- **Mermaid Generation** (`mermaidGenerator.ts`): Visual diagram creation for reports
 
-**Process:**
-1. Compute scope (respects workspaceParts filter)
-2. Analyze intended state (from commits)
-3. Analyze working state (from workspace)
-4. Detect drift (incompleteness, pattern inconsistencies)
-5. Audit legacy code (dead symbols, replaced leftovers)
-6. Assemble facts JSON
-7. Run LLM analysis on facts
-8. Generate markdown report with stable anchors
-9. Update debt meter
-10. Open report in editor
+#### 5. Services Layer (`src/services/`)
 
-**Markdown Features:**
-- Stable anchors for navigation (`{#anchor-id}`)
-- Findings sections with top items
-- LLM analysis blocks sorted by value
-- Clickable evidence links
+Business logic services that orchestrate complex operations.
 
-#### 6. Debt Meter (`src/ui/refactorDebtMeter.ts`)
-
-Status bar item showing refactor debt metrics.
+**Key Services:**
+- **Report Service**: Manages report generation, storage, and retrieval
+- **Analysis Pipeline Service**: Coordinates multi-stage analysis workflows
+- **Database Service**: Handles all SQLite database operations and migrations
 
 **Features:**
-- Displays debt percentage and breakdown (zombies, drift, dead code)
-- Color-coded by debt level
-- Click refreshes tree and reveals bundle
-- Auto-refreshes when facts file changes
+- **Asynchronous Operations**: Non-blocking analysis with progress tracking
+- **Error Handling**: Comprehensive error recovery and user feedback
+- **Caching**: Intelligent caching of analysis results and metadata
+- **Batch Processing**: Efficient handling of multiple commits/files
 
-**Integration:**
-- Wired to commit tracker for tree refresh
-- File watcher monitors facts file for updates
-- Shows coverage metrics from LLM analysis
+#### 6. CLI Interface (`src/cli/`)
+
+Command-line interface for automated analysis and integration workflows.
+
+**Key Components:**
+- **Analysis CLI** (`analyze.ts`): Programmatic analysis execution
+- **Query Interface** (`queries.ts`): Data querying and export capabilities
+- **Git Hooks** (`hooks.ts`): Automated analysis triggers
+- **Index** (`index.ts`): Main CLI entry point and command routing
+
+**Features:**
+- **Batch Processing**: Analyze multiple commits or workspaces
+- **Export Formats**: JSON, CSV, and other data formats
+- **Integration Hooks**: Git hooks and CI/CD pipeline integration
+- **Scripting Support**: Programmatic access for automation scripts
 
 ### Data Flow
 
 ```
-User selects commits
+User interacts with Cockpit UI
     ↓
-Commit Tracker updates selectedCommits
+Cockpit sends message to VS Code host
     ↓
-User clicks "Generate Report"
+State Orchestrator updates state
     ↓
-Report Generation:
-  1. Compute scope (with workspaceParts filter)
-  2. Analyze intended state (from commits)
-  3. Analyze working state (from workspace)
-  4. Detect drift & legacy issues
-  5. Assemble facts JSON
-  6. Run LLM analysis (value-focused)
-  7. Generate markdown report
+Providers fetch/update data from database
     ↓
-Facts saved to .git/commit-tracker/last-bundle-facts.json
+Analysis triggered (manual or automatic)
     ↓
-Debt meter updates
+Analysis Pipeline:
+  1. Scope computation (workspace/staged/unstaged)
+  2. Static analysis (AST, symbols, dependencies)
+  3. Semantic analysis (changes, patterns, drift)
+  4. LLM analysis (insights, recommendations)
+  5. Report generation (facts + LLM analysis)
     ↓
-Commit tracker refreshes with latest facts
+Report Service saves to database
     ↓
-Tree view shows bundle with drilldowns
+State Orchestrator notified of changes
+    ↓
+Cockpit UI updates in real-time
+    ↓
+Live Analysis tracks ongoing changes
 ```
 
 ### Key Concepts
 
-#### Workspace as Root/Base
+#### Cockpit State Management
 
-**IMPORTANT**: The workspace (current working directory state) is the ROOT/BASE for all comparisons, NOT HEAD.
+**Centralized State**: The Cockpit Orchestrator maintains the single source of truth for all UI state.
 
-- **Workspace** = Current state of files (staged and/or unstaged) - this is the baseline
-- **HEAD** = Just another commit in the history - no special status
-- Workspace is always available for comparison
-- Any commit can be compared against workspace or other commits
-- Comparisons respect `workspaceParts` filter (staged/unstaged/full)
+- **Singleton Pattern**: One orchestrator instance coordinates all state changes
+- **Debounced Updates**: State changes are batched and debounced to prevent performance issues
+- **Event-Driven**: State changes emit events for UI synchronization
+- **Derived Metrics**: Automatic calculation of metrics like debt scores and symbol counts
+- **Partial Updates**: Efficient partial state updates with change tracking
 
-#### Value-Based Prioritization
+#### Workspace as Analysis Baseline
 
-The system prioritizes information by value:
+The workspace serves as the foundation for all analysis comparisons:
 
-1. **High-Value Blocks**: Critical/high severity claims, urgent/high priority actions with low effort
-2. **Health Score**: Overall refactor completeness (0-100)
-3. **Filtering**: Low-value content (low severity/priority) filtered out unless high confidence
-4. **Sorting**: Blocks sorted by value score, not just type
+- **Workspace Scope**: Analysis can be limited to staged, unstaged, or full workspace
+- **Real-time Tracking**: Live analysis monitors workspace changes continuously
+- **Flexible Comparisons**: Any commit can be compared against workspace state
+- **Incremental Analysis**: Only changed files/symbols are re-analyzed when possible
 
-#### Evidence Linking
+#### Live Analysis Architecture
 
-All claims and actions link to specific evidence:
-- JSON paths in facts (e.g., `findings.incompleteness.missing[0]`)
-- Clickable links that open evidence viewer
-- File paths and line numbers when available
-- Symbol IDs for navigation
+**Continuous Monitoring**: Real-time analysis of workspace changes and their impact.
+
+- **Change Tracking**: Monitors file modifications, additions, and deletions
+- **Symbol Impact**: Tracks how changes affect symbols and their relationships
+- **Progressive Updates**: Analysis results update incrementally as changes occur
+- **Status Indicators**: Live status showing analysis progress and pending changes
+- **Non-blocking**: Analysis runs in background without blocking user interactions
+
+#### Evidence-Based Insights
+
+All analysis results are backed by specific, actionable evidence:
+
+- **Structured Facts**: JSON-based facts structure with precise evidence paths
+- **Interactive Navigation**: Clickable links to source code locations
+- **Symbol Resolution**: Direct navigation to affected symbols and functions
+- **Context Preservation**: Evidence maintains full context for understanding changes
 
 ### File Structure
 
 ```
 src/
-├── ui/
-│   ├── commitTracker.ts      # Main sidebar tree view
-│   ├── commands.ts           # VS Code command handlers
-│   ├── report.ts             # Report generation pipeline
-│   ├── refactorDebtMeter.ts  # Status bar debt meter
-│   └── evidenceProvider.ts   # Evidence viewer provider
-├── analysis/
+├── webview/                  # React-based webview UIs
+│   ├── cockpit/              # Main cockpit interface
+│   │   ├── CockpitProvider.ts # Webview provider
+│   │   ├── components/       # React components
+│   │   └── index.tsx         # Main cockpit app
+│   ├── reports/              # Report viewing webviews
+│   └── styles.css            # Shared styles
+├── providers/                # Data providers
+│   ├── activeBundleProvider.ts   # Bundle data management
+│   ├── commitsProvider.ts        # Commit data management
+│   └── symbolHistoryProvider.ts  # Symbol history tracking
+├── state/                    # State management
+│   └── cockpitOrchestrator.ts    # Centralized state orchestrator
+├── services/                 # Business logic services
+│   └── reportService.ts      # Report management
+├── analysis/                 # Analysis pipeline
 │   ├── llmAnalyst/           # LLM analysis system
-│   │   ├── runner.ts         # Analysis pipeline
-│   │   ├── renderer.ts       # Markdown rendering
-│   │   ├── prompts.ts        # LLM prompts
-│   │   └── blocks.ts         # Data structures
-│   ├── drift.ts              # Pattern drift detection
-│   ├── legacy.ts             # Legacy code audit
+│   ├── astSerializer.ts      # AST processing
 │   ├── symbols.ts            # Symbol extraction
-│   ├── git.ts                # Git operations
-│   └── astSerializer.ts      # AST serialization
-├── facts/
+│   ├── semanticChanges.ts    # Change analysis
+│   ├── dependencies.ts       # Dependency analysis
+│   ├── liveAnalysis.ts       # Real-time analysis
+│   └── pipeline.ts           # Analysis orchestration
+├── cli/                      # Command-line interface
+│   ├── analyze.ts            # Analysis commands
+│   ├── queries.ts            # Query operations
+│   ├── hooks.ts              # Git hooks integration
+│   └── index.ts              # CLI entry point
+├── commands/                 # VS Code commands
+│   └── commands.ts           # Command registrations
+├── facts/                    # Facts assembly
 │   ├── scope.ts              # Scope computation
 │   ├── factsAssembler.ts     # Facts assembly
 │   └── types.ts              # Type definitions
-├── storage/
-│   └── database.ts           # SQLite database for commits
-└── utils/
-    └── config.ts             # Configuration utilities
+├── types/                    # TypeScript type definitions
+│   ├── cockpit.ts            # Cockpit-specific types
+│   └── index.ts              # Shared types
+├── storage/                  # Database and persistence
+│   └── database.ts           # SQLite database management
+├── utils/                    # Utility functions
+│   ├── config.ts             # Configuration management
+│   ├── logger.ts             # Logging utilities
+│   └── workspace.ts          # Workspace utilities
+├── contracts/                # Data contracts
+│   ├── llmContext.ts         # LLM context definitions
+│   └── treeNodes.ts          # Tree node contracts
+└── extension.ts              # Main extension entry point
 ```
 
 ### Commands
 
-Key VS Code commands:
+Key VS Code commands available through the extension:
 
-- `git-context.toggleCommitSelection` - Toggle commit selection for bundle
+**Analysis Commands:**
+- `git-context.analyzeLastCommits` - Analyze last N commits and generate report
+- `git-context.analyzeStagedChanges` - Analyze staged changes
+- `git-context.analyzeUnstagedChanges` - Analyze unstaged changes
 - `git-context.generateReport` - Generate refactor bundle report
-- `git-context.toggleWorkspaceFull` - Toggle full workspace state
-- `git-context.toggleWorkspacePart` - Toggle staged/unstaged parts
-- `git-context.compareCommits` - Compare two commits
-- `git-context.compareWorkspaceVsCommit` - Compare workspace vs commit
-- `git-context.scrollToMDSection` - Navigate to markdown section
-- `git-context.refreshDebtMeterAndReveal` - Refresh tree and reveal bundle
+
+**Report Management:**
+- `git-context.openReport` - Open a saved report
+- `git-context.deleteReport` - Delete a saved report
+- `git-context.togglePinReport` - Pin/unpin a report
+
+**Selection & Navigation:**
+- `git-context.toggleCommitSelection` - Toggle commit selection for bundle
+- `git-context.clearSelection` - Clear current selection
+- `git-context.toggleBranchFilter` - Toggle branch filter
+
+**Bundle Operations:**
+- `git-context.bundle.regenerate` - Regenerate active bundle
+- `git-context.bundle.clear` - Clear active bundle
+- `git-context.bundle.cancel` - Cancel analysis in progress
 
 ### Performance Considerations
 
-- **Caching**: Commit summaries and info cached to avoid repeated DB queries
-- **Batch Loading**: Multiple commits loaded in single query
-- **Lazy Loading**: Children computed on expand, "Load more..." nodes for long lists
-- **Filtering**: Low-value content filtered out before rendering
-- **Debouncing**: File watchers debounced to avoid excessive refreshes
+- **State Orchestrator**: Centralized state management with debounced updates prevents UI thrashing
+- **Database Caching**: SQLite-backed storage with efficient querying and indexing
+- **Lazy Loading**: On-demand data loading with pagination for large datasets
+- **Batch Processing**: Multi-commit analysis with progress tracking and cancellation
+- **Incremental Updates**: Live analysis tracks only changed files/symbols
+- **Webview Optimization**: React-based UI with efficient virtual scrolling and memoization
 
 ### Future Improvements
 
 Potential areas for enhancement:
 
-1. **Incremental Analysis**: Only re-analyze changed files
-2. **Pattern Learning**: Learn from user corrections to improve prompts
-3. **Custom Value Weights**: Allow users to customize value scoring
-4. **Export Formats**: Export reports to other formats (JSON, HTML)
-5. **Integration**: Integrate with other VS Code extensions
-6. **Real-time Updates**: Update analysis as code changes
+1. **Enhanced LLM Integration**: Support for multiple LLM providers and custom model configurations
+2. **Advanced Pattern Recognition**: Machine learning-based pattern detection and suggestions
+3. **Collaborative Features**: Shared analysis reports and team collaboration tools
+4. **Custom Analysis Rules**: User-configurable analysis rules and heuristics
+5. **Performance Profiling**: Built-in performance analysis and optimization suggestions
+6. **Multi-repository Support**: Cross-repository analysis and dependency tracking
 

@@ -3,35 +3,16 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { getGitRoot } from '../utils/config';
 import { ActiveBundleProvider } from './activeBundleProvider';
+import { GitOperations } from '../analysis/git';
+import { BranchManager } from '../storage/branchManager';
+import { getAnalysisPipeline } from '../analysis/pipeline';
+import { makeWorkspaceSha, isWorkspaceSha } from '../utils/workspace';
 
-export type TreeNode = {
-  id: string;
-  type: 'category' | 'commit' | 'file' | 'risk' | 'timeline' | 'load-more' | 'action' | 'bundle-root';
-  categoryType?: 'added' | 'modified' | 'removed';
-  parentId?: string;
-  count?: number;
-  label: string;
-  description?: string;
-  tooltip?: string | vscode.MarkdownString;
-  icon?: string;
-  contextValue?: string;
-  command?: vscode.Command;
-  sha?: string;
-  path?: string;
-  message?: string;
-  author?: string;
-  date?: string;
-  stats?: {
-    added: number;
-    modified: number;
-    removed: number;
-  };
-  children?: TreeNode[];
-};
 
-export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
-  private _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | undefined | null | void>();
-  readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+export class CommitsProvider {
+  private git: GitOperations | null = null;
+  private branchManager: BranchManager;
+  private currentBranch: string | null = null;
 
   // DEPRECATED: State moved to CockpitOrchestrator
   // public selectedCommits = new Set<string>();
@@ -44,6 +25,14 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
   public PAGE_SIZE = 50;
 
   constructor(private context: vscode.ExtensionContext, private activeBundleProvider: ActiveBundleProvider) {
+    this.branchManager = new BranchManager();
+    try {
+      this.git = new GitOperations();
+      this.currentBranch = this.git.getCurrentBranch();
+    } catch {
+      this.git = null;
+      this.currentBranch = null;
+    }
     this.manualCommits = new Set(context.workspaceState.get<string[]>('commit-tracker.manualCommits', []));
 
     // DEPRECATED: State moved to CockpitOrchestrator
@@ -58,385 +47,25 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   refresh(): void {
-    this._onDidChangeTreeData.fire();
+    this.updateBranchCursor();
+    // TreeView removed - no event firing needed
   }
 
-  getTreeItem(element: TreeNode): vscode.TreeItem {
-    const collapsibleState = this.getCollapsibleState(element);
 
-    const treeItem = new vscode.TreeItem(element.label || '', collapsibleState);
-    treeItem.id = element.id;
-    treeItem.description = element.description;
-
-    // Create rich tooltips with MarkdownString
-    if (element.type === 'commit') {
-      const mdTooltip = new vscode.MarkdownString();
-      mdTooltip.appendMarkdown(`**${element.message!.split('\n')[0]}**\n\n`);
-      mdTooltip.appendMarkdown(`- SHA: \`${element.sha!.substring(0, 8)}\`\n`);
-      mdTooltip.appendMarkdown(`- Author: ${element.author}\n`);
-      mdTooltip.appendMarkdown(`- Date: ${new Date(element.date!).toLocaleDateString()}\n\n`);
-      if (element.message!.includes('\n')) {
-        mdTooltip.appendMarkdown(`\n\`\`\`\n${element.message}\n\`\`\`\n\n`);
-      }
-      mdTooltip.appendMarkdown(`*Click to expand files • Right-click for actions*`);
-      treeItem.tooltip = mdTooltip;
-    } else if (element.tooltip) {
-      if (element.tooltip instanceof vscode.MarkdownString) {
-        treeItem.tooltip = element.tooltip;
-      } else {
-        const mdTooltip = new vscode.MarkdownString(element.tooltip);
-        treeItem.tooltip = mdTooltip;
+  private updateBranchCursor() {
+    if (this.git) {
+      try {
+        this.currentBranch = this.git.getCurrentBranch();
+      } catch {
+        this.currentBranch = null;
       }
     }
-
-    treeItem.iconPath = element.icon ? new vscode.ThemeIcon(element.icon) : undefined;
-    treeItem.command = element.command;
-    treeItem.contextValue = element.contextValue;
-
-    // Handle selection items: No commands, simple tooltips
-    if (element.contextValue?.startsWith('gitContextSelection')) {
-      treeItem.command = undefined;
-      treeItem.tooltip = element.description || element.tooltip || '';
-    }
-
-    return treeItem;
   }
 
-  private getCollapsibleState(element: TreeNode): vscode.TreeItemCollapsibleState {
-    if (element.contextValue === 'no-data-placeholder') {
-      return vscode.TreeItemCollapsibleState.None;
-    } else if (element.contextValue === 'workspace-group') {
-      return vscode.TreeItemCollapsibleState.Expanded;
-    } else if (element.contextValue === 'recent-commits-group') {
-      return vscode.TreeItemCollapsibleState.Expanded;
-    } else if (element.contextValue === 'selected-commits-group') {
-      return vscode.TreeItemCollapsibleState.Collapsed;
-    } else if (element.contextValue === 'gitContextSelectionStaged' || element.contextValue === 'gitContextSelectionUnstaged') {
-      return vscode.TreeItemCollapsibleState.Collapsed;
-    } else if (element.contextValue === 'workspace-full') {
-      return vscode.TreeItemCollapsibleState.None;
-    } else if (element.type === 'category' && element.count === 0 && !element.children?.length) {
-      return vscode.TreeItemCollapsibleState.None;
-    } else if (element.children && element.children.length > 0) {
-      return vscode.TreeItemCollapsibleState.Collapsed;
-    }
-    return vscode.TreeItemCollapsibleState.None;
-  }
 
-  async getChildren(element?: TreeNode): Promise<TreeNode[]> {
-    if (!element) {
-      // Root level - show selection header
-      return this.getRootNodes();
-    }
 
-    // Handle selection section children
-    if (element.id === 'selection-header') {
-      return this.getSelectionNodes();
-    }
 
-    if (element.id === 'workspace-select') {
-      return this.getWorkspaceSelectionChildren();
-    }
 
-    if (element.id === 'selection-staged') {
-      return this.getStagedFileNodes();
-    }
-
-    if (element.id === 'selection-unstaged') {
-      return this.getUnstagedFileNodes();
-    }
-
-    if (element.id === 'selection-commits') {
-      return this.getCommitSelectionNodes();
-    }
-
-    if (element.id === 'selection-more' || element.contextValue === 'gitContextActionAddBySha') {
-      return []; // Leaf node, clicking shows input
-    }
-
-    // Handle workspace staged/unstaged file children
-    if (element.id === 'workspace-staged') {
-      return this.getWorkspaceStagedFiles();
-    }
-
-    if (element.id === 'workspace-unstaged') {
-      return this.getWorkspaceUnstagedFiles();
-    }
-
-    // Handle selected-commits-group children
-    if (element.id === 'selected-commits-group') {
-      return [];
-    }
-
-    // Handle recent-commits-group children
-    if (element.id === 'recent-commits-group') {
-      return this.getRecentCommitsList();
-    }
-
-    return [];
-  }
-
-  private async getRootNodes(): Promise<TreeNode[]> {
-    const nodes: TreeNode[] = [{
-      id: 'selection-header',
-      type: 'category',
-      label: '🔄 New Analysis',
-      description: '',
-      tooltip: 'Select workspace files and commits to analyze',
-      contextValue: 'gitContextSelectionHeader',
-      command: {
-        command: 'git-context.analyzeLastCommits',
-        title: 'Analyze Last N Commits'
-      }
-    }];
-
-    // Add recent commits section
-    nodes.push({
-      id: 'recent-commits-group',
-      type: 'category',
-      label: '📋 Recent Commits',
-      description: '',
-      tooltip: 'Recently analyzed commits',
-      contextValue: 'gitContextRecentCommitsGroup'
-    });
-
-    return nodes;
-  }
-
-  private async getSelectionNodes(): Promise<TreeNode[]> {
-    const nodes: TreeNode[] = [];
-
-    // Workspace node
-    try {
-      const { GitOperations } = require('../analysis/git');
-      const git = new GitOperations();
-      const changes = await git.getWorkingDirectoryChanges();
-      const fileCount = changes.length;
-
-      // Check selected files count
-      const { getCockpitOrchestrator: getOrch } = require('../state/cockpitOrchestrator');
-      const orch = getOrch();
-      const selectedFilesCount = orch.getState().selectedStagedPaths.length + orch.getState().selectedUnstagedPaths.length;
-
-      nodes.push({
-        id: 'workspace-select',
-        type: 'category',
-        count: fileCount,
-        label: this.getCheckboxLabel(selectedFilesCount > 0, `Workspace - ${fileCount} files (${this.workspaceScope})`),
-        description: '',
-        tooltip: `Select workspace files for analysis. Scope: ${this.workspaceScope}`,
-        contextValue: 'gitContextSelectionItem'
-      });
-    } catch (error) {
-      console.debug('Failed to get workspace changes:', error);
-    }
-
-    // Selection group
-    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    const selectedCount = orchestrator.getState().selectedCommitShas.length;
-
-    nodes.push({
-      id: 'selection-commits',
-      type: 'category',
-      count: selectedCount,
-      label: `Commits (${selectedCount} selected)`,
-      description: '',
-      tooltip: 'Select commits to analyze',
-      contextValue: 'gitContextSelectionItem'
-    });
-
-    // Pull Latest action button
-    nodes.push({
-      id: 'pull-latest-action',
-      type: 'action',
-      label: 'Pull Latest Commits',
-      description: '',
-      tooltip: 'Fetch and display the latest commits',
-      contextValue: 'gitContextActionPullLatest',
-      icon: 'repo-pull'
-    });
-
-    return nodes;
-  }
-
-  private getWorkspaceSelectionChildren(): TreeNode[] {
-    const nodes: TreeNode[] = [];
-
-    // Staged files
-    nodes.push({
-      id: 'selection-staged',
-      type: 'category',
-      label: this.getCheckboxLabel(false, 'Staged Files'),
-      description: '',
-      tooltip: 'Files staged for commit',
-      contextValue: 'gitContextSelectionStaged'
-    });
-
-    // Unstaged files
-    nodes.push({
-      id: 'selection-unstaged',
-      type: 'category',
-      label: this.getCheckboxLabel(false, 'Unstaged Files'),
-      description: '',
-      tooltip: 'Files with uncommitted changes',
-      contextValue: 'gitContextSelectionUnstaged'
-    });
-
-    return nodes;
-  }
-
-  private async getStagedFileNodes(): Promise<TreeNode[]> {
-    try {
-      const { GitOperations } = require('../analysis/git');
-      const git = new GitOperations();
-      const staged = await git.getStagedFiles();
-
-      return staged.map((f: { path: string }) => ({
-        id: `staged-${f.path}`,
-        type: 'file',
-        path: f.path,
-        label: path.basename(f.path),
-        description: f.path,
-        tooltip: `Staged file: ${f.path}`,
-        contextValue: 'gitContextFile',
-        icon: 'file'
-      }));
-    } catch (error) {
-      console.debug('Failed to get staged files:', error);
-      return [];
-    }
-  }
-
-  private async getUnstagedFileNodes(): Promise<TreeNode[]> {
-    try {
-      const { GitOperations } = require('../analysis/git');
-      const git = new GitOperations();
-      const unstaged = await git.getUnstagedFiles();
-
-      return unstaged.map((f: { path: string }) => ({
-        id: `unstaged-${f.path}`,
-        type: 'file',
-        path: f.path,
-        label: path.basename(f.path),
-        description: f.path,
-        tooltip: `Unstaged file: ${f.path}`,
-        contextValue: 'gitContextFile',
-        icon: 'file'
-      }));
-    } catch (error) {
-      console.debug('Failed to get unstaged files:', error);
-      return [];
-    }
-  }
-
-  private async getCommitSelectionNodes(): Promise<TreeNode[]> {
-    // This would show selected commits - for now return empty
-    // In the future, this would show the actual selected commits
-    return [];
-  }
-
-  private async getWorkspaceStagedFiles(): Promise<TreeNode[]> {
-    try {
-      const { GitOperations } = require('../analysis/git');
-      const git = new GitOperations();
-      const gitRoot = getGitRoot();
-      const staged = await git.getStagedFiles();
-
-      return staged.map((f: { path: string }) => {
-        const fullPath = gitRoot ? path.join(gitRoot, f.path) : f.path;
-        let command: vscode.Command | undefined;
-
-        if (gitRoot) {
-          try {
-            const stats = fs.statSync(fullPath);
-            const isFile = stats.isFile();
-            if (isFile) {
-              command = {
-                command: 'vscode.open',
-                title: 'Open File',
-                arguments: [vscode.Uri.file(fullPath)]
-              };
-            } else {
-              command = {
-                command: 'revealInExplorer',
-                title: 'Reveal in Explorer',
-                arguments: [vscode.Uri.file(fullPath)]
-              };
-            }
-          } catch {
-            command = undefined;
-          }
-        }
-
-        return {
-          id: `workspace-staged-${f.path}`,
-          type: 'file',
-          path: f.path,
-          label: path.basename(f.path),
-          description: f.path,
-          tooltip: `Staged file: ${f.path}`,
-          contextValue: 'gitContextFile',
-          command,
-          icon: 'file'
-        };
-      });
-    } catch (error) {
-      console.debug('Failed to get workspace staged files:', error);
-      return [];
-    }
-  }
-
-  private async getWorkspaceUnstagedFiles(): Promise<TreeNode[]> {
-    try {
-      const { GitOperations } = require('../analysis/git');
-      const git = new GitOperations();
-      const gitRoot = getGitRoot();
-      const unstaged = await git.getUnstagedFiles();
-
-      return unstaged.map((f: { path: string }) => {
-        const fullPath = gitRoot ? path.join(gitRoot, f.path) : f.path;
-        let command: vscode.Command | undefined;
-
-        if (gitRoot) {
-          try {
-            const stats = fs.statSync(fullPath);
-            const isFile = stats.isFile();
-            if (isFile) {
-              command = {
-                command: 'vscode.open',
-                title: 'Open File',
-                arguments: [vscode.Uri.file(fullPath)]
-              };
-            } else {
-              command = {
-                command: 'revealInExplorer',
-                title: 'Reveal in Explorer',
-                arguments: [vscode.Uri.file(fullPath)]
-              };
-            }
-          } catch {
-            command = undefined;
-          }
-        }
-
-        return {
-          id: `workspace-unstaged-${f.path}`,
-          type: 'file',
-          path: f.path,
-          label: path.basename(f.path),
-          description: f.path,
-          tooltip: `Unstaged file: ${f.path}`,
-          contextValue: 'gitContextFile',
-          command,
-          icon: 'file'
-        };
-      });
-    } catch (error) {
-      console.debug('Failed to get workspace unstaged files:', error);
-      return [];
-    }
-  }
 
   // Methods for compatibility with commands.ts
   async initializeDatabase(): Promise<void> {
@@ -586,116 +215,84 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
     orchestrator.updateState({ selectedStagedPaths: Array.from(parts) }, 'provider:setWorkspaceParts');
   }
 
-  // State management methods
-  async setSelectedCommits(commits: Set<string>): Promise<void> {
-    // DEPRECATED: Use CockpitOrchestrator.updateState() instead
-    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    orchestrator.updateState({ selectedCommitShas: Array.from(commits) }, 'provider:setSelectedCommits');
-    this.refresh();
-  }
 
-  async setSelectedFiles(files: Set<string>): Promise<void> {
-    // DEPRECATED: Use CockpitOrchestrator.updateState() instead
-    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    // Note: Files are now in selectedStagedPaths or selectedUnstagedPaths
-    // For compatibility, we'll just set staged paths.
-    orchestrator.updateState({ selectedStagedPaths: Array.from(files) }, 'provider:setSelectedFiles');
-    this.refresh();
-  }
-
-  getSelectedCommits(): Set<string> {
-    // DEPRECATED: Read from CockpitOrchestrator instead
-    const { getCockpitOrchestrator } = require('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    return new Set(orchestrator.getState().selectedCommitShas);
-  }
-
-  getSelectedFiles(): Set<string> {
-    // DEPRECATED: Read from CockpitOrchestrator instead
-    const { getCockpitOrchestrator } = require('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    const state = orchestrator.getState();
-    // Combine staged and unstaged
-    return new Set([...state.selectedStagedPaths, ...state.selectedUnstagedPaths]);
-  }
-
-  private async getRecentCommitsList(): Promise<TreeNode[]> {
-    try {
-      const { getDatabaseManager } = await import('../storage/database');
-      const db = getDatabaseManager().getDatabase();
-
-      // Get recent commits (limit to 20 for performance)
-      const commitsStmt = db.prepare(`
-        SELECT m.sha, m.author, m.date, m.message,
-               COALESCE(a.symbols_added, 0) + COALESCE(a.symbols_modified, 0) + COALESCE(a.symbols_removed, 0) as changes
-        FROM commits_metadata m
-        LEFT JOIN commits_analysis a ON m.sha = a.sha
-        ORDER BY m.date DESC
-        LIMIT 20
-      `);
-
-      const commits = commitsStmt.all() as any[];
-      const nodes: TreeNode[] = [];
-
-      const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
-      const orchestrator = getCockpitOrchestrator();
-      const selectedShas = new Set(orchestrator.getState().selectedCommitShas);
-
-      for (const commit of commits) {
-        const isSelected = selectedShas.has(commit.sha);
-        const inBundle = this.activeBundleProvider.lastBundleFacts?.bundle?.shas?.includes(commit.sha) || false;
-        const shortSha = commit.sha.substring(0, 8);
-        const changesText = commit.changes > 0 ? ` (${commit.changes} changes)` : '';
-
-        nodes.push({
-          id: `commit-${commit.sha}`,
-          type: 'commit',
-          sha: commit.sha,
-          message: commit.message,
-          author: commit.author,
-          date: commit.date,
-          label: this.getCheckboxLabel(isSelected, `${shortSha} - ${commit.message.split('\n')[0]}`),
-          description: `${commit.author} • ${new Date(commit.date).toLocaleDateString()}${changesText}`,
-          tooltip: `Commit: ${commit.sha}\nAuthor: ${commit.author}\nDate: ${commit.date}\nMessage: ${commit.message}`,
-          contextValue: inBundle ? 'gitContextCommitInBundle' : 'gitContextCommit',
-          command: {
-            command: 'git-context.toggleCommitSelection',
-            title: 'Toggle Selection',
-            arguments: [commit.sha]
-          }
-        });
-      }
-
-      return nodes;
-    } catch (error) {
-      console.error('Failed to load recent commits:', error);
-      return [{
-        id: 'error-loading-commits',
-        type: 'risk',
-        label: 'Error loading commits',
-        description: 'Check console for details',
-        icon: 'error'
-      }];
-    }
-  }
-
-  private getCheckboxLabel(isChecked: boolean, label: string): string {
-    return isChecked ? `☑ ${label}` : `☐ ${label}`;
-  }
 
   async exportCommitsDto(
     limit = 20,
     filterText?: string,
     filterScopes?: { staged?: boolean; unstaged?: boolean; history?: boolean }
-  ): Promise<Array<{ sha: string; message: string; author?: string; date?: string; changes?: number }>> {
+  ): Promise<Array<{ sha: string; message: string; author?: string; date?: string; changes?: number; files?: Array<{ path: string; status: any }> }>> {
     try {
       // Ensure database is initialized before accessing it
       await this.initializeDatabase();
       const { getDatabaseManager } = await import('../storage/database');
       const db = getDatabaseManager().getDatabase();
       const limitValue = Math.max(1, Number(limit) || 20);
+
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const branch = this.currentBranch || git.getCurrentBranch();
+
+      const result: Array<{ sha: string; message: string; author?: string; date?: string; changes?: number; files?: Array<{ path: string; status: any }> }> = [];
+
+      // 1. Inject Virtual Commits (Staged/Unstaged)
+      // Only if not filtering text (or if text matches "staged"/"unstaged")
+      if (!filterText || 'staged changes'.includes(filterText.toLowerCase()) || 'unstaged changes'.includes(filterText.toLowerCase())) {
+        try {
+          const stagedFiles = await git.getStagedFiles();
+          if (stagedFiles.length > 0) {
+            result.push({
+              sha: makeWorkspaceSha('staged', branch),
+              message: 'Staged Changes',
+              author: 'You',
+              date: new Date().toISOString(),
+              changes: stagedFiles.length,
+              files: stagedFiles.map((f: any) => ({ path: f.path, status: f.status }))
+            });
+          }
+
+          const unstagedFiles = await git.getUnstagedFiles();
+          if (unstagedFiles.length > 0) {
+            result.push({
+              sha: makeWorkspaceSha('unstaged', branch),
+              message: 'Unstaged Changes',
+              author: 'You',
+              date: new Date().toISOString(),
+              changes: unstagedFiles.length,
+              files: unstagedFiles.map((f: any) => ({ path: f.path, status: f.status }))
+            });
+          }
+        } catch (e) {
+          console.error('Failed to load virtual commits:', e);
+        }
+      }
+
+      // 2. Get HEAD SHA for explicit HEAD node
+      let headSha: string | null = null;
+      try {
+        headSha = git.getHeadSha();
+      } catch {
+        headSha = null;
+      }
+
+      // 3. Add explicit HEAD node (baseline commit before workspace changes)
+      if (!filterText && headSha) {
+        try {
+          const headInfo = git.getCommitInfo(headSha);
+          result.push({
+            sha: headSha,
+            message: headInfo.message,
+            author: headInfo.author,
+            date: headInfo.date,
+            changes: 0, // Virtual - will be populated if analyzed
+            files: [] // Will be populated from git.getFileChanges if needed
+          });
+        } catch {
+          // HEAD not accessible, skip
+        }
+      }
+
+      // 4. Fetch History Commits
 
       let query = `
         SELECT m.sha, m.author, m.date, m.message, m.files_changed
@@ -721,19 +318,14 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
       const commits = commitsStmt.all(...params) as any[];
       commitsStmt.free?.();
 
-      // Note: Scope filtering (staged/unstaged/history) is handled client-side
-      // since all commits from DB are 'history' scope. If we add virtual commits
-      // for staged/unstaged in the future, we'd filter here.
-
-      // Fetch files for each commit
-      const { GitOperations } = require('../analysis/git');
-      const git = new GitOperations();
-
-      return commits.map((commit) => {
+      // 3. Map History Commits (exclude HEAD since we added it explicitly)
+      const historyCommits = commits
+        .filter((commit) => commit.sha && !isWorkspaceSha(commit.sha) && commit.sha !== headSha)
+        .map((commit) => {
         let files: Array<{ path: string; status: any }> = [];
         try {
-          // Only fetch files if we have a valid SHA
-          if (commit.sha) {
+          // Only fetch files if we have a valid non-workspace SHA
+          if (commit.sha && !isWorkspaceSha(commit.sha)) {
             files = git.getFileChanges(commit.sha).map((f: any) => ({
               path: f.path,
               status: f.status
@@ -741,6 +333,9 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
           }
         } catch (e) {
           console.warn(`Failed to fetch files for commit ${commit.sha}:`, e);
+          // If we failed to load files, but DB says there are changes, 
+          // we shouldn't return empty array if possible.
+          // However, we can't invent files. The UI will show 0 files but maybe 'changes' count from DB.
         }
 
         return {
@@ -752,6 +347,8 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
           files: files
         };
       });
+
+      return [...result, ...historyCommits];
     } catch (error) {
       console.error('Failed to export commits for cockpit:', error);
       return [];
