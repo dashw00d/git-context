@@ -3,7 +3,6 @@ import { logInfo, logDebug, logError } from './utils/logger';
 import type { ActiveBundleProvider } from './providers/activeBundleProvider';
 import type { CommitsProvider } from './providers/commitsProvider';
 import type { SymbolHistoryProvider } from './providers/symbolHistoryProvider';
-import type { ReportsProvider } from './providers/reportsProvider';
 import type { CockpitProvider } from './webview/cockpit/CockpitProvider';
 import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
 import { LiveDiffTracker } from './liveTracker';
@@ -21,7 +20,6 @@ import type {
 let activeBundleProvider: ActiveBundleProvider;
 let commitsProvider: CommitsProvider;
 let symbolHistoryProvider: SymbolHistoryProvider;
-let reportsProvider: ReportsProvider;
 let outputChannel: vscode.OutputChannel;
 let debugChannel: vscode.OutputChannel;
 let cockpitProvider: CockpitProvider | undefined;
@@ -217,29 +215,21 @@ async function updateSymbolsState(reason = 'symbols:update') {
 }
 
 async function updateReportsState(reason = 'reports:update') {
-  if (!reportsProvider?.exportReportsDto) return;
-  const currentState = orchestrator.getState();
-  const reports = await reportsProvider.exportReportsDto(
-    currentState.reportsFilterText || undefined,
-    currentState.reportsBranchFilter !== 'all' ? currentState.reportsBranchFilter : undefined,
-    currentState.reportsShowPinnedOnly
-  );
-  const reportDtos: ReportDTO[] = reports.map((report: any) => ({
-    id: report.id,
-    title: report.title,
-    summary: report.summary,
-    createdAt: report.createdAt,
-    branch: report.branch,
-    pinned: report.pinned,
-    bundleSummary: report.bundleSummary
-  }));
-  orchestrator.updateState(
-    {
-      reports: reportDtos,
-      bundleReportId: reportDtos.length > 0 ? reportDtos[0].id : currentState.bundleReportId ?? null
-    },
-    reason
-  );
+  try {
+    const { getReportService } = await import('./services/reportService');
+    const reportService = await getReportService();
+    const state = orchestrator.getState();
+
+    const reports = await reportService.exportReportsDto(
+      state.reportsFilterText,
+      state.reportsBranchFilter,
+      state.reportsShowPinnedOnly
+    );
+
+    orchestrator.updateState({ reports }, reason);
+  } catch (error) {
+    logError('Failed to update reports state', error);
+  }
 }
 
 async function refreshCockpitState(reason = 'refresh:all') {
@@ -255,7 +245,9 @@ async function refreshCockpitState(reason = 'refresh:all') {
 export async function updateContexts() {
   try {
     await vscode.commands.executeCommand('setContext', 'gitContext.hasActiveBundle', !!activeBundleProvider?.lastBundleFacts);
-    await vscode.commands.executeCommand('setContext', 'gitContext.hasSelection', commitsProvider?.selectedCommits.size > 0 || false);
+    // Use orchestrator state (single source of truth)
+    const hasSelection = orchestrator.getState().selectedCommitShas.length > 0;
+    await vscode.commands.executeCommand('setContext', 'gitContext.hasSelection', hasSelection);
   } catch (error) {
     logError('Failed to update context keys', error);
   }
@@ -298,10 +290,8 @@ export async function activate(context: vscode.ExtensionContext) {
     const { ActiveBundleProvider } = await import('./providers/activeBundleProvider');
     const { CommitsProvider } = await import('./providers/commitsProvider');
     const { SymbolHistoryProvider } = await import('./providers/symbolHistoryProvider');
-    const { ReportsProvider } = await import('./providers/reportsProvider');
     const { registerCommands } = await import('./commands/commands');
     const { RefactorReportProvider } = await import('./webview/reports/refactorReportProvider');
-    const { getDebtMeter, disposeDebtMeter } = await import('./providers/legacy/refactorDebtMeter');
     const { CockpitProvider } = await import('./webview/cockpit/CockpitProvider');
 
     logDebug('Modules loaded successfully');
@@ -310,7 +300,6 @@ export async function activate(context: vscode.ExtensionContext) {
     activeBundleProvider = new ActiveBundleProvider(context);
     commitsProvider = new CommitsProvider(context, activeBundleProvider);
     symbolHistoryProvider = new SymbolHistoryProvider(context);
-    reportsProvider = new ReportsProvider(context);
     cockpitProvider = new CockpitProvider(context.extensionUri);
 
     // Initialize LiveDiffTracker
@@ -339,11 +328,11 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     );
 
-    // Register tree data providers
-    vscode.window.registerTreeDataProvider('bundle', activeBundleProvider);
-    vscode.window.registerTreeDataProvider('commits', commitsProvider);
-    vscode.window.registerTreeDataProvider('symbols', symbolHistoryProvider);
-    vscode.window.registerTreeDataProvider('reports', reportsProvider);
+    // LEGACY: Tree data providers (deprecated in favor of Cockpit UI)
+    // Keeping providers for data export but not registering tree views
+    // vscode.window.registerTreeDataProvider('bundle', activeBundleProvider);
+    // vscode.window.registerTreeDataProvider('commits', commitsProvider);
+    // vscode.window.registerTreeDataProvider('symbols', symbolHistoryProvider);
 
     // Initialize context keys
     await updateContextKeys();
@@ -360,18 +349,19 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.window.registerWebviewViewProvider('cockpit', cockpitProvider)
     );
 
-    commitsProvider.onDidChangeTreeData(async () => {
-      await updateCommitsState('commits:treeChange');
-    });
-    activeBundleProvider.onDidChangeTreeData(async () => {
-      await updateBundleState('bundle:treeChange');
-    });
-    symbolHistoryProvider.onDidChangeTreeData(async () => {
-      await updateSymbolsState('symbols:treeChange');
-    });
-    reportsProvider.onDidChangeTreeData(async () => {
-      await updateReportsState('reports:treeChange');
-    });
+    // LEGACY: Tree provider change listeners (deprecated)
+    // commitsProvider.onDidChangeTreeData(async () => {
+    //   await updateCommitsState('commits:treeChange');
+    // });
+    // activeBundleProvider.onDidChangeTreeData(async () => {
+    //   await updateBundleState('bundle:treeChange');
+    // });
+    // symbolHistoryProvider.onDidChangeTreeData(async () => {
+    //   await updateSymbolsState('symbols:treeChange');
+    // });
+    // reportsProvider.onDidChangeTreeData(async () => {
+    //   await updateReportsState('reports:treeChange');
+    // });
     // Lightweight working directory watcher (debounced)
     const scheduleWorkspaceRefresh = (reason: string) => {
       if (workspaceRefreshTimeout) {
@@ -390,13 +380,17 @@ export async function activate(context: vscode.ExtensionContext) {
     // Auto-load initial commits on activation
     try {
       logInfo('[Cockpit] Checking if initial commits need to be loaded...');
+
+      // Ensure database is initialized first
+      const { ensureDatabaseInitialized, getDatabaseManager } = await import('./storage/database');
+      await ensureDatabaseInitialized();
+
       const { getAnalysisPipeline } = await import('./analysis/pipeline');
       const pipeline = await getAnalysisPipeline();
       const { getExtensionConfig } = await import('./utils/config');
       const config = getExtensionConfig();
 
       // Check if database has any commits
-      const { getDatabaseManager } = await import('./storage/database');
       const db = getDatabaseManager().getDatabase();
       const result = db.prepare('SELECT COUNT(*) as count FROM commits_metadata').get() as { count: number };
 
@@ -413,44 +407,47 @@ export async function activate(context: vscode.ExtensionContext) {
       // Continue activation even if initial load fails
     }
 
-    // Register evidence provider for markdown links
-    const { EvidenceProvider } = await import('./providers/legacy/evidenceProvider');
-    const evidenceProvider = new EvidenceProvider();
-    context.subscriptions.push(
-      vscode.workspace.registerTextDocumentContentProvider('evidence', evidenceProvider)
-    );
 
-    // Initialize debt meter and wire it to commits provider
-    const debtMeter = getDebtMeter();
-    debtMeter.setCommitTracker(commitsProvider);
-    context.subscriptions.push({
-      dispose: () => disposeDebtMeter()
-    });
+    // Watcher management
+    let dbWatcher: vscode.FileSystemWatcher | undefined;
+    let factsWatcher: vscode.FileSystemWatcher | undefined;
+    let refreshTimeout: NodeJS.Timeout | null = null;
+    let factsRefreshTimeout: NodeJS.Timeout | null = null;
 
-    // Set up file watcher for database auto-refresh
-    const { getGitRoot } = await import('./utils/config');
-    const initialGitRoot = getGitRoot();
-    if (initialGitRoot) {
-      // Use dynamic gitRoot path pattern to handle workspace changes
+    const setupWatchers = async () => {
+      // Dispose existing watchers
+      if (dbWatcher) {
+        dbWatcher.dispose();
+        dbWatcher = undefined;
+      }
+      if (factsWatcher) {
+        factsWatcher.dispose();
+        factsWatcher = undefined;
+      }
+
+      const { getGitRoot } = await import('./utils/config');
+      const gitRoot = getGitRoot();
+
+      if (!gitRoot) {
+        return;
+      }
+
+      // Set up file watcher for database auto-refresh
       const dbPathPattern = new vscode.RelativePattern(
-        vscode.Uri.file(initialGitRoot),
+        vscode.Uri.file(gitRoot),
         '.git/commit-tracker/commit_tracker.db'
       );
-      const dbWatcher = vscode.workspace.createFileSystemWatcher(dbPathPattern);
-
-      // Debounce rapid file changes to avoid excessive refreshes
-      // This prevents SQLITE_IOERR from concurrent access
-      let refreshTimeout: NodeJS.Timeout | null = null;
+      dbWatcher = vscode.workspace.createFileSystemWatcher(dbPathPattern);
 
       // Refresh UI when database changes (with defensive checks)
       const refreshUI = () => {
         // Get gitRoot dynamically in case workspace changed
-        const gitRoot = getGitRoot();
-        if (!gitRoot) {
+        const currentGitRoot = getGitRoot();
+        if (!currentGitRoot) {
           return; // No git root available
         }
 
-        const dbPath = vscode.Uri.file(`${gitRoot}/.git/commit-tracker/commit_tracker.db`);
+        const dbPath = vscode.Uri.file(`${currentGitRoot}/.git/commit-tracker/commit_tracker.db`);
 
         // Check if database file actually exists before refreshing
         const fs = require('fs');
@@ -475,23 +472,10 @@ export async function activate(context: vscode.ExtensionContext) {
             if (symbolHistoryProvider) {
               symbolHistoryProvider.refresh();
             }
-            if (reportsProvider) {
-              reportsProvider.refresh();
-            }
-
-            // Only refresh debt meter if facts file exists (defensive check)
-            if (debtMeter) {
-              const factsPath = debtMeter.getFactsPath();
-              if (factsPath && fs.existsSync(factsPath)) {
-                debtMeter.refresh();
-              } else {
-                // Try to update once to see if facts file now exists
-                debtMeter.update().catch(err => {
-                  // Silently fail if facts don't exist yet
-                  logDebug(`Debt meter update skipped (no facts file): ${err}`);
-                });
-              }
-            }
+            // Refresh reports via orchestrator
+            updateReportsState('db:facts').catch(err => {
+              logError('Failed to update reports state', err);
+            });
           } catch (error) {
             // Gracefully handle any errors during refresh
             logError('Error refreshing UI after database change', error);
@@ -504,26 +488,12 @@ export async function activate(context: vscode.ExtensionContext) {
       dbWatcher.onDidCreate(refreshUI);
       dbWatcher.onDidDelete(refreshUI);
 
-      context.subscriptions.push(dbWatcher);
-
-      // Clean up timeout on deactivation
-      context.subscriptions.push({
-        dispose: () => {
-          if (refreshTimeout) {
-            clearTimeout(refreshTimeout);
-            refreshTimeout = null;
-          }
-        }
-      });
-
       // Set up file watcher for facts file to auto-refresh tree
       const factsPathPattern = new vscode.RelativePattern(
-        vscode.Uri.file(initialGitRoot),
+        vscode.Uri.file(gitRoot),
         '.git/commit-tracker/last-bundle-facts.json'
       );
-      const factsWatcher = vscode.workspace.createFileSystemWatcher(factsPathPattern);
-
-      let factsRefreshTimeout: NodeJS.Timeout | null = null;
+      factsWatcher = vscode.workspace.createFileSystemWatcher(factsPathPattern);
 
       const refreshTreeOnFactsUpdate = () => {
         // Debounce rapid changes
@@ -534,12 +504,10 @@ export async function activate(context: vscode.ExtensionContext) {
         factsRefreshTimeout = setTimeout(() => {
           try {
             // Get gitRoot dynamically in case workspace changed
-            const gitRoot = getGitRoot();
-            if (!gitRoot) {
+            const currentGitRoot = getGitRoot();
+            if (!currentGitRoot) {
               return; // No git root available
             }
-
-            const factsPath = vscode.Uri.file(`${gitRoot}/.git/commit-tracker/last-bundle-facts.json`);
 
             // Refresh bundle provider to pick up latest facts
             if (activeBundleProvider) {
@@ -548,9 +516,10 @@ export async function activate(context: vscode.ExtensionContext) {
             if (commitsProvider) {
               commitsProvider.refresh();
             }
-            if (reportsProvider) {
-              reportsProvider.refresh();
-            }
+            // Refresh reports
+            updateReportsState('facts:update').catch(err => {
+              logError('Failed to update reports state', err);
+            });
           } catch (error) {
             logError('Error refreshing tree after facts update', error);
           }
@@ -560,24 +529,40 @@ export async function activate(context: vscode.ExtensionContext) {
 
       factsWatcher.onDidChange(refreshTreeOnFactsUpdate);
       factsWatcher.onDidCreate(refreshTreeOnFactsUpdate);
+    };
 
-      context.subscriptions.push(factsWatcher);
-      context.subscriptions.push({
-        dispose: () => {
-          if (factsRefreshTimeout) {
-            clearTimeout(factsRefreshTimeout);
-            factsRefreshTimeout = null;
-          }
+    // Initial setup
+    await setupWatchers();
+
+    // Clean up timeout on deactivation
+    context.subscriptions.push({
+      dispose: () => {
+        if (refreshTimeout) {
+          clearTimeout(refreshTimeout);
+          refreshTimeout = null;
         }
-      });
-    }
+        if (factsRefreshTimeout) {
+          clearTimeout(factsRefreshTimeout);
+          factsRefreshTimeout = null;
+        }
+        if (dbWatcher) {
+          dbWatcher.dispose();
+        }
+        if (factsWatcher) {
+          factsWatcher.dispose();
+        }
+      }
+    });
 
     // Register commands
-    await registerCommands(context, commitsProvider, activeBundleProvider, symbolHistoryProvider, refactorReportProvider, reportsProvider);
+    await registerCommands(context, commitsProvider, activeBundleProvider, symbolHistoryProvider, refactorReportProvider);
 
     // Refresh providers when workspace changes
     context.subscriptions.push(
-      vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      vscode.workspace.onDidChangeWorkspaceFolders(async () => {
+        // Re-setup watchers for new workspace structure
+        await setupWatchers();
+
         if (activeBundleProvider) {
           activeBundleProvider.refresh();
         }
@@ -587,9 +572,9 @@ export async function activate(context: vscode.ExtensionContext) {
         if (symbolHistoryProvider) {
           symbolHistoryProvider.refresh();
         }
-        if (reportsProvider) {
-          reportsProvider.refresh();
-        }
+        updateReportsState('workspace:change').catch(err => {
+          logError('Failed to update reports state', err);
+        });
       })
     );
 

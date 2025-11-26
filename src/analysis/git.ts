@@ -255,138 +255,191 @@ export class GitOperations {
   /**
    * Get list of changed files in working directory
    */
-  getWorkingDirectoryChanges(): FileChange[] {
-    const output = this.execGit(['status', '--porcelain']);
+  /**
+   * Execute a git command and return the output via stream (for large outputs)
+   */
+  private async execGitStream(args: string[]): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const git = spawn('git', args, {
+        cwd: this.gitRoot,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
 
-    const changes: FileChange[] = [];
-    const lines = output.split('\n').filter(line => line.trim());
+      let stdout = '';
+      let stderr = '';
 
-    for (const line of lines) {
-      const status = line.substring(0, 2).trim();
-      const filePath = line.substring(3);
+      git.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
 
-      // Map git status codes to our status types
-      let changeStatus: FileChange['status'];
-      if (status.includes('A')) {
-        changeStatus = 'A';
-      } else if (status.includes('M')) {
-        changeStatus = 'M';
-      } else if (status.includes('D')) {
-        changeStatus = 'D';
-      } else if (status.includes('R')) {
-        changeStatus = 'R';
-      } else if (status.includes('C')) {
-        changeStatus = 'C';
-      } else if (status.includes('U')) {
-        changeStatus = 'U';
-      } else {
-        changeStatus = 'M'; // Default to modified
+      git.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      git.on('close', (code) => {
+        if (code === 0) {
+          resolve(stdout.trim());
+        } else {
+          reject(new Error(`Git command failed: git ${args.join(' ')}\n${stderr}`));
+        }
+      });
+
+      git.on('error', (error) => {
+        reject(error);
+      });
+    });
+  }
+
+  /**
+   * Get list of changed files in working directory
+   */
+  async getWorkingDirectoryChanges(): Promise<FileChange[]> {
+    try {
+      const output = await this.execGitStream(['status', '--porcelain']);
+
+      const changes: FileChange[] = [];
+      const lines = output.split('\n').filter(line => line.trim());
+
+      for (const line of lines) {
+        const status = line.substring(0, 2).trim();
+        const filePath = line.substring(3);
+
+        // Map git status codes to our status types
+        let changeStatus: FileChange['status'];
+        if (status.includes('A')) {
+          changeStatus = 'A';
+        } else if (status.includes('M')) {
+          changeStatus = 'M';
+        } else if (status.includes('D')) {
+          changeStatus = 'D';
+        } else if (status.includes('R')) {
+          changeStatus = 'R';
+        } else if (status.includes('C')) {
+          changeStatus = 'C';
+        } else if (status.includes('U')) {
+          changeStatus = 'U';
+        } else {
+          changeStatus = 'M'; // Default to modified
+        }
+
+        changes.push({
+          path: filePath,
+          status: changeStatus
+        });
       }
 
-      changes.push({
-        path: filePath,
-        status: changeStatus
-      });
+      return changes;
+    } catch (error) {
+      console.error('Failed to get working directory changes:', error);
+      return [];
     }
-
-    return changes;
   }
 
   /**
    * Get staged files only
    */
-  getStagedFiles(): FileChange[] {
-    const output = this.execGit(['status', '--porcelain']);
+  async getStagedFiles(): Promise<FileChange[]> {
+    try {
+      const output = await this.execGitStream(['status', '--porcelain']);
 
-    const staged: FileChange[] = [];
-    const lines = output.split('\n').filter(line => line.trim());
+      const staged: FileChange[] = [];
+      const lines = output.split('\n').filter(line => line.trim());
 
-    for (const line of lines) {
-      const status = line.substring(0, 2);
-      const filePath = line.substring(3);
+      for (const line of lines) {
+        const status = line.substring(0, 2);
+        const filePath = line.substring(3);
 
-      // First character indicates staged status (not space, not ?)
-      if (status.charAt(0) !== ' ' && status.charAt(0) !== '?') {
-        let changeStatus: FileChange['status'];
-        if (status.charAt(0) === 'A') {
-          changeStatus = 'A';
-        } else if (status.charAt(0) === 'M') {
-          changeStatus = 'M';
-        } else if (status.charAt(0) === 'D') {
-          changeStatus = 'D';
-        } else if (status.charAt(0) === 'R') {
-          changeStatus = 'R';
-        } else {
-          changeStatus = 'M';
+        // First character indicates staged status (not space, not ?)
+        if (status.charAt(0) !== ' ' && status.charAt(0) !== '?') {
+          let changeStatus: FileChange['status'];
+          if (status.charAt(0) === 'A') {
+            changeStatus = 'A';
+          } else if (status.charAt(0) === 'M') {
+            changeStatus = 'M';
+          } else if (status.charAt(0) === 'D') {
+            changeStatus = 'D';
+          } else if (status.charAt(0) === 'R') {
+            changeStatus = 'R';
+          } else {
+            changeStatus = 'M';
+          }
+
+          staged.push({
+            path: filePath,
+            status: changeStatus
+          });
         }
-
-        staged.push({
-          path: filePath,
-          status: changeStatus
-        });
       }
-    }
 
-    return staged;
+      return staged;
+    } catch (error) {
+      console.error('Failed to get staged files:', error);
+      return [];
+    }
   }
 
   /**
    * Get unstaged files only (including untracked files)
    */
-  getUnstagedFiles(): FileChange[] {
-    const output = this.execGit(['status', '--porcelain']);
-
-    const unstaged: FileChange[] = [];
-    const lines = output.split('\n').filter(line => line.trim());
-
-    for (const line of lines) {
-      const status = line.substring(0, 2);
-      const filePath = line.substring(3);
-
-      // Second character indicates unstaged status (not space)
-      // Include untracked files (?) as unstaged
-      if (status.charAt(1) !== ' ') {
-        let changeStatus: FileChange['status'];
-        if (status.charAt(1) === 'A') {
-          changeStatus = 'A';
-        } else if (status.charAt(1) === 'M') {
-          changeStatus = 'M';
-        } else if (status.charAt(1) === 'D') {
-          changeStatus = 'D';
-        } else if (status.charAt(1) === 'R') {
-          changeStatus = 'R';
-        } else if (status.charAt(1) === '?') {
-          // Untracked files are considered unstaged
-          changeStatus = 'U';
-        } else {
-          changeStatus = 'M';
-        }
-
-        unstaged.push({
-          path: filePath,
-          status: changeStatus
-        });
-      }
-    }
-
-    // Also include untracked files from ls-files
+  async getUnstagedFiles(): Promise<FileChange[]> {
     try {
-      const untrackedOutput = this.execGit(['ls-files', '--others', '--exclude-standard']);
-      const untrackedLines = untrackedOutput.split('\n').filter(f => f.trim());
-      for (const filePath of untrackedLines) {
-        // Only add if not already in unstaged (avoid duplicates)
-        if (!unstaged.some(f => f.path === filePath)) {
+      const output = await this.execGitStream(['status', '--porcelain']);
+
+      const unstaged: FileChange[] = [];
+      const lines = output.split('\n').filter(line => line.trim());
+
+      for (const line of lines) {
+        const status = line.substring(0, 2);
+        const filePath = line.substring(3);
+
+        // Second character indicates unstaged status (not space)
+        // Include untracked files (?) as unstaged
+        if (status.charAt(1) !== ' ') {
+          let changeStatus: FileChange['status'];
+          if (status.charAt(1) === 'A') {
+            changeStatus = 'A';
+          } else if (status.charAt(1) === 'M') {
+            changeStatus = 'M';
+          } else if (status.charAt(1) === 'D') {
+            changeStatus = 'D';
+          } else if (status.charAt(1) === 'R') {
+            changeStatus = 'R';
+          } else if (status.charAt(1) === '?') {
+            // Untracked files are considered unstaged
+            changeStatus = 'U';
+          } else {
+            changeStatus = 'M';
+          }
+
           unstaged.push({
             path: filePath,
-            status: 'U' // U = untracked
+            status: changeStatus
           });
         }
       }
-    } catch (error) {
-      // Silently ignore if ls-files fails (e.g., no untracked files)
-    }
 
-    return unstaged;
+      // Also include untracked files from ls-files
+      try {
+        const untrackedOutput = await this.execGitStream(['ls-files', '--others', '--exclude-standard']);
+        const untrackedLines = untrackedOutput.split('\n').filter(f => f.trim());
+        for (const filePath of untrackedLines) {
+          // Only add if not already in unstaged (avoid duplicates)
+          if (!unstaged.some(f => f.path === filePath)) {
+            unstaged.push({
+              path: filePath,
+              status: 'U' // U = untracked
+            });
+          }
+        }
+      } catch (error) {
+        // Silently ignore if ls-files fails (e.g., no untracked files)
+      }
+
+      return unstaged;
+    } catch (error) {
+      console.error('Failed to get unstaged files:', error);
+      return [];
+    }
   }
 
   /**

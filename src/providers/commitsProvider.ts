@@ -33,8 +33,10 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | undefined | null | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  public selectedCommits = new Set<string>();
-  public selectedFiles = new Set<string>();
+  // DEPRECATED: State moved to CockpitOrchestrator
+  // public selectedCommits = new Set<string>();
+  // public selectedFiles = new Set<string>();
+
   public workspaceScope: 'workspace' | 'staged' | 'unstaged' = 'workspace';
   public loadMoreOffset = 0;
   public manualCommits: Set<string>;
@@ -44,12 +46,12 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
   constructor(private context: vscode.ExtensionContext, private activeBundleProvider: ActiveBundleProvider) {
     this.manualCommits = new Set(context.workspaceState.get<string[]>('commit-tracker.manualCommits', []));
 
-    // Load initial state
-    const selectedCommits = context.workspaceState.get<string[]>('selectedCommits', []);
-    this.selectedCommits = new Set(selectedCommits);
-
-    const selectedFiles = context.workspaceState.get<string[]>('selectedFiles', []);
-    this.selectedFiles = new Set(selectedFiles);
+    // DEPRECATED: State moved to CockpitOrchestrator
+    // Load initial state (no longer used - CockpitOrchestrator is single source of truth)
+    // const selectedCommits = context.workspaceState.get<string[]>('selectedCommits', []);
+    // this.selectedCommits = new Set(selectedCommits);
+    // const selectedFiles = context.workspaceState.get<string[]>('selectedFiles', []);
+    // this.selectedFiles = new Set(selectedFiles);
 
     this.workspaceScope = context.workspaceState.get('workspaceScope', 'workspace');
     this.loadMoreOffset = context.workspaceState.get('loadMoreOffset', 0);
@@ -201,21 +203,26 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
     return nodes;
   }
 
-  private getSelectionNodes(): TreeNode[] {
+  private async getSelectionNodes(): Promise<TreeNode[]> {
     const nodes: TreeNode[] = [];
 
     // Workspace node
     try {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
-      const changes = git.getWorkingDirectoryChanges();
+      const changes = await git.getWorkingDirectoryChanges();
       const fileCount = changes.length;
+
+      // Check selected files count
+      const { getCockpitOrchestrator: getOrch } = require('../state/cockpitOrchestrator');
+      const orch = getOrch();
+      const selectedFilesCount = orch.getState().selectedStagedPaths.length + orch.getState().selectedUnstagedPaths.length;
 
       nodes.push({
         id: 'workspace-select',
         type: 'category',
         count: fileCount,
-        label: this.getCheckboxLabel(this.selectedFiles.size > 0, `Workspace - ${fileCount} files (${this.workspaceScope})`),
+        label: this.getCheckboxLabel(selectedFilesCount > 0, `Workspace - ${fileCount} files (${this.workspaceScope})`),
         description: '',
         tooltip: `Select workspace files for analysis. Scope: ${this.workspaceScope}`,
         contextValue: 'gitContextSelectionItem'
@@ -224,12 +231,16 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
       console.debug('Failed to get workspace changes:', error);
     }
 
-    // Commits node
+    // Selection group
+    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    const selectedCount = orchestrator.getState().selectedCommitShas.length;
+
     nodes.push({
       id: 'selection-commits',
       type: 'category',
-      count: this.selectedCommits.size,
-      label: `Commits (${this.selectedCommits.size} selected)`,
+      count: selectedCount,
+      label: `Commits (${selectedCount} selected)`,
       description: '',
       tooltip: 'Select commits to analyze',
       contextValue: 'gitContextSelectionItem'
@@ -279,7 +290,7 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
     try {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
-      const staged = git.getStagedFiles();
+      const staged = await git.getStagedFiles();
 
       return staged.map((f: { path: string }) => ({
         id: `staged-${f.path}`,
@@ -301,7 +312,7 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
     try {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
-      const unstaged = git.getUnstagedFiles();
+      const unstaged = await git.getUnstagedFiles();
 
       return unstaged.map((f: { path: string }) => ({
         id: `unstaged-${f.path}`,
@@ -330,7 +341,7 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
       const gitRoot = getGitRoot();
-      const staged = git.getStagedFiles();
+      const staged = await git.getStagedFiles();
 
       return staged.map((f: { path: string }) => {
         const fullPath = gitRoot ? path.join(gitRoot, f.path) : f.path;
@@ -381,7 +392,7 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
       const gitRoot = getGitRoot();
-      const unstaged = git.getUnstagedFiles();
+      const unstaged = await git.getUnstagedFiles();
 
       return unstaged.map((f: { path: string }) => {
         const fullPath = gitRoot ? path.join(gitRoot, f.path) : f.path;
@@ -437,65 +448,119 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
     return this.workspaceScope;
   }
 
-  toggleCommitSelection(commit: any): void {
-    const sha = typeof commit === 'string' ? commit : (commit.sha || commit.id);
-    if (this.selectedCommits.has(sha)) {
-      this.selectedCommits.delete(sha);
+  async toggleCommitSelection(sha: string): Promise<void> {
+    // DEPRECATED: Use CockpitOrchestrator.updateState() instead
+    // This method kept for backwards compatibility with tree views
+    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    const state = orchestrator.getState();
+    const selected = new Set(state.selectedCommitShas);
+
+    if (selected.has(sha)) {
+      selected.delete(sha);
     } else {
-      this.selectedCommits.add(sha);
+      selected.add(sha);
     }
-    // Persist state
-    this.context.workspaceState.update('selectedCommits', Array.from(this.selectedCommits));
+
+    orchestrator.updateState({ selectedCommitShas: Array.from(selected) }, 'provider:toggleCommit');
     this.refresh();
   }
 
-  clearSelection(): void {
-    this.selectedCommits.clear();
-    this.selectedFiles.clear();
-    // Persist cleared state
-    this.context.workspaceState.update('selectedCommits', []);
-    this.context.workspaceState.update('selectedFiles', []);
+  async clearSelection(): Promise<void> {
+    // DEPRECATED: Use CockpitOrchestrator.updateState() instead
+    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    orchestrator.updateState({
+      selectedCommitShas: [],
+      selectedStagedPaths: [],
+      selectedUnstagedPaths: []
+    }, 'provider:clearSelection');
     this.refresh();
   }
 
-  toggleFileSelection(file: any): void {
-    const path = typeof file === 'string' ? file : (file.path || file.id);
-    if (this.selectedFiles.has(path)) {
-      this.selectedFiles.delete(path);
-    } else {
-      this.selectedFiles.add(path);
-    }
-    // Persist state
-    this.context.workspaceState.update('selectedFiles', Array.from(this.selectedFiles));
-    this.refresh();
-  }
+  async toggleFileSelection(file: any): Promise<void> {
+    const filePath = typeof file === 'string' ? file : (file.path || file.id);
+    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    const state = orchestrator.getState();
+    const selectedStaged = new Set(state.selectedStagedPaths);
+    const selectedUnstaged = new Set(state.selectedUnstagedPaths);
 
-  selectAllStaged(): void {
+    let updatedStaged: string[] | undefined;
+    let updatedUnstaged: string[] | undefined;
+
+    // Check if it's a staged file
     try {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
-      const staged = git.getStagedFiles();
-      staged.forEach((file: { path: string; status: any }) => {
-        this.selectedFiles.add(file.path);
-      });
-      // Persist state
-      this.context.workspaceState.update('selectedFiles', Array.from(this.selectedFiles));
+      const stagedFilesList = await git.getStagedFiles();
+      const stagedFiles = stagedFilesList.map((f: { path: string }) => f.path);
+      if (stagedFiles.includes(filePath)) {
+        if (selectedStaged.has(filePath)) {
+          selectedStaged.delete(filePath);
+        } else {
+          selectedStaged.add(filePath);
+        }
+        updatedStaged = Array.from(selectedStaged);
+      } else {
+        // Assume it's an unstaged file if not staged
+        if (selectedUnstaged.has(filePath)) {
+          selectedUnstaged.delete(filePath);
+        } else {
+          selectedUnstaged.add(filePath);
+        }
+        updatedUnstaged = Array.from(selectedUnstaged);
+      }
+    } catch (error) {
+      console.error('Failed to determine file status for toggle:', error);
+      // Fallback: if we can't determine, just toggle in both sets (less efficient but safe)
+      if (selectedStaged.has(filePath)) {
+        selectedStaged.delete(filePath);
+      } else {
+        selectedStaged.add(filePath);
+      }
+      if (selectedUnstaged.has(filePath)) {
+        selectedUnstaged.delete(filePath);
+      } else {
+        selectedUnstaged.add(filePath);
+      }
+      updatedStaged = Array.from(selectedStaged);
+      updatedUnstaged = Array.from(selectedUnstaged);
+    }
+
+    orchestrator.updateState({
+      selectedStagedPaths: updatedStaged,
+      selectedUnstagedPaths: updatedUnstaged
+    }, 'provider:toggleFile');
+    this.refresh();
+  }
+
+  async selectAllStaged(): Promise<void> {
+    try {
+      const { GitOperations } = require('../analysis/git');
+      const git = new GitOperations();
+      const staged = await git.getStagedFiles();
+      const stagedPaths = staged.map((file: { path: string; status: any }) => file.path);
+
+      const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
+      const orchestrator = getCockpitOrchestrator();
+      orchestrator.updateState({ selectedStagedPaths: stagedPaths }, 'provider:selectAllStaged');
       this.refresh();
     } catch (error) {
       console.error('Failed to select all staged files:', error);
     }
   }
 
-  selectAllUnstaged(): void {
+  async selectAllUnstaged(): Promise<void> {
     try {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
-      const unstaged = git.getUnstagedFiles();
-      unstaged.forEach((file: { path: string; status: any }) => {
-        this.selectedFiles.add(file.path);
-      });
-      // Persist state
-      this.context.workspaceState.update('selectedFiles', Array.from(this.selectedFiles));
+      const unstaged = await git.getUnstagedFiles();
+      const unstagedPaths = unstaged.map((file: { path: string; status: any }) => file.path);
+
+      const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
+      const orchestrator = getCockpitOrchestrator();
+      orchestrator.updateState({ selectedUnstagedPaths: unstagedPaths }, 'provider:selectAllUnstaged');
       this.refresh();
     } catch (error) {
       console.error('Failed to select all unstaged files:', error);
@@ -507,32 +572,53 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   get workspaceParts(): Set<string> {
-    return this.selectedFiles;
+    const { getCockpitOrchestrator } = require('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    const state = orchestrator.getState();
+    return new Set([...state.selectedStagedPaths, ...state.selectedUnstagedPaths]);
   }
 
   set workspaceParts(parts: Set<string>) {
-    this.selectedFiles = parts;
+    // This setter is deprecated as files are now split into staged/unstaged
+    // For compatibility, we'll just set staged paths.
+    const { getCockpitOrchestrator } = require('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    orchestrator.updateState({ selectedStagedPaths: Array.from(parts) }, 'provider:setWorkspaceParts');
   }
 
   // State management methods
-  setSelectedCommits(commits: Set<string>) {
-    this.selectedCommits = commits;
-    this.context.workspaceState.update('selectedCommits', Array.from(commits));
+  async setSelectedCommits(commits: Set<string>): Promise<void> {
+    // DEPRECATED: Use CockpitOrchestrator.updateState() instead
+    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    orchestrator.updateState({ selectedCommitShas: Array.from(commits) }, 'provider:setSelectedCommits');
     this.refresh();
   }
 
-  setSelectedFiles(files: Set<string>) {
-    this.selectedFiles = files;
-    this.context.workspaceState.update('selectedFiles', Array.from(files));
+  async setSelectedFiles(files: Set<string>): Promise<void> {
+    // DEPRECATED: Use CockpitOrchestrator.updateState() instead
+    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    // Note: Files are now in selectedStagedPaths or selectedUnstagedPaths
+    // For compatibility, we'll just set staged paths.
+    orchestrator.updateState({ selectedStagedPaths: Array.from(files) }, 'provider:setSelectedFiles');
     this.refresh();
   }
 
   getSelectedCommits(): Set<string> {
-    return this.selectedCommits;
+    // DEPRECATED: Read from CockpitOrchestrator instead
+    const { getCockpitOrchestrator } = require('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    return new Set(orchestrator.getState().selectedCommitShas);
   }
 
   getSelectedFiles(): Set<string> {
-    return this.selectedFiles;
+    // DEPRECATED: Read from CockpitOrchestrator instead
+    const { getCockpitOrchestrator } = require('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    const state = orchestrator.getState();
+    // Combine staged and unstaged
+    return new Set([...state.selectedStagedPaths, ...state.selectedUnstagedPaths]);
   }
 
   private async getRecentCommitsList(): Promise<TreeNode[]> {
@@ -553,8 +639,12 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
       const commits = commitsStmt.all() as any[];
       const nodes: TreeNode[] = [];
 
+      const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
+      const orchestrator = getCockpitOrchestrator();
+      const selectedShas = new Set(orchestrator.getState().selectedCommitShas);
+
       for (const commit of commits) {
-        const isSelected = this.selectedCommits.has(commit.sha);
+        const isSelected = selectedShas.has(commit.sha);
         const inBundle = this.activeBundleProvider.lastBundleFacts?.bundle?.shas?.includes(commit.sha) || false;
         const shortSha = commit.sha.substring(0, 8);
         const changesText = commit.changes > 0 ? ` (${commit.changes} changes)` : '';
@@ -669,22 +759,28 @@ export class CommitsProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   exportSelectionDto(): { selectedCommitShas: string[]; selectedFiles: string[]; workspaceScope: 'workspace' | 'staged' | 'unstaged' } {
+    const { getCockpitOrchestrator } = require('../state/cockpitOrchestrator');
+    const orchestrator = getCockpitOrchestrator();
+    const state = orchestrator.getState();
+
     return {
-      selectedCommitShas: Array.from(this.selectedCommits),
-      selectedFiles: Array.from(this.selectedFiles),
+      selectedCommitShas: state.selectedCommitShas,
+      selectedFiles: [...state.selectedStagedPaths, ...state.selectedUnstagedPaths],
       workspaceScope: this.workspaceScope
     };
   }
 
-  exportWorkspaceFilesDto(): {
+  async exportWorkspaceFilesDto(): Promise<{
     staged: Array<{ path: string; status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' }>;
     unstaged: Array<{ path: string; status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' }>;
-  } {
+  }> {
     try {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
-      const staged = git.getStagedFiles().map((f: { path: string; status: any }) => ({ path: f.path, status: f.status }));
-      const unstaged = git.getUnstagedFiles().map((f: { path: string; status: any }) => ({ path: f.path, status: f.status }));
+      const stagedList = await git.getStagedFiles();
+      const unstagedList = await git.getUnstagedFiles();
+      const staged = stagedList.map((f: { path: string; status: any }) => ({ path: f.path, status: f.status }));
+      const unstaged = unstagedList.map((f: { path: string; status: any }) => ({ path: f.path, status: f.status }));
       return { staged, unstaged };
     } catch (error) {
       console.error('Failed to export workspace files for cockpit:', error);

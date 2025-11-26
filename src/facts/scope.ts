@@ -105,26 +105,26 @@ export async function computeScope(
   }
 
   // 2. Files changed in working tree (filtered by workspaceParts)
-  const workingChanges = git.getWorkingDirectoryChanges();
-  
+  const workingChanges = await git.getWorkingDirectoryChanges();
+
   if (workspaceParts) {
     const includeStaged = workspaceParts.has('staged');
     const includeUnstaged = workspaceParts.has('unstaged');
-    
+
     // Get staged and unstaged files separately
-    const stagedFiles = git.getStagedFiles();
-    const unstagedFiles = git.getUnstagedFiles();
-    
+    const stagedFiles = await git.getStagedFiles();
+    const unstagedFiles = await git.getUnstagedFiles();
+
     if (includeStaged) {
       stagedFiles.forEach(f => scope.workingChanged.add(f.path));
     }
-    
+
     if (includeUnstaged) {
       unstagedFiles.forEach(f => scope.workingChanged.add(f.path));
     }
   } else {
     // Default: include all working changes
-  workingChanges.forEach(f => scope.workingChanged.add(f.path));
+    workingChanges.forEach(f => scope.workingChanged.add(f.path));
   }
 
   // 3. Blast-radius neighbors (top N by confidence)

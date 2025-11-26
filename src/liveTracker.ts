@@ -7,6 +7,7 @@ import { logDebug, logInfo, logError } from './utils/logger';
 interface ThresholdConfig {
     lines: number;
     symbols: number;
+    extensions: string[];
 }
 
 interface LiveChange {
@@ -18,8 +19,9 @@ interface LiveChange {
 
 export class LiveDiffTracker {
     private changeBuffers = new Map<string, vscode.TextDocumentContentChangeEvent[]>();
-    private threshold: ThresholdConfig = { lines: 50, symbols: 5 };
+    private threshold: ThresholdConfig = { lines: 50, symbols: 5, extensions: ['php', 'js', 'ts', 'tsx', 'jsx'] };
     private disposables: vscode.Disposable[] = [];
+    private watcher: vscode.FileSystemWatcher | undefined;
     private symbolExtractor: SymbolExtractor;
     private git: GitOperations;
     private autoRunAfterEdits: number = 50;
@@ -31,14 +33,16 @@ export class LiveDiffTracker {
 
         this.disposables.push(
             vscode.workspace.onDidChangeTextDocument(this.handleChange, this),
-            vscode.workspace.onDidSaveTextDocument(this.resetBuffer, this),
-            vscode.workspace.createFileSystemWatcher('**/*.{php,js,ts,tsx,jsx}') // Configurable patterns
+            vscode.workspace.onDidSaveTextDocument(this.resetBuffer, this)
         );
 
         this.updateConfig();
+        this.setupWatcher();
+
         vscode.workspace.onDidChangeConfiguration((e) => {
             if (e.affectsConfiguration('commitTracker')) {
                 this.updateConfig();
+                this.setupWatcher();
             }
         });
     }
@@ -46,11 +50,25 @@ export class LiveDiffTracker {
     private updateConfig() {
         const config = vscode.workspace.getConfiguration('commitTracker');
         const liveConfig = config.get<{ thresholds: ThresholdConfig; autoRunAfterEdits: number }>('live') || {
-            thresholds: { lines: 50, symbols: 5 },
+            thresholds: { lines: 50, symbols: 5, extensions: ['php', 'js', 'ts', 'tsx', 'jsx'] },
             autoRunAfterEdits: 50
         };
-        this.threshold = liveConfig.thresholds;
+        this.threshold = {
+            ...liveConfig.thresholds,
+            extensions: liveConfig.thresholds.extensions || ['php', 'js', 'ts', 'tsx', 'jsx']
+        };
         this.autoRunAfterEdits = liveConfig.autoRunAfterEdits;
+    }
+
+    private setupWatcher() {
+        if (this.watcher) {
+            this.watcher.dispose();
+            // Remove old watcher from disposables if it was added there (it wasn't in previous code, but good practice)
+        }
+
+        const pattern = `**/*.{${this.threshold.extensions.join(',')}}`;
+        this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
+        this.disposables.push(this.watcher);
     }
 
     private handleChange(e: vscode.TextDocumentChangeEvent) {

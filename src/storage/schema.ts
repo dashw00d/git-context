@@ -289,6 +289,37 @@ CREATE INDEX IF NOT EXISTS idx_symbol_versions_sha ON symbol_versions(sha);
 CREATE INDEX IF NOT EXISTS idx_symbol_versions_lookup ON symbol_versions(sha, path, symbol_id);
 `;
 
+export const MIGRATION_V8 = `
+-- Layer 2 Caching: Add symbol_version_id for embedding deduplication
+-- This enables "never regenerate embeddings for same symbol version"
+
+ALTER TABLE symbol_dna ADD COLUMN symbol_version_id TEXT;
+ALTER TABLE symbol_dna ADD COLUMN embedding_model TEXT DEFAULT 'text-embedding-3-small';
+ALTER TABLE symbol_dna ADD COLUMN embedding BLOB;
+
+-- Create unique index on symbol_version_id for cache lookups
+CREATE UNIQUE INDEX IF NOT EXISTS idx_symbol_dna_version ON symbol_dna(symbol_version_id);
+
+-- Keep existing indexes
+CREATE INDEX IF NOT EXISTS idx_symbol_dna_dna_id ON symbol_dna(dna_id);
+`;
+
+export const MIGRATION_V9 = `
+-- Layer 3 Caching: Add bundle fingerprint for report deduplication
+-- This enables "never reanalyze same selection"
+
+ALTER TABLE reports ADD COLUMN fingerprint TEXT;
+ALTER TABLE reports ADD COLUMN pipeline_version TEXT DEFAULT '2.0';
+ALTER TABLE reports ADD COLUMN prompt_version TEXT DEFAULT '1.0';
+ALTER TABLE reports ADD COLUMN mode TEXT DEFAULT 'selection';
+
+-- Create unique index on fingerprint for cache lookups
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_fingerprint ON reports(fingerprint);
+
+-- Add index on mode for filtering
+CREATE INDEX IF NOT EXISTS idx_reports_mode ON reports(mode);
+`;
+
 export const MIGRATIONS = [
   // Version 1: Initial schema
   DATABASE_SCHEMA,
@@ -303,7 +334,12 @@ export const MIGRATIONS = [
   // Version 6: Add difftastic highlights storage
   MIGRATION_V6,
   // Version 7: Symbol DNA tables
-  MIGRATION_V7
+  MIGRATION_V7,
+  // Version 8: Symbol version caching (Layer 2)
+  MIGRATION_V8,
+  // Version 9: Bundle fingerprint caching (Layer 3)
+  MIGRATION_V9
 ];
 
-export const CURRENT_VERSION = 7;
+export const CURRENT_VERSION = 9;
+

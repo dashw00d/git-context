@@ -5,7 +5,7 @@ import { getWorkingSnapshot } from '../facts/workingSnapshot';
 import { detectDrift } from '../facts/driftDetector';
 import { auditLegacy } from '../facts/legacyAudit';
 import { ScopeSet } from '../facts/scope';
-import { IntendedState } from '../facts/intendedMap';
+import { IntendedState, buildIntendedMap } from '../facts/intendedMap';
 import { logInfo, logDebug, logError } from '../utils/logger';
 
 export class LiveAnalysisEngine {
@@ -44,28 +44,23 @@ export class LiveAnalysisEngine {
             const liveOverrides = this.tracker.getDirtyContent();
 
             // 2. Reconstruct Scope & Intended State from Bundle Facts
-            // We need to rebuild these maps from the stored facts
-            const intended = new Map<string, IntendedState>();
-            // TODO: We need a way to hydrate IntendedState from bundleFacts.
-            // For now, we might need to rely on the fact that we don't have the full IntendedState object
-            // readily available unless we persist it or re-compute it.
-            // However, we can reconstruct a partial IntendedState from facts.intended lists.
+            let intended: Map<string, IntendedState>;
 
-            if (state.bundleFacts.evidence) {
-                const evidence = state.bundleFacts.evidence;
-                // @ts-ignore - accessing dynamic evidence properties
-                const present = evidence["intended.present"] as string[] || [];
-                // @ts-ignore
-                const absent = evidence["intended.absent"] as string[] || [];
-
-                present.forEach(id => {
-                    const name = id.split(':').pop() || '';
-                    intended.set(id, { expect: 'present', lastSha: 'bundle', lastName: name });
-                });
-                absent.forEach(id => {
-                    const name = id.split(':').pop() || '';
-                    intended.set(id, { expect: 'absent', lastSha: 'bundle', lastName: name });
-                });
+            // Use buildIntendedMap if we have commit SHAs
+            if (state.bundleFacts.bundle.shas && state.bundleFacts.bundle.shas.length > 0) {
+                try {
+                    intended = await buildIntendedMap(state.bundleFacts.bundle.shas);
+                    logDebug(`[LiveAnalysis] Rebuilt intended map from database: ${intended.size} symbols`);
+                } catch (error) {
+                    logError('[LiveAnalysis] Failed to rebuild intended map from database', error);
+                    // Fallback to evidence-based reconstruction
+                    intended = this.reconstructIntendedFromEvidence(state.bundleFacts.evidence);
+                    logDebug(`[LiveAnalysis] Using evidence-based reconstruction: ${intended.size} symbols`);
+                }
+            } else {
+                // No commit SHAs available (workspace-only analysis), use evidence
+                intended = this.reconstructIntendedFromEvidence(state.bundleFacts.evidence);
+                logDebug(`[LiveAnalysis] No SHAs available, reconstructed from evidence: ${intended.size} symbols`);
             }
 
             // 3. Reconstruct Scope
@@ -113,6 +108,66 @@ export class LiveAnalysisEngine {
         } finally {
             this.isAnalyzing = false;
         }
+    }
+
+    /**
+     * Reconstruct IntendedState from evidence arrays when database unavailable
+     */
+    private reconstructIntendedFromEvidence(evidence: Record<string, any>): Map<string, IntendedState> {
+        const intended = new Map<string, IntendedState>();
+
+        if (!evidence) {
+            return intended;
+        }
+
+        const present = evidence["intended.present"] as string[] || [];
+        const absent = evidence["intended.absent"] as string[] || [];
+        const renamed = evidence["intended.renamed"] as string[] || [];
+        const renamedSet = new Set(renamed);
+
+        // Parse symbol IDs: path:kind:name
+        function parseSymbolId(id: string): { path: string; kind: string; name: string } {
+            const parts = id.split(':');
+            if (parts.length >= 3) {
+                return {
+                    path: parts[0],
+                    kind: parts[1],
+                    // Handle names with colons (e.g., "namespace:ClassName")
+                    name: parts.slice(2).join(':')
+                };
+            }
+            // Fallback for malformed IDs
+            return {
+                path: parts[0] || '',
+                kind: parts[1] || 'unknown',
+                name: parts[parts.length - 1] || ''
+            };
+        }
+
+        // Process present symbols
+        present.forEach(id => {
+            const parsed = parseSymbolId(id);
+            intended.set(id, {
+                expect: 'present',
+                lastSha: 'bundle',
+                lastName: parsed.name,
+                lastPath: parsed.path,
+                isRenamed: renamedSet.has(id)
+            });
+        });
+
+        // Process absent symbols
+        absent.forEach(id => {
+            const parsed = parseSymbolId(id);
+            intended.set(id, {
+                expect: 'absent',
+                lastSha: 'bundle',
+                lastName: parsed.name,
+                lastPath: parsed.path
+            });
+        });
+
+        return intended;
     }
 }
 

@@ -413,7 +413,7 @@ export class SymbolExtractor {
     removed: SymbolInfo[];
     modified: SymbolDelta[];
   }> {
-    const stagedChanges = this.git.getWorkingDirectoryChanges();
+    const stagedChanges = await this.git.getWorkingDirectoryChanges();
     const added: SymbolInfo[] = [];
     const removed: SymbolInfo[] = [];
     const modified: SymbolDelta[] = [];

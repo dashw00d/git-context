@@ -511,7 +511,7 @@
             }
             return element;
           };
-          function createElement15(type, config, children) {
+          function createElement16(type, config, children) {
             var propName;
             var props = {};
             var key = null;
@@ -1610,7 +1610,7 @@
                 error("React.createElement: type is invalid -- expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s", typeString, info);
               }
             }
-            var element = createElement15.apply(this, arguments);
+            var element = createElement16.apply(this, arguments);
             if (element == null) {
               return element;
             }
@@ -2384,9 +2384,9 @@
           if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart === "function") {
             __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
           }
-          var React15 = require_react();
+          var React16 = require_react();
           var Scheduler = require_scheduler();
-          var ReactSharedInternals = React15.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+          var ReactSharedInternals = React16.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
           var suppressWarning = false;
           function setSuppressWarning(newSuppressWarning) {
             {
@@ -3993,7 +3993,7 @@
             {
               if (props.value == null) {
                 if (typeof props.children === "object" && props.children !== null) {
-                  React15.Children.forEach(props.children, function(child) {
+                  React16.Children.forEach(props.children, function(child) {
                     if (child == null) {
                       return;
                     }
@@ -9417,7 +9417,7 @@
               }
             }
           }
-          function createElement15(type, props, rootContainerElement, parentNamespace) {
+          function createElement16(type, props, rootContainerElement, parentNamespace) {
             var isCustomComponentTag;
             var ownerDocument = getOwnerDocumentFromRootContainer(rootContainerElement);
             var domElement;
@@ -10287,7 +10287,7 @@
               }
               parentNamespace = hostContextDev.namespace;
             }
-            var domElement = createElement15(type, props, rootContainerInstance, parentNamespace);
+            var domElement = createElement16(type, props, rootContainerInstance, parentNamespace);
             precacheFiberNode(internalInstanceHandle, domElement);
             updateFiberProps(domElement, props);
             return domElement;
@@ -23583,7 +23583,7 @@
   });
 
   // src/webview/cockpit/index.tsx
-  var React14 = __toESM(require_react());
+  var React15 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
   // src/webview/cockpit/components/Header.tsx
@@ -23712,7 +23712,7 @@
   var React4 = __toESM(require_react());
   var Tabs = ({ active, onChange, counts }) => {
     const tabs = [
-      { key: "live", label: "Live", badge: null, disabled: true, tooltip: "Coming soon: Real-time change tracking" },
+      { key: "live", label: "Live", badge: counts.live > 0 ? counts.live.toString() : null, disabled: false, tooltip: "Real-time change tracking" },
       { key: "commits", label: "Commits", badge: counts.commits.toString(), disabled: false, tooltip: void 0 },
       { key: "bundle", label: "Bundle", badge: counts.bundle, disabled: false, tooltip: void 0 },
       { key: "symbols", label: "Symbols", badge: counts.symbols.toString(), disabled: false, tooltip: void 0 },
@@ -24202,6 +24202,20 @@
     ), /* @__PURE__ */ React13.createElement("span", { className: "cockpit__dim" }, "Pinned only"))), /* @__PURE__ */ React13.createElement(ReportList, { state, vscode: vscode2 }));
   };
 
+  // src/webview/cockpit/components/LiveTabContent.tsx
+  var React14 = __toESM(require_react());
+  var LiveTabContent = ({ state, vscode: vscode2 }) => {
+    const { liveAnalysis } = state;
+    return /* @__PURE__ */ React14.createElement("div", { className: "cockpit__tab-content" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__section-header" }, /* @__PURE__ */ React14.createElement("h3", null, "Live Analysis"), /* @__PURE__ */ React14.createElement("span", { className: `cockpit__badge ${liveAnalysis.isTracking ? "success" : "warning"}` }, liveAnalysis.isTracking ? "Tracking Active" : "Tracking Paused")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__card" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metrics-grid" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.pendingChanges), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Pending Files")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.totalEdits), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Total Edits")))), liveAnalysis.summary && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__card" }, /* @__PURE__ */ React14.createElement("h4", null, "Analysis Results"), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metrics-grid" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric danger" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.zombies), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Zombies")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric warning" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.missing), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Missing")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric info" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.drift), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Drift")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric secondary" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.dead), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Ghosts")))), liveAnalysis.facts?.drift?.zombie_symbols?.length > 0 && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__section" }, /* @__PURE__ */ React14.createElement("h4", null, "Zombies Detected"), /* @__PURE__ */ React14.createElement("ul", { className: "cockpit__list" }, liveAnalysis.facts.drift.zombie_symbols.map((z) => /* @__PURE__ */ React14.createElement("li", { key: z.symbol_id, className: "cockpit__list-item" }, /* @__PURE__ */ React14.createElement("span", { className: "codicon codicon-warning" }), /* @__PURE__ */ React14.createElement("span", { className: "cockpit__list-label" }, z.found.name), /* @__PURE__ */ React14.createElement("span", { className: "cockpit__list-detail" }, "Should be absent"))))), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__actions" }, liveAnalysis.status === "ready" && /* @__PURE__ */ React14.createElement(
+      "button",
+      {
+        className: "cockpit__button primary",
+        onClick: () => vscode2.postMessage({ type: "generateLiveReport" })
+      },
+      "Analyze Pending Changes"
+    ), liveAnalysis.status === "analyzing" && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__loading" }, /* @__PURE__ */ React14.createElement("span", { className: "codicon codicon-loading codicon-modifier-spin" }), "Analyzing live changes..."), liveAnalysis.status === "idle" && liveAnalysis.pendingChanges > 0 && !liveAnalysis.summary && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__dim" }, "Edit threshold not yet reached for auto-analysis.")));
+  };
+
   // src/webview/cockpit/index.tsx
   var vscode = window.acquireVsCodeApi();
   var defaultState = {
@@ -24236,12 +24250,20 @@
     reports: [],
     reportsFilterText: "",
     reportsBranchFilter: "all",
-    reportsShowPinnedOnly: false
+    reportsShowPinnedOnly: false,
+    liveAnalysis: {
+      isTracking: true,
+      pendingChanges: 0,
+      totalEdits: 0,
+      status: "idle",
+      summary: null,
+      facts: null
+    }
   };
   var App = () => {
-    const [state, setState] = React14.useState(defaultState);
-    const filterDebounceRef = React14.useRef({});
-    React14.useEffect(() => {
+    const [state, setState] = React15.useState(defaultState);
+    const filterDebounceRef = React15.useRef({});
+    React15.useEffect(() => {
       const handler = (event) => {
         const message = event.data;
         if (message?.type === "updateState" && message.payload) {
@@ -24265,7 +24287,6 @@
       return () => window.removeEventListener("message", handler);
     }, []);
     const setActiveSection = (section) => {
-      if (section === "live") return;
       setState((prev) => ({ ...prev, activeSection: section }));
       vscode.postMessage({ type: "setActiveSection", section });
     };
@@ -24318,7 +24339,7 @@
       vscode.postMessage({ type: "setReportsShowPinnedOnly", value });
     };
     const bundleSummaryText = state.bundleSummary ? `${state.bundleSummary.commitCount} commits, ${state.bundleSummary.fileCount} files${state.bundleSummary.symbolCount ? `, ${state.bundleSummary.symbolCount} symbols` : ""}` : "Bundle: none";
-    return /* @__PURE__ */ React14.createElement("div", { className: "cockpit" }, /* @__PURE__ */ React14.createElement(
+    return /* @__PURE__ */ React15.createElement("div", { className: "cockpit" }, /* @__PURE__ */ React15.createElement(
       Header,
       {
         state,
@@ -24329,7 +24350,7 @@
           vscode.postMessage({ type: "clearError" });
         }
       }
-    ), /* @__PURE__ */ React14.createElement("section", { className: "cockpit__dashboard" }, /* @__PURE__ */ React14.createElement(SelectionPanel, { state, vscode }), /* @__PURE__ */ React14.createElement(BundlePanel, { state, vscode })), /* @__PURE__ */ React14.createElement(MetricsRow, { state }), /* @__PURE__ */ React14.createElement(
+    ), /* @__PURE__ */ React15.createElement("section", { className: "cockpit__dashboard" }, /* @__PURE__ */ React15.createElement(SelectionPanel, { state, vscode }), /* @__PURE__ */ React15.createElement(BundlePanel, { state, vscode })), /* @__PURE__ */ React15.createElement(MetricsRow, { state }), /* @__PURE__ */ React15.createElement(
       Tabs,
       {
         active: state.activeSection,
@@ -24338,10 +24359,11 @@
           commits: state.commits.length,
           bundle: bundleSummaryText,
           symbols: state.symbols.length,
-          reports: state.reports.length
+          reports: state.reports.length,
+          live: state.liveAnalysis.pendingChanges
         }
       }
-    ), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__tab-container" }, state.activeSection === "commits" && /* @__PURE__ */ React14.createElement(
+    ), /* @__PURE__ */ React15.createElement("div", { className: "cockpit__tab-container" }, state.activeSection === "commits" && /* @__PURE__ */ React15.createElement(
       CommitsTabContent,
       {
         state,
@@ -24350,14 +24372,14 @@
         toggleCommitsScope,
         formatDate
       }
-    ), state.activeSection === "bundle" && /* @__PURE__ */ React14.createElement(
+    ), state.activeSection === "bundle" && /* @__PURE__ */ React15.createElement(
       BundleTabContent,
       {
         state,
         vscode,
         formatDate
       }
-    ), state.activeSection === "symbols" && /* @__PURE__ */ React14.createElement(
+    ), state.activeSection === "symbols" && /* @__PURE__ */ React15.createElement(
       SymbolsTabContent,
       {
         state,
@@ -24366,7 +24388,7 @@
         updateSymbolKind,
         updateSymbolChangeFilter
       }
-    ), state.activeSection === "reports" && /* @__PURE__ */ React14.createElement(
+    ), state.activeSection === "reports" && /* @__PURE__ */ React15.createElement(
       ReportsTabContent,
       {
         state,
@@ -24375,12 +24397,18 @@
         updateReportsBranchFilter,
         updateReportsPinned
       }
+    ), state.activeSection === "live" && /* @__PURE__ */ React15.createElement(
+      LiveTabContent,
+      {
+        state,
+        vscode
+      }
     )));
   };
   var rootEl = document.getElementById("root");
   if (rootEl) {
     const root = (0, import_client.createRoot)(rootEl);
-    root.render(/* @__PURE__ */ React14.createElement(App, null));
+    root.render(/* @__PURE__ */ React15.createElement(App, null));
   }
 })();
 /*! Bundled license information:

@@ -33,7 +33,7 @@ export class AnalysisPipeline {
     private difftastic: any, // Difftastic integration
     private riskDetector: RiskDetector,
     private llmSummarizer?: LLMSummarizer
-  ) {}
+  ) { }
 
   // ====== METADATA ONLY (Lightweight) ======
 
@@ -245,7 +245,7 @@ export class AnalysisPipeline {
    * Analyze staged changes (not yet committed).
    */
   async analyzeStagedChanges(): Promise<StagedAnalysis> {
-    const files = this.git.getStagedFiles();
+    const files = await this.git.getStagedFiles();
     logInfo(`[PIPELINE] Analyzing staged changes (${files.length} files)`);
 
     // Extract symbols from staged changes compared to HEAD
@@ -275,7 +275,7 @@ export class AnalysisPipeline {
    * Analyze unstaged changes (working directory vs HEAD).
    */
   async analyzeUnstagedChanges(): Promise<StagedAnalysis> {
-    const files = this.git.getUnstagedFiles();
+    const files = await this.git.getUnstagedFiles();
     logInfo(`[PIPELINE] Analyzing unstaged changes (${files.length} files)`);
 
     // Extract symbols from unstaged changes compared to HEAD
@@ -362,7 +362,7 @@ export class AnalysisPipeline {
         status: string;
         lang: string | null;
       }>;
-      
+
       const filesChanged = fileRows.map(fileRow => ({
         path: fileRow.path,
         status: fileRow.status as any,

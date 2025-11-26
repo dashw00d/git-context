@@ -20,6 +20,11 @@ export interface SavedReport {
   criticalCount: number;
   warningCount: number;
   isPinned: boolean;
+  // Layer 3 caching fields
+  fingerprint?: string;
+  pipelineVersion?: string;
+  promptVersion?: string;
+  mode?: string;
 }
 
 export class ReportManager {
@@ -36,8 +41,9 @@ export class ReportManager {
       INSERT OR REPLACE INTO reports (
         id, title, commit_shas, selected_files, workspace_scope,
         created_at, workspace_hash, facts_json, analysis_json,
-        summary, critical_count, warning_count, is_pinned
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        summary, critical_count, warning_count, is_pinned,
+        fingerprint, pipeline_version, prompt_version, mode
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -53,7 +59,11 @@ export class ReportManager {
       report.summary,
       report.criticalCount,
       report.warningCount,
-      report.isPinned ? 1 : 0
+      report.isPinned ? 1 : 0,
+      report.fingerprint || null,
+      report.pipelineVersion || null,
+      report.promptVersion || null,
+      report.mode || 'selection'
     );
   }
 
@@ -68,6 +78,25 @@ export class ReportManager {
 
     const stmt = db.prepare('SELECT * FROM reports WHERE id = ?');
     const row = stmt.get(id);
+
+    if (!row) {
+      return null;
+    }
+
+    return this.deserializeReport(row);
+  }
+
+  /**
+   * Load a report by fingerprint (Layer 3 caching)
+   */
+  loadByFingerprint(fingerprint: string): SavedReport | null {
+    const db = getDatabase();
+    if (!db) {
+      return null;
+    }
+
+    const stmt = db.prepare('SELECT * FROM reports WHERE fingerprint = ?');
+    const row = stmt.get(fingerprint);
 
     if (!row) {
       return null;
@@ -129,7 +158,11 @@ export class ReportManager {
    * Compute workspace hash for staleness detection
    * Hash of: git status output + file modification times
    */
-  computeWorkspaceHash(): string {
+  /**
+   * Compute workspace hash for staleness detection
+   * Hash of: git status output + file modification times
+   */
+  async computeWorkspaceHash(): Promise<string> {
     const git = new GitOperations();
     const gitRoot = getGitRoot();
     if (!gitRoot) {
@@ -138,17 +171,17 @@ export class ReportManager {
 
     // Get git status output by using getWorkingDirectoryChanges
     // We'll reconstruct the status string from the changes
-    const changes = git.getWorkingDirectoryChanges();
+    const changes = await git.getWorkingDirectoryChanges();
     const statusLines: string[] = [];
     const fileTimes: string[] = [];
-    
+
     for (const change of changes) {
       // Reconstruct status line format: "XY path"
-      const statusCode = change.status === 'A' ? 'A ' : 
-                        change.status === 'M' ? ' M' :
-                        change.status === 'D' ? 'D ' : '??';
+      const statusCode = change.status === 'A' ? 'A ' :
+        change.status === 'M' ? ' M' :
+          change.status === 'D' ? 'D ' : '??';
       statusLines.push(`${statusCode} ${change.path}`);
-      
+
       const fullPath = path.join(gitRoot, change.path);
       try {
         if (fs.existsSync(fullPath)) {
@@ -168,15 +201,16 @@ export class ReportManager {
   /**
    * Get count of files that changed since report was created
    */
-  getChangedFileCount(report: SavedReport): number {
+  async getChangedFileCount(report: SavedReport): Promise<number> {
     const git = new GitOperations();
     const gitRoot = getGitRoot();
     if (!gitRoot) {
       return 0;
     }
 
+    const changes = await git.getWorkingDirectoryChanges();
     const currentFiles = new Set(
-      git.getWorkingDirectoryChanges().map(f => f.path)
+      changes.map(f => f.path)
     );
     const reportFiles = new Set(report.selectedFiles);
 
@@ -216,13 +250,18 @@ export class ReportManager {
       selectedFiles: JSON.parse(row.selected_files || '[]'),
       workspaceScope: row.workspace_scope || 'full',
       createdAt: new Date(row.created_at),
-      workspaceHash: row.workspace_hash || '',
+      workspaceHash: row.workspace_hash,
       facts: row.facts_json ? JSON.parse(row.facts_json) : null,
       analysis: row.analysis_json ? JSON.parse(row.analysis_json) : null,
       summary: row.summary || '',
       criticalCount: row.critical_count || 0,
       warningCount: row.warning_count || 0,
-      isPinned: Boolean(row.is_pinned)
+      isPinned: row.is_pinned === 1,
+      // Layer 3 caching fields
+      fingerprint: row.fingerprint || undefined,
+      pipelineVersion: row.pipeline_version || undefined,
+      promptVersion: row.prompt_version || undefined,
+      mode: row.mode || undefined
     };
   }
 }

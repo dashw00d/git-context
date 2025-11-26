@@ -51,7 +51,9 @@ export class DifftasticIntegration {
       }
     }
 
-    throw new Error('Difftastic binary not found. Please install difftastic or configure the path in settings.');
+    // Return empty string if not found (optional dependency)
+    console.warn('[DIFFTASTIC] Binary not found. Structural diff analysis will be disabled.');
+    return '';
   }
 
   /**
@@ -242,6 +244,9 @@ export class DifftasticIntegration {
    * Check if difftastic is available
    */
   isAvailable(): boolean {
+    if (!this.difftasticPath) {
+      return false;
+    }
     try {
       return this.isValidDifftasticPath(this.difftasticPath);
     } catch {
