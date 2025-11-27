@@ -111,6 +111,7 @@ function createMockBundleFacts(scenario: MockScenario): RefactorBundleFacts {
   return {
     version: '2.0',
     generated_at: new Date().toISOString(),
+    confidence: 1.0, // Mock test data has full confidence
     bundle: {
       oldestSha,
       newestSha,

@@ -42,6 +42,7 @@ export type MoveReason =
   | 'extraction'
   | 'consolidation'
   | 'module_split'
+  | 'file_rename'
   | 'unclear';
 
 export interface MovedBlockResult {
@@ -209,6 +210,11 @@ export class MovedBlockDetector {
    */
   classifyMoveReason(candidate: MoveCandidate): MoveReason {
     const { sourceBlock, destBlock } = candidate;
+
+    // File rename: same directory, different filename
+    if (this.isFileRename(sourceBlock.file, destBlock.file)) {
+      return 'file_rename';
+    }
 
     // Extraction: moved to a utility/helper file
     if (this.isUtilityFile(destBlock.file) && !this.isUtilityFile(sourceBlock.file)) {
@@ -490,6 +496,16 @@ export class MovedBlockDetector {
   private isLargeFile(filePath: string): boolean {
     // Simplified - would check file size
     return false; // Placeholder
+  }
+
+  private isFileRename(sourcePath: string, destPath: string): boolean {
+    // Check if paths represent a file rename (same directory, different filename)
+    const sourceDir = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
+    const destDir = destPath.substring(0, destPath.lastIndexOf('/'));
+    const sourceName = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
+    const destName = destPath.substring(destPath.lastIndexOf('/') + 1);
+
+    return sourceDir === destDir && sourceName !== destName;
   }
 
   // Public API methods

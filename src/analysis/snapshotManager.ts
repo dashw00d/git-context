@@ -4,6 +4,7 @@ import { SymbolExtractor } from './symbols';
 import { DependencyExtractor } from './dependencies';
 import { assignDNAIds, computeBodyHash } from './symbolDna';
 import { logDebug } from '../utils/logger';
+import NodeCache from 'node-cache';
 
 export interface FileSnapshot {
   blobSha: string;
@@ -16,11 +17,28 @@ export interface FileSnapshot {
 }
 
 export class SnapshotManager {
+  private snapshotCache = new NodeCache({ stdTTL: 3600, checkperiod: 600 }); // 1 hour TTL, check every 10 minutes
+  private cacheHits = 0;
+  private cacheMisses = 0;
+
   constructor(
     private db: Database,
     private symbolExtractor: SymbolExtractor,
     private dependencyExtractor: DependencyExtractor
   ) {}
+
+  /**
+   * Get cache statistics for observability
+   */
+  getCacheStats() {
+    const total = this.cacheHits + this.cacheMisses;
+    const hitRate = total > 0 ? this.cacheHits / total : 0;
+    return {
+      cacheHits: this.cacheHits,
+      cacheMisses: this.cacheMisses,
+      hitRate: hitRate
+    };
+  }
 
   /**
    * Get or create snapshot for a blob (content-addressed caching)
@@ -30,12 +48,26 @@ export class SnapshotManager {
     blobSha: string,
     content: string
   ): Promise<FileSnapshot> {
-    // Check cache
+    // Check LRU cache first
+    const cacheKey = `${blobSha}:${filePath}`;
+    const lruCached = this.snapshotCache.get<FileSnapshot>(cacheKey);
+    if (lruCached) {
+      logDebug(`[Snapshot] LRU cache hit for ${filePath}@${blobSha.substring(0, 8)}`);
+      this.cacheHits++;
+      return lruCached;
+    }
+
+    // Check database cache
     const cached = this.getCachedSnapshot(blobSha, filePath);
     if (cached) {
-      logDebug(`[Snapshot] Cache hit for ${filePath}@${blobSha.substring(0, 8)}`);
+      logDebug(`[Snapshot] DB cache hit for ${filePath}@${blobSha.substring(0, 8)}`);
+      this.cacheHits++;
+      // Also cache in LRU for faster access
+      this.snapshotCache.set(cacheKey, cached);
       return cached;
     }
+
+    this.cacheMisses++;
 
     // Parse with Tree-sitter
     logDebug(`[Snapshot] Creating snapshot for ${filePath}@${blobSha.substring(0, 8)}`);
@@ -72,6 +104,10 @@ export class SnapshotManager {
 
     // Store to cache
     this.storeSnapshot(snapshot);
+
+    // Also cache in LRU cache for faster access
+    const lruCacheKey = `${blobSha}:${filePath}`;
+    this.snapshotCache.set(lruCacheKey, snapshot);
 
     return snapshot;
   }

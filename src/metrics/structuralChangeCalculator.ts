@@ -40,22 +40,42 @@ export function calculateStructuralChangeSimple(
   const prevLines = prevContent.split('\n');
   const currLines = currContent.split('\n');
 
-  const linesAdded = Math.max(0, currLines.length - prevLines.length);
-  const linesRemoved = Math.max(0, prevLines.length - currLines.length);
+  // Diff line arrays to count actual added/removed lines
+  const prevLineSet = new Set(prevLines);
+  const currLineSet = new Set(currLines);
 
-  // Simple heuristics for structural changes
-  const controlFlowChanged = (
-    (prevContent.includes('if ') || prevContent.includes('for ') || prevContent.includes('while ')) !==
-    (currContent.includes('if ') || currContent.includes('for ') || currContent.includes('while '))
-  );
+  let linesAdded = 0;
+  let linesRemoved = 0;
 
-  const interfaceChanged = (
-    (prevContent.includes('interface ') || prevContent.includes('class ')) !==
-    (currContent.includes('interface ') || currContent.includes('class '))
-  );
+  // Count lines that exist in curr but not in prev
+  for (const line of currLines) {
+    if (!prevLineSet.has(line)) {
+      linesAdded++;
+    }
+  }
 
-  // Rough change score based on line differences
-  const structuralChangeScore = Math.min((linesAdded + linesRemoved) / Math.max(prevLines.length, 1), 1.0);
+  // Count lines that exist in prev but not in curr
+  for (const line of prevLines) {
+    if (!currLineSet.has(line)) {
+      linesRemoved++;
+    }
+  }
+
+  // Detect control-flow changes from line content analysis
+  const controlFlowKeywords = /\b(if|while|for|switch|return|throw|catch|try|else|do|break|continue)\b/;
+  const prevControlFlowLines = prevLines.filter(line => controlFlowKeywords.test(line)).length;
+  const currControlFlowLines = currLines.filter(line => controlFlowKeywords.test(line)).length;
+  const controlFlowChanged = prevControlFlowLines !== currControlFlowLines;
+
+  // Detect interface changes from line content analysis
+  const interfaceKeywords = /\b(function|class|interface|type|export|import|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\b/;
+  const prevInterfaceLines = prevLines.filter(line => interfaceKeywords.test(line)).length;
+  const currInterfaceLines = currLines.filter(line => interfaceKeywords.test(line)).length;
+  const interfaceChanged = prevInterfaceLines !== currInterfaceLines;
+
+  // Calculate structural change score: min(linesChanged / 10, 1.0)
+  const linesChanged = linesAdded + linesRemoved;
+  const structuralChangeScore = Math.min(linesChanged / 10, 1.0);
 
   return {
     structuralChangeScore,

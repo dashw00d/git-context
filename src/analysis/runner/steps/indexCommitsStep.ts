@@ -8,6 +8,7 @@ export function createIndexCommitsStep(
   return {
     id: 'index_commits',
     label: 'Index commits (snapshots + diffs)',
+    deps: [],
 
     async run(state: PipelineState) {
       const shas = state.selectedCommitShas;

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-// Analysis functions moved to AnalysisPipeline service
+// Analysis functions moved to RefactorPipeline service
 import { showCommit, searchSymbol, showLastCommits } from './queries';
 import { installHooks } from './hooks';
 import chalk from 'chalk';
@@ -23,15 +23,31 @@ program
     logInfo(chalk.blue(`Analyzing last ${count} commits...`));
 
     try {
-      const { getAnalysisPipeline } = await import('../analysis/pipeline');
-      const pipeline = await getAnalysisPipeline();
+      const { getRefactorPipeline } = await import('../extension');
+      const { GitOperations } = await import('../analysis/git');
+      const { BranchManager } = await import('../storage/branchManager');
+      const { getDatabaseManager } = await import('../storage/database');
 
-      // Load metadata first
-      const commits = await pipeline.loadRecentCommits(count);
-      const shas = commits.map(c => c.sha);
+      const refactorPipeline = await getRefactorPipeline();
+      const git = new GitOperations();
+      const db = getDatabaseManager().getDatabase();
+      const branchManager = new BranchManager(db);
+
+      // Load recent commits directly
+      const recentCommits = git.getRecentCommits(count);
+      const shas = recentCommits.map(c => c.sha);
+
+      // Record commits in branch manager
+      const branch = git.getCurrentBranch();
+      if (branch && recentCommits.length > 0) {
+        for (const commit of recentCommits) {
+          branchManager.recordCommit(commit.sha, branch);
+        }
+        branchManager.updateBranchHead(branch, recentCommits[0].sha);
+      }
 
       // Then analyze
-      await pipeline.analyzeCommits(shas);
+      await refactorPipeline.analyzeBundle(shas);
 
       logInfo(chalk.green('Analysis complete!'));
     } catch (error) {
@@ -47,9 +63,11 @@ program
     logInfo(chalk.blue('Analyzing staged changes...'));
 
     try {
-      const { getAnalysisPipeline } = await import('../analysis/pipeline');
-      const pipeline = await getAnalysisPipeline();
-      await pipeline.analyzeStagedChanges();
+      const { getRefactorPipeline } = await import('../extension');
+      const refactorPipeline = await getRefactorPipeline();
+
+      // Analyze with workspace enabled to include staged changes
+      await refactorPipeline.analyzeBundle([], true);
 
       logInfo(chalk.green('Staged analysis complete!'));
     } catch (error) {
@@ -65,12 +83,12 @@ program
     logInfo(chalk.blue(`Analyzing commit ${sha}...`));
 
     try {
-      const { getAnalysisPipeline } = await import('../analysis/pipeline');
-      const pipeline = await getAnalysisPipeline();
+      const { getRefactorPipeline } = await import('../extension');
+      const refactorPipeline = await getRefactorPipeline();
 
-      // Load metadata first, then analyze
-      await pipeline.loadCommitMetadata(sha);
-      await pipeline.analyzeCommit(sha);
+      // Index and analyze the specific commit
+      await refactorPipeline.indexCommits([sha]);
+      await refactorPipeline.analyzeBundle([sha]);
 
       logInfo(chalk.green(`Commit ${sha} analysis complete!`));
     } catch (error) {

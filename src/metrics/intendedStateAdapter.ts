@@ -1,8 +1,16 @@
 /**
  * Intended State Adapter
  *
- * Adapter for buildIntendedMap() logic
- * Provides intended state calculation for tests
+ * TEST-ONLY ADAPTER: Simplified intended state calculation for tests
+ *
+ * IMPORTANT: This is a simplified version for test fixtures that don't have database access.
+ * The real pipeline uses buildIntendedMap() from facts/intendedMap.ts (called by intendedStep.ts).
+ *
+ * Real function: buildIntendedMap(commitShas) in src/facts/intendedMap.ts
+ * Runner step: createIntendedStep() in src/analysis/runner/steps/intendedStep.ts
+ *
+ * This adapter provides test metrics based on commit symbol data without requiring
+ * database queries. For production, use buildIntendedMap() directly.
  */
 
 import { IntendedState } from '../facts/intendedMap';
@@ -38,8 +46,12 @@ export function buildIntendedStateFromCommits(
 ): IntendedMetrics {
   const intended = new Map<string, IntendedState>();
 
-  // Process commits in order (oldest first)
-  for (const commit of commits) {
+  // Sort commits oldest→newest by SHA order (assuming SHA order implies chronological order)
+  // In a real git repository, newer commits have higher SHA values lexicographically
+  const sortedCommits = commits.sort((a, b) => a.sha.localeCompare(b.sha));
+
+  // Process commits in chronological order (oldest first)
+  for (const commit of sortedCommits) {
     // Process renames first
     if (commit.renames) {
       for (const rename of commit.renames) {
@@ -74,7 +86,7 @@ export function buildIntendedStateFromCommits(
     }
   }
 
-  // Count metrics
+  // Count metrics - renames are counted as present symbols
   let present = 0;
   let absent = 0;
   let renamed = 0;
@@ -82,11 +94,11 @@ export function buildIntendedStateFromCommits(
   for (const state of intended.values()) {
     if (state.expect === 'present') {
       present++;
-    } else if (state.expect === 'absent') {
-      absent++;
       if (state.isRenamed) {
         renamed++;
       }
+    } else if (state.expect === 'absent') {
+      absent++;
     }
   }
 

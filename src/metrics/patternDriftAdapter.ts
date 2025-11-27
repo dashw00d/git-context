@@ -29,7 +29,9 @@ export function detectPatternDriftFromFacts(
   drift: DriftFindings
 ): PatternDriftMetrics {
   // Import the functions from factsAssembler
-  const { detectMixedTargets, detectOldNamespaces } = require('../facts/factsAssembler');
+  const factsAssembler = require('../facts/factsAssembler');
+  const detectMixedTargets = factsAssembler.detectMixedTargets;
+  const detectOldNamespaces = factsAssembler.detectOldNamespaces;
 
   const mixedTargets = detectMixedTargets(drift, working);
   const oldNamespaces = detectOldNamespaces(working, intended);

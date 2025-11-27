@@ -8,7 +8,7 @@ import { MovedBlockDetector } from './movedBlockDetector';
 import { Database } from 'sql.js';
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { logDebug, logInfo } from '../utils/logger';
-import { runWithConcurrency } from './runner/concurrency';
+import pLimit from 'p-limit';
 import { getExtensionConfig } from '../utils/config';
 import * as pathModule from 'path';
 
@@ -27,6 +27,9 @@ export interface CommitFacts {
 }
 
 export class CommitIndexer {
+  private cacheHits = 0;
+  private cacheMisses = 0;
+
   constructor(
     private db: Database,
     private git: GitOperations,
@@ -39,14 +42,63 @@ export class CommitIndexer {
   ) { }
 
   /**
+   * Get cache statistics for observability
+   */
+  getCacheStats() {
+    const total = this.cacheHits + this.cacheMisses;
+    const hitRate = total > 0 ? this.cacheHits / total : 0;
+    return {
+      cacheHits: this.cacheHits,
+      cacheMisses: this.cacheMisses,
+      hitRate: hitRate
+    };
+  }
+
+  /**
+   * Retry a function with exponential backoff and jitter
+   */
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> {
+    let lastError: Error;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error as Error;
+
+        if (attempt === maxRetries) {
+          break; // Don't retry on final attempt
+        }
+
+        // Exponential backoff with jitter: baseDelay * 2^attempt + random jitter
+        const exponentialDelay = baseDelay * Math.pow(2, attempt);
+        const jitter = Math.random() * 0.1 * exponentialDelay; // 10% jitter
+        const delay = exponentialDelay + jitter;
+
+        logDebug(`[CommitIndexer] Retry attempt ${attempt + 1}/${maxRetries} after ${delay.toFixed(0)}ms: ${lastError.message}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError!;
+  }
+
+  /**
    * Ensure commit is indexed (idempotent, cacheable)
    */
   async ensureCommitIndexed(sha: string): Promise<CommitFacts> {
     // Check if already indexed with current analysis version
     if (this.isIndexed(sha)) {
       logDebug(`[CommitIndexer] ${sha} already indexed`);
+      this.cacheHits++;
       return this.loadCommitFacts(sha);
     }
+
+    this.cacheMisses++;
 
     // Mark as pending
     this.markPending(sha);
@@ -70,14 +122,21 @@ export class CommitIndexer {
    */
   async ensureCommitsIndexed(
     shas: string[],
-    concurrency: number = 4
+    concurrency: number = 8
   ): Promise<CommitFacts[]> {
-    const results: CommitFacts[] = [];
+    const limit = pLimit(concurrency);
+    const promises = shas.map(sha => limit(async () => {
+      return this.retryWithBackoff(async () => {
+        const facts = await this.ensureCommitIndexed(sha);
+        return facts;
+      });
+    }));
 
-    await runWithConcurrency(shas, concurrency, async (sha) => {
-      const facts = await this.ensureCommitIndexed(sha);
-      results.push(facts);
-    });
+    const results = await Promise.all(promises);
+
+    // Log cache performance metrics
+    const stats = this.getCacheStats();
+    logInfo(`[CommitIndexer] Cache performance: ${stats.cacheHits} hits, ${stats.cacheMisses} misses (${(stats.hitRate * 100).toFixed(1)}% hit rate)`);
 
     return results;
   }

@@ -181,7 +181,9 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "build:cockpit": "esbuild src/webview/cockpit/index.tsx --bundle --outfile=media/cockpit.js --format=iife --platform=browser --loader:.tsx=tsx --loader:.ts=ts --jsx=automatic --sourcemap",
-    "test": "echo \"No tests configured\""
+    "test": "npm run test:pipeline",
+    "test:pipeline": "npx ts-node benchmarks/pipeline_metric_test.ts --shared-state",
+    "test:pipeline:ci": "node -e \"const cp = require('child_process'); const result = cp.spawnSync('npx', ['ts-node', 'benchmarks/pipeline_metric_test.ts', '--shared-state'], { stdio: 'pipe', encoding: 'utf8' }); console.log(result.stdout); const accuracyMatch = result.stdout.match(/Overall Accuracy: ([\\d.]+)%/); if (accuracyMatch && parseFloat(accuracyMatch[1]) < 85) { console.error('❌ Pipeline test accuracy below 85% threshold'); process.exit(1); } else if (accuracyMatch) { console.log('✅ Pipeline test accuracy meets 85% threshold'); } else { console.log('⚠️  Could not parse accuracy from test output'); process.exit(1); }\""
   },
   "devDependencies": {
     "@types/node": "16.x",
@@ -203,7 +205,9 @@
     "chalk": "^4.1.2",
     "commander": "^10.0.0",
     "lodash": "^4.17.21",
+    "node-cache": "^5.1.2",
     "openai": "^4.0.0",
+    "p-limit": "^3.1.0",
     "sql.js": "^1.13.0",
     "web-tree-sitter": "^0.25.10"
   },

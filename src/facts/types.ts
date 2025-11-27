@@ -6,6 +6,7 @@
 export interface RefactorBundleFacts {
   version: '2.0';
   generated_at: string;
+  confidence: number; // 0-1: completeness of available data
   bundle: {
     oldestSha: string;
     newestSha?: string;

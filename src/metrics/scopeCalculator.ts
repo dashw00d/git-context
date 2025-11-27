@@ -1,8 +1,16 @@
 /**
  * Scope Calculator
  *
- * Adapter for scope calculation logic
- * Tests file and blast radius scoping
+ * TEST-ONLY ADAPTER: Simplified scope calculation for tests
+ *
+ * IMPORTANT: This is a simplified version for test fixtures that don't have database/git access.
+ * The real pipeline uses computeScope() from facts/scope.ts (called by scopeStep.ts).
+ *
+ * Real function: computeScope(commitShas, workspaceParts) in src/facts/scope.ts
+ * Runner step: createScopeStep() in src/analysis/runner/steps/scopeStep.ts
+ *
+ * This adapter provides test metrics based on commit/symbol/edge data without requiring
+ * database queries or git operations. For production, use computeScope() directly.
  */
 
 import { ScopeSet } from '../facts/scope';
@@ -57,9 +65,10 @@ export function calculateScopeFromFacts(
     }
   });
 
-  // Blast radius (simplified - files that have dependencies)
+  // Blast radius using BFS algorithm matching real computeBlastRadiusNeighbors
   const blastRadius = new Set<string>();
   const symbolToFile = new Map<string, string>();
+  const adjacencyMap = new Map<string, Array<{neighborId: string, confidence: number}>>();
 
   // Build symbol to file mapping
   [...symbols, ...commits.flatMap(c => c.symbols || [])].forEach(symbol => {
@@ -67,13 +76,55 @@ export function calculateScopeFromFacts(
     if (file) symbolToFile.set(symbol.id, file);
   });
 
-  // Add files that have incoming or outgoing edges
+  // Build bidirectional adjacency map from edges
   edges.forEach(edge => {
-    const fromFile = symbolToFile.get(edge.from);
-    const toFile = symbolToFile.get(edge.to);
-    if (fromFile) blastRadius.add(fromFile);
-    if (toFile) blastRadius.add(toFile);
+    const confidence = 1.0; // Simplified - real algorithm uses edge confidence
+
+    // Add forward edge
+    if (!adjacencyMap.has(edge.from)) {
+      adjacencyMap.set(edge.from, []);
+    }
+    adjacencyMap.get(edge.from)!.push({ neighborId: edge.to, confidence });
+
+    // Add reverse edge (bidirectional)
+    if (!adjacencyMap.has(edge.to)) {
+      adjacencyMap.set(edge.to, []);
+    }
+    adjacencyMap.get(edge.to)!.push({ neighborId: edge.from, confidence });
   });
+
+  // Extract changed symbols (symbols in commits or working changes)
+  const changedSymbols = new Set<string>();
+  commits.forEach(commit => {
+    commit.symbols?.forEach(symbol => changedSymbols.add(symbol.id));
+  });
+  symbols.forEach(symbol => changedSymbols.add(symbol.id));
+
+  // BFS from changed symbols (depth 2-3, max 50 files)
+  const queue: Array<{symbolId: string, depth: number}> = Array.from(changedSymbols).map(id => ({symbolId: id, depth: 0}));
+  const visited = new Set<string>(changedSymbols);
+  const maxDepth = 3;
+  const maxFiles = 50;
+
+  while (queue.length > 0 && blastRadius.size < maxFiles) {
+    const {symbolId, depth} = queue.shift()!;
+    if (depth > maxDepth || visited.has(symbolId)) continue;
+    visited.add(symbolId);
+
+    const neighbors = adjacencyMap.get(symbolId) || [];
+    for (const {neighborId} of neighbors) {
+      if (changedSymbols.has(neighborId)) continue; // Skip changed symbols
+
+      const filePath = symbolToFile.get(neighborId);
+      if (filePath && !commitFiles.has(filePath)) {
+        blastRadius.add(filePath);
+
+        if (depth < maxDepth) {
+          queue.push({symbolId: neighborId, depth: depth + 1});
+        }
+      }
+    }
+  }
 
   // Union of all files
   const allPaths = new Set([...commitFiles, ...workingChanged, ...blastRadius]);

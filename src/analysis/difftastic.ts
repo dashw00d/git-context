@@ -7,6 +7,18 @@ export interface DifftasticResult {
   highlights: string[];
   morphs: MorphHighlight[];
   hasStructuralChanges: boolean;
+  hunks?: DiffHunk[];
+  tags?: Map<number, string[]>; // line number -> array of tags
+}
+
+export interface DiffHunk {
+  oldStart: number;
+  oldCount: number;
+  newStart: number;
+  newCount: number;
+  lines: string[];
+  linesAdded: number;
+  linesRemoved: number;
 }
 
 export interface MorphHighlight {
@@ -163,33 +175,110 @@ export class DifftasticIntegration {
   }
 
   /**
-   * Parse difftastic output to extract structural highlights
+   * Parse difftastic output to extract structural highlights, hunks, and tagged tokens
    */
   private parseDifftasticOutput(output: string, hasDifferences: boolean): DifftasticResult {
     const highlights: string[] = [];
     const morphs: MorphHighlight[] = [];
+    const hunks: DiffHunk[] = [];
+    const tags = new Map<number, string[]>();
 
     if (!hasDifferences) {
       return {
         highlights: [],
         morphs: [],
-        hasStructuralChanges: false
+        hasStructuralChanges: false,
+        hunks: [],
+        tags
       };
     }
 
-    // Simple parsing: just capture relevant lines without overfitting
     const lines = output.split('\n');
-    for (const line of lines) {
+    let currentHunk: Partial<DiffHunk> | null = null;
+    let inHunkContext = false;
+
+    // Control-flow and interface keywords to tag
+    const controlFlowKeywords = /\b(if|while|for|switch|return|throw|catch|try|else|do|break|continue)\b/;
+    const interfaceKeywords = /\b(function|class|interface|type|export|import|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\b/;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('File ')) {
+
+      // Skip file headers
+      if (trimmed.startsWith('File ')) {
+        continue;
+      }
+
+      // Parse hunk headers: @@ -oldStart,oldCount +newStart,newCount @@
+      const hunkMatch = trimmed.match(/^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
+      if (hunkMatch) {
+        // Save previous hunk if exists
+        if (currentHunk && currentHunk.lines) {
+          hunks.push(currentHunk as DiffHunk);
+        }
+
+        // Start new hunk
+        const [, oldStart, oldCount, newStart, newCount] = hunkMatch;
+        currentHunk = {
+          oldStart: parseInt(oldStart),
+          oldCount: parseInt(oldCount || '1'),
+          newStart: parseInt(newStart),
+          newCount: parseInt(newCount || '1'),
+          lines: [],
+          linesAdded: 0,
+          linesRemoved: 0
+        };
+        inHunkContext = true;
+
+        // Add hunk header as highlight
+        highlights.push(trimmed);
+        continue;
+      }
+
+      // Process lines within hunk context
+      if (inHunkContext && currentHunk) {
+        currentHunk.lines!.push(line);
+
+        // Count added/removed lines
+        if (line.startsWith('+') && !line.startsWith('+++')) {
+          currentHunk.linesAdded!++;
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+          currentHunk.linesRemoved!++;
+        }
+
+        // Tag control-flow keywords
+        if (controlFlowKeywords.test(line)) {
+          const lineTags = tags.get(i + 1) || [];
+          lineTags.push('control-flow');
+          tags.set(i + 1, lineTags);
+        }
+
+        // Tag interface keywords
+        if (interfaceKeywords.test(line)) {
+          const lineTags = tags.get(i + 1) || [];
+          lineTags.push('interface');
+          tags.set(i + 1, lineTags);
+        }
+      }
+
+      // Add non-empty lines as highlights
+      if (trimmed) {
         highlights.push(trimmed);
       }
+    }
+
+    // Save final hunk
+    if (currentHunk && currentHunk.lines) {
+      hunks.push(currentHunk as DiffHunk);
     }
 
     return {
       highlights,
       morphs, // Empty for now as we don't want to overfit
-      hasStructuralChanges: true
+      hasStructuralChanges: true,
+      hunks,
+      tags
     };
   }
 

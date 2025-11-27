@@ -59,9 +59,20 @@ export async function buildRefactorBundleFacts(
   const oldestSha = commitFacts.length > 0 ? commitFacts[0].sha : 'unknown';
   const newestSha = commitFacts.length > 0 ? commitFacts[commitFacts.length - 1].sha : 'unknown';
 
+  // Calculate confidence score based on available inputs (0.2 per input)
+  const confidenceInputs = [
+    options?.scope ? 1 : 0,
+    options?.intended ? 1 : 0,
+    options?.working ? 1 : 0,
+    options?.drift ? 1 : 0,
+    options?.legacy ? 1 : 0
+  ];
+  const confidence = confidenceInputs.reduce((sum, present) => sum + present * 0.2, 0);
+
   return {
     version: '2.0',
     generated_at: new Date().toISOString(),
+    confidence,
     bundle: {
       oldestSha,
       newestSha,
@@ -71,26 +82,65 @@ export async function buildRefactorBundleFacts(
       files: totalFiles,
       blastRadius: maxStructuralChange * 10 // Rough approximation
     },
-    intended: {
-      present: totalSymbols,
-      absent: 0, // TODO: Implement intended state tracking
-      renamed: 0
-    },
+    intended: options?.intended
+      ? calculateIntendedCounts(options.intended)
+      : {
+          present: totalSymbols,
+          absent: 0,
+          renamed: 0
+        },
     working: {
       symbols: totalSymbols,
       edges: totalEdges
     },
     findings: {
-      incompleteness: {
-        missing: 0, // TODO: Implement completeness checking
+      incompleteness: options?.drift ? {
+        missing: options.drift.missing_symbols.length,
+        zombies: options.drift.zombie_symbols.length,
+        divergent: options.drift.divergent_symbols.length
+      } : {
+        missing: 0,
         zombies: 0,
         divergent: 0
       },
-      patternDrift: {
+      patternDrift: options?.drift && options?.working && options?.intended ? {
+        mixedTargets: detectMixedTargets(options.drift, options.working),
+        oldNamespaces: detectOldNamespaces(options.working, options.intended),
+        conventionDrift: options.drift.conventionDrift ? {
+          dominantConvention: options.drift.conventionDrift.dominantConvention,
+          driftPercent: options.drift.conventionDrift.driftPercent,
+          driftSymbolCount: options.drift.conventionDrift.driftSymbols.length
+        } : undefined,
+        mixedConventionFiles: options.drift.mixedConventionFiles?.length || undefined
+      } : options?.working && options?.intended ? {
+        // Compute basic pattern drift even without full drift analysis
+        mixedTargets: detectMixedTargets({
+          missing_symbols: [],
+          zombie_symbols: [],
+          divergent_symbols: [],
+          missing_edges: [],
+          zombie_edges: [],
+          hotspots: []
+        }, options.working),
+        oldNamespaces: detectOldNamespaces(options.working, options.intended)
+      } : {
         mixedTargets: 0,
         oldNamespaces: 0
       },
-      legacyAudit: {
+      legacyAudit: options?.legacy ? {
+        dead: options.legacy.dead.length,
+        legacyUsed: options.legacy.legacyUsed.length,
+        replacedLeftovers: options.legacy.replacedLeftovers.map(r => ({
+          old: r.old.symbol_id,
+          new: r.new.symbol_id,
+          confidence: r.confidence
+        }))
+      } : options?.working && options?.intended ? {
+        // Compute basic dead symbol detection from reachability analysis
+        dead: computeBasicDeadSymbols(options.working, options.intended),
+        legacyUsed: 0,
+        replacedLeftovers: []
+      } : {
         dead: 0,
         legacyUsed: 0,
         replacedLeftovers: []
@@ -98,7 +148,18 @@ export async function buildRefactorBundleFacts(
     },
     evidence: {
       risks: allRisks,
-      structuralChangeScore: maxStructuralChange
+      structuralChangeScore: maxStructuralChange,
+      ...(options?.intended && {
+        "intended.present": Array.from(options.intended.values())
+          .filter(state => state.expect === 'present')
+          .map(state => Array.from(options.intended!.keys())[Array.from(options.intended!.values()).indexOf(state)]),
+        "intended.absent": Array.from(options.intended.values())
+          .filter(state => state.expect === 'absent')
+          .map(state => Array.from(options.intended!.keys())[Array.from(options.intended!.values()).indexOf(state)]),
+        "intended.renamed": Array.from(options.intended.values())
+          .filter(state => state.expect === 'present' && state.isRenamed)
+          .map(state => Array.from(options.intended!.keys())[Array.from(options.intended!.values()).indexOf(state)])
+      })
     }
   };
 }
@@ -126,6 +187,7 @@ export async function assembleFacts(
   const facts: RefactorBundleFacts = {
     version: "2.0",
     generated_at: new Date().toISOString(),
+    confidence: 1.0, // Full confidence when using complete pipeline data
     bundle: {
       oldestSha,
       newestSha,
@@ -256,7 +318,7 @@ export async function saveFacts(facts: RefactorBundleFacts): Promise<string> {
 /**
  * Calculate counts for intended state summary
  */
-function calculateIntendedCounts(intended: Map<string, IntendedState>): { present: number; absent: number; renamed: number } {
+export function calculateIntendedCounts(intended: Map<string, IntendedState>): { present: number; absent: number; renamed: number } {
   let present = 0;
   let absent = 0;
   let renamed = 0;
@@ -311,7 +373,7 @@ function getWorkingLists(working: WorkingSnapshot): { symbols: string[]; edges: 
  * Detect files with mixed naming convention targets
  * Counts files that have multiple naming conventions in use
  */
-function detectMixedTargets(drift: DriftFindings, working: WorkingSnapshot): number {
+export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapshot): number {
   // Use mixedConventionFiles from drift detector if available
   if (drift.mixedConventionFiles && drift.mixedConventionFiles.length > 0) {
     return drift.mixedConventionFiles.length;
@@ -352,7 +414,7 @@ function detectMixedTargets(drift: DriftFindings, working: WorkingSnapshot): num
  * Detect old namespace usage patterns
  * Looks for symbols using deprecated/old namespace patterns
  */
-function detectOldNamespaces(working: WorkingSnapshot, intended: Map<string, IntendedState>): number {
+export function detectOldNamespaces(working: WorkingSnapshot, intended: Map<string, IntendedState>): number {
   const oldNamespacePatterns = [
     /^(old|legacy|deprecated|v1|v2|old_|legacy_|deprecated_)/i,
     /(Old|Legacy|Deprecated)([A-Z]|$)/,
@@ -392,4 +454,56 @@ function detectOldNamespaces(working: WorkingSnapshot, intended: Map<string, Int
   }
 
   return oldNamespaceCount;
+}
+
+/**
+ * Compute basic dead symbol detection from reachability analysis
+ * Identifies symbols that are not reachable from entry points
+ */
+function computeBasicDeadSymbols(working: WorkingSnapshot, intended: Map<string, IntendedState>): number {
+  const reachable = new Set<string>();
+  const queue: string[] = [];
+
+  // Start with entry points: exported symbols and symbols marked as entry points
+  for (const [symbolId, symbol] of working.symbolsById) {
+    const intendedState = intended.get(symbolId);
+
+    // Include symbols that are exported or explicitly intended present
+    if (symbol.kind === 'export' ||
+        (intendedState && intendedState.expect === 'present') ||
+        symbol.name.startsWith('main') ||
+        symbol.name.startsWith('index')) {
+      reachable.add(symbolId);
+      queue.push(symbolId);
+    }
+  }
+
+  // BFS traversal following edges
+  while (queue.length > 0) {
+    const currentSymbolId = queue.shift()!;
+
+    // Find all edges where current symbol is the source
+    const outgoingEdges = working.edges.filter(edge =>
+      edge.from_symbol_id === currentSymbolId
+    );
+
+    for (const edge of outgoingEdges) {
+      const targetSymbolId = edge.to_symbol_id;
+
+      if (!reachable.has(targetSymbolId)) {
+        reachable.add(targetSymbolId);
+        queue.push(targetSymbolId);
+      }
+    }
+  }
+
+  // Count symbols that are intended present but not reachable
+  let deadCount = 0;
+  for (const [symbolId, intendedState] of intended) {
+    if (intendedState.expect === 'present' && !reachable.has(symbolId)) {
+      deadCount++;
+    }
+  }
+
+  return deadCount;
 }

@@ -5,20 +5,30 @@ export function createBundleFactsStep(): PipelineStep {
   return {
     id: 'bundle_facts',
     label: 'Aggregate bundle facts',
+    deps: ['scope', 'intended', 'working', 'drift', 'legacy', 'hotspots'],
 
     async run(state: PipelineState) {
       if (!state.commitFacts || state.commitFacts.length === 0) {
         throw new Error('No commit facts available');
       }
 
-      // Build bundle facts from commit analyses
-      // Pass commit SHAs when available for enhanced functionality
+      // Use full logic if all facts are available, otherwise fallback
+      const options: any = {
+        commitShas: state.selectedCommitShas
+      };
+
+      if (state.scope && state.intended && state.working && state.drift && state.legacy) {
+        options.scope = state.scope;
+        options.intended = state.intended;
+        options.working = state.working;
+        options.drift = state.drift;
+        options.legacy = state.legacy;
+      }
+
       const bundleFacts = await buildRefactorBundleFacts(
         state.commitFacts,
         state.workspaceFacts,
-        {
-          commitShas: state.selectedCommitShas
-        }
+        options
       );
 
       state.bundleFacts = bundleFacts;

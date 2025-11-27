@@ -5,7 +5,6 @@ import { getGitRoot } from '../utils/config';
 import { ActiveBundleProvider } from './activeBundleProvider';
 import { GitOperations } from '../analysis/git';
 import { BranchManager } from '../storage/branchManager';
-import { getAnalysisPipeline } from '../analysis/pipeline';
 import { makeWorkspaceSha, isWorkspaceSha } from '../utils/workspace';
 
 

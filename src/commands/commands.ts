@@ -246,8 +246,8 @@ export async function registerCommands(
         try {
           const state = orchestrator.getState();
           const selected = new Set(state.selectedCommitShas);
-          const { getAnalysisPipeline } = await import('../analysis/pipeline');
-          const pipeline = await getAnalysisPipeline();
+          const { getRefactorPipeline } = await import('../extension');
+          const refactorPipeline = await getRefactorPipeline();
 
           let branchLoaded = false;
           let branchName: string | null = null;
@@ -282,6 +282,8 @@ export async function registerCommands(
             }
           }
 
+          // In new architecture, workspace analysis happens as part of the pipeline
+          // Just ensure workspace SHAs are in the selected set
           for (const [mode, request] of workspaceRequests.entries()) {
             if (!request.sha) {
               const currentBranch = await ensureBranch();
@@ -294,17 +296,17 @@ export async function registerCommands(
               request.sha = makeWorkspaceSha(mode, currentBranch);
             }
 
-            const analysis = await pipeline.analyzeWorkspace(mode);
-            if (analysis) {
-              selected.add(analysis.sha);
-              request.sha = analysis.sha;
-            } else {
-              const existing = await pipeline.getAnalysisResults(request.sha!);
-              if (existing) {
-                selected.add(request.sha!);
-              } else if (request.fromPaths) {
-                vscode.window.showInformationMessage(`No ${mode} files to analyze`);
-              }
+            // Check if there are actually files to analyze for this workspace mode
+            const { GitOperations } = await import('../analysis/git');
+            const git = new GitOperations();
+            const files = mode === 'staged'
+              ? await git.getStagedFiles()
+              : await git.getUnstagedFiles();
+
+            if (files.length > 0) {
+              selected.add(request.sha!);
+            } else if (request.fromPaths) {
+              vscode.window.showInformationMessage(`No ${mode} files to analyze`);
             }
           }
 

@@ -28,6 +28,240 @@ export interface DriftFindings {
     symbolCount: number;
     driftPercent: number;
   }>;
+  divergentClusters?: Array<Set<SymbolContext>>;
+  suggestedConsolidations?: Array<{symbols: string[], similarity: number}>;
+}
+
+/**
+ * Detect divergent symbol clusters using AST shape similarity and reachability analysis
+ */
+function detectDivergentClusters(
+  working: WorkingSnapshot,
+  intended: Map<string, IntendedState>
+): {
+  divergentClusters: Array<Set<SymbolContext>>;
+  suggestedConsolidations: Array<{symbols: string[], similarity: number}>;
+} {
+  const divergentClusters: Array<Set<SymbolContext>> = [];
+  const suggestedConsolidations: Array<{symbols: string[], similarity: number}> = [];
+
+  // Get symbols that exist in working tree and are intended present
+  const workingIntendedSymbols = Array.from(working.symbolsById.entries())
+    .filter(([symbolId]) => {
+      const intendedState = intended.get(symbolId);
+      return intendedState && intendedState.expect === 'present';
+    })
+    .map(([, symbol]) => symbol);
+
+  if (workingIntendedSymbols.length < 2) {
+    return { divergentClusters, suggestedConsolidations };
+  }
+
+  // Cluster by AST shape similarity
+  const clusters = clusterByShape(workingIntendedSymbols);
+
+  // Find divergent clusters (clusters with high internal similarity but different names)
+  for (const cluster of clusters) {
+    if (cluster.size >= 2) {
+      const symbols = Array.from(cluster);
+      const names = symbols.map(s => s.name);
+
+      // Check if symbols have different names but similar AST shapes
+      const uniqueNames = new Set(names);
+      if (uniqueNames.size > 1) {
+        // Calculate average similarity within cluster
+        let totalSimilarity = 0;
+        let pairCount = 0;
+
+        for (let i = 0; i < symbols.length; i++) {
+          for (let j = i + 1; j < symbols.length; j++) {
+            const similarity = calculateSymbolSimilarity(symbols[i], symbols[j]);
+            totalSimilarity += similarity;
+            pairCount++;
+          }
+        }
+
+        const avgSimilarity = pairCount > 0 ? totalSimilarity / pairCount : 0;
+
+        // Only consider clusters with high similarity (>0.7) as potentially divergent
+        if (avgSimilarity > 0.7) {
+          divergentClusters.push(new Set(symbols));
+
+          // Suggest consolidation if similarity is very high (>0.9)
+          if (avgSimilarity > 0.9) {
+            suggestedConsolidations.push({
+              symbols: symbols.map(s => s.symbol_id),
+              similarity: avgSimilarity
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Reachability analysis for intended symbols
+  const reachableSymbols = findReachableSymbols(working, intended);
+  for (const [symbolId, intendedState] of intended) {
+    if (intendedState.expect === 'present' && !reachableSymbols.has(symbolId)) {
+      // Symbol is intended present but not reachable from entry points
+      const symbol = working.symbolsById.get(symbolId);
+      if (symbol) {
+        // Add to divergent clusters as potentially unreachable/dead code
+        const unreachableCluster = new Set([symbol]);
+        divergentClusters.push(unreachableCluster);
+      }
+    }
+  }
+
+  return { divergentClusters, suggestedConsolidations };
+}
+
+/**
+ * Cluster symbols by AST shape similarity using symbol DNA hash
+ */
+function clusterByShape(symbols: SymbolContext[]): Set<SymbolContext>[] {
+  const clusters: Set<SymbolContext>[] = [];
+
+  // Group symbols by their DNA hash (if available)
+  const dnaClusters = new Map<string, Set<SymbolContext>>();
+  const symbolsWithoutDna: SymbolContext[] = [];
+
+  for (const symbol of symbols) {
+    const dnaHash = (symbol as any).dnaId;
+
+    if (dnaHash) {
+      // Has DNA hash - cluster by DNA
+      if (!dnaClusters.has(dnaHash)) {
+        dnaClusters.set(dnaHash, new Set());
+      }
+      dnaClusters.get(dnaHash)!.add(symbol);
+    } else {
+      // No DNA hash - will use signature clustering
+      symbolsWithoutDna.push(symbol);
+    }
+  }
+
+  // Convert DNA clusters to array
+  for (const cluster of dnaClusters.values()) {
+    if (cluster.size > 0) {
+      clusters.push(cluster);
+    }
+  }
+
+  // For symbols without DNA, use signature-based similarity
+  if (symbolsWithoutDna.length > 0) {
+    const signatureClusters = clusterBySignature(symbolsWithoutDna);
+    clusters.push(...signatureClusters);
+  }
+
+  return clusters;
+}
+
+/**
+ * Fallback clustering by signature similarity when DNA hash is not available
+ */
+function clusterBySignature(symbols: SymbolContext[]): Set<SymbolContext>[] {
+  const clusters: Set<SymbolContext>[] = [];
+
+  for (const symbol of symbols) {
+    let foundCluster = false;
+
+    // Try to find existing cluster with similar signature
+    for (const cluster of clusters) {
+      const clusterSymbol = Array.from(cluster)[0];
+      if (calculateSignatureSimilarity(symbol.signature || '', clusterSymbol.signature || '') > 0.8) {
+        cluster.add(symbol);
+        foundCluster = true;
+        break;
+      }
+    }
+
+    // Create new cluster if no similar signature found
+    if (!foundCluster) {
+      clusters.push(new Set([symbol]));
+    }
+  }
+
+  return clusters;
+}
+
+/**
+ * Calculate similarity between two symbols (0-1 scale)
+ */
+function calculateSymbolSimilarity(a: SymbolContext, b: SymbolContext): number {
+  // Use DNA hash similarity if available
+  const aDna = (a as any).dnaId;
+  const bDna = (b as any).dnaId;
+
+  if (aDna && bDna) {
+    return aDna === bDna ? 1.0 : 0.0; // Exact DNA match = perfect similarity
+  }
+
+  // Fallback to signature similarity
+  return calculateSignatureSimilarity(a.signature || '', b.signature || '');
+}
+
+/**
+ * Calculate signature similarity using Jaccard index on tokens
+ */
+function calculateSignatureSimilarity(sigA: string, sigB: string): number {
+  if (!sigA || !sigB) return 0;
+
+  // Tokenize signatures (simple split on non-word chars)
+  const tokensA = new Set(sigA.split(/\W+/).filter(t => t.length > 0));
+  const tokensB = new Set(sigB.split(/\W+/).filter(t => t.length > 0));
+
+  // Calculate Jaccard similarity: |intersection| / |union|
+  const intersection = new Set([...tokensA].filter(x => tokensB.has(x)));
+  const union = new Set([...tokensA, ...tokensB]);
+
+  return union.size > 0 ? intersection.size / union.size : 0;
+}
+
+/**
+ * Find symbols reachable from entry points (exported symbols, public APIs)
+ */
+function findReachableSymbols(
+  working: WorkingSnapshot,
+  intended: Map<string, IntendedState>
+): Set<string> {
+  const reachable = new Set<string>();
+  const queue: string[] = [];
+
+  // Start with entry points: exported symbols and symbols marked as entry points
+  for (const [symbolId, symbol] of working.symbolsById) {
+    const intendedState = intended.get(symbolId);
+
+    // Include symbols that are exported or explicitly intended present
+    if (symbol.kind === 'export' ||
+        (intendedState && intendedState.expect === 'present') ||
+        symbol.name.startsWith('main') ||
+        symbol.name.startsWith('index')) {
+      reachable.add(symbolId);
+      queue.push(symbolId);
+    }
+  }
+
+  // BFS traversal following edges
+  while (queue.length > 0) {
+    const currentSymbolId = queue.shift()!;
+
+    // Find all edges where current symbol is the source
+    const outgoingEdges = working.edges.filter(edge =>
+      edge.from_symbol_id === currentSymbolId
+    );
+
+    for (const edge of outgoingEdges) {
+      const targetSymbolId = edge.to_symbol_id;
+
+      if (!reachable.has(targetSymbolId)) {
+        reachable.add(targetSymbolId);
+        queue.push(targetSymbolId);
+      }
+    }
+  }
+
+  return reachable;
 }
 
 /**
@@ -173,6 +407,15 @@ export function detectDrift(
   if (conventionDrift) {
     findings.conventionDrift = conventionDrift.conventionDrift;
     findings.mixedConventionFiles = conventionDrift.mixedConventionFiles;
+  }
+
+  // Enhanced divergent detection with AST shape clustering
+  const enhancedDivergent = detectDivergentClusters(working, intended);
+  if (enhancedDivergent.divergentClusters.length > 0) {
+    findings.divergentClusters = enhancedDivergent.divergentClusters;
+  }
+  if (enhancedDivergent.suggestedConsolidations.length > 0) {
+    findings.suggestedConsolidations = enhancedDivergent.suggestedConsolidations;
   }
 
   return findings;

@@ -11,5 +11,5 @@ import { detectNamingConvention, analyzeConventionDrift } from '../analysis/nami
 import { extractImportPaths, analyzeImportPathDrift, detectFileNamingConvention } from '../analysis/conventionEnhancements';
 import { detectLanguage } from '../analysis/tree-sitter';
 
-// Analysis functions have been moved to AnalysisPipeline service
-// Use getAnalysisPipeline() to access analysis functionality
+// Analysis functions have been moved to RefactorPipeline service
+// Use getRefactorPipeline() to access analysis functionality

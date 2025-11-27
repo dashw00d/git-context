@@ -306,6 +306,7 @@ export class ReportService {
         return {
             version: '2.0',
             generated_at: new Date().toISOString(),
+            confidence: 0.2, // Low confidence - basic aggregation only
             bundle: {
                 oldestSha: shas[shas.length - 1] || '',
                 newestSha: shas[0] || '',

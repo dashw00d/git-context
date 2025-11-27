@@ -140,13 +140,18 @@ async function updateCommitsState(reason = 'commits:update') {
 
   const bundleShaSet = new Set(activeBundleProvider?.exportBundleFacts?.()?.bundle?.shas ?? []);
 
-  const { getAnalysisPipeline } = await import('./analysis/pipeline');
-  const pipeline = await getAnalysisPipeline();
+  const { getDatabaseManager } = await import('./storage/database');
+  const { ANALYSIS_VERSION } = await import('./storage/schema');
+  const db = getDatabaseManager().getDatabase();
   const analyzedStatuses = await Promise.all(
-    commits.map(async (commit: any) => ({
-      sha: commit.sha,
-      analyzed: await pipeline.isCommitAnalyzed(commit.sha)
-    }))
+    commits.map(async (commit: any) => {
+      // Check if commit is analyzed by querying commits_analysis table
+      const result = db.prepare('SELECT COUNT(*) as count FROM commits_analysis WHERE sha = ? AND analysis_version = ? AND status = ?').get(commit.sha, ANALYSIS_VERSION, 'complete') as { count: number };
+      return {
+        sha: commit.sha,
+        analyzed: result.count > 0
+      };
+    })
   );
   const analyzedMap = new Map(analyzedStatuses.map((s) => [s.sha, s.analyzed]));
 
@@ -368,8 +373,7 @@ export async function activate(context: vscode.ExtensionContext) {
       const { ensureDatabaseInitialized, getDatabaseManager } = await import('./storage/database');
       await ensureDatabaseInitialized();
 
-      const { getAnalysisPipeline } = await import('./analysis/pipeline');
-      const pipeline = await getAnalysisPipeline();
+      const { BranchManager } = await import('./storage/branchManager');
       const { getExtensionConfig } = await import('./utils/config');
       const config = getExtensionConfig();
 
@@ -379,7 +383,26 @@ export async function activate(context: vscode.ExtensionContext) {
 
       if (result.count === 0) {
         logInfo(`[Cockpit] Database is empty, loading initial ${config.defaultCommitCount} commits...`);
-        await pipeline.loadRecentCommits(config.defaultCommitCount);
+
+        // Load recent commits directly
+        const git = new GitOperations();
+        const branchManager = new BranchManager(db);
+        const recentCommits = git.getRecentCommits(config.defaultCommitCount);
+        const shas = recentCommits.map(c => c.sha);
+
+        // Record commits in branch manager
+        const branch = git.getCurrentBranch();
+        if (branch && recentCommits.length > 0) {
+          for (const commit of recentCommits) {
+            branchManager.recordCommit(commit.sha, branch);
+          }
+          branchManager.updateBranchHead(branch, recentCommits[0].sha);
+        }
+
+        // Index the commits to ensure they're in the database
+        const refactorPipeline = await getRefactorPipeline();
+        await refactorPipeline.indexCommits(shas);
+
         commitsProvider.refresh(); // This will trigger orchestrator updates
         logInfo('[Cockpit] Initial commits loaded successfully');
       } else {

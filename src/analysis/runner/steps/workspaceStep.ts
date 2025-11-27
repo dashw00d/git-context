@@ -7,6 +7,7 @@ export function createWorkspaceOverlayStep(
   return {
     id: 'workspace_overlay',
     label: 'Analyze workspace changes',
+    deps: [],
 
     async run(state: PipelineState) {
       if (!state.includeWorkspace) {

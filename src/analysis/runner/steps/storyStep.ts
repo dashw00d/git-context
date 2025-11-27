@@ -7,6 +7,7 @@ export function createStoryStep(
   return {
     id: 'llm_story',
     label: 'Generate story + drift + plan',
+    deps: ['bundle_facts', 'retrieve_history', 'embedding_index'],
 
     async run(state: PipelineState) {
       if (!state.bundleFacts) {

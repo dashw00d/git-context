@@ -43,7 +43,7 @@ export interface TestSuiteResult {
 }
 
 export interface MetricValidator {
-  calculate(bundleFacts: RefactorBundleFacts): Promise<Record<string, any>>;
+  calculate(bundleFacts: RefactorBundleFacts, state?: import('./testPipelineState').TestPipelineState): Promise<Record<string, any>>;
 }
 
 export class MetricTestSuite {
@@ -54,6 +54,8 @@ export class MetricTestSuite {
       name: string;
       description: string;
       validator: MetricValidator;
+      useSharedState?: boolean; // Opt-in flag for shared state
+      stepId?: string; // Maps to pipeline step ID for ordering
     }
   ) {}
 
@@ -61,18 +63,28 @@ export class MetricTestSuite {
     this.tests.push(testCase);
   }
 
-  async run(): Promise<TestSuiteResult> {
+  async run(state?: import('./testPipelineState').TestPipelineState): Promise<TestSuiteResult> {
     const results: TestResult[] = [];
 
     for (const test of this.tests) {
       const startTime = Date.now();
 
       try {
-        // Convert fixture to pipeline format
-        const bundleFacts = this.fixtureToBundle(test.fixture);
+        let bundleFacts: RefactorBundleFacts;
+        let actualMetrics: Record<string, any>;
 
-        // Run the specific metric calculation
-        const actualMetrics = await this.config.validator.calculate(bundleFacts);
+        if (this.config.useSharedState && state) {
+          // Use shared state - tests can read from/write to state
+          bundleFacts = this.fixtureToBundle(test.fixture);
+          actualMetrics = await this.config.validator.calculate(bundleFacts, state);
+
+          // Mark suite as completed in state
+          state.markSuiteCompleted(this.config.name);
+        } else {
+          // Run independently as before
+          bundleFacts = this.fixtureToBundle(test.fixture);
+          actualMetrics = await this.config.validator.calculate(bundleFacts);
+        }
 
         // Compare with expectations
         const comparison = this.compareMetrics(
@@ -98,6 +110,11 @@ export class MetricTestSuite {
           issues: [`Test failed: ${error}`],
           duration: Date.now() - startTime
         });
+
+        // Record error in shared state if available
+        if (this.config.useSharedState && state) {
+          state.recordError(this.config.name, error);
+        }
       }
     }
 
@@ -148,6 +165,7 @@ export class MetricTestSuite {
     return {
       version: '2.0',
       generated_at: new Date().toISOString(),
+      confidence: 1.0, // Test fixtures have full confidence
       bundle: {
         oldestSha: commits[0]?.sha || 'test-sha',
         newestSha: commits[commits.length - 1]?.sha || 'test-sha',

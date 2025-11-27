@@ -104,38 +104,73 @@ export class StructuralDiffManager {
   }
 
   private extractMetrics(difftasticOutput: any): StructuralDiffMetrics {
-    // Parse difftastic JSON output to extract metrics
-    // This is simplified - adapt to actual difftastic output format
+    // Use parsed hunks and tags from enhanced difftastic output
+    const hunks = difftasticOutput.hunks || [];
+    const tags = difftasticOutput.tags || new Map<number, string[]>();
     const highlights = difftasticOutput.highlights || [];
+    const morphs = difftasticOutput.morphs || [];
 
-    const structuralChanges = highlights.filter((h: any) =>
-      h.type === 'structural' || h.type === 'syntax'
-    ).length;
+    // Calculate lines added/removed from hunks
+    let linesAdded = 0;
+    let linesRemoved = 0;
 
-    const totalChanges = highlights.length;
-    const structuralChangeScore = totalChanges > 0
-      ? structuralChanges / totalChanges
-      : 0;
+    for (const hunk of hunks) {
+      linesAdded += hunk.linesAdded || 0;
+      linesRemoved += hunk.linesRemoved || 0;
+    }
 
-    const controlFlowChanged = highlights.some((h: any) =>
-      h.tags?.includes('control-flow')
-    );
+    // Fallback: if hunks not available, parse raw difftastic output text
+    if (hunks.length === 0 && difftasticOutput.rawData) {
+      const rawOutput = typeof difftasticOutput.rawData === 'string'
+        ? difftasticOutput.rawData
+        : JSON.stringify(difftasticOutput.rawData);
 
-    const interfaceChanged = highlights.some((h: any) =>
-      h.tags?.includes('signature') || h.tags?.includes('params')
-    );
+      // Parse @@ hunk headers with regex
+      const hunkRegex = /^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/gm;
+      const hunkLines = rawOutput.split('\n');
 
-    const movedBlocks = highlights.filter((h: any) =>
-      h.type === 'moved'
-    ).length;
+      for (let i = 0; i < hunkLines.length; i++) {
+        const line = hunkLines[i];
+        if (line.startsWith('+') && !line.startsWith('+++')) {
+          linesAdded++;
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+          linesRemoved++;
+        }
+      }
+    }
+
+    // Detect control-flow changes from tagged lines
+    let controlFlowChanged = false;
+    for (const [, lineTags] of tags) {
+      if (lineTags.includes('control-flow')) {
+        controlFlowChanged = true;
+        break;
+      }
+    }
+
+    // Detect interface changes from tagged lines or morphs
+    let interfaceChanged = false;
+    for (const [, lineTags] of tags) {
+      if (lineTags.includes('interface')) {
+        interfaceChanged = true;
+        break;
+      }
+    }
+
+    // Count moved blocks from morphs or heuristics
+    const movedBlocks = morphs.filter((m: any) => m.type === 'moved_block').length;
+
+    // Calculate structural change score: min(linesChanged / 10, 1.0)
+    const linesChanged = linesAdded + linesRemoved;
+    const structuralChangeScore = Math.min(linesChanged / 10, 1.0);
 
     return {
       structuralChangeScore,
       controlFlowChanged,
       interfaceChanged,
       movedBlocks,
-      linesAdded: difftasticOutput.linesAdded || 0,
-      linesRemoved: difftasticOutput.linesRemoved || 0,
+      linesAdded,
+      linesRemoved,
       rawData: difftasticOutput
     };
   }

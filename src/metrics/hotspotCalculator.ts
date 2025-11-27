@@ -30,11 +30,11 @@ export function calculateHotspotMetrics(
   averageChangeSize: number = 1.0,
   temporalSpread: number = 0.5
 ): HotspotCalculationMetrics {
-  // Normalize inputs to 0-1 ranges
-  const commitFrequency = Math.min(commitCount / 20, 1.0); // Cap at 20 commits
+  // Normalize inputs using exponential/logarithmic curves (no hard caps)
+  const commitFrequency = 1 - Math.exp(-commitCount / 5); // Exponential saturation
   const recency = Math.max(0, 1 - (daysSinceLastChange / 365)); // Recent within a year
-  const authorDiversity = Math.min(uniqueAuthors / 5, 1.0); // Cap at 5 authors
-  const changeIntensity = Math.min(averageChangeSize / 10, 1.0); // Cap at 10 average changes
+  const authorDiversity = Math.min(uniqueAuthors / 4, 1.0); // Soft cap at 4 authors (not 5)
+  const changeIntensity = Math.log(totalChanges + 1) / Math.log(150); // Logarithmic scaling
   const temporalClustering = temporalSpread; // Already 0-1
 
   const metrics: HotspotMetrics = {

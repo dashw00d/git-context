@@ -27,24 +27,12 @@ function extractFileFromSymbolId(symbolId: string): string | null {
 async function computeBlastRadiusNeighbors(
   commitShas: string[],
   commitFiles: Set<string>,
+  workingChangedFiles: Set<string>,
   maxNeighbors: number
 ): Promise<string[]> {
   const db = getDatabaseManager().getDatabase();
 
-  const neighborFiles = new Map<string, number>(); // file -> confidence score
-
-  // Get edges from selected commits
-  const placeholders = commitShas.map(() => '?').join(',');
-  const edgesStmt = db.prepare(`
-    SELECT from_symbol_id, to_symbol_id, confidence, change_type
-    FROM edges
-    WHERE sha IN (${placeholders}) AND change_type IS NOT NULL
-    ORDER BY confidence DESC
-    LIMIT 200
-  `);
-  const edges = edgesStmt.all(...commitShas) as any[];
-
-  // Extract symbol IDs that changed
+  // Extract symbol IDs that changed in selected commits
   const changedSymbols = new Set<string>();
   for (const sha of commitShas) {
     const symbolsStmt = db.prepare(`
@@ -54,25 +42,85 @@ async function computeBlastRadiusNeighbors(
     symbols.forEach(s => changedSymbols.add(s.symbol_id));
   }
 
-  // For each edge connected to changed symbols, find the file containing the other end
-  for (const edge of edges) {
-    const fromChanged = changedSymbols.has(edge.from_symbol_id);
-    const toChanged = changedSymbols.has(edge.to_symbol_id);
+  // Extract symbols from working tree changes (simplified - use file paths to find related symbols)
+  const workingSymbols = new Set<string>();
+  for (const filePath of workingChangedFiles) {
+    const symbolsStmt = db.prepare(`
+      SELECT symbol_id FROM symbols
+      WHERE path LIKE ? AND change_type IN ('added', 'modified', 'removed')
+      ORDER BY date DESC
+      LIMIT 50  -- Limit per file to avoid explosion
+    `);
+    const symbols = symbolsStmt.all(`${filePath}%`) as any[];
+    symbols.forEach(s => workingSymbols.add(s.symbol_id));
+  }
 
-    // Only consider edges where one end is changed (to find neighbors)
-    if (fromChanged !== toChanged) {
-      const neighborSymbolId = fromChanged ? edge.to_symbol_id : edge.from_symbol_id;
-      const confidence = edge.confidence || 1.0;
+  // Merge working symbols into changed symbols for BFS
+  for (const symbolId of workingSymbols) {
+    changedSymbols.add(symbolId);
+  }
 
-      // Extract file path from symbol ID (simplified heuristic)
-      const filePath = extractFileFromSymbolId(neighborSymbolId);
+  // Build full repo adjacency map from all edges (not just selected commits)
+  const adjacencyMap = new Map<string, Array<{neighborId: string, confidence: number}>>();
+  const edgesStmt = db.prepare(`
+    SELECT from_symbol_id, to_symbol_id, confidence
+    FROM edges
+    ORDER BY confidence DESC
+    LIMIT 5000  -- Reasonable limit for full repo analysis
+  `);
+  const allEdges = edgesStmt.all() as any[];
+
+  // Build bidirectional adjacency map
+  for (const edge of allEdges) {
+    const fromId = edge.from_symbol_id;
+    const toId = edge.to_symbol_id;
+    const confidence = edge.confidence || 1.0;
+
+    // Add forward edge
+    if (!adjacencyMap.has(fromId)) {
+      adjacencyMap.set(fromId, []);
+    }
+    adjacencyMap.get(fromId)!.push({ neighborId: toId, confidence });
+
+    // Add reverse edge (bidirectional)
+    if (!adjacencyMap.has(toId)) {
+      adjacencyMap.set(toId, []);
+    }
+    adjacencyMap.get(toId)!.push({ neighborId: fromId, confidence });
+  }
+
+  // Depth-limited BFS from changed symbols (depth 2-3)
+  const queue: Array<{symbolId: string, depth: number}> = Array.from(changedSymbols).map(id => ({symbolId: id, depth: 0}));
+  const visited = new Set<string>(changedSymbols);
+  const maxDepth = 3;
+  const maxTotalFiles = Math.max(maxNeighbors * 2, 50); // Allow more files for BFS exploration
+  const neighborFiles = new Map<string, number>();
+
+  while (queue.length > 0 && neighborFiles.size < maxTotalFiles) {
+    const {symbolId, depth} = queue.shift()!;
+    if (depth > maxDepth || visited.has(symbolId)) continue;
+    visited.add(symbolId);
+
+    const neighbors = adjacencyMap.get(symbolId) || [];
+    for (const {neighborId, confidence} of neighbors) {
+      if (changedSymbols.has(neighborId)) continue; // Skip changed symbols
+
+      const filePath = extractFileFromSymbolId(neighborId);
       if (filePath && !commitFiles.has(filePath)) {
-        neighborFiles.set(filePath, (neighborFiles.get(filePath) || 0) + confidence);
+        // Weight by depth: closer neighbors get higher scores
+        const depthWeight = 1.0 / (depth + 1);
+        const weightedConfidence = confidence * depthWeight;
+        neighborFiles.set(filePath, (neighborFiles.get(filePath) || 0) + weightedConfidence);
+
+        // Continue BFS to next depth
+        if (depth < maxDepth) {
+          queue.push({symbolId: neighborId, depth: depth + 1});
+        }
       }
     }
   }
 
-  // Return top N neighbors by confidence score
+  // Return top N neighbors by weighted confidence score
   return Array.from(neighborFiles.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, maxNeighbors)
@@ -128,7 +176,7 @@ export async function computeScope(
   }
 
   // 3. Blast-radius neighbors (top N by confidence)
-  const blastRadiusFiles = await computeBlastRadiusNeighbors(commitShas, scope.commitFiles, 20); // Max 20 extra files
+  const blastRadiusFiles = await computeBlastRadiusNeighbors(commitShas, scope.commitFiles, scope.workingChanged, 20); // Max 20 extra files
   blastRadiusFiles.forEach(f => scope.blastRadius.add(f));
 
   // Union all paths

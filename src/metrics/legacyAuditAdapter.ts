@@ -25,11 +25,23 @@ export interface LegacyAuditMetrics {
  */
 export async function auditLegacyFromFacts(
   intendedSymbols: Array<{ id: string; expect?: 'present' | 'absent' }>,
-  workingSymbols: Array<{ id: string; name: string; kind: string }>,
+  workingSymbols: Array<{ id: string; name: string; kind: string; filePath?: string }>,
   edges: Array<{ from: string; to: string; type?: string }>
 ): Promise<LegacyAuditMetrics> {
   try {
     // Transform test data to real data structures
+
+    // Derive file paths from symbol IDs or use provided filePath
+    const allPaths = new Set<string>();
+    for (const symbol of workingSymbols) {
+      if (symbol.filePath) {
+        allPaths.add(symbol.filePath);
+      } else {
+        // Derive file path from symbol ID (format: "path/to/file.ts:symbolName")
+        const filePath = symbol.id.includes(':') ? symbol.id.split(':')[0] : 'test-file';
+        allPaths.add(filePath);
+      }
+    }
 
     // Build intended map
     const intended = new Map<string, IntendedState>();
@@ -44,7 +56,7 @@ export async function auditLegacyFromFacts(
     const working: WorkingSnapshot = {
       symbolsById: new Map(),
       symbolsByFile: new Map(),
-      analyzedPaths: new Set(['test-file']),
+      analyzedPaths: allPaths,
       edges: edges.map(e => ({
         from_symbol_id: e.from,
         to_symbol_id: e.to,
@@ -68,12 +80,12 @@ export async function auditLegacyFromFacts(
       });
     }
 
-    // Build minimal scope (all symbols in scope for tests)
+    // Build scope with derived file paths
     const scope: ScopeSet = {
-      commitFiles: new Set(['test-file']),
-      workingChanged: new Set(['test-file']),
-      blastRadius: new Set(workingSymbols.map(s => s.id)),
-      allPaths: new Set(['test-file'])
+      commitFiles: new Set(allPaths),
+      workingChanged: new Set(allPaths),
+      blastRadius: new Set([...allPaths, ...workingSymbols.map(s => s.id)]),
+      allPaths: new Set([...allPaths, ...workingSymbols.map(s => s.id)])
     };
 
     // Run real legacy audit

@@ -1,8 +1,16 @@
 /**
  * Workspace Facts Adapter
  *
- * Adapter for WorkspaceIndexer logic
- * Provides workspace facts calculation for tests
+ * TEST-ONLY ADAPTER: Simplified workspace facts calculation for tests
+ *
+ * IMPORTANT: This is a simplified version for test fixtures that don't have git/database access.
+ * The real pipeline uses WorkspaceIndexer.analyzeWorkspace() (called by workspaceStep.ts).
+ *
+ * Real function: WorkspaceIndexer.analyzeWorkspace(mode) in src/analysis/workspaceIndexer.ts
+ * Runner step: createWorkspaceOverlayStep() in src/analysis/runner/steps/workspaceStep.ts
+ *
+ * This adapter provides test metrics based on symbol/edge data without requiring
+ * git operations or file system access. For production, use WorkspaceIndexer.analyzeWorkspace() directly.
  */
 
 import { WorkspaceFacts } from '../analysis/workspaceIndexer';

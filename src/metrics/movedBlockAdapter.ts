@@ -26,6 +26,12 @@ export async function detectMovedBlocksFromFacts(
   addedSymbols: Array<{ id: string; name: string; filePath?: string; content?: string }>
 ): Promise<MovedBlockMetrics> {
   try {
+    // Check if this is fixture mode (content provided) - use direct content hashing
+    const hasContent = deletedSymbols.some(s => s.content) && addedSymbols.some(s => s.content);
+    if (hasContent) {
+      return detectMovedBlocksFromContent(deletedSymbols, addedSymbols);
+    }
+
     // Transform test data to SymbolInfo format
     const deletedSymbolInfos: SymbolInfo[] = deletedSymbols.map(symbol => ({
       id: symbol.id,
@@ -108,6 +114,113 @@ export async function detectMovedBlocksFromFacts(
       movedLines: 0
     };
   }
+}
+
+/**
+ * Fixture-aware moved block detection using direct content hashing
+ * Used when symbol content is provided (no DB/git dependencies needed)
+ */
+export async function detectMovedBlocksFromContent(
+  deletedSymbols: Array<{ id: string; name: string; filePath?: string; content?: string }>,
+  addedSymbols: Array<{ id: string; name: string; filePath?: string; content?: string }>
+): Promise<MovedBlockMetrics> {
+  try {
+    // Create content hash map for deleted symbols
+    const deletedHashes = new Map<string, { symbol: any; hash: string }>();
+    for (const symbol of deletedSymbols) {
+      if (symbol.content) {
+        const hash = hashSymbolContent(symbol.content);
+        deletedHashes.set(hash, { symbol, hash });
+      }
+    }
+
+    // Find matches in added symbols by content hash
+    const movedBlocks: Array<{ deleted: any; added: any; similarity: number }> = [];
+    for (const addedSymbol of addedSymbols) {
+      if (addedSymbol.content) {
+        const hash = hashSymbolContent(addedSymbol.content);
+        const deletedMatch = deletedHashes.get(hash);
+        if (deletedMatch) {
+          movedBlocks.push({
+            deleted: deletedMatch.symbol,
+            added: addedSymbol,
+            similarity: 1.0 // Exact content match
+          });
+          deletedHashes.delete(hash); // Remove to prevent duplicate matches
+        }
+      }
+    }
+
+    // Calculate metrics
+    const fileRenames = movedBlocks.filter(block =>
+      isFileRename(block.deleted.filePath, block.added.filePath)
+    ).length;
+
+    const blockMoves = movedBlocks.filter(block =>
+      !isFileRename(block.deleted.filePath, block.added.filePath)
+    ).length;
+
+    const symbolRenames = movedBlocks.filter(block =>
+      block.deleted.name !== block.added.name
+    ).length;
+
+    const averageSimilarity = movedBlocks.length > 0
+      ? movedBlocks.reduce((sum, block) => sum + block.similarity, 0) / movedBlocks.length
+      : 0;
+
+    const movedLines = movedBlocks.reduce((sum, block) => {
+      const deletedLines = block.deleted.content?.split('\n').length || 0;
+      return sum + deletedLines;
+    }, 0);
+
+    return {
+      totalMovedBlocks: movedBlocks.length,
+      fileRenames,
+      blockMoves,
+      symbolRenames,
+      averageSimilarity,
+      movedSymbols: movedBlocks.length,
+      movedLines
+    };
+  } catch (error) {
+    console.warn('Content-based moved block detection failed:', error);
+    return {
+      totalMovedBlocks: 0,
+      fileRenames: 0,
+      blockMoves: 0,
+      symbolRenames: 0,
+      averageSimilarity: 0,
+      movedSymbols: 0,
+      movedLines: 0
+    };
+  }
+}
+
+/**
+ * Simple content hashing for symbol comparison
+ */
+function hashSymbolContent(content: string): string {
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return hash.toString();
+}
+
+/**
+ * Detect if two file paths represent a file rename (same directory, different name)
+ */
+function isFileRename(path1?: string, path2?: string): boolean {
+  if (!path1 || !path2) return false;
+
+  const dir1 = path1.substring(0, path1.lastIndexOf('/'));
+  const dir2 = path2.substring(0, path2.lastIndexOf('/'));
+  const name1 = path1.substring(path1.lastIndexOf('/') + 1);
+  const name2 = path2.substring(path2.lastIndexOf('/') + 1);
+
+  return dir1 === dir2 && name1 !== name2;
 }
 
 /**
