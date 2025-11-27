@@ -277,13 +277,20 @@ DISCOVER emergent patterns generically:
 - DRIFT: Diff-applied files w/ lingering old code; intended symbols w/o edges.
 - HOOKS: New symbols w/o callers; edge drops.
 
-**IMPORTANT:** For examples, provide DESCRIPTIVE paths that explain what the evidence shows:
-- Good: "diff[UserService.php] shows renamed getUser() to fetchUser()"
-- Good: "ast[PaymentController.php].method_processPayment - new payment flow"
-- Bad: "diff[file.php] (truncated)"
-- Bad: "Example"
+**CRITICAL RULE:** ONLY use file names from bundle.scope.files or history.similarSymbols[].filePath. Do NOT invent files.
+- For examples, ONLY reference files that exist in bundle.scope.files or history.similarSymbols[].filePath
+- Format: "diff[bundle.scope.files[0]] shows <pattern in this file>"
+- Format: "ast[history.similarSymbols[0].filePath].history.similarSymbols[0].name - <pattern>"
+- If no files match pattern, use "graph.nodes[symbol_dna_id]" or skip example
+- NEVER invent file names like "PaymentService.php" unless it exists in the provided files list
 
-Output ONLY JSON: {patterns: [{name:"naming_drift", desc:"...", examples:["diff[Widget.php] shows old camelCase method names"], count:15, pct:12}]}
+**IMPORTANT:** For examples, provide DESCRIPTIVE paths that explain what the evidence shows:
+- Good: "diff[bundle.scope.files[0]] shows renamed getUser() to fetchUser()" (only if file exists)
+- Good: "ast[history.similarSymbols[0].filePath].method_name - new payment flow" (only if file exists)
+- Bad: "diff[PaymentService.php]" (if file not in bundle.scope.files)
+- Bad: "Example" or generic file names
+
+Output ONLY JSON: {patterns: [{name:"naming_drift", desc:"...", examples:["diff[bundle.scope.files[2]] shows old camelCase method names"], count:15, pct:12}]}
 `;
 
 /**

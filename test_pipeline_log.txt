@@ -1,0 +1,54 @@
+Test started at: 2025-11-27T04:23:37.429Z
+Log file: /home/ryan/plugins/git-context/test_pipeline_log.txt
+
+
+[DATABASE] Clearing existing database...
+Clearing existing database...
+[DATABASE] No existing database file to clear
+No existing database file to clear
+================================================================================
+PIPELINE INTEGRATION TEST - Full UI Simulation (with LLM analysis)
+⚠️  WARNING: This test enables LLM calls and may incur API costs!
+================================================================================
+
+[INIT] Initializing database singleton...
+DatabaseManager initialized with path: /home/ryan/plugins/git-context/.git/commit-tracker/commit_tracker.db
+[DB-INIT] Starting database initialization...
+[DB-INIT] Loading SQL.js WASM...
+[DB-INIT] WASM loaded in 7ms
+[DB-INIT] Initializing schema...
+[DB-INIT] No version found, starting fresh
+[DB-INIT] Running initial schema...
+[DB-INIT] Schema initialized in 32ms
+[DB-INIT] Total initialization time: 41ms
+[INIT] ✓ Database singleton initialized
+[INIT] Initializing git operations...
+[INIT] Current HEAD: 0c973858 on branch: master
+[INIT] Found 3 commits in history
+[INIT] Selected commits:
+  1. 0c973858 - feat: Implement pipeline integration test, new configuration, and update analysis and reporting services.
+  2. 7fae5f76 - refactor: Decouple commit data management from UI, introduce branch awareness and client-side database, and update Cockpit UI components.
+  3. 4391d532 - feat(cockpit): add live analysis tab with real-time tracking
+
+[INIT] Getting analysis pipeline...
+[CONFIG] Loaded config from .git-context.config.json
+[INIT] ✓ Pipeline initialized
+[INIT] ✓ Report service initialized
+
+================================================================================
+PHASE 1: Analyzing Workspace Changes (Staged + Unstaged)
+================================================================================
+
+[WORKSPACE] Analyzing staged changes...
+[PIPELINE] Workspace staged analyzed on master (1 files)
+[WORKSPACE] ✓ Staged analysis complete: workspace-staged@master
+  - Symbols: +0 -0 ~0
+  - Edges: +0 -0
+  - Risks: []
+[WORKSPACE] Staged analysis took 0.05s
+
+[WORKSPACE] Analyzing unstaged changes...
+✓ Loaded tree-sitter parser for typescript (dev mode)
+✓ Loaded tree-sitter parser for javascript (dev mode)
+✓ Loaded tree-sitter parser for php (dev mode)
+Tree-sitter initialized with 3 parsers

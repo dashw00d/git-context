@@ -60,7 +60,11 @@ export function getExtensionConfig(): ExtensionConfig {
       qdrantApiKey: fileConfig?.qdrantApiKey || config.get('qdrantApiKey', ''),
       // Embedding config
       embeddingProvider: embeddingProvider || apiEndpoint,
-      embeddingModel: fileConfig?.embeddingModel || config.get('embeddingModel', 'text-embedding-3-small')
+      embeddingModel: fileConfig?.embeddingModel || config.get('embeddingModel', 'text-embedding-3-small'),
+      allowedExtensions: fileConfig?.allowedExtensions || config.get('allowedExtensions', ['php', 'js', 'ts', 'tsx', 'jsx']),
+      maxFileSize: fileConfig?.maxFileSize || config.get('maxFileSize', 100 * 1024), // 100KB default
+      // Qdrant isolation config
+      perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || config.get('perProjectQdrantCollections', false)
     };
   } else {
     // CLI/Test fallback: config file > environment variables
@@ -81,7 +85,11 @@ export function getExtensionConfig(): ExtensionConfig {
       qdrantApiKey: fileConfig?.qdrantApiKey || process.env.QDRANT_API_KEY || '',
       // Embedding config
       embeddingProvider: embeddingProvider || apiEndpoint,
-      embeddingModel: fileConfig?.embeddingModel || process.env.EMBEDDING_MODEL || 'text-embedding-3-small'
+      embeddingModel: fileConfig?.embeddingModel || process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
+      allowedExtensions: fileConfig?.allowedExtensions || (process.env.ALLOWED_EXTENSIONS ? process.env.ALLOWED_EXTENSIONS.split(',') : ['php', 'js', 'ts', 'tsx', 'jsx']),
+      maxFileSize: fileConfig?.maxFileSize || (process.env.MAX_FILE_SIZE ? parseInt(process.env.MAX_FILE_SIZE) : 100 * 1024),
+      // Qdrant isolation config
+      perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || (process.env.PER_PROJECT_QDRANT_COLLECTIONS === 'true')
     };
   }
 }
@@ -118,7 +126,13 @@ function findGitRootForPath(startPath: string): string | undefined {
 
     // Check if .git exists (as directory or file for worktrees/submodules)
     if (fs.existsSync(gitPath)) {
-      return currentPath;
+      // Normalize: ensure trailing path separator and consistent casing
+      const normalized = path.resolve(currentPath);
+      // Add trailing separator if not root
+      if (normalized !== path.parse(normalized).root) {
+        return normalized + path.sep;
+      }
+      return normalized;
     }
 
     // Move up one directory

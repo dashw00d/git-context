@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { debounce } from 'lodash';
 import { getGitRoot } from '../utils/config';
-import { getAnalysisPipeline } from '../analysis/pipeline';
+import { getRefactorPipeline } from '../extension';
 import { GitOperations } from '../analysis/git';
 import { logError, logDebug } from '../utils/logger';
 
@@ -30,16 +30,20 @@ export class GitCommitWatcher {
 
   private async handleCommit(): Promise<void> {
     try {
-      const pipeline = await getAnalysisPipeline();
+      // No migration needed in new architecture - workspace SHA is separate
+      // Just re-index the new commit
+      const pipeline = await getRefactorPipeline();
       const git = new GitOperations();
       const newSha = git.getHeadSha();
-      await pipeline.migrateWorkspaceToCommit(newSha);
-      logDebug(`[GitCommitWatcher] Detected new commit ${newSha.substring(0, 8)}`);
+
+      await pipeline.indexCommits([newSha]);
+
+      logDebug(`[GitCommitWatcher] Detected and indexed new commit ${newSha.substring(0, 8)}`);
       if (this.onCommit) {
         await this.onCommit(newSha);
       }
     } catch (error) {
-      logError('[GitCommitWatcher] Failed to migrate workspace analysis', error);
+      logError('[GitCommitWatcher] Failed to handle commit', error);
     }
   }
 

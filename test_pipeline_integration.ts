@@ -1,5 +1,5 @@
 import { ensureDatabaseInitialized, getDatabaseManager } from './src/storage/database';
-import { getAnalysisPipeline } from './src/analysis/pipeline';
+import { getRefactorPipeline } from './src/extension';
 import { ReportService } from './src/services/reportService';
 import { GitOperations } from './src/analysis/git';
 import { getGitRoot } from './src/utils/config';
@@ -272,7 +272,7 @@ async function testPipeline() {
 
     const testStart = startTimer('Total Test Time');
     console.log('='.repeat(80));
-    console.log('PIPELINE INTEGRATION TEST - Full UI Simulation (with LLM analysis)');
+    console.log('LAYERED PIPELINE INTEGRATION TEST - Full UI Simulation (with LLM analysis)');
     console.log('⚠️  WARNING: This test enables LLM calls and may incur API costs!');
     console.log('='.repeat(80));
 
@@ -301,8 +301,8 @@ async function testPipeline() {
     });
 
     // 4. Get Pipeline (uses singleton database)
-    console.log('\n[INIT] Getting analysis pipeline...');
-    const pipeline = await getAnalysisPipeline();
+    console.log('\n[INIT] Getting refactor pipeline...');
+    const pipeline = await getRefactorPipeline();
     console.log('[INIT] ✓ Pipeline initialized');
 
     // 5. Get Report Service
@@ -321,20 +321,21 @@ async function testPipeline() {
     console.log('\n[WORKSPACE] Analyzing staged changes...');
     startTimer('Staged Analysis');
     try {
-        const stagedAnalysis = await pipeline.analyzeWorkspace('staged', { forceReanalyze: true });
-        if (stagedAnalysis) {
+        const workspaceIndexer = pipeline.workspaceIndexer;
+        const stagedFacts = await workspaceIndexer.analyzeWorkspace('staged');
+        if (stagedFacts) {
             const stagedSha = `workspace-staged@${currentBranch}`;
             workspaceShas.push(stagedSha);
             analysisDetails.push({
                 type: 'workspace',
                 mode: 'staged',
                 sha: stagedSha,
-                analysis: stagedAnalysis
+                facts: stagedFacts
             });
             console.log(`[WORKSPACE] ✓ Staged analysis complete: ${stagedSha}`);
-            console.log(`  - Symbols: +${stagedAnalysis.symbols.added.length} -${stagedAnalysis.symbols.removed.length} ~${stagedAnalysis.symbols.modified.length}`);
-            console.log(`  - Edges: +${stagedAnalysis.edges.added.length} -${stagedAnalysis.edges.removed.length}`);
-            console.log(`  - Risks: [${stagedAnalysis.risks.join(', ')}]`);
+            console.log(`  - Symbols: +${stagedFacts.symbolsAdded} -${stagedFacts.symbolsRemoved} ~${stagedFacts.symbolsModified}`);
+            console.log(`  - Files: ${stagedFacts.filesChanged}`);
+            console.log(`  - Risks: [${stagedFacts.risks.join(', ')}]`);
         } else {
             console.log('[WORKSPACE] No staged changes to analyze');
         }
@@ -348,20 +349,21 @@ async function testPipeline() {
     console.log('\n[WORKSPACE] Analyzing unstaged changes...');
     startTimer('Unstaged Analysis');
     try {
-        const unstagedAnalysis = await pipeline.analyzeWorkspace('unstaged', { forceReanalyze: true });
-        if (unstagedAnalysis) {
+        const workspaceIndexer = pipeline.workspaceIndexer;
+        const unstagedFacts = await workspaceIndexer.analyzeWorkspace('unstaged');
+        if (unstagedFacts) {
             const unstagedSha = `workspace-unstaged@${currentBranch}`;
             workspaceShas.push(unstagedSha);
             analysisDetails.push({
                 type: 'workspace',
                 mode: 'unstaged',
                 sha: unstagedSha,
-                analysis: unstagedAnalysis
+                facts: unstagedFacts
             });
             console.log(`[WORKSPACE] ✓ Unstaged analysis complete: ${unstagedSha}`);
-            console.log(`  - Symbols: +${unstagedAnalysis.symbols.added.length} -${unstagedAnalysis.symbols.removed.length} ~${unstagedAnalysis.symbols.modified.length}`);
-            console.log(`  - Edges: +${unstagedAnalysis.edges.added.length} -${unstagedAnalysis.edges.removed.length}`);
-            console.log(`  - Risks: [${unstagedAnalysis.risks.join(', ')}]`);
+            console.log(`  - Symbols: +${unstagedFacts.symbolsAdded} -${unstagedFacts.symbolsRemoved} ~${unstagedFacts.symbolsModified}`);
+            console.log(`  - Files: ${unstagedFacts.filesChanged}`);
+            console.log(`  - Risks: [${unstagedFacts.risks.join(', ')}]`);
         } else {
             console.log('[WORKSPACE] No unstaged changes to analyze');
         }
@@ -378,33 +380,39 @@ async function testPipeline() {
     startTimer('Phase 2: Commit Analysis');
 
     const commitShas: string[] = [];
-    for (let i = 0; i < selectedCommits.length; i++) {
-        const commit = selectedCommits[i];
-        const shortSha = commit.sha.substring(0, 8);
-        console.log(`\n[COMMIT ${i + 1}/${selectedCommits.length}] Analyzing ${shortSha}...`);
-        startTimer(`Commit ${shortSha} Analysis`);
+    console.log(`\n[COMMIT] Indexing ${selectedCommits.length} commits...`);
+    startTimer('Commit Indexing');
 
-        try {
-            const analysis = await pipeline.analyzeCommit(commit.sha, { forceReanalyze: true });
-            commitShas.push(commit.sha);
+    try {
+        // Use the new pipeline's indexCommits for quick indexing
+        await pipeline.indexCommits(selectedCommits.map(c => c.sha));
+        commitShas.push(...selectedCommits.map(c => c.sha));
+
+        // Get facts from the indexer for display purposes
+        const commitIndexer = (pipeline as any).commitIndexer; // Access internal indexer
+        for (let i = 0; i < selectedCommits.length; i++) {
+            const commit = selectedCommits[i];
+            const commitFacts = await commitIndexer.ensureCommitIndexed(commit.sha);
             analysisDetails.push({
                 type: 'commit',
                 sha: commit.sha,
-                analysis: analysis
+                facts: commitFacts
             });
 
-            const commitTime = endTimer(`Commit ${shortSha} Analysis`);
-            console.log(`[COMMIT ${i + 1}] ✓ Analysis complete (${(commitTime / 1000).toFixed(2)}s)`);
+            const shortSha = commit.sha.substring(0, 8);
+            console.log(`[COMMIT ${i + 1}] ✓ Indexed ${shortSha}`);
             console.log(`  - Message: ${commit.message.split('\n')[0]}`);
-            console.log(`  - Symbols: +${analysis.symbols.added.length} -${analysis.symbols.removed.length} ~${analysis.symbols.modified.length}`);
-            console.log(`  - Edges: +${analysis.edges.added.length} -${analysis.edges.removed.length}`);
-            console.log(`  - Risks: [${analysis.risks.join(', ')}]`);
-            console.log(`  - Blast Radius: ${analysis.blastRadius}`);
-        } catch (error) {
-            console.error(`[COMMIT ${i + 1}] ✗ Analysis failed:`, error);
-            endTimer(`Commit ${shortSha} Analysis`); // Still end timer on error
+            console.log(`  - Symbols: +${commitFacts.symbolsAdded} -${commitFacts.symbolsRemoved} ~${commitFacts.symbolsModified}`);
+            console.log(`  - Edges: +${commitFacts.edgesAdded} -${commitFacts.edgesRemoved}`);
+            console.log(`  - Risks: [${commitFacts.risks.join(', ')}]`);
+            console.log(`  - Files: ${commitFacts.filesChanged}`);
         }
+    } catch (error) {
+        console.error(`[COMMIT] ✗ Indexing failed:`, error);
     }
+
+    const commitTime = endTimer('Commit Indexing');
+    console.log(`[COMMIT] Commit indexing took ${(commitTime / 1000).toFixed(2)}s`);
     endTimer('Phase 2: Commit Analysis');
 
     console.log('\n' + '='.repeat(80));
@@ -503,7 +511,7 @@ async function testPipeline() {
     console.log('[UI-DATA] Querying commits_analysis table...');
     startTimer('Query Commits Analysis');
     for (const sha of allShas) {
-        const dbAnalysis = db.prepare('SELECT * FROM commits_analysis WHERE sha = ?').get(sha);
+        const dbAnalysis = db.prepare('SELECT * FROM commits_analysis WHERE sha = ?').get([sha]);
         if (dbAnalysis) {
             const parsed = {
                 sha: dbAnalysis.sha,
@@ -517,31 +525,32 @@ async function testPipeline() {
                 blast_radius: dbAnalysis.blast_radius,
                 analyzed_at: dbAnalysis.analyzed_at,
                 pipeline_version: dbAnalysis.pipeline_version,
-                model: dbAnalysis.model
+                analysis_version: dbAnalysis.analysis_version,
+                status: dbAnalysis.status
             };
             uiData.commits_analysis.push(parsed);
 
-            // Find corresponding analysis from our tracking
+            // Find corresponding facts from our tracking
             const tracked = analysisDetails.find(d => d.sha === sha);
-            if (tracked) {
+            if (tracked && tracked.facts) {
                 const mismatches: string[] = [];
-                if (parsed.symbols_added !== tracked.analysis.symbols.added.length) {
-                    mismatches.push(`symbols_added: DB=${parsed.symbols_added}, Actual=${tracked.analysis.symbols.added.length}`);
+                if (parsed.symbols_added !== tracked.facts.symbolsAdded) {
+                    mismatches.push(`symbols_added: DB=${parsed.symbols_added}, Actual=${tracked.facts.symbolsAdded}`);
                 }
-                if (parsed.symbols_removed !== tracked.analysis.symbols.removed.length) {
-                    mismatches.push(`symbols_removed: DB=${parsed.symbols_removed}, Actual=${tracked.analysis.symbols.removed.length}`);
+                if (parsed.symbols_removed !== tracked.facts.symbolsRemoved) {
+                    mismatches.push(`symbols_removed: DB=${parsed.symbols_removed}, Actual=${tracked.facts.symbolsRemoved}`);
                 }
-                if (parsed.symbols_modified !== tracked.analysis.symbols.modified.length) {
-                    mismatches.push(`symbols_modified: DB=${parsed.symbols_modified}, Actual=${tracked.analysis.symbols.modified.length}`);
+                if (parsed.symbols_modified !== tracked.facts.symbolsModified) {
+                    mismatches.push(`symbols_modified: DB=${parsed.symbols_modified}, Actual=${tracked.facts.symbolsModified}`);
                 }
-                if (parsed.edges_added !== tracked.analysis.edges.added.length) {
-                    mismatches.push(`edges_added: DB=${parsed.edges_added}, Actual=${tracked.analysis.edges.added.length}`);
+                if (parsed.edges_added !== tracked.facts.edgesAdded) {
+                    mismatches.push(`edges_added: DB=${parsed.edges_added}, Actual=${tracked.facts.edgesAdded}`);
                 }
-                if (parsed.edges_removed !== tracked.analysis.edges.removed.length) {
-                    mismatches.push(`edges_removed: DB=${parsed.edges_removed}, Actual=${tracked.analysis.edges.removed.length}`);
+                if (parsed.edges_removed !== tracked.facts.edgesRemoved) {
+                    mismatches.push(`edges_removed: DB=${parsed.edges_removed}, Actual=${tracked.facts.edgesRemoved}`);
                 }
-                if (parsed.blast_radius !== tracked.analysis.blastRadius) {
-                    mismatches.push(`blast_radius: DB=${parsed.blast_radius}, Actual=${tracked.analysis.blastRadius}`);
+                if (parsed.blast_radius !== tracked.facts.structuralChangeScore) {
+                    mismatches.push(`structural_change_score: DB=${parsed.blast_radius}, Actual=${tracked.facts.structuralChangeScore}`);
                 }
 
                 if (mismatches.length > 0) {
@@ -725,11 +734,13 @@ async function testPipeline() {
     // Edge analysis
     console.log('\n[EDGE-ANALYSIS] Analyzing edge patterns...');
     startTimer('Edge Pattern Analysis');
-    const edgeStats = analysisDetails.map(d => ({
-        sha: d.sha.substring(0, 8),
-        added: d.analysis.edges.added.length,
-        removed: d.analysis.edges.removed.length
-    }));
+    const edgeStats = analysisDetails
+        .filter(d => d.facts) // Only commits with facts
+        .map(d => ({
+            sha: d.sha.substring(0, 8),
+            added: d.facts.edgesAdded,
+            removed: d.facts.edgesRemoved
+        }));
 
     const uniqueEdgeCounts = new Set(edgeStats.map(s => s.added));
     if (uniqueEdgeCounts.size === 1 && edgeStats.length > 1) {
@@ -745,6 +756,231 @@ async function testPipeline() {
     console.log(`[EDGE-ANALYSIS] Edge pattern analysis completed (${(edgeAnalysisTime / 1000).toFixed(2)}s)`);
 
     endTimer('Phase 5: Database Integrity Checks');
+
+    // PHASE 6: Enhanced Pipeline Features Validation
+    console.log('\n' + '='.repeat(80));
+    console.log('PHASE 6: Enhanced Pipeline Features Validation');
+    console.log('='.repeat(80));
+    startTimer('Phase 6: Enhanced Features');
+
+    // 6.1 Validate Symbol History Storage
+    console.log('\n[VALIDATION] Checking symbol history storage...');
+    startTimer('Symbol History Validation');
+    try {
+        const symbolHistoryCount = db.prepare('SELECT count(*) as count FROM symbol_history').get();
+        console.log(`[VALIDATION] ✓ Symbol history entries: ${symbolHistoryCount.count}`);
+
+        if (symbolHistoryCount.count > 0) {
+            const sampleHistory = db.prepare('SELECT * FROM symbol_history LIMIT 3').all();
+            console.log('[VALIDATION] ✓ Sample symbol history:');
+            sampleHistory.forEach((h: any, i: number) => {
+                console.log(`  ${i + 1}. ${h.name} (${h.kind}) @ ${h.sha.substring(0, 8)} - ${h.change_type} (impact: ${h.impact_score})`);
+            });
+        } else {
+            console.warn('[VALIDATION] ⚠ No symbol history found - this may be expected if no commits were analyzed');
+        }
+    } catch (error) {
+        console.error('[VALIDATION] ✗ Symbol history validation failed:', error);
+    }
+    const symbolHistoryTime = endTimer('Symbol History Validation');
+    console.log(`[VALIDATION] Symbol history validation completed (${(symbolHistoryTime / 1000).toFixed(2)}s)`);
+
+    // 6.2 Test Enhanced Embedding Indexer
+    console.log('\n[VALIDATION] Testing enhanced embedding indexer...');
+    startTimer('Embedding Indexer Test');
+    try {
+        const embeddingIndexer = (pipeline as any).embeddingIndexer;
+        if (embeddingIndexer) {
+            // Test symbol history loading
+            const symbolHistory = embeddingIndexer.loadSymbolHistory?.(selectedCommits[0]?.sha);
+            if (symbolHistory) {
+                console.log(`[VALIDATION] ✓ Symbol history loaded for ${selectedCommits[0]?.sha?.substring(0, 8)}: ${symbolHistory.length} entries`);
+            } else {
+                console.log('[VALIDATION] No symbol history to load (expected for first run)');
+            }
+
+            // Test metadata loading
+            const commitMeta = embeddingIndexer.getCommitMetadata?.(selectedCommits[0]?.sha);
+            if (commitMeta) {
+                console.log(`[VALIDATION] ✓ Commit metadata loaded: ${commitMeta.author} - "${commitMeta.message?.substring(0, 50)}..."`);
+            } else {
+                console.warn('[VALIDATION] ⚠ No commit metadata found');
+            }
+        } else {
+            console.warn('[VALIDATION] ⚠ Embedding indexer not accessible for testing');
+        }
+    } catch (error) {
+        console.error('[VALIDATION] ✗ Embedding indexer test failed:', error);
+    }
+    const embeddingTime = endTimer('Embedding Indexer Test');
+    console.log(`[VALIDATION] Embedding indexer test completed (${(embeddingTime / 1000).toFixed(2)}s)`);
+
+    // 6.3 Test Moved Block Detection
+    console.log('\n[VALIDATION] Testing moved block detection...');
+    startTimer('Moved Block Detection Test');
+    try {
+        const movedBlockDetector = (pipeline as any).commitIndexer.movedBlockDetector;
+        if (movedBlockDetector) {
+            // Test moved block detection API
+            const testSha = selectedCommits[0]?.sha;
+            if (testSha) {
+                const movedBlocks = await movedBlockDetector.getMovedBlocks(testSha);
+                console.log(`[VALIDATION] ✓ Moved blocks query for ${testSha.substring(0, 8)}: ${movedBlocks.length} moved blocks found`);
+
+                // Test file moves query
+                const fileMoves = await movedBlockDetector.getFileMoves('src/analysis/hotspotDetector.ts');
+                console.log(`[VALIDATION] ✓ File moves query: ${fileMoves.length} moves involving hotspotDetector.ts`);
+
+                // Test symbol lineage
+                const lineage = await movedBlockDetector.getSymbolLineage('test_symbol_id');
+                console.log(`[VALIDATION] ✓ Symbol lineage query: ${lineage.length} lineage entries`);
+            } else {
+                console.warn('[VALIDATION] ⚠ No commits available for moved block testing');
+            }
+        } else {
+            console.warn('[VALIDATION] ⚠ Moved block detector not accessible for testing');
+        }
+    } catch (error) {
+        console.error('[VALIDATION] ✗ Moved block detection test failed:', error);
+    }
+    const movedBlockTime = endTimer('Moved Block Detection Test');
+    console.log(`[VALIDATION] Moved block detection test completed (${(movedBlockTime / 1000).toFixed(2)}s)`);
+
+    // 6.3 Validate Pipeline State Integration
+    console.log('\n[VALIDATION] Testing pipeline state integration...');
+    startTimer('Pipeline State Test');
+    try {
+        // Test full pipeline with history retrieval
+        console.log('[VALIDATION] Running full pipeline analysis with history...');
+        const fullResult = await pipeline.analyzeBundle(
+            selectedCommits.slice(0, 2).map(c => c.sha),
+            false, // no workspace
+            (event) => {
+                console.log(`[PIPELINE-EVENT] ${event.type}: ${(event as any).step?.label || 'unknown'}`);
+                if (event.type === 'error') {
+                    console.error(`[PIPELINE-EVENT] Error in ${(event as any).step?.id}: ${event.error}`);
+                }
+            }
+        );
+
+        if (fullResult.errors.length === 0) {
+            console.log('[VALIDATION] ✓ Full pipeline completed successfully');
+            console.log(`[VALIDATION] ✓ Bundle facts generated: ${!!fullResult.bundleFacts}`);
+            console.log(`[VALIDATION] ✓ LLM outputs generated: ${!!fullResult.llmOutputs}`);
+            console.log(`[VALIDATION] ✓ History retrieved: ${!!fullResult.history}`);
+
+            if (fullResult.history) {
+                const history = fullResult.history;
+                console.log(`[VALIDATION] ✓ History details:`);
+                console.log(`    - Similar commits: ${history.similarCommits?.length || 0}`);
+                console.log(`    - Similar symbols: ${history.similarSymbols?.length || 0}`);
+                console.log(`    - Related refactors: ${history.relatedRefactors?.length || 0}`);
+                console.log(`    - Symbol evolutions: ${Object.keys(history.symbolEvolution || {}).length}`);
+            }
+        } else {
+            console.error('[VALIDATION] ✗ Pipeline failed with errors:');
+            fullResult.errors.forEach(err => {
+                console.error(`    ${err.stepId}: ${err.error}`);
+            });
+        }
+    } catch (error) {
+        console.error('[VALIDATION] ✗ Pipeline state test failed:', error);
+    }
+    const pipelineStateTime = endTimer('Pipeline State Test');
+    console.log(`[VALIDATION] Pipeline state test completed (${(pipelineStateTime / 1000).toFixed(2)}s)`);
+
+    endTimer('Phase 6: Enhanced Features');
+
+    // PHASE 7: Performance Benchmarks
+    console.log('\n' + '='.repeat(80));
+    console.log('PHASE 7: Performance Benchmarks');
+    console.log('='.repeat(80));
+    startTimer('Phase 7: Benchmarks');
+
+    // 7.1 Commit Indexing Benchmark
+    console.log('\n[BENCHMARK] Benchmarking commit indexing...');
+    startTimer('Commit Indexing Benchmark');
+    try {
+        const benchmarkShas = selectedCommits.slice(0, Math.min(10, selectedCommits.length)).map(c => c.sha);
+        console.log(`[BENCHMARK] Indexing ${benchmarkShas.length} commits...`);
+
+        const indexStart = Date.now();
+        await pipeline.indexCommits(benchmarkShas);
+        const indexTime = Date.now() - indexStart;
+
+        const avgTime = indexTime / benchmarkShas.length;
+        console.log(`[BENCHMARK] ✓ Commit indexing: ${(indexTime / 1000).toFixed(2)}s total, ${(avgTime / 1000).toFixed(3)}s per commit`);
+
+        // Test cache hit performance
+        console.log('[BENCHMARK] Testing cache performance...');
+        const cacheStart = Date.now();
+        await pipeline.indexCommits(benchmarkShas); // Should hit cache
+        const cacheTime = Date.now() - cacheStart;
+        const cacheAvgTime = cacheTime / benchmarkShas.length;
+
+        console.log(`[BENCHMARK] ✓ Cache performance: ${(cacheTime / 1000).toFixed(2)}s total, ${(cacheAvgTime / 1000).toFixed(3)}s per commit`);
+        console.log(`[BENCHMARK] ✓ Cache speedup: ${(avgTime / cacheAvgTime).toFixed(1)}x faster`);
+    } catch (error) {
+        console.error('[BENCHMARK] ✗ Commit indexing benchmark failed:', error);
+    }
+    const commitBenchmarkTime = endTimer('Commit Indexing Benchmark');
+    console.log(`[BENCHMARK] Commit indexing benchmark completed (${(commitBenchmarkTime / 1000).toFixed(2)}s)`);
+
+    // 7.2 Workspace Analysis Benchmark
+    console.log('\n[BENCHMARK] Benchmarking workspace analysis...');
+    startTimer('Workspace Analysis Benchmark');
+    try {
+        const workspaceIndexer = pipeline.workspaceIndexer;
+
+        // Test staged analysis
+        const stagedStart = Date.now();
+        const stagedResult = await workspaceIndexer.analyzeWorkspace('staged');
+        const stagedTime = Date.now() - stagedStart;
+        console.log(`[BENCHMARK] ✓ Staged analysis: ${(stagedTime / 1000).toFixed(2)}s`);
+
+        // Test cache hit
+        const stagedCacheStart = Date.now();
+        const stagedCacheResult = await workspaceIndexer.analyzeWorkspace('staged');
+        const stagedCacheTime = Date.now() - stagedCacheStart;
+        console.log(`[BENCHMARK] ✓ Staged cache hit: ${(stagedCacheTime / 1000).toFixed(2)}s (${stagedTime > 0 ? (stagedTime / stagedCacheTime).toFixed(1) : 'N/A'}x speedup)`);
+
+        // Test unstaged analysis
+        const unstagedStart = Date.now();
+        const unstagedResult = await workspaceIndexer.analyzeWorkspace('unstaged');
+        const unstagedTime = Date.now() - unstagedStart;
+        console.log(`[BENCHMARK] ✓ Unstaged analysis: ${(unstagedTime / 1000).toFixed(2)}s`);
+
+    } catch (error) {
+        console.error('[BENCHMARK] ✗ Workspace analysis benchmark failed:', error);
+    }
+    const workspaceBenchmarkTime = endTimer('Workspace Analysis Benchmark');
+    console.log(`[BENCHMARK] Workspace analysis benchmark completed (${(workspaceBenchmarkTime / 1000).toFixed(2)}s)`);
+
+    // 7.3 Full Pipeline Benchmark
+    console.log('\n[BENCHMARK] Benchmarking full pipeline...');
+    startTimer('Full Pipeline Benchmark');
+    try {
+        const pipelineShas = selectedCommits.slice(0, Math.min(5, selectedCommits.length)).map(c => c.sha);
+
+        const fullStart = Date.now();
+        const fullResult = await pipeline.analyzeBundle(pipelineShas, true); // include workspace
+        const fullTime = Date.now() - fullStart;
+
+        console.log(`[BENCHMARK] ✓ Full pipeline (${pipelineShas.length} commits + workspace): ${(fullTime / 1000).toFixed(2)}s`);
+        console.log(`[BENCHMARK] ✓ Average time per commit: ${(fullTime / pipelineShas.length / 1000).toFixed(3)}s`);
+
+        if (fullResult.errors.length === 0) {
+            console.log('[BENCHMARK] ✓ Pipeline completed without errors');
+        } else {
+            console.warn(`[BENCHMARK] ⚠ Pipeline completed with ${fullResult.errors.length} errors`);
+        }
+    } catch (error) {
+        console.error('[BENCHMARK] ✗ Full pipeline benchmark failed:', error);
+    }
+    const fullBenchmarkTime = endTimer('Full Pipeline Benchmark');
+    console.log(`[BENCHMARK] Full pipeline benchmark completed (${(fullBenchmarkTime / 1000).toFixed(2)}s)`);
+
+    endTimer('Phase 7: Benchmarks');
 
     printLogSummary();
     printLLMStats();

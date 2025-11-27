@@ -16,12 +16,13 @@ export interface FileChange {
 
 // Symbol information extracted from code
 export interface SymbolInfo {
-  id: string;
-  dnaId?: string; // Stable DNA ID
-  semanticId?: string; // Path-independent ID (e.g. class:MyClass)
+  id: string;  // MUST be stable DNA-based ID
+  dnaId: string;  // Explicit DNA hash for tracking across renames
+  semanticId?: string;  // Path-independent ID (e.g., class:MyClass)
   name: string;
   kind: 'function' | 'class' | 'method' | 'const' | 'interface' | 'type' | 'variable';
   signature: string;
+  bodyHash?: string;  // NEW: Hash of function body for change detection
   location: {
     start: { line: number; column: number };
     end: { line: number; column: number };
@@ -209,6 +210,9 @@ export interface ExtensionConfig {
   qdrantApiKey?: string;
   embeddingProvider?: string;
   embeddingModel?: string;
+  allowedExtensions?: string[];
+  maxFileSize?: number;
+  perProjectQdrantCollections?: boolean;
 }
 
 // Context values for tree items (used in package.json menus and tree item identification)

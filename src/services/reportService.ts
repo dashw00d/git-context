@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { getAnalysisPipeline } from '../analysis/pipeline';
+import { getRefactorPipeline } from '../extension';
 import { GitOperations } from '../analysis/git';
 import { getReportManager } from '../storage/reportManager';
 import { getDatabaseManager } from '../storage/database';
@@ -43,7 +43,7 @@ export class ReportService {
         } = {}
     ): Promise<string | null> {
         const orchestrator = getCockpitOrchestrator();
-        const pipeline = await getAnalysisPipeline();
+        const pipeline = await getRefactorPipeline();
         const reportManager = getReportManager();
 
         // 1. Check Cache (Layer 3)
@@ -65,7 +65,7 @@ export class ReportService {
                     logInfo(`[ReportService] Empty cache hit for ${fingerprint}; forcing reanalysis...`);
                     orchestrator.updateState({analysisStep: 'Reindexing empty commits...'}, 'report:reindexStart');
                     const commitShas = shas.filter(s => !isWorkspaceSha(s));
-                    await pipeline.analyzeCommits(commitShas, {forceReanalyze: true});
+                    await pipeline.indexCommits(commitShas);
                     commitShas.forEach(s => tempAnalyzed.add(s));
                     // Fall through to full generation (cache bypassed)
                 } else {
@@ -84,68 +84,65 @@ export class ReportService {
         orchestrator.updateState({ isAnalyzing: true, analysisStep: 'Analyzing commits...' }, 'report:start');
 
         try {
-            // 2. Run Analysis (Layer 1 & 2 handled by pipeline)
-            const workspaceShas = shas.filter(isWorkspaceSha);
+            // 2. Run Analysis with new layered pipeline
+            const includeWorkspace = scope === 'staged' || scope === 'unstaged' || scope === 'full';
             const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
-            let analysisResults: CommitAnalysis[] = [];
+            const workspaceShas = shas.filter(isWorkspaceSha);
 
-            if (scope === 'staged') {
-                const analysis = await pipeline.analyzeWorkspace('staged', { forceReanalyze: options.force });
-            if (analysis) {
-                analysisResults.push(analysis);
-            }
-        } else if (scope === 'unstaged') {
-                const analysis = await pipeline.analyzeWorkspace('unstaged', { forceReanalyze: options.force });
-                if (analysis) {
-                    analysisResults.push(analysis);
-                }
-            } else if (commitShas.length > 0) {
-                const git = new GitOperations();
-                let headSha: string | null = null;
-                try {
-                    headSha = git.getHeadSha();
-                } catch {
-                    headSha = null;
-                }
+            // Use the new RefactorPipeline.analyzeBundle method
+            const result = await pipeline.analyzeBundle(
+                commitShas,
+                includeWorkspace,
+                (event) => {
+                    // Map pipeline events to orchestrator state
+                    switch (event.type) {
+                        case 'start':
+                            orchestrator.updateState({
+                                analysisStep: event.step.label,
+                                analysisProgress: undefined
+                            }, `report:step:${event.step.id}`);
+                            break;
 
-                const cachedAnalyses: CommitAnalysis[] = [];
-                const shasToAnalyze: string[] = [];
+                        case 'complete':
+                            orchestrator.updateState({
+                                analysisStep: event.step.label,
+                                analysisProgress: 100
+                            }, `report:step:${event.step.id}:complete`);
+                            break;
 
-                for (const sha of commitShas.filter(s => !tempAnalyzed.has(s))) {
-                    const isHead = headSha ? sha === headSha : false;
-                    if (options.force || isWorkspaceSha(sha) || isHead) {
-                        shasToAnalyze.push(sha);
-                        continue;
-                    }
+                        case 'error':
+                            orchestrator.updateState({
+                                error: String(event.error),
+                                isAnalyzing: false
+                            }, `report:error`);
+                            break;
 
-                    const existing = await pipeline.getAnalysisResults(sha);
-                    if (existing && !this.isEmptyAnalysis(existing)) {
-                        cachedAnalyses.push(existing);
-                    } else {
-                        if (existing) {
-                            logInfo(`[ReportService] Empty analysis cache for ${sha}; reanalyzing...`);
-                        }
-                        shasToAnalyze.push(sha);
-                    }
-                }
+                        case 'finished':
+                            if (event.state.errors.length === 0) {
+                                // Serialize symbolEvolution map
+                                const history = event.state.history;
+                                const serializedHistory = history ? {
+                                    ...history,
+                                    symbolEvolution: history.symbolEvolution
+                                        ? Object.fromEntries(history.symbolEvolution)
+                                        : {}
+                                } : undefined;
 
-                if (shasToAnalyze.length > 0) {
-                    const fresh = await pipeline.analyzeCommits(shasToAnalyze, {
-                        forceReanalyze: options.force
-                    });
-                    analysisResults = [...cachedAnalyses, ...fresh];
-                } else {
-                    analysisResults = [...cachedAnalyses];
-                }
-            }
-
-            if (workspaceShas.length > 0) {
-                for (const workspaceSha of workspaceShas) {
-                    const workspace = await pipeline.getAnalysisResults(workspaceSha);
-                    if (workspace) {
-                        analysisResults.push(workspace);
+                                orchestrator.updateState({
+                                    bundleFacts: event.state.bundleFacts,
+                                    retrievedHistory: serializedHistory,
+                                    isAnalyzing: false,
+                                    analysisStep: undefined,
+                                    pipelineErrors: []
+                                }, 'report:complete');
+                            }
+                            break;
                     }
                 }
+            );
+
+            if (result.errors.length > 0) {
+                throw new Error(`Pipeline failed: ${result.errors[0].error}`);
             }
 
             if (options.cancellationToken?.isCancellationRequested) {
@@ -153,44 +150,26 @@ export class ReportService {
                 return null;
             }
 
-            // 3. Aggregate Facts
-            const facts = this.aggregateFacts(analysisResults, [...commitShas, ...workspaceShas]);
+            // 3. Use facts and analysis from new pipeline
+            const facts = result.bundleFacts;
+            const llmAnalysis = result.llmOutputs;
 
-            // 4. Generate Summary (LLM)
+            // 4. Prepare analysis results
             let summary: string;
             let analysis: any = undefined;
 
-            const config = getExtensionConfig();
-            const llmAvailable = config.openRouterApiKey && config.openRouterModel;
+            if (llmAnalysis) {
+                summary = llmAnalysis.summary;
+                analysis = {
+                    summary: llmAnalysis.summary,
+                    blocks: llmAnalysis.blocks,
+                    markdown: llmAnalysis.markdown,
+                    metadata: llmAnalysis.metadata
+                };
 
-            if (!options.skipLLM && llmAvailable) {
-                try {
-                    orchestrator.updateState({
-                        analysisStep: 'Generating LLM analysis...'
-                    }, 'report:llm-start');
-
-                    const analyst = new LlmAnalyst();
-                    if (options.llmCallTracker) {
-                        analyst.setLLMCallTracker(options.llmCallTracker);
-                    }
-                    const llmAnalysis = await analyst.analyze(facts);
-
-                    summary = llmAnalysis.summary;
-                    analysis = {
-                        summary: llmAnalysis.summary,
-                        blocks: llmAnalysis.blocks,
-                        markdown: llmAnalysis.markdown,
-                        metadata: llmAnalysis.metadata
-                    };
-
-                    logInfo(`[ReportService] LLM analysis complete: ` +
-                            `health score ${llmAnalysis.metadata.healthScore}/100, ` +
-                            `${llmAnalysis.metadata.totalTokens} tokens`);
-                } catch (error) {
-                    logError('[ReportService] LLM analysis failed, using fallback', error);
-                    summary = this.generateFallbackSummary(facts, shas);
-                    analysis = { summary };
-                }
+                logInfo(`[ReportService] LLM analysis complete: ` +
+                        `health score ${llmAnalysis.metadata.healthScore}/100, ` +
+                        `${llmAnalysis.metadata.totalTokens} tokens`);
             } else {
                 logDebug('[ReportService] LLM not available, using fallback summary');
                 summary = this.generateFallbackSummary(facts, shas);

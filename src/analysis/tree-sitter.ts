@@ -149,6 +149,7 @@ export class TreeSitterParser {
           const signature = this.extractPHPSignature(node);
           return {
             id: `function_${name}`,
+            dnaId: `function_${name}`, // Temporary - will be replaced by DNA computation
             name,
             kind: 'function',
             signature,
@@ -167,6 +168,7 @@ export class TreeSitterParser {
           const name = child.text;
           return {
             id: `class_${name}`,
+            dnaId: `class_${name}`, // Temporary - will be replaced by DNA computation
             name,
             kind: 'class',
             signature: `class ${name}`,
@@ -186,6 +188,7 @@ export class TreeSitterParser {
           const signature = this.extractPHPSignature(node);
           return {
             id: `method_${name}`,
+            dnaId: `method_${name}`, // Temporary - will be replaced by DNA computation
             name,
             kind: 'method',
             signature,
@@ -204,6 +207,7 @@ export class TreeSitterParser {
           const name = child.text;
           return {
             id: `const_${name}`,
+            dnaId: `const_${name}`, // Temporary - will be replaced by DNA computation
             name,
             kind: 'const',
             signature: `const ${name}`,
@@ -228,6 +232,7 @@ export class TreeSitterParser {
           const signature = this.extractJSSignature(node, language);
           return {
             id: `function_${name}`,
+            dnaId: `function_${name}`, // Temporary - will be replaced by DNA computation
             name,
             kind: 'function',
             signature,
@@ -246,6 +251,7 @@ export class TreeSitterParser {
           const name = child.text;
           return {
             id: `class_${name}`,
+            dnaId: `class_${name}`, // Temporary - will be replaced by DNA computation
             name,
             kind: 'class',
             signature: `class ${name}`,
@@ -265,6 +271,7 @@ export class TreeSitterParser {
           const signature = this.extractJSSignature(node, language);
           return {
             id: `method_${name}`,
+            dnaId: `method_${name}`, // Temporary - will be replaced by DNA computation
             name,
             kind: 'method',
             signature,
@@ -286,6 +293,7 @@ export class TreeSitterParser {
               const name = subChild.text;
               return {
                 id: `const_${name}`,
+                dnaId: `const_${name}`, // Temporary - will be replaced by DNA computation
                 name,
                 kind: 'const',
                 signature: `const ${name}`,

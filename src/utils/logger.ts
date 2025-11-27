@@ -51,6 +51,19 @@ export function logDebug(message: string): void {
 }
 
 /**
+ * Log warning message (goes to both channels)
+ */
+export function logWarn(message: string): void {
+    const infoCh = getInfoChannel();
+    if (infoCh) infoCh.appendLine(`[WARN] ${message}`);
+
+    const debugCh = getDebugChannel();
+    if (debugCh) debugCh.appendLine(`[WARN] ${message}`);
+
+    console.warn(`[WARN] ${message}`);
+}
+
+/**
  * Log error message (goes to both channels)
  */
 export function logError(message: string, error?: any): void {

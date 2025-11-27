@@ -1,6 +1,7 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { getExtensionConfig } from '../utils/config';
 import { getEmbeddingDimension } from './embeddings';
+import { logInfo, logWarn } from '../utils/logger';
 
 export interface QdrantConfig {
   url: string;
@@ -90,9 +91,38 @@ export class QdrantClientWrapper {
             distance: 'Cosine'
           }
         });
-        console.log(`[Qdrant] Created collection: ${collectionName} (dim: ${this.embeddingDimension})`);
+        logInfo(`[Qdrant] Created collection: ${collectionName} (dim: ${this.embeddingDimension})`);
+      }
+      
+      // Add keyword index on git_root for fast filtering (idempotent - will skip if exists)
+      try {
+        await this.client!.createPayloadIndex(collectionName, {
+          field_name: 'git_root',
+          field_schema: { type: 'keyword' }
+        });
+        logInfo(`[Qdrant] Indexed git_root on ${collectionName}`);
+      } catch (error: any) {
+        // Index may already exist, ignore error if so
+        const errorMsg = error?.message || String(error);
+        if (!errorMsg.includes('already exists') && !errorMsg.includes('already exist')) {
+          logWarn(`[Qdrant] Failed to create git_root index on ${collectionName}: ${errorMsg}`);
+        }
       }
     }
+  }
+
+  /**
+   * Get collection name for a given base type and git root
+   * Supports per-project collections for stronger isolation
+   */
+  getCollectionName(base: 'commits' | 'symbols' | 'patterns', gitRoot?: string): string {
+    const config = getExtensionConfig();
+    if (config.perProjectQdrantCollections && gitRoot) {
+      // Hash last 8 chars of git root for collection suffix
+      const hash = gitRoot.slice(-8).replace(/[/\\]/g, '_');
+      return `${base}_${hash}`;
+    }
+    return base;
   }
 }
 

@@ -11,6 +11,77 @@ import { RefactorBundleFacts } from './types';
 // Re-export for backward compatibility
 export type { RefactorBundleFacts } from './types';
 
+import { CommitFacts } from '../analysis/commitIndexer';
+import { WorkspaceFacts } from '../analysis/workspaceIndexer';
+
+/**
+ * Build RefactorBundleFacts from pipeline state (CommitFacts + WorkspaceFacts)
+ * Simplified version for the new layered pipeline
+ */
+export function buildRefactorBundleFacts(
+  commitFacts: CommitFacts[],
+  workspaceFacts: WorkspaceFacts | null
+): RefactorBundleFacts {
+  let totalSymbols = commitFacts.reduce((sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved, 0);
+  const totalEdges = commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0);
+  let totalFiles = commitFacts.reduce((sum, c) => sum + c.filesChanged, 0);
+  const allRisks = Array.from(new Set(commitFacts.flatMap(c => c.risks)));
+  const maxStructuralChange = Math.max(...commitFacts.map(c => c.structuralChangeScore), 0);
+
+  // Add workspace facts if available
+  if (workspaceFacts) {
+    totalSymbols += workspaceFacts.symbolsAdded + workspaceFacts.symbolsModified + workspaceFacts.symbolsRemoved;
+    totalFiles += workspaceFacts.filesChanged;
+    allRisks.push(...workspaceFacts.risks);
+  }
+
+  const oldestSha = commitFacts.length > 0 ? commitFacts[0].sha : 'unknown';
+  const newestSha = commitFacts.length > 0 ? commitFacts[commitFacts.length - 1].sha : 'unknown';
+
+  return {
+    version: '2.0',
+    generated_at: new Date().toISOString(),
+    bundle: {
+      oldestSha,
+      newestSha,
+      shas: commitFacts.map(c => c.sha)
+    },
+    scope: {
+      files: totalFiles,
+      blastRadius: maxStructuralChange * 10 // Rough approximation
+    },
+    intended: {
+      present: totalSymbols,
+      absent: 0, // TODO: Implement intended state tracking
+      renamed: 0
+    },
+    working: {
+      symbols: totalSymbols,
+      edges: totalEdges
+    },
+    findings: {
+      incompleteness: {
+        missing: 0, // TODO: Implement completeness checking
+        zombies: 0,
+        divergent: 0
+      },
+      patternDrift: {
+        mixedTargets: 0,
+        oldNamespaces: 0
+      },
+      legacyAudit: {
+        dead: 0,
+        legacyUsed: 0,
+        replacedLeftovers: []
+      }
+    },
+    evidence: {
+      risks: allRisks,
+      structuralChangeScore: maxStructuralChange
+    }
+  };
+}
+
 /**
  * Assemble all facts into v2 JSON schema
  */

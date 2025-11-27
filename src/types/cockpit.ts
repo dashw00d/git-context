@@ -1,4 +1,5 @@
 import { RefactorBundleFacts } from '../facts/types';
+import { WorkspaceFacts } from '../analysis/workspaceIndexer';
 
 /** Which section (accordion) is active/open in the cockpit sidebar */
 export type CockpitSectionKey = 'commits' | 'bundle' | 'symbols' | 'reports' | 'live';
@@ -94,6 +95,21 @@ export interface CockpitState {
   analysisStep?: string;        // e.g. "Diffing", "Building facts"
   analysisProgress?: number;    // e.g. 0–1 or 0–100
   error?: string | null;        // Error message to display to user
+
+  /* Pipeline execution state */
+  currentStepId?: string | null;
+  pipelineErrors?: Array<{ stepId: string; error: string }>;
+
+  /* Historical context (NEW) */
+  retrievedHistory?: {
+    similarCommits: Array<any>;
+    similarSymbols: Array<any>;
+    relatedRefactors: Array<any>;
+    symbolEvolution: Record<string, Array<any>>;  // Map serialized as object
+  };
+
+  /* Workspace analysis results */
+  workspaceFacts?: WorkspaceFacts | null;
 
   /* Selections */
   selectedCommitShas: string[];

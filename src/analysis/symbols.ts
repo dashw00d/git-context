@@ -3,18 +3,15 @@ import { getTreeSitterParser, detectLanguage } from './tree-sitter';
 import { GitOperations } from './git';
 import { SemanticChangeDetector } from './semanticChanges';
 
-import { SymbolDnaEngine } from './symbolDna';
-import { getDatabaseManager } from '../storage/database';
+import { assignDNAIds } from './symbolDna';
 
 export class SymbolExtractor {
   private git: GitOperations;
   private parser = getTreeSitterParser();
   private semanticDetector = new SemanticChangeDetector();
-  private dnaEngine: SymbolDnaEngine;
 
   constructor(git: GitOperations) {
     this.git = git;
-    this.dnaEngine = new SymbolDnaEngine(getDatabaseManager());
   }
 
   /**
@@ -127,24 +124,22 @@ export class SymbolExtractor {
 
       // Extract symbols from both versions
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
-      for (const sym of currentSymbols) {
-        sym.dnaId = await this.dnaEngine.resolveSymbolIdentity(sym, currentContent, sha, file.path);
-      }
+      const bodyTexts = new Map([[file.path, currentContent]]);
+      const currentSymbolsWithDNA = assignDNAIds(currentSymbols, bodyTexts);
 
       const previousSymbols = previousContent
         ? await this.extractSymbolsFromContent(previousContent, file.oldPath || file.path)
         : [];
 
+      let previousSymbolsWithDNA = previousSymbols;
       if (previousContent) {
         // We might want to resolve previous symbols too if they haven't been resolved
-        // But typically we rely on them being in the DB already. 
-        // For robustness in this flow, we can try to resolve them if needed, 
+        // But typically we rely on them being in the DB already.
+        // For robustness in this flow, we can try to resolve them if needed,
         // but let's assume for now we focus on the current commit's DNA.
         // Actually, for diffing, having DNA on both sides helps.
-        const parentSha = this.git.getCommitInfo(sha).parent || 'unknown';
-        for (const sym of previousSymbols) {
-          sym.dnaId = await this.dnaEngine.resolveSymbolIdentity(sym, previousContent, parentSha, file.oldPath || file.path);
-        }
+        const bodyTexts = new Map([[file.oldPath || file.path, previousContent]]);
+        previousSymbolsWithDNA = assignDNAIds(previousSymbols, bodyTexts);
       }
 
       // Compare and categorize changes
@@ -230,22 +225,21 @@ export class SymbolExtractor {
 
       // Extract symbols from both versions
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
-      for (const sym of currentSymbols) {
-        sym.dnaId = await this.dnaEngine.resolveSymbolIdentity(sym, currentContent, 'live', file.path);
-      }
+      const bodyTexts = new Map([[file.path, currentContent]]);
+      const currentSymbolsWithDNA = assignDNAIds(currentSymbols, bodyTexts);
 
       const headSymbols = headContent
         ? await this.extractSymbolsFromContent(headContent, file.path)
         : [];
+      let headSymbolsWithDNA = headSymbols;
 
       if (headContent) {
-        for (const sym of headSymbols) {
-          sym.dnaId = await this.dnaEngine.resolveSymbolIdentity(sym, headContent, 'HEAD', file.path);
-        }
+        const headBodyTexts = new Map([[file.path, headContent]]);
+        headSymbolsWithDNA = assignDNAIds(headSymbols, headBodyTexts);
       }
 
       // Compare and categorize changes
-      const changes = this.compareSymbolSets(headSymbols, currentSymbols, file.path);
+      const changes = this.compareSymbolSets(headSymbolsWithDNA, currentSymbolsWithDNA, file.path);
 
       // Enhance modified symbols with semantic information
       for (const delta of changes.modified) {
@@ -296,6 +290,35 @@ export class SymbolExtractor {
       semanticId: symbol.id,
       id: `${filePath}:${symbol.id}`
     }));
+  }
+
+  /**
+   * Extract symbols WITH body text for DNA hashing
+   */
+  async extractSymbolsWithBodies(
+    content: string,
+    filePath: string,
+    language: string
+  ): Promise<{ symbols: SymbolInfo[]; bodyTexts: Map<string, string> }> {
+    const symbols = await this.extractSymbolsFromContent(content, filePath);
+    const bodyTexts = new Map<string, string>();
+
+    // For each symbol, extract body text from content
+    for (const symbol of symbols) {
+      const bodyText = this.extractBodyText(
+        content,
+        symbol.location.start.line,
+        symbol.location.end.line
+      );
+      bodyTexts.set(symbol.id, bodyText);
+    }
+
+    return { symbols, bodyTexts };
+  }
+
+  private extractBodyText(content: string, startLine: number, endLine: number): string {
+    const lines = content.split('\n');
+    return lines.slice(startLine - 1, endLine).join('\n');
   }
 
   /**

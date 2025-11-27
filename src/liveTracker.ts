@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { debounce } from 'lodash';
 import { GitOperations } from './analysis/git';
-import { logDebug, logInfo } from './utils/logger';
+import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
+import { logDebug, logInfo, logError } from './utils/logger';
 
 interface ThresholdConfig {
     lines: number;
@@ -82,6 +83,27 @@ export class LiveDiffTracker {
         this.debouncedCheck(uri);
     }
 
+    private async triggerAnalysis(staged: boolean): Promise<void> {
+        try {
+            const { getRefactorPipeline } = await import('./extension');
+            const pipeline = await getRefactorPipeline();
+            const workspaceIndexer = pipeline.workspaceIndexer;
+
+            const facts = await workspaceIndexer.analyzeWorkspace(
+                staged ? 'staged' : 'unstaged'
+            );
+
+            if (facts) {
+                getCockpitOrchestrator().updateState({
+                    workspaceFacts: facts,
+                    activeSection: 'live'
+                }, 'liveTracker:analysis');
+            }
+        } catch (error) {
+            logError('[LiveTracker] Analysis failed', error);
+        }
+    }
+
     private debouncedCheck = debounce(async (uri: string) => {
         const buffer = this.changeBuffers.get(uri);
         if (!buffer || buffer.length === 0) return;
@@ -102,12 +124,11 @@ export class LiveDiffTracker {
         const relativePath = vscode.workspace.asRelativePath(doc.uri, false);
         const stagedFiles = await this.git.getStagedFiles();
         const isStaged = stagedFiles.some(f => f.path === relativePath);
-        const commandId = isStaged ? 'git-context.analyzeStagedChanges' : 'git-context.analyzeUnstagedChanges';
         const mode = isStaged ? 'staged' : 'unstaged';
 
         if (this.autoRunAfterEdits > 0) {
             logInfo(`Live threshold reached for ${mode} changes, triggering analysis`);
-            await vscode.commands.executeCommand(commandId);
+            await this.triggerAnalysis(isStaged);
             this.clearBuffer(doc.uri);
         } else {
             const choice = await vscode.window.showInformationMessage(
@@ -116,7 +137,7 @@ export class LiveDiffTracker {
                 'Later'
             );
             if (choice === 'Analyze') {
-                await vscode.commands.executeCommand(commandId);
+                await this.triggerAnalysis(isStaged);
                 this.clearBuffer(doc.uri);
             }
         }

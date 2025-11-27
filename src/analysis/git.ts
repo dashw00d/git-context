@@ -14,6 +14,10 @@ export class GitOperations {
     this.gitRoot = root;
   }
 
+  public getRoot(): string {
+    return this.gitRoot;
+  }
+
   /**
    * Execute a git command and return the output
    */
@@ -269,6 +273,48 @@ export class GitOperations {
    */
   getHeadSha(): string {
     return this.execGit(['rev-parse', 'HEAD']);
+  }
+
+  /**
+   * Get blob SHA for a file at a specific commit
+   * @throws Error if file doesn't exist at the given commit
+   */
+  getBlobSha(sha: string, filePath: string): string {
+    try {
+      const output = this.execGit(['ls-tree', '-r', sha, '--', filePath]);
+      const lines = output.trim().split('\n').filter(l => l.length > 0);
+
+      if (lines.length === 0) {
+        throw new Error(`File ${filePath} not found at commit ${sha}`);
+      }
+
+      if (lines.length > 1) {
+        console.warn(`Multiple blobs found for ${filePath} at ${sha}, using first match`);
+      }
+
+      const parts = lines[0].split(/\s+/);
+      if (parts.length < 3) {
+        throw new Error(`Invalid ls-tree output for ${filePath} at ${sha}`);
+      }
+
+      return parts[2];
+    } catch (error) {
+      throw new Error(`Failed to get blob SHA for ${filePath} at ${sha}: ${error}`);
+    }
+  }
+
+  /**
+   * Get size of a blob in bytes
+   */
+  getBlobSize(sha: string, filePath: string): number {
+    try {
+      // git cat-file -s <sha>:<path>
+      const output = this.execGit(['cat-file', '-s', `${sha}:${filePath}`]);
+      return parseInt(output.trim(), 10) || 0;
+    } catch (error) {
+      // If file doesn't exist or other error, return 0 (safe fallback)
+      return 0;
+    }
   }
 
   /**

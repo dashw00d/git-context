@@ -142,18 +142,36 @@ export class AnalysisBlockUtils {
   /**
    * Create an evidence link with auto-generated readable description
    * Parses the evidence path to generate human-readable text
+   * @param knownFiles Optional set of known file paths to validate against (prevents hallucinated files)
    */
-  static createEvidenceAuto(path: string, context?: string): EvidenceLink {
+  static createEvidenceAuto(path: string, context?: string, knownFiles?: Set<string> | string[]): EvidenceLink {
     const description = this.parseEvidencePathToDescription(path, context);
     const parsed = this.parseEvidencePath(path);
     
-    return {
+    const evidence: EvidenceLink = {
       path,
       description,
       symbolId: parsed.symbolId,
       filePath: parsed.filePath,
       lineNumber: parsed.lineNumber
     };
+
+    // Validate filePath against known files if provided
+    if (parsed.filePath && knownFiles) {
+      const knownFilesSet = knownFiles instanceof Set ? knownFiles : new Set(knownFiles);
+      if (!knownFilesSet.has(parsed.filePath)) {
+        // File path not in known files - potentially hallucinated
+        return {
+          path,
+          description: `${description} (validate existence)`,
+          symbolId: parsed.symbolId,
+          filePath: undefined, // Remove invalid file path
+          lineNumber: parsed.lineNumber
+        };
+      }
+    }
+    
+    return evidence;
   }
 
   /**

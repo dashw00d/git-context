@@ -585,6 +585,74 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 }
 
+// === NEW REFACTOR PIPELINE FACTORY ===
+
+import { RefactorPipeline } from './analysis/refactorPipeline';
+import { CommitIndexer } from './analysis/commitIndexer';
+import { WorkspaceIndexer } from './analysis/workspaceIndexer';
+import { EmbeddingIndexer } from './analysis/embeddingIndexer';
+import { BundleStoryEngine } from './analysis/bundleStoryEngine';
+import { SnapshotManager } from './analysis/snapshotManager';
+import { StructuralDiffManager } from './analysis/structuralDiffManager';
+import { SymbolExtractor } from './analysis/symbols';
+import { DependencyExtractor } from './analysis/dependencies';
+import { RiskDetector } from './analysis/heuristics';
+import { HotspotDetector } from './analysis/hotspotDetector';
+import { MovedBlockDetector } from './analysis/movedBlockDetector';
+import { LlmAnalyst } from './analysis/llmAnalyst/runner';
+import { GitOperations } from './analysis/git';
+import { getDatabaseManager } from './storage/database';
+
+let refactorPipeline: RefactorPipeline | null = null;
+
+export async function getRefactorPipeline(): Promise<RefactorPipeline> {
+  if (!refactorPipeline) {
+    const db = getDatabaseManager().getDatabase();
+    const git = new GitOperations();
+
+    const symbolExtractor = new SymbolExtractor(git);
+    const dependencyExtractor = new DependencyExtractor();
+
+    const snapshotManager = new SnapshotManager(db, symbolExtractor, dependencyExtractor);
+    const structuralDiffManager = new StructuralDiffManager(db);
+    const riskDetector = new RiskDetector();
+    const hotspotDetector = new HotspotDetector();
+    const movedBlockDetector = new MovedBlockDetector();
+
+    const commitIndexer = new CommitIndexer(
+      db,
+      git,
+      snapshotManager,
+      structuralDiffManager,
+      riskDetector,
+      dependencyExtractor,
+      hotspotDetector,
+      movedBlockDetector
+    );
+
+    const workspaceIndexer = new WorkspaceIndexer(
+      db,
+      git,
+      snapshotManager,
+      structuralDiffManager
+    );
+
+    const embeddingIndexer = new EmbeddingIndexer(db);
+
+    const llmAnalyst = new LlmAnalyst();
+    const storyEngine = new BundleStoryEngine(llmAnalyst);
+
+    refactorPipeline = new RefactorPipeline(
+      commitIndexer,
+      workspaceIndexer,
+      embeddingIndexer,
+      storyEngine
+    );
+  }
+
+  return refactorPipeline;
+}
+
 export function deactivate() {
   logInfo('Git Context extension is now deactivated!');
 

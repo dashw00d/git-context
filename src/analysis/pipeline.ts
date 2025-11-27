@@ -761,6 +761,7 @@ export class AnalysisPipeline {
     for (const row of symbols) {
       const symbol: SymbolInfo = {
         id: row.symbol_id,
+        dnaId: row.symbol_id, // For legacy symbols table, use symbol_id as dnaId
         name: row.name,
         kind: row.kind as any, // Cast to match the union type
         location: {

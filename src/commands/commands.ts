@@ -47,20 +47,20 @@ export async function registerCommands(
           }, async (progress, token) => {
             try {
               await commitsProvider.initializeDatabase();
-              const { getAnalysisPipeline } = await import('../analysis/pipeline');
-              const pipeline = await getAnalysisPipeline();
-              const commits = await pipeline.loadRecentCommits(parseInt(count));
+              const { getRefactorPipeline } = await import('../extension');
+              const pipeline = await getRefactorPipeline();
+              const git = new GitOperations();
+              const commits = git.getRecentCommits(parseInt(count));
               const shas = commits.map(c => c.sha);
-              await pipeline.analyzeCommits(shas);
-              const reportService = await getReportService();
-              await reportService.generateReport(
-                shas,
-                'full',
-                { cancellationToken: token }
-              );
+
+              // Just index commits (quick metadata load)
+              await pipeline.indexCommits(shas);
+
+              // Refresh UI to show indexed commits
               commitsProvider.refresh();
-              await refreshCockpitState();
-              vscode.window.showInformationMessage(`Analyzed last ${count} commits and generated report`);
+              await refreshCockpitState('command:analyzeLastCommits');
+
+              vscode.window.showInformationMessage(`Indexed ${shas.length} commits`);
             } catch (error) {
               vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
             }
@@ -75,18 +75,26 @@ export async function registerCommands(
       async () => {
         try {
           await commitsProvider.initializeDatabase();
-          const { getAnalysisPipeline } = await import('../analysis/pipeline');
-          const pipeline = await getAnalysisPipeline();
-          const analysis = await pipeline.analyzeWorkspace('staged');
-          if (!analysis) {
-            vscode.window.showInformationMessage('No staged files to analyze');
+          const { getRefactorPipeline } = await import('../extension');
+          const pipeline = await getRefactorPipeline();
+          const workspaceIndexer = pipeline.workspaceIndexer; // Expose as property
+
+          const facts = await workspaceIndexer.analyzeWorkspace('staged');
+
+          if (!facts) {
+            vscode.window.showInformationMessage('No staged changes to analyze');
             return;
           }
+
+          orchestrator.updateState({
+            workspaceFacts: facts,
+            activeSection: 'live'
+          }, 'command:analyzeStagedChanges');
+
           commitsProvider.refresh();
           await refreshCockpitState('command:analyzeStaged');
-          vscode.window.showInformationMessage(
-            `Analyzed ${analysis.symbols.added.length} new symbols in staged changes`
-          );
+
+          vscode.window.showInformationMessage(`Analyzed ${facts.filesChanged} staged files`);
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to analyze staged changes: ${error}`);
         }
@@ -98,18 +106,24 @@ export async function registerCommands(
       async () => {
         try {
           await commitsProvider.initializeDatabase();
-          const { getAnalysisPipeline } = await import('../analysis/pipeline');
-          const pipeline = await getAnalysisPipeline();
-          const analysis = await pipeline.analyzeWorkspace('unstaged');
-          if (!analysis) {
+          const { getRefactorPipeline } = await import('../extension');
+          const pipeline = await getRefactorPipeline();
+          const workspaceIndexer = pipeline.workspaceIndexer;
+
+          const facts = await workspaceIndexer.analyzeWorkspace('unstaged');
+          if (!facts) {
             vscode.window.showInformationMessage('No unstaged files to analyze');
             return;
           }
+
+          orchestrator.updateState({
+            workspaceFacts: facts,
+            activeSection: 'live'
+          }, 'command:analyzeUnstagedChanges');
+
           commitsProvider.refresh();
           await refreshCockpitState('command:analyzeUnstaged');
-          vscode.window.showInformationMessage(
-            `Analyzed ${analysis.symbols.added.length} new symbols in unstaged changes`
-          );
+          vscode.window.showInformationMessage(`Analyzed ${facts.filesChanged} unstaged files`);
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to analyze unstaged changes: ${error}`);
         }

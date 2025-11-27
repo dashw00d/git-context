@@ -46,8 +46,8 @@ export class LlmAnalyst {
       let discoveryBlock: AnalysisBlock | undefined;
       if (rawFeed) {
         console.log('LLM Analyst: Running pattern discovery...');
-        const discoveryResult = await this.discoverPatterns(rawFeed);
-        discoveryBlock = this.createDiscoveryBlock(discoveryResult);
+        const discoveryResult = await this.discoverPatterns(rawFeed, facts);
+        discoveryBlock = this.createDiscoveryBlock(discoveryResult, facts);
         totalCalls += 3; // Discover, Quantify, Plan
         totalTokens += discoveryResult.metadata.totalTokens;
       }
@@ -63,6 +63,16 @@ export class LlmAnalyst {
       // Calculate health score
       const healthScore = this.calculateHealthScore(facts);
 
+      // Calculate validated evidence count (evidence with valid filePath in scope.files)
+      const knownFiles = new Set((facts.evidence['scope.files'] as string[]) || []);
+      const validatedEvidenceCount = blocks.reduce((acc, block) => {
+        return acc + block.claims.reduce((claimAcc, claim) => {
+          return claimAcc + claim.evidence.filter(e => e.filePath && knownFiles.has(e.filePath)).length;
+        }, 0) + block.actions.reduce((actionAcc, action) => {
+          return actionAcc + action.evidence.filter(e => e.filePath && knownFiles.has(e.filePath)).length;
+        }, 0);
+      }, 0);
+
       return {
         summary,
         blocks,
@@ -72,7 +82,8 @@ export class LlmAnalyst {
           totalTokens,
           model: getExtensionConfig().openRouterModel,
           timestamp: new Date().toISOString(),
-          healthScore
+          healthScore,
+          validatedEvidenceCount
         }
       };
 
@@ -121,15 +132,21 @@ export class LlmAnalyst {
    * Run the "Churn" pipeline: Discover -> Quantify -> Plan
    * Uses raw AST/diff/graph feed to find emergent patterns
    */
-  async discoverPatterns(rawFeed: any): Promise<any> {
+  async discoverPatterns(rawFeed: any, facts: RefactorBundleFacts): Promise<any> {
     const startTime = Date.now();
     let totalTokens = 0;
 
     try {
+      // Get known files from facts for grounding examples
+      const knownFiles = (facts.evidence['scope.files'] as string[]) || [];
+      const knownFilesList = knownFiles.length > 0 
+        ? `\n\nKNOWN FILES (ONLY use these in examples):\n${JSON.stringify(knownFiles)}\n\n`
+        : '\n\n';
+
       // Turn 1: Discover Patterns
       console.log('LLM Analyst: Discovering emergent patterns...');
       const discoverPromptTemplate = this.getPrompt('discover', PROMPT_DISCOVER);
-      const discoverPrompt = `${SYSTEM_PROMPT}\n\nRAW FEED JSON:\n${JSON.stringify(rawFeed)}\n\n${discoverPromptTemplate}`;
+      const discoverPrompt = `${SYSTEM_PROMPT}\n\nRAW FEED JSON:\n${JSON.stringify(rawFeed)}${knownFilesList}${discoverPromptTemplate}`;
       const discovery = await this.callLLM(discoverPrompt, 'discover');
       totalTokens += this.estimateTokens(discoverPrompt);
 
@@ -232,12 +249,15 @@ export class LlmAnalyst {
   /**
    * Convert discovery results into an AnalysisBlock
    */
-  private createDiscoveryBlock(discoveryResult: any): AnalysisBlock {
+  private createDiscoveryBlock(discoveryResult: any, facts: RefactorBundleFacts): AnalysisBlock {
     const block = AnalysisBlockUtils.createBlock(
       'discovery',
       'LLM-Driven Pattern Discovery',
       'discovery'
     );
+
+    // Get known files for validation
+    const knownFiles = new Set((facts.evidence['scope.files'] as string[]) || []);
 
     if (discoveryResult.quantified && discoveryResult.quantified.quantified) {
       const patterns = discoveryResult.quantified.quantified;
@@ -246,7 +266,7 @@ export class LlmAnalyst {
         confidence: 0.9,
         severity: p.impact === 'high' ? 'high' : 'medium',
         evidence: (p.examples || []).map((ex: string) => 
-          AnalysisBlockUtils.createEvidenceAuto(ex, `${p.name} example`)
+          AnalysisBlockUtils.createEvidenceAuto(ex, `${p.name} example`, knownFiles)
         )
       }));
     }
