@@ -1,0 +1,15 @@
+{
+  "$schema": "./git-context.config.schema.json",
+  "openRouterApiKey": "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",
+  "openRouterModel": "x-ai/grok-4.1-fast:free",
+  "apiEndpoint": "https://openrouter.ai/api/v1",
+  "difftasticPath": "/home/ryan/bin/difftastic",
+  "defaultCommitCount": 5,
+  "qdrantUrl": "http://localhost:6333",
+  "qdrantApiKey": "",
+  "embeddingProvider": "",
+  "embeddingModel": "text-embedding-3-small",
+  "tokensPerStep": null,
+  "customPrompts": null,
+  "customIgnorePaths": null
+}

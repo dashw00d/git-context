@@ -1,0 +1,16 @@
+{
+  "$schema": "./git-context.config.schema.json",
+  "_comment": "Copy this file to .git-context.config.json and fill in your settings",
+  "openRouterApiKey": "",
+  "openRouterModel": "anthropic/claude-3-haiku:beta",
+  "apiEndpoint": "https://openrouter.ai/api/v1",
+  "difftasticPath": "",
+  "defaultCommitCount": 5,
+  "qdrantUrl": "",
+  "qdrantApiKey": "",
+  "embeddingProvider": "",
+  "embeddingModel": "text-embedding-3-small",
+  "tokensPerStep": null,
+  "customPrompts": null,
+  "customIgnorePaths": null
+}

@@ -4,4 +4,4 @@
 *.vsix
 /.examples
 /.vscode
-/.cursor
+/.cursor.git-context.config.json

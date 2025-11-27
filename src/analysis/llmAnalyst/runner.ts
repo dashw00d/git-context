@@ -9,6 +9,11 @@ import { getExtensionConfig } from '../../utils/config';
  */
 export class LlmAnalyst {
   private client = getLLMClient();
+  private llmCallTracker?: (purpose: string, model?: string, tokens?: number, duration?: number) => void;
+
+  setLLMCallTracker(tracker: (purpose: string, model?: string, tokens?: number, duration?: number) => void) {
+    this.llmCallTracker = tracker;
+  }
 
   /**
    * Run complete analysis pipeline on facts JSON
@@ -309,10 +314,21 @@ export class LlmAnalyst {
 
     const maxTokens = this.getMaxTokens(stepKey);
 
+    // Track LLM call
+    const callStart = Date.now();
+    const config = getExtensionConfig();
+    const model = config.openRouterModel;
+
     const response = await this.client.complete(messages, {
       temperature: 0.1,
       maxTokens
     });
+
+    // Track completion
+    const duration = Date.now() - callStart;
+    if (this.llmCallTracker) {
+      this.llmCallTracker(`report-${stepKey}`, model, undefined, duration);
+    }
 
     // Try to parse as JSON first
     try {

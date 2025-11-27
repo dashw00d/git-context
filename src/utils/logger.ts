@@ -1,16 +1,27 @@
-import * as vscode from 'vscode';
+let vscode: any;
+try {
+    vscode = require('vscode');
+} catch {
+    // Not in VS Code environment
+    vscode = null;
+}
 
-let infoChannel: vscode.OutputChannel | undefined;
-let debugChannel: vscode.OutputChannel | undefined;
+let infoChannel: any | undefined;
+let debugChannel: any | undefined;
 
-export function getInfoChannel(): vscode.OutputChannel {
+// Check if we are in VS Code environment
+const isVsCode = vscode && vscode.window;
+
+export function getInfoChannel(): any | undefined {
+    if (!isVsCode) return undefined;
     if (!infoChannel) {
         infoChannel = vscode.window.createOutputChannel('Git Context');
     }
     return infoChannel;
 }
 
-export function getDebugChannel(): vscode.OutputChannel {
+export function getDebugChannel(): any | undefined {
+    if (!isVsCode) return undefined;
     if (!debugChannel) {
         debugChannel = vscode.window.createOutputChannel('Git Context (Debug)');
     }
@@ -21,7 +32,10 @@ export function getDebugChannel(): vscode.OutputChannel {
  * Log info message (user-facing, high-level operations)
  */
 export function logInfo(message: string): void {
-    getInfoChannel().appendLine(message);
+    const channel = getInfoChannel();
+    if (channel) {
+        channel.appendLine(message);
+    }
     console.log(message);
 }
 
@@ -29,7 +43,10 @@ export function logInfo(message: string): void {
  * Log debug message (detailed trace, goes to debug channel)
  */
 export function logDebug(message: string): void {
-    getDebugChannel().appendLine(message);
+    const channel = getDebugChannel();
+    if (channel) {
+        channel.appendLine(message);
+    }
     console.log(message);
 }
 
@@ -38,10 +55,17 @@ export function logDebug(message: string): void {
  */
 export function logError(message: string, error?: any): void {
     const errorMsg = error ? `${message}: ${error}` : message;
-    getInfoChannel().appendLine(`[ERROR] ${errorMsg}`);
-    getDebugChannel().appendLine(`[ERROR] ${errorMsg}`);
-    if (error instanceof Error && error.stack) {
-        getDebugChannel().appendLine(error.stack);
+
+    const infoCh = getInfoChannel();
+    if (infoCh) infoCh.appendLine(`[ERROR] ${errorMsg}`);
+
+    const debugCh = getDebugChannel();
+    if (debugCh) {
+        debugCh.appendLine(`[ERROR] ${errorMsg}`);
+        if (error instanceof Error && error.stack) {
+            debugCh.appendLine(error.stack);
+        }
     }
+
     console.error(errorMsg, error);
 }

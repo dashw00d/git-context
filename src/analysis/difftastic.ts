@@ -37,7 +37,15 @@ export class DifftasticIntegration {
     }
 
     // Check common installation paths
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    const workspaceRoot = path.join(__dirname, '..', '..');
+
     const commonPaths = [
+      // User-specific paths (for testing)
+      path.join(homeDir, 'bin', 'difftastic'),
+      // Extension resources folder (bundled or for tests)
+      path.join(workspaceRoot, 'resources', 'difftastic'),
+      // System paths
       '/usr/local/bin/difftastic',
       '/usr/bin/difftastic',
       '/opt/homebrew/bin/difftastic', // macOS Homebrew
@@ -53,6 +61,7 @@ export class DifftasticIntegration {
 
     // Return empty string if not found (optional dependency)
     console.warn('[DIFFTASTIC] Binary not found. Structural diff analysis will be disabled.');
+    console.warn('[DIFFTASTIC] Searched paths:', commonPaths.slice(0, 3).join(', '));
     return '';
   }
 

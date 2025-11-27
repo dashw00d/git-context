@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Git Context Configuration",
+  "description": "Configuration for git-context extension and CLI",
+  "type": "object",
+  "properties": {
+    "openRouterApiKey": {
+      "type": "string",
+      "description": "OpenRouter API key for LLM analysis"
+    },
+    "openRouterModel": {
+      "type": "string",
+      "description": "OpenRouter model to use",
+      "default": "anthropic/claude-3-haiku:beta"
+    },
+    "apiEndpoint": {
+      "type": "string",
+      "description": "API endpoint for LLM provider",
+      "default": "https://openrouter.ai/api/v1"
+    },
+    "difftasticPath": {
+      "type": "string",
+      "description": "Path to difftastic binary for structural diffs"
+    },
+    "defaultCommitCount": {
+      "type": "integer",
+      "description": "Default number of commits to analyze",
+      "default": 5
+    },
+    "qdrantUrl": {
+      "type": "string",
+      "description": "Qdrant vector database URL for semantic search"
+    },
+    "qdrantApiKey": {
+      "type": "string",
+      "description": "Qdrant API key"
+    },
+    "embeddingProvider": {
+      "type": "string",
+      "description": "Embedding provider endpoint (leave empty to use LLM provider)"
+    },
+    "embeddingModel": {
+      "type": "string",
+      "description": "Embedding model to use",
+      "default": "text-embedding-3-small"
+    },
+    "tokensPerStep": {
+      "type": ["object", "null"],
+      "description": "Token limits per analysis step"
+    },
+    "customPrompts": {
+      "type": ["object", "null"],
+      "description": "Custom prompts for LLM analysis"
+    },
+    "customIgnorePaths": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "string"
+      },
+      "description": "Custom paths to ignore during analysis"
+    }
+  }
+}

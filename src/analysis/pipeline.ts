@@ -616,6 +616,7 @@ export class AnalysisPipeline {
   }
 
   private async storeCommitAnalysis(analysis: CommitAnalysis): Promise<void> {
+    // Store the analysis summary first
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO commits_analysis
       (sha, summary_md, raw_llm_json, symbols_added, symbols_removed, symbols_modified,
@@ -653,6 +654,9 @@ export class AnalysisPipeline {
       model
     );
 
+    // Store individual symbols to enable future caching
+    await this.storeSymbols(analysis.sha, analysis.symbols);
+
     const totalSymbols = analysis.symbols.added.length + analysis.symbols.modified.length + analysis.symbols.removed.length;
     if (totalSymbols > 0) {
       this.trackProgress('symbols', totalSymbols, analysis.sha);
@@ -661,6 +665,132 @@ export class AnalysisPipeline {
     if (totalEdges > 0) {
       this.trackProgress('edges', totalEdges, analysis.sha);
     }
+  }
+
+  private async storeSymbols(sha: string, symbols: {
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  }): Promise<void> {
+    // Delete existing symbols for this SHA (idempotent)
+    this.db.prepare('DELETE FROM symbols WHERE sha = ?').run(sha);
+
+    const symbolStmt = this.db.prepare(`
+      INSERT INTO symbols
+      (sha, path, symbol_id, name, kind, signature, change_type, mod_reason,
+       diff_snippet_pre, diff_snippet_post, confidence, naming_convention, convention_confidence)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    // Store added symbols
+    for (const symbol of symbols.added) {
+      symbolStmt.run(
+        sha,
+        '', // path - we don't store this for now
+        symbol.id,
+        symbol.name,
+        symbol.kind,
+        symbol.signature,
+        'added',
+        null, // mod_reason
+        null, // diff_snippet_pre
+        null, // diff_snippet_post
+        1.0, // confidence
+        null, // naming_convention
+        null  // convention_confidence
+      );
+    }
+
+    // Store removed symbols
+    for (const symbol of symbols.removed) {
+      symbolStmt.run(
+        sha,
+        '', // path - we don't store this for now
+        symbol.id,
+        symbol.name,
+        symbol.kind,
+        symbol.signature,
+        'removed',
+        null, // mod_reason
+        null, // diff_snippet_pre
+        null, // diff_snippet_post
+        1.0, // confidence
+        null, // naming_convention
+        null  // convention_confidence
+      );
+    }
+
+    // Store modified symbols with additional metadata
+    for (const delta of symbols.modified) {
+      symbolStmt.run(
+        sha,
+        '', // path - we don't store this for now
+        delta.symbol.id,
+        delta.symbol.name,
+        delta.symbol.kind,
+        delta.symbol.signature,
+        'modified',
+        delta.modReason || null,
+        delta.diffSnippetPre || null,
+        delta.diffSnippetPost || null,
+        1.0, // confidence - use default since SymbolDelta doesn't have confidence
+        null, // naming_convention
+        null  // convention_confidence
+      );
+    }
+  }
+
+  /**
+   * Retrieve stored symbols for a commit (for future caching)
+   */
+  private getStoredSymbols(sha: string): {
+    added: SymbolInfo[];
+    removed: SymbolInfo[];
+    modified: SymbolDelta[];
+  } | null {
+    const symbols = this.db.prepare('SELECT * FROM symbols WHERE sha = ?').all(sha);
+
+    if (symbols.length === 0) {
+      return null;
+    }
+
+    const added: SymbolInfo[] = [];
+    const removed: SymbolInfo[] = [];
+    const modified: SymbolDelta[] = [];
+
+    for (const row of symbols) {
+      const symbol: SymbolInfo = {
+        id: row.symbol_id,
+        name: row.name,
+        kind: row.kind as any, // Cast to match the union type
+        location: {
+          start: { line: 1, column: 0 }, // Placeholder values
+          end: { line: 1, column: 0 }
+        },
+        signature: row.signature || ''
+      };
+
+      switch (row.change_type) {
+        case 'added':
+          added.push(symbol);
+          break;
+        case 'removed':
+          removed.push(symbol);
+          break;
+        case 'modified':
+          const delta: SymbolDelta = {
+            symbol,
+            changeType: 'modified',
+            modReason: row.mod_reason || undefined,
+            diffSnippetPre: row.diff_snippet_pre || undefined,
+            diffSnippetPost: row.diff_snippet_post || undefined
+          };
+          modified.push(delta);
+          break;
+      }
+    }
+
+    return { added, removed, modified };
   }
 
   private trackProgress(kind: 'symbols' | 'edges' | 'dna', delta: number, sha?: string): void {

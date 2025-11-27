@@ -39,6 +39,7 @@ export class ReportService {
             existingReportId?: string;
             skipLLM?: boolean;
             cancellationToken?: vscode.CancellationToken;
+            llmCallTracker?: (purpose: string, model?: string, tokens?: number, duration?: number) => void;
         } = {}
     ): Promise<string | null> {
         const orchestrator = getCockpitOrchestrator();
@@ -169,6 +170,9 @@ export class ReportService {
                     }, 'report:llm-start');
 
                     const analyst = new LlmAnalyst();
+                    if (options.llmCallTracker) {
+                        analyst.setLLMCallTracker(options.llmCallTracker);
+                    }
                     const llmAnalysis = await analyst.analyze(facts);
 
                     summary = llmAnalysis.summary;

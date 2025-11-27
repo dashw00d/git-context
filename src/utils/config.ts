@@ -9,48 +9,79 @@ try {
   // Ignore, running in CLI
 }
 
+/**
+ * Load configuration from file if it exists
+ */
+let cachedFileConfig: Partial<ExtensionConfig> | null | undefined = undefined;
+
+function loadConfigFile(): Partial<ExtensionConfig> | null {
+  // Return cached value if already loaded
+  if (cachedFileConfig !== undefined) {
+    return cachedFileConfig;
+  }
+
+  try {
+    const configPath = path.join(process.cwd(), '.git-context.config.json');
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(content);
+      console.log('[CONFIG] Loaded config from .git-context.config.json');
+      cachedFileConfig = config;
+      return config;
+    }
+  } catch (error) {
+    console.warn('[CONFIG] Failed to load .git-context.config.json:', error);
+  }
+
+  cachedFileConfig = null;
+  return null;
+}
+
 export function getExtensionConfig(): ExtensionConfig {
+  // Priority: 1. Local config file, 2. VS Code settings, 3. Environment variables
+  const fileConfig = loadConfigFile();
+
   if (vscode) {
     const config = vscode.workspace.getConfiguration('git-context');
-    const apiEndpoint = config.get('apiEndpoint', 'https://openrouter.ai/api/v1');
-    const embeddingProvider = config.get('embeddingProvider', ''); // Blank = use LLM provider
+    const apiEndpoint = fileConfig?.apiEndpoint || config.get('apiEndpoint', 'https://openrouter.ai/api/v1');
+    const embeddingProvider = fileConfig?.embeddingProvider || config.get('embeddingProvider', '');
 
     return {
-      openRouterApiKey: config.get('openRouterApiKey') || process.env.OPENROUTER_API_KEY,
-      openRouterModel: config.get('openRouterModel', 'anthropic/claude-3-haiku:beta'),
+      openRouterApiKey: fileConfig?.openRouterApiKey || config.get('openRouterApiKey') || process.env.OPENROUTER_API_KEY,
+      openRouterModel: fileConfig?.openRouterModel || config.get('openRouterModel', 'anthropic/claude-3-haiku:beta'),
       apiEndpoint,
-      difftasticPath: config.get('difftasticPath'),
-      defaultCommitCount: config.get('defaultCommitCount', 5),
-      tokensPerStep: config.get('tokensPerStep'),
-      customPrompts: config.get('customPrompts'),
-      customIgnorePaths: config.get('customIgnorePaths'),
+      difftasticPath: fileConfig?.difftasticPath || config.get('difftasticPath') || process.env.DIFFTASTIC_PATH,
+      defaultCommitCount: fileConfig?.defaultCommitCount || config.get('defaultCommitCount', 5),
+      tokensPerStep: fileConfig?.tokensPerStep || config.get('tokensPerStep'),
+      customPrompts: fileConfig?.customPrompts || config.get('customPrompts'),
+      customIgnorePaths: fileConfig?.customIgnorePaths || config.get('customIgnorePaths'),
       // Qdrant config
-      qdrantUrl: config.get('qdrantUrl', ''),
-      qdrantApiKey: config.get('qdrantApiKey', ''),
-      // Embedding config
-      embeddingProvider: embeddingProvider || apiEndpoint, // Fallback to LLM provider
-      embeddingModel: config.get('embeddingModel', 'text-embedding-3-small')
-    };
-  } else {
-    // CLI fallback
-    const apiEndpoint = process.env.API_ENDPOINT || 'https://openrouter.ai/api/v1';
-    const embeddingProvider = process.env.EMBEDDING_PROVIDER || '';
-
-    return {
-      openRouterApiKey: process.env.OPENROUTER_API_KEY,
-      openRouterModel: process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku:beta',
-      apiEndpoint,
-      difftasticPath: process.env.DIFFTASTIC_PATH,
-      defaultCommitCount: parseInt(process.env.DEFAULT_COMMIT_COUNT || '5'),
-      tokensPerStep: process.env.TOKENS_PER_STEP ? JSON.parse(process.env.TOKENS_PER_STEP) : undefined,
-      customPrompts: process.env.CUSTOM_PROMPTS ? JSON.parse(process.env.CUSTOM_PROMPTS) : undefined,
-      customIgnorePaths: process.env.CUSTOM_IGNORE_PATHS ? process.env.CUSTOM_IGNORE_PATHS.split(',') : undefined,
-      // Qdrant config
-      qdrantUrl: process.env.QDRANT_URL || '',
-      qdrantApiKey: process.env.QDRANT_API_KEY || '',
+      qdrantUrl: fileConfig?.qdrantUrl || config.get('qdrantUrl', ''),
+      qdrantApiKey: fileConfig?.qdrantApiKey || config.get('qdrantApiKey', ''),
       // Embedding config
       embeddingProvider: embeddingProvider || apiEndpoint,
-      embeddingModel: process.env.EMBEDDING_MODEL || 'text-embedding-3-small'
+      embeddingModel: fileConfig?.embeddingModel || config.get('embeddingModel', 'text-embedding-3-small')
+    };
+  } else {
+    // CLI/Test fallback: config file > environment variables
+    const apiEndpoint = fileConfig?.apiEndpoint || process.env.API_ENDPOINT || 'https://openrouter.ai/api/v1';
+    const embeddingProvider = fileConfig?.embeddingProvider || process.env.EMBEDDING_PROVIDER || '';
+
+    return {
+      openRouterApiKey: fileConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY,
+      openRouterModel: fileConfig?.openRouterModel || process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku:beta',
+      apiEndpoint,
+      difftasticPath: fileConfig?.difftasticPath || process.env.DIFFTASTIC_PATH,
+      defaultCommitCount: fileConfig?.defaultCommitCount || parseInt(process.env.DEFAULT_COMMIT_COUNT || '5'),
+      tokensPerStep: fileConfig?.tokensPerStep || (process.env.TOKENS_PER_STEP ? JSON.parse(process.env.TOKENS_PER_STEP) : undefined),
+      customPrompts: fileConfig?.customPrompts || (process.env.CUSTOM_PROMPTS ? JSON.parse(process.env.CUSTOM_PROMPTS) : undefined),
+      customIgnorePaths: fileConfig?.customIgnorePaths || (process.env.CUSTOM_IGNORE_PATHS ? process.env.CUSTOM_IGNORE_PATHS.split(',') : undefined),
+      // Qdrant config
+      qdrantUrl: fileConfig?.qdrantUrl || process.env.QDRANT_URL || '',
+      qdrantApiKey: fileConfig?.qdrantApiKey || process.env.QDRANT_API_KEY || '',
+      // Embedding config
+      embeddingProvider: embeddingProvider || apiEndpoint,
+      embeddingModel: fileConfig?.embeddingModel || process.env.EMBEDDING_MODEL || 'text-embedding-3-small'
     };
   }
 }
