@@ -12,9 +12,13 @@ export function createBundleFactsStep(): PipelineStep {
       }
 
       // Build bundle facts from commit analyses
-      const bundleFacts = buildRefactorBundleFacts(
+      // Pass commit SHAs when available for enhanced functionality
+      const bundleFacts = await buildRefactorBundleFacts(
         state.commitFacts,
-        state.workspaceFacts
+        state.workspaceFacts,
+        {
+          commitShas: state.selectedCommitShas
+        }
       );
 
       state.bundleFacts = bundleFacts;

@@ -33,8 +33,11 @@ CREATE TABLE IF NOT EXISTS commits_analysis (
   prompt_version TEXT DEFAULT '1.0',
   model TEXT,
   -- New layered pipeline fields
-  analysis_version TEXT DEFAULT '0.0',
+  analysis_version TEXT DEFAULT '2.0',
   status TEXT DEFAULT 'pending', -- pending, complete, failed
+  structural_change_score REAL DEFAULT 0.0,
+  files_changed INTEGER DEFAULT 0,
+  hotspots_json TEXT DEFAULT '[]',
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE
 );
 
@@ -162,6 +165,7 @@ CREATE TABLE IF NOT EXISTS file_snapshots (
   edges_json TEXT NOT NULL,     -- EdgeInfo[]
   scope_path TEXT,
   shape_hash TEXT,
+  body_hash TEXT,  -- For body-level change detection
   created_at TEXT NOT NULL,
   UNIQUE(blob_sha, file_path)
 );
@@ -405,11 +409,59 @@ CREATE INDEX IF NOT EXISTS idx_moved_blocks_dest ON moved_blocks(dest_file, dest
 CREATE INDEX IF NOT EXISTS idx_moved_blocks_hash ON moved_blocks(source_content_hash);
 CREATE INDEX IF NOT EXISTS idx_symbol_lineage_current ON symbol_lineage(symbol_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_lineage_previous ON symbol_lineage(previous_symbol_id);
+
+-- Migration tracking table
+CREATE TABLE IF NOT EXISTS migration_log (
+  version INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  applied_at TEXT NOT NULL,
+  success INTEGER DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_migration_log_version ON migration_log(version);
 `;
 
-export const MIGRATIONS = [
-  DATABASE_SCHEMA
+export const MIGRATIONS: string[] = [
+  // v1: Base schema (DATABASE_SCHEMA) - applied on fresh init
+  DATABASE_SCHEMA,
+  
+  // v12: Add body_hash to file_snapshots
+  `-- v12: Add body_hash to file_snapshots
+INSERT OR IGNORE INTO migration_log (version, name, applied_at) VALUES (12, 'file_snapshots.body_hash', datetime('now'));
+-- SQLite doesn't support IF NOT EXISTS for ALTER, so we catch duplicate column errors
+-- Attempt to add column (will fail silently if exists due to try-catch in migration runner)
+ALTER TABLE file_snapshots ADD COLUMN body_hash TEXT;`,
+
+  // v13: Add new fields to commits_analysis
+  `-- v13: commits_analysis new fields
+INSERT OR IGNORE INTO migration_log (version, name, applied_at) VALUES (13, 'commits_analysis.v11', datetime('now'));
+ALTER TABLE commits_analysis ADD COLUMN status TEXT DEFAULT 'pending';
+ALTER TABLE commits_analysis ADD COLUMN structural_change_score REAL DEFAULT 0.0;
+ALTER TABLE commits_analysis ADD COLUMN files_changed INTEGER DEFAULT 0;
+ALTER TABLE commits_analysis ADD COLUMN hotspots_json TEXT DEFAULT '[]';`,
+
+  // v14: Ensure workspace_analysis table exists with all fields
+  `-- v14: workspace_analysis full schema
+INSERT OR IGNORE INTO migration_log (version, name, applied_at) VALUES (14, 'workspace_analysis', datetime('now'));
+CREATE TABLE IF NOT EXISTS workspace_analysis (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  head_sha TEXT NOT NULL,
+  workspace_hash TEXT NOT NULL,
+  symbols_added INTEGER DEFAULT 0,
+  symbols_modified INTEGER DEFAULT 0,
+  symbols_removed INTEGER DEFAULT 0,
+  edges_added INTEGER DEFAULT 0,
+  edges_removed INTEGER DEFAULT 0,
+  risks TEXT,
+  files_changed INTEGER DEFAULT 0,
+  structural_change_score REAL DEFAULT 0,
+  blast_radius REAL DEFAULT 0,
+  analyzed_at TEXT NOT NULL,
+  UNIQUE(head_sha, workspace_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_workspace_head ON workspace_analysis(head_sha);`
 ];
+
+export const CURRENT_VERSION = 14;
 
 // === NEW LAYERED PIPELINE SCHEMA ===
 
@@ -741,7 +793,7 @@ export function migrateDatabase(db: Database): void {
   }
 }
 
-export const CURRENT_VERSION = 10;
+// CURRENT_VERSION is now defined with MIGRATIONS above
 
 // === MIGRATION FUNCTIONS ===
 
@@ -833,6 +885,9 @@ export function migrateToV2(db: Database): void {
   addColumnIfNotExists(db, 'commits_analysis', 'files_changed', 'INTEGER DEFAULT 0');
   addColumnIfNotExists(db, 'commits_analysis', 'structural_change_score', 'REAL DEFAULT 0');
   addColumnIfNotExists(db, 'commits_analysis', 'hotspots_json', 'TEXT');
+
+  // Add body_hash to file_snapshots for existing databases
+  addColumnIfNotExists(db, 'file_snapshots', 'body_hash', 'TEXT');
 
   // Mark existing commits as complete
   db.exec(`

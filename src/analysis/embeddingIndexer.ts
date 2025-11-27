@@ -4,7 +4,7 @@ import { generateEmbedding, stringToPointId } from '../storage/embeddings';
 import { logDebug, logInfo } from '../utils/logger';
 import { runWithConcurrency } from './runner/concurrency';
 import { getDatabaseManager } from '../storage/database';
-import { getGitRoot } from '../utils/config';
+import { getProjectId } from '../utils/config';
 
 export class EmbeddingIndexer {
   constructor(private dbManager = getDatabaseManager()) { }
@@ -39,11 +39,11 @@ export class EmbeddingIndexer {
    */
   private async indexCommitShards(commitFacts: CommitFacts[], client: any): Promise<void> {
     const qdrant = getQdrantClient();
-    const gitRoot = getGitRoot() || 'unknown'; // Get normalized project identifier
-    const collectionName = qdrant.getCollectionName('commits', gitRoot);
+    const projectId = getProjectId() || 'unknown'; // Get unique project identifier
+    const collectionName = qdrant.getCollectionName('commits', projectId);
 
     await runWithConcurrency(commitFacts, 5, async (facts) => {
-      const shard = this.buildCommitShard(facts, gitRoot);
+      const shard = this.buildCommitShard(facts, projectId);
       const embedding = await generateEmbedding(shard.text);
 
       await client.upsert(collectionName, {
@@ -64,8 +64,8 @@ export class EmbeddingIndexer {
    */
   private async indexSymbolShards(commitFacts: CommitFacts[], client: any): Promise<void> {
     const qdrant = getQdrantClient();
-    const gitRoot = getGitRoot() || 'unknown'; // Get normalized project identifier
-    const collectionName = qdrant.getCollectionName('symbols', gitRoot);
+    const projectId = getProjectId() || 'unknown'; // Get unique project identifier
+    const collectionName = qdrant.getCollectionName('symbols', projectId);
     const symbolShards = [];
 
     // Gather symbol history from DB
@@ -73,7 +73,7 @@ export class EmbeddingIndexer {
       const symbols = this.loadSymbolHistory(facts.sha);
 
       for (const symbol of symbols) {
-        const shard = this.buildSymbolShard(symbol, facts, gitRoot);
+        const shard = this.buildSymbolShard(symbol, facts, projectId);
         symbolShards.push({ shard, symbol });
       }
     }
@@ -97,7 +97,7 @@ export class EmbeddingIndexer {
   /**
    * Build commit story shard
    */
-  private buildCommitShard(facts: CommitFacts, gitRoot: string): { text: string; metadata: any } {
+  private buildCommitShard(facts: CommitFacts, projectId: string): { text: string; metadata: any } {
     const tags = [
       ...facts.risks.map(r => `[${r}]`),
       facts.structuralChangeScore > 0.7 ? '[high-structural-change]' : '',
@@ -121,7 +121,7 @@ export class EmbeddingIndexer {
     return {
       text,
       metadata: {
-        git_root: gitRoot,  // PROJECT ISOLATION
+        project_id: projectId,  // PROJECT ISOLATION
         sha: facts.sha,
         date: commitInfo?.date,
         author: commitInfo?.author,
@@ -145,7 +145,7 @@ export class EmbeddingIndexer {
   private buildSymbolShard(
     symbolHistory: any,
     commitFacts: CommitFacts,
-    gitRoot: string
+    projectId: string
   ): { text: string; metadata: any } {
     const tags = [
       `[${symbolHistory.change_type}]`,
@@ -166,7 +166,7 @@ export class EmbeddingIndexer {
     return {
       text,
       metadata: {
-        git_root: gitRoot,  // PROJECT ISOLATION
+        project_id: projectId,  // PROJECT ISOLATION
         symbol_dna_id: symbolHistory.symbol_dna_id,
         name: symbolHistory.name,
         kind: symbolHistory.kind,

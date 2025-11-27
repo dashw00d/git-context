@@ -1,6 +1,7 @@
 import { ExtensionConfig } from '../types';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 let vscode: any;
 try {
@@ -114,6 +115,53 @@ export function getGitRoot(): string | undefined {
   } else {
     // CLI fallback
     return findGitRootForPath(process.cwd());
+  }
+}
+
+/**
+ * Get a unique project identifier for Qdrant isolation
+ * Uses git remote URL if available, otherwise folder name + hash
+ */
+export function getProjectId(): string | undefined {
+  const gitRoot = getGitRoot();
+  if (!gitRoot) return undefined;
+
+  try {
+    // Try to get git remote URL (most unique identifier)
+    const { execSync } = require('child_process');
+    try {
+      const remoteUrl = execSync('git config --get remote.origin.url', {
+        cwd: gitRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore']
+      }).trim();
+
+      if (remoteUrl) {
+        // Hash the remote URL for a stable, unique ID
+        const hash = crypto.createHash('sha256')
+          .update(remoteUrl)
+          .digest('hex')
+          .substring(0, 16);
+        return `project_${hash}`;
+      }
+    } catch {
+      // No remote configured, fall through
+    }
+
+    // Fallback: folder name + hash of git root
+    const folderName = path.basename(gitRoot.replace(/[/\\]$/, '')); // Remove trailing separator
+    const rootHash = crypto.createHash('sha256')
+      .update(gitRoot)
+      .digest('hex')
+      .substring(0, 12);
+    return `project_${folderName}_${rootHash}`;
+  } catch {
+    // Final fallback: just hash of git root
+    const hash = crypto.createHash('sha256')
+      .update(gitRoot)
+      .digest('hex')
+      .substring(0, 16);
+    return `project_${hash}`;
   }
 }
 

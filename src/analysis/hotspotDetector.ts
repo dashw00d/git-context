@@ -46,7 +46,7 @@ export interface HotspotSnapshot {
 }
 
 export class HotspotDetector {
-  constructor(private dbManager = getDatabaseManager()) {}
+  constructor(private dbManager = getDatabaseManager()) { }
 
   /**
    * Calculate hotspot score from metrics (0-100)
@@ -134,41 +134,61 @@ export class HotspotDetector {
     symbol: SymbolInfo,
     sha: string
   ): Promise<void> {
-    const now = new Date().toISOString();
+    // Early validation
+    if (!symbol.id || !symbol.dnaId) {
+      logDebug(`[HotspotDetector] Skipping invalid symbol ${symbol.name}: missing id/dnaId`);
+      return;
+    }
 
-    // Get current symbol hotspot data
-    const existing = this.getSymbolHotspot(symbol.dnaId);
+    // Extract file path from symbol ID (format: "file/path.ext:symbolName")
+    const filePath = symbol.id.includes(':') ? symbol.id.split(':')[0] : '';
 
-    // Calculate metrics for this symbol
-    const metrics = await this.calculateSymbolMetrics(symbol.dnaId, sha);
+    // Skip if we can't extract a valid file path
+    if (!filePath || filePath.trim() === '') {
+      logDebug(`[HotspotDetector] Skipping symbol ${symbol.name}: no valid file path from ID ${symbol.id}`);
+      return;
+    }
 
-    // Update or insert symbol hotspot
-    const stmt = this.dbManager.getDatabase().prepare(`
-      INSERT OR REPLACE INTO symbol_hotspots
-      (symbol_id, file_path, symbol_type, symbol_name,
-       total_modifications, total_commits, last_change_type,
-       last_changed_sha, last_changed_date, hotspot_score, risk_level)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    try {
+      const now = new Date().toISOString();
 
-    const totalModifications = (existing?.totalModifications || 0) + 1;
-    const totalCommits = (existing?.totalCommits || 0) + 1;
+      // Get current symbol hotspot data
+      const existing = this.getSymbolHotspot(symbol.dnaId);
 
-    stmt.run(
-      symbol.dnaId,
-      symbol.id.split(':')[0] || '', // Extract file path
-      symbol.kind,
-      symbol.name,
-      totalModifications,
-      totalCommits,
-      'modified', // TODO: Determine actual change type
-      sha,
-      now,
-      metrics.hotspotScore,
-      metrics.riskLevel
-    );
+      // Calculate metrics for this symbol
+      const metrics = await this.calculateSymbolMetrics(symbol.dnaId, sha);
 
-    logDebug(`[HotspotDetector] Updated symbol hotspot: ${symbol.name} (score: ${metrics.hotspotScore.toFixed(1)})`);
+      // Update or insert symbol hotspot
+      const stmt = this.dbManager.getDatabase().prepare(`
+        INSERT OR REPLACE INTO symbol_hotspots
+        (symbol_id, file_path, symbol_type, symbol_name,
+         total_modifications, total_commits, last_change_type,
+         last_changed_sha, last_changed_date, hotspot_score, risk_level)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const totalModifications = (existing?.totalModifications || 0) + 1;
+      const totalCommits = (existing?.totalCommits || 0) + 1;
+
+      stmt.run([
+        symbol.dnaId,
+        filePath,
+        symbol.kind,
+        symbol.name,
+        totalModifications,
+        totalCommits,
+        'modified', // TODO: Determine actual change type
+        sha,
+        now,
+        metrics.hotspotScore,
+        metrics.riskLevel
+      ]);
+
+      logDebug(`[HotspotDetector] Updated symbol hotspot: ${symbol.name} (score: ${metrics.hotspotScore.toFixed(1)}, file: ${filePath})`);
+    } catch (error: any) {
+      logDebug(`[HotspotDetector] Failed to update symbol hotspot ${symbol.name} (id: ${symbol.id}): ${error.message}`);
+      // Don't throw - gracefully skip problematic symbols
+    }
   }
 
   /**
@@ -277,37 +297,41 @@ export class HotspotDetector {
     // Snapshot file hotspots
     const fileHotspots = await this.getTopFileHotspots(1000); // Get all
     for (const hotspot of fileHotspots) {
+      if (!hotspot.filePath) continue; // Skip hotspots with null file paths
+
       const stmt = this.dbManager.getDatabase().prepare(`
         INSERT INTO hotspot_snapshots
         (snapshot_sha, snapshot_date, entity_type, entity_id, hotspot_score, total_changes)
         VALUES (?, ?, ?, ?, ?, ?)
       `);
-      stmt.run(
+      stmt.run([
         sha,
         now,
         'file',
         hotspot.filePath,
         hotspot.hotspotScore,
         hotspot.totalChanges
-      );
+      ]);
     }
 
     // Snapshot symbol hotspots
     const symbolHotspots = await this.getTopSymbolHotspots(1000); // Get all
     for (const hotspot of symbolHotspots) {
+      if (!hotspot.symbolId) continue; // Skip hotspots with null symbol IDs
+
       const stmt = this.dbManager.getDatabase().prepare(`
         INSERT INTO hotspot_snapshots
         (snapshot_sha, snapshot_date, entity_type, entity_id, hotspot_score, total_changes)
         VALUES (?, ?, ?, ?, ?, ?)
       `);
-      stmt.run(
+      stmt.run([
         sha,
         now,
         'symbol',
         hotspot.symbolId,
         hotspot.hotspotScore,
         hotspot.totalModifications
-      );
+      ]);
     }
 
     logInfo(`[HotspotDetector] Created hotspot snapshot for ${fileHotspots.length} files and ${symbolHotspots.length} symbols`);

@@ -1,12 +1,12 @@
 {
-  "startTime": "2025-11-27T05:25:13.124Z",
+  "startTime": "2025-11-27T07:39:41.865Z",
   "steps": [],
   "events": [
     {
       "item": {
         "type": "start",
         "stepId": "index_commits",
-        "timestamp": 1764221113259
+        "timestamp": 1764229182217
       },
       "count": 1
     },
@@ -14,7 +14,7 @@
       "item": {
         "type": "complete",
         "stepId": "index_commits",
-        "timestamp": 1764221134883
+        "timestamp": 1764229189490
       },
       "count": 1
     },
@@ -22,7 +22,7 @@
       "item": {
         "type": "start",
         "stepId": "workspace_overlay",
-        "timestamp": 1764221134883
+        "timestamp": 1764229189490
       },
       "count": 1
     },
@@ -30,7 +30,7 @@
       "item": {
         "type": "complete",
         "stepId": "workspace_overlay",
-        "timestamp": 1764221134902
+        "timestamp": 1764229191741
       },
       "count": 1
     },
@@ -38,7 +38,7 @@
       "item": {
         "type": "start",
         "stepId": "embedding_index",
-        "timestamp": 1764221134902
+        "timestamp": 1764229191741
       },
       "count": 1
     },
@@ -46,7 +46,7 @@
       "item": {
         "type": "complete",
         "stepId": "embedding_index",
-        "timestamp": 1764221135733
+        "timestamp": 1764229207198
       },
       "count": 1
     },
@@ -54,7 +54,7 @@
       "item": {
         "type": "start",
         "stepId": "bundle_facts",
-        "timestamp": 1764221135733
+        "timestamp": 1764229207198
       },
       "count": 1
     },
@@ -62,7 +62,7 @@
       "item": {
         "type": "complete",
         "stepId": "bundle_facts",
-        "timestamp": 1764221135733
+        "timestamp": 1764229207198
       },
       "count": 1
     },
@@ -70,7 +70,7 @@
       "item": {
         "type": "start",
         "stepId": "llm_story",
-        "timestamp": 1764221135733
+        "timestamp": 1764229207198
       },
       "count": 1
     },
@@ -78,14 +78,14 @@
       "item": {
         "type": "complete",
         "stepId": "llm_story",
-        "timestamp": 1764221261297
+        "timestamp": 1764229367283
       },
       "count": 1
     },
     {
       "item": {
         "type": "finished",
-        "timestamp": 1764221261297
+        "timestamp": 1764229367283
       },
       "count": 1
     }
@@ -93,13 +93,13 @@
   "errors": [],
   "initialState": {
     "selectedCommitShas": [
-      "0c973858ddc0218c6b2c5772dfea87d9bb00f422",
-      "7fae5f76c8747ec54b3105f58a1a51664f1b1abc"
+      "0676e247877b7f18bde5cefd412acdb738dd46a0",
+      "459804923ec8f55547c2df43e2d163d6c1dee2db"
     ],
     "includeWorkspace": true
   },
-  "endTime": "2025-11-27T05:27:41.297Z",
-  "totalTimeMs": 148038,
+  "endTime": "2025-11-27T07:42:47.283Z",
+  "totalTimeMs": 185066,
   "finalState": {
     "completedSteps": [
       "index_commits",
@@ -109,30 +109,42 @@
       "llm_story"
     ],
     "commitFactsCount": 2,
-    "workspaceFacts": null,
+    "workspaceFacts": {
+      "workspaceHash": "ba10626e10ef26e7",
+      "headSha": "0676e247877b7f18bde5cefd412acdb738dd46a0",
+      "symbolsAdded": 67,
+      "symbolsModified": 3,
+      "symbolsRemoved": 24,
+      "edgesAdded": 245,
+      "edgesRemoved": 42,
+      "risks": [],
+      "filesChanged": 3,
+      "structuralChangeScore": 0,
+      "blastRadius": 940
+    },
     "bundleFacts": {
       "version": "2.0",
-      "generated_at": "2025-11-27T05:25:35.733Z",
+      "generated_at": "2025-11-27T07:40:07.198Z",
       "bundle": {
-        "oldestSha": "0c973858ddc0218c6b2c5772dfea87d9bb00f422",
-        "newestSha": "7fae5f76c8747ec54b3105f58a1a51664f1b1abc",
+        "oldestSha": "0676e247877b7f18bde5cefd412acdb738dd46a0",
+        "newestSha": "459804923ec8f55547c2df43e2d163d6c1dee2db",
         "shas": [
-          "0c973858ddc0218c6b2c5772dfea87d9bb00f422",
-          "7fae5f76c8747ec54b3105f58a1a51664f1b1abc"
+          "0676e247877b7f18bde5cefd412acdb738dd46a0",
+          "459804923ec8f55547c2df43e2d163d6c1dee2db"
         ]
       },
       "scope": {
-        "files": 57,
+        "files": 53,
         "blastRadius": 0
       },
       "intended": {
-        "present": 601,
+        "present": 624,
         "absent": 0,
         "renamed": 0
       },
       "working": {
-        "symbols": 601,
-        "edges": 2610
+        "symbols": 624,
+        "edges": 2628
       },
       "findings": {
         "incompleteness": {
@@ -155,16 +167,16 @@
           "schema-migration",
           "refactor",
           "security",
+          "performance",
           "auth",
-          "payment",
-          "performance"
+          "payment"
         ],
         "structuralChangeScore": 0
       }
     },
     "llmOutputs": {
       "llmAnalysis": {
-        "summary": "## Key Insights\n\n**Most Critical:** Zero blast radius indicates no breaking changes introduced. (high severity, 100% confidence)\n\n**Immediate Actions:**\n1. Fix recurrent_schema_migration_refactors: 1 fixes identified [high priority, medium effort]\n2. Fix divergent_refactor_risks: 2 fixes identified [high priority, medium effort]\n3. Fix absent_symbol_patterns: 0 fixes identified [high priority, medium effort]\n\n**Refactor Health:** 100/100 ✅\n\n**Quick Stats:** 2 commits, 601 symbols analyzed, no issues found\n",
+        "summary": "## Key Insights\n\n**Most Critical:** Intended symbols fully match working symbols at 624 with zero absent or renamed. (high severity, 100% confidence)\n\n**Immediate Actions:**\n1. Fix security_sensitive_debt: 3 fixes identified [high priority, medium effort]\n2. Fix multi_risk_cluster: 1 fixes identified [high priority, medium effort]\n3. Fix performance_schema_drift: 2 fixes identified [high priority, medium effort]\n4. Fix high_similarity_refactor: 1 fixes identified [high priority, medium effort]\n\n**Refactor Health:** 100/100 ✅\n\n**Quick Stats:** 2 commits, 624 symbols analyzed, no issues found\n",
         "blocks": [
           {
             "id": "intent",
@@ -172,9 +184,9 @@
             "type": "intent",
             "claims": [
               {
-                "text": "Refactor is complete with all 601 intended symbols present and zero absent or renamed.",
+                "text": "Intended symbols fully match working symbols at 624 with zero absent or renamed.",
                 "confidence": 1,
-                "severity": "medium",
+                "severity": "high",
                 "evidence": [
                   {
                     "path": "intended.present",
@@ -187,11 +199,26 @@
                   {
                     "path": "intended.renamed",
                     "description": "renamed"
+                  },
+                  {
+                    "path": "working.symbols",
+                    "description": "Working symbols"
                   }
                 ]
               },
               {
-                "text": "Zero blast radius indicates no breaking changes introduced.",
+                "text": "No incompleteness detected: zero missing, zombies, or divergent symbols.",
+                "confidence": 1,
+                "severity": "high",
+                "evidence": [
+                  {
+                    "path": "findings.incompleteness",
+                    "description": "incompleteness"
+                  }
+                ]
+              },
+              {
+                "text": "Zero blast radius confirms no breaking changes introduced.",
                 "confidence": 1,
                 "severity": "high",
                 "evidence": [
@@ -202,18 +229,10 @@
                 ]
               },
               {
-                "text": "No incompleteness, pattern drift, or legacy issues detected across all findings categories.",
+                "text": "Clean legacy audit with zero dead code, legacy usage, or replaced leftovers.",
                 "confidence": 1,
-                "severity": "high",
+                "severity": "medium",
                 "evidence": [
-                  {
-                    "path": "findings.incompleteness",
-                    "description": "incompleteness"
-                  },
-                  {
-                    "path": "findings.patternDrift",
-                    "description": "pattern Drift"
-                  },
                   {
                     "path": "findings.legacyAudit",
                     "description": "legacy Audit"
@@ -221,7 +240,7 @@
                 ]
               },
               {
-                "text": "Structural change score of zero suggests minimal structural disruptions.",
+                "text": "Zero structural change score indicates minimal architectural disruption.",
                 "confidence": 1,
                 "severity": "medium",
                 "evidence": [
@@ -234,7 +253,7 @@
             ],
             "actions": [],
             "confidence": 0.8,
-            "timestamp": "2025-11-27T05:25:56.962Z"
+            "timestamp": "2025-11-27T07:40:34.376Z"
           },
           {
             "id": "drift",
@@ -243,7 +262,7 @@
             "claims": [],
             "actions": [],
             "confidence": 0.8,
-            "timestamp": "2025-11-27T05:26:03.707Z"
+            "timestamp": "2025-11-27T07:40:42.122Z"
           },
           {
             "id": "cleanup",
@@ -252,7 +271,7 @@
             "claims": [],
             "actions": [],
             "confidence": 0.8,
-            "timestamp": "2025-11-27T05:26:12.305Z"
+            "timestamp": "2025-11-27T07:40:49.795Z"
           },
           {
             "id": "discovery",
@@ -260,140 +279,164 @@
             "type": "discovery",
             "claims": [
               {
-                "text": "recurrent_schema_migration_refactors: Highly similar commits (similarity >0.7) both include 'schema-migration' and 'refactor' risks, indicating repeated structural changes and potential ongoing technical debt in schema stability during refactoring (Impact: high, Coverage: 100%)",
+                "text": "security_sensitive_debt: Risks in security, auth, payment flagged in similar commit; high priority problematic debt with architectural impact on trust boundaries, prioritize safe cleanup. (Impact: high, Coverage: 50%)",
                 "confidence": 0.9,
                 "severity": "high",
                 "evidence": [
                   {
-                    "path": "diff[SchemaMigration.php] shows schema-migration and refactor risks with similarity=0.73717445",
-                    "description": "Diff: SchemaMigration.php",
-                    "filePath": "SchemaMigration.php"
+                    "path": "diff[PaymentService.php] shows 'payment' risk in similar commit with trust boundary exposure",
+                    "description": "Diff: PaymentService.php (validate existence)"
                   },
                   {
-                    "path": "diff[SchemaMigration.php] shows schema-migration and refactor risks with similarity=0.7007803",
-                    "description": "Diff: SchemaMigration.php",
-                    "filePath": "SchemaMigration.php"
+                    "path": "diff[AuthController.php] shows 'auth' risk in similar commit affecting authentication flows",
+                    "description": "Diff: AuthController.php (validate existence)"
+                  },
+                  {
+                    "path": "diff[SecurityGateway.php] shows 'security' risk in similar commit with vulnerability patterns",
+                    "description": "Diff: SecurityGateway.php (validate existence)"
                   }
                 ]
               },
               {
-                "text": "divergent_refactor_risks: Similar commits share core risks but diverge on others (security/auth/payment vs performance), suggesting refactoring impacts broadening to security/performance without resolution, low blastRadius=0 indicates acceptable incremental debt (Impact: medium, Coverage: 100%)",
+                "text": "multi_risk_cluster: Commit bundling multiple risks (schema-migration, security, performance, auth, payment, refactor), suggesting interconnected technical debt across domains; problematic due to security/payment involvement but acceptable given blastRadius 0. (Impact: high, Coverage: 100%)",
                 "confidence": 0.9,
-                "severity": "medium",
+                "severity": "high",
                 "evidence": [
                   {
-                    "path": "diff[PaymentService.php] shows divergent risks: security,auth,payment",
-                    "description": "Diff: PaymentService.php",
-                    "filePath": "PaymentService.php"
+                    "path": "diff[PaymentService.php] shows similarCommits[0].risks array length 6 bundling schema-migration, security, performance, auth, payment, refactor risks",
+                    "description": "Diff: PaymentService.php (validate existence)"
                   },
                   {
-                    "path": "diff[PerformanceService.php] shows divergent risk: performance",
-                    "description": "Diff: PerformanceService.php",
-                    "filePath": "PerformanceService.php"
+                    "path": "ast[PaymentService.php].processPayment - demonstrates interconnected debt with blastRadius 0",
+                    "description": "AST: processPayment() in PaymentService.php (validate existence)"
                   }
                 ]
               },
               {
-                "text": "absent_symbol_patterns: No data in similarSymbols, relatedRefactors, or symbolEvolution indicates no detected symbol-level drift, hooks, or evolution issues post-refactor (Impact: low, Coverage: 0%)",
+                "text": "performance_schema_drift: Risks in performance and schema-migration; acceptable if isolated but monitor for broader drift post-refactor. (Impact: medium, Coverage: 33%)",
                 "confidence": 0.9,
                 "severity": "medium",
                 "evidence": [
                   {
-                    "path": "ast[*.php].similarSymbols shows empty array - no symbol drift",
-                    "description": "AST: similarSymbols() in *.php",
-                    "filePath": "*.php"
+                    "path": "diff[DatabaseSchema.php] shows 'schema-migration' risk in similar commit indicating potential drift",
+                    "description": "Diff: DatabaseSchema.php (validate existence)"
                   },
                   {
-                    "path": "ast[*.php].relatedRefactors shows empty array - no refactor links",
-                    "description": "AST: relatedRefactors() in *.php",
-                    "filePath": "*.php"
+                    "path": "diff[QueryService.php] shows 'performance' risk in similar commit with query inconsistencies",
+                    "description": "Diff: QueryService.php (validate existence)"
+                  }
+                ]
+              },
+              {
+                "text": "high_similarity_refactor: High code similarity (74.9%) to past refactor commit, indicating potential recurring refactoring needs or code duplication. (Impact: low, Coverage: 100%)",
+                "confidence": 0.9,
+                "severity": "medium",
+                "evidence": [
+                  {
+                    "path": "diff[PaymentService.php] shows 74.9% similarity to similarCommits[0] sha '459804923ec8f55547c2df43e2d163d6c1dee2db' with 'refactor' risk",
+                    "description": "Diff: PaymentService.php (validate existence)"
                   },
                   {
-                    "path": "ast[*.php].symbolEvolution shows empty object - no evolution drift",
-                    "description": "AST: symbolEvolution() in *.php",
-                    "filePath": "*.php"
+                    "path": "ast[PaymentService.php].defaultSort - demonstrates code duplication and recurring refactor needs",
+                    "description": "AST: defaultSort() in PaymentService.php (validate existence)"
                   }
                 ]
               }
             ],
             "actions": [
               {
-                "description": "Fix recurrent_schema_migration_refactors: 1 fixes identified",
-                "priority": "high",
-                "effort": "medium",
-                "risk": "medium",
-                "evidence": [
-                  {
-                    "path": "SchemaMigration.php",
-                    "description": "Change: public function up()\n{\n    Sch..."
-                  }
-                ],
-                "dependsOn": []
-              },
-              {
-                "description": "Fix divergent_refactor_risks: 2 fixes identified",
+                "description": "Fix security_sensitive_debt: 3 fixes identified",
                 "priority": "high",
                 "effort": "medium",
                 "risk": "medium",
                 "evidence": [
                   {
                     "path": "PaymentService.php",
-                    "description": "Change: class PaymentService {\n    pub..."
+                    "description": "Change: public function processPayment..."
                   },
                   {
-                    "path": "PerformanceService.php",
-                    "description": "Change: class PerformanceService {\n   ..."
+                    "path": "AuthController.php",
+                    "description": "Change: public function login($user, $..."
+                  },
+                  {
+                    "path": "SecurityGateway.php",
+                    "description": "Change: public function checkAccess($t..."
                   }
                 ],
                 "dependsOn": []
               },
               {
-                "description": "Fix absent_symbol_patterns: 0 fixes identified",
+                "description": "Fix multi_risk_cluster: 1 fixes identified",
                 "priority": "high",
                 "effort": "medium",
                 "risk": "medium",
-                "evidence": [],
+                "evidence": [
+                  {
+                    "path": "PaymentService.php",
+                    "description": "Change: public function processPayment..."
+                  }
+                ],
+                "dependsOn": []
+              },
+              {
+                "description": "Fix performance_schema_drift: 2 fixes identified",
+                "priority": "high",
+                "effort": "medium",
+                "risk": "medium",
+                "evidence": [
+                  {
+                    "path": "DatabaseSchema.php",
+                    "description": "Change: // Legacy schema-migration ris..."
+                  },
+                  {
+                    "path": "QueryService.php",
+                    "description": "Change: public function getPayments() ..."
+                  }
+                ],
+                "dependsOn": []
+              },
+              {
+                "description": "Fix high_similarity_refactor: 1 fixes identified",
+                "priority": "high",
+                "effort": "medium",
+                "risk": "medium",
+                "evidence": [
+                  {
+                    "path": "PaymentService.php",
+                    "description": "Change: // Duplicated sort logic 74.9%..."
+                  }
+                ],
                 "dependsOn": []
               }
             ],
             "confidence": 0.8,
-            "timestamp": "2025-11-27T05:27:41.284Z"
+            "timestamp": "2025-11-27T07:42:47.273Z"
           }
         ],
-        "markdown": "# LLM Analysis Report\n\n**Generated:** 11/26/2025, 11:27:41 PM\n\n**Bundle:** 2 commits\n\n## Refactor Intent & Story\n\n### Findings\n\n- **MEDIUM:** Refactor is complete with all 601 intended symbols present and zero absent or renamed. (confidence: 100%)\n  - Evidence: `intended.present`\n  - Evidence: `intended.absent`\n  - Evidence: `intended.renamed`\n- **HIGH:** Zero blast radius indicates no breaking changes introduced. (confidence: 100%)\n  - Evidence: `scope.blastRadius`\n- **HIGH:** No incompleteness, pattern drift, or legacy issues detected across all findings categories. (confidence: 100%)\n  - Evidence: `findings.incompleteness`\n  - Evidence: `findings.patternDrift`\n  - Evidence: `findings.legacyAudit`\n- **MEDIUM:** Structural change score of zero suggests minimal structural disruptions. (confidence: 100%)\n  - Evidence: `evidence.structuralChangeScore`\n\n## Drift Verification\n\n## Cleanup Plan\n\n## LLM-Driven Pattern Discovery\n\n### Findings\n\n- **HIGH:** recurrent_schema_migration_refactors: Highly similar commits (similarity >0.7) both include 'schema-migration' and 'refactor' risks, indicating repeated structural changes and potential ongoing technical debt in schema stability during refactoring (Impact: high, Coverage: 100%) (confidence: 90%)\n  - Evidence: `diff[SchemaMigration.php] shows schema-migration and refactor risks with similarity=0.73717445`\n  - Evidence: `diff[SchemaMigration.php] shows schema-migration and refactor risks with similarity=0.7007803`\n- **MEDIUM:** divergent_refactor_risks: Similar commits share core risks but diverge on others (security/auth/payment vs performance), suggesting refactoring impacts broadening to security/performance without resolution, low blastRadius=0 indicates acceptable incremental debt (Impact: medium, Coverage: 100%) (confidence: 90%)\n  - Evidence: `diff[PaymentService.php] shows divergent risks: security,auth,payment`\n  - Evidence: `diff[PerformanceService.php] shows divergent risk: performance`\n- **MEDIUM:** absent_symbol_patterns: No data in similarSymbols, relatedRefactors, or symbolEvolution indicates no detected symbol-level drift, hooks, or evolution issues post-refactor (Impact: low, Coverage: 0%) (confidence: 90%)\n  - Evidence: `ast[*.php].similarSymbols shows empty array - no symbol drift`\n  - Evidence: `ast[*.php].relatedRefactors shows empty array - no refactor links`\n  - Evidence: `ast[*.php].symbolEvolution shows empty object - no evolution drift`\n\n### Actions\n\n- **HIGH** [MEDIUM] Fix recurrent_schema_migration_refactors: 1 fixes identified (risk: medium)\n  - Evidence: `SchemaMigration.php`\n- **HIGH** [MEDIUM] Fix divergent_refactor_risks: 2 fixes identified (risk: medium)\n  - Evidence: `PaymentService.php`\n  - Evidence: `PerformanceService.php`\n- **HIGH** [MEDIUM] Fix absent_symbol_patterns: 0 fixes identified (risk: medium)\n\n",
+        "markdown": "# LLM Analysis Report\n\n**Generated:** 11/27/2025, 1:42:47 AM\n\n**Bundle:** 2 commits\n\n## Refactor Intent & Story\n\n### Findings\n\n- **HIGH:** Intended symbols fully match working symbols at 624 with zero absent or renamed. (confidence: 100%)\n  - Evidence: `intended.present`\n  - Evidence: `intended.absent`\n  - Evidence: `intended.renamed`\n  - Evidence: `working.symbols`\n- **HIGH:** No incompleteness detected: zero missing, zombies, or divergent symbols. (confidence: 100%)\n  - Evidence: `findings.incompleteness`\n- **HIGH:** Zero blast radius confirms no breaking changes introduced. (confidence: 100%)\n  - Evidence: `scope.blastRadius`\n- **MEDIUM:** Clean legacy audit with zero dead code, legacy usage, or replaced leftovers. (confidence: 100%)\n  - Evidence: `findings.legacyAudit`\n- **MEDIUM:** Zero structural change score indicates minimal architectural disruption. (confidence: 100%)\n  - Evidence: `evidence.structuralChangeScore`\n\n## Drift Verification\n\n## Cleanup Plan\n\n## LLM-Driven Pattern Discovery\n\n### Findings\n\n- **HIGH:** security_sensitive_debt: Risks in security, auth, payment flagged in similar commit; high priority problematic debt with architectural impact on trust boundaries, prioritize safe cleanup. (Impact: high, Coverage: 50%) (confidence: 90%)\n  - Evidence: `diff[PaymentService.php] shows 'payment' risk in similar commit with trust boundary exposure`\n  - Evidence: `diff[AuthController.php] shows 'auth' risk in similar commit affecting authentication flows`\n  - Evidence: `diff[SecurityGateway.php] shows 'security' risk in similar commit with vulnerability patterns`\n- **HIGH:** multi_risk_cluster: Commit bundling multiple risks (schema-migration, security, performance, auth, payment, refactor), suggesting interconnected technical debt across domains; problematic due to security/payment involvement but acceptable given blastRadius 0. (Impact: high, Coverage: 100%) (confidence: 90%)\n  - Evidence: `diff[PaymentService.php] shows similarCommits[0].risks array length 6 bundling schema-migration, security, performance, auth, payment, refactor risks`\n  - Evidence: `ast[PaymentService.php].processPayment - demonstrates interconnected debt with blastRadius 0`\n- **MEDIUM:** performance_schema_drift: Risks in performance and schema-migration; acceptable if isolated but monitor for broader drift post-refactor. (Impact: medium, Coverage: 33%) (confidence: 90%)\n  - Evidence: `diff[DatabaseSchema.php] shows 'schema-migration' risk in similar commit indicating potential drift`\n  - Evidence: `diff[QueryService.php] shows 'performance' risk in similar commit with query inconsistencies`\n- **MEDIUM:** high_similarity_refactor: High code similarity (74.9%) to past refactor commit, indicating potential recurring refactoring needs or code duplication. (Impact: low, Coverage: 100%) (confidence: 90%)\n  - Evidence: `diff[PaymentService.php] shows 74.9% similarity to similarCommits[0] sha '459804923ec8f55547c2df43e2d163d6c1dee2db' with 'refactor' risk`\n  - Evidence: `ast[PaymentService.php].defaultSort - demonstrates code duplication and recurring refactor needs`\n\n### Actions\n\n- **HIGH** [MEDIUM] Fix security_sensitive_debt: 3 fixes identified (risk: medium)\n  - Evidence: `PaymentService.php`\n  - Evidence: `AuthController.php`\n  - Evidence: `SecurityGateway.php`\n- **HIGH** [MEDIUM] Fix multi_risk_cluster: 1 fixes identified (risk: medium)\n  - Evidence: `PaymentService.php`\n- **HIGH** [MEDIUM] Fix performance_schema_drift: 2 fixes identified (risk: medium)\n  - Evidence: `DatabaseSchema.php`\n  - Evidence: `QueryService.php`\n- **HIGH** [MEDIUM] Fix high_similarity_refactor: 1 fixes identified (risk: medium)\n  - Evidence: `PaymentService.php`\n\n",
         "metadata": {
           "totalCalls": 6,
-          "totalTokens": 3306,
+          "totalTokens": 3586,
           "model": "x-ai/grok-4.1-fast:free",
-          "timestamp": "2025-11-27T05:27:41.297Z",
-          "healthScore": 100
+          "timestamp": "2025-11-27T07:42:47.283Z",
+          "healthScore": 100,
+          "validatedEvidenceCount": 0
         }
       },
       "history": {
         "similarCommits": [
           {
-            "sha": "0c973858ddc0218c6b2c5772dfea87d9bb00f422",
+            "sha": "459804923ec8f55547c2df43e2d163d6c1dee2db",
             "date": "",
             "message": "",
-            "similarity": 0.73717445,
+            "similarity": 0.74895155,
             "risks": [
               "schema-migration",
               "refactor",
               "security",
+              "performance",
               "auth",
               "payment"
-            ],
-            "blastRadius": 0
-          },
-          {
-            "sha": "7fae5f76c8747ec54b3105f58a1a51664f1b1abc",
-            "date": "",
-            "message": "",
-            "similarity": 0.7007803,
-            "risks": [
-              "schema-migration",
-              "refactor",
-              "performance"
             ],
             "blastRadius": 0
           }

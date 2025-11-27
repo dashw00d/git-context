@@ -5,7 +5,7 @@ import { getQdrantClient } from '../storage/qdrantClient';
 import { generateEmbedding } from '../storage/embeddings';
 import { RefactorBundleFacts } from '../facts/types';
 import { logInfo, logWarn } from '../utils/logger';
-import { getGitRoot } from '../utils/config';
+import { getProjectId } from '../utils/config';
 
 export interface RetrievedHistory {
   similarCommits: Array<{
@@ -110,21 +110,21 @@ export class BundleStoryEngine {
     const client = await qdrant.getClient();
     if (!client) return this.emptyHistory();
 
-    // PROJECT ISOLATION: Filter by git root
-    const gitRoot = getGitRoot();
-    if (!gitRoot) {
-      logInfo('[BundleStory] No git root found, skipping retrieval');
+    // PROJECT ISOLATION: Filter by project ID
+    const projectId = getProjectId();
+    if (!projectId) {
+      logInfo('[BundleStory] No project ID found, skipping retrieval');
       return this.emptyHistory();
     }
 
-    const commitsCollection = qdrant.getCollectionName('commits', gitRoot);
-    const symbolsCollection = qdrant.getCollectionName('symbols', gitRoot);
+    const commitsCollection = qdrant.getCollectionName('commits', projectId);
+    const symbolsCollection = qdrant.getCollectionName('symbols', projectId);
 
     const projectFilter = {
       must: [
         {
-          key: 'git_root',
-          match: { value: gitRoot }
+          key: 'project_id',
+          match: { value: projectId }
         }
       ]
     };
@@ -151,8 +151,8 @@ export class BundleStoryEngine {
     const refactorFilter = {
       must: [
         {
-          key: 'git_root',
-          match: { value: gitRoot }  // PROJECT ISOLATION
+          key: 'project_id',
+          match: { value: projectId }  // PROJECT ISOLATION
         },
         {
           key: 'structural_change_score',
@@ -173,20 +173,20 @@ export class BundleStoryEngine {
     // Build symbol evolution timelines
     const symbolEvolution = await this.buildSymbolEvolution(similarSymbols);
 
-    // Validate filter isolation: check that all retrieved items match git_root
-    const retrievedRoots = new Set<string>();
+    // Validate filter isolation: check that all retrieved items match project_id
+    const retrievedProjectIds = new Set<string>();
     similarCommits.forEach(c => {
-      if (c.payload?.git_root && typeof c.payload.git_root === 'string') retrievedRoots.add(c.payload.git_root);
+      if (c.payload?.project_id && typeof c.payload.project_id === 'string') retrievedProjectIds.add(c.payload.project_id);
     });
     similarSymbols.forEach(s => {
-      if (s.payload?.git_root && typeof s.payload.git_root === 'string') retrievedRoots.add(s.payload.git_root);
+      if (s.payload?.project_id && typeof s.payload.project_id === 'string') retrievedProjectIds.add(s.payload.project_id);
     });
     relatedRefactors.forEach(r => {
-      if (r.payload?.git_root && typeof r.payload.git_root === 'string') retrievedRoots.add(r.payload.git_root);
+      if (r.payload?.project_id && typeof r.payload.project_id === 'string') retrievedProjectIds.add(r.payload.project_id);
     });
 
-    if (retrievedRoots.size > 1 || (retrievedRoots.size === 1 && !retrievedRoots.has(gitRoot))) {
-      logWarn(`[BundleStory] Filter leak detected: expected ${gitRoot}, got ${Array.from(retrievedRoots).join(', ')}`);
+    if (retrievedProjectIds.size > 1 || (retrievedProjectIds.size === 1 && !retrievedProjectIds.has(projectId))) {
+      logWarn(`[BundleStory] Filter leak detected: expected ${projectId}, got ${Array.from(retrievedProjectIds).join(', ')}`);
     }
 
     return {

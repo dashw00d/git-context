@@ -23,10 +23,10 @@ export class QdrantClientWrapper {
   private async initialize(): Promise<void> {
     const config = getExtensionConfig();
     const url = config.qdrantUrl?.trim() || 'http://localhost:6333';
-    
+
     // Get embedding dimension from model
     this.embeddingDimension = getEmbeddingDimension(config.embeddingModel || 'text-embedding-3-small');
-    
+
     if (!url) {
       this.isAvailable = false;
       return;
@@ -79,7 +79,7 @@ export class QdrantClientWrapper {
     if (!(await this.isEnabled())) return;
 
     const collections = ['symbols', 'commits', 'patterns'];
-    
+
     for (const collectionName of collections) {
       try {
         await this.client!.getCollection(collectionName);
@@ -93,34 +93,33 @@ export class QdrantClientWrapper {
         });
         logInfo(`[Qdrant] Created collection: ${collectionName} (dim: ${this.embeddingDimension})`);
       }
-      
-      // Add keyword index on git_root for fast filtering (idempotent - will skip if exists)
+
+      // Add keyword index on project_id for fast filtering (idempotent - will skip if exists)
       try {
         await this.client!.createPayloadIndex(collectionName, {
-          field_name: 'git_root',
+          field_name: 'project_id',
           field_schema: { type: 'keyword' }
         });
-        logInfo(`[Qdrant] Indexed git_root on ${collectionName}`);
+        logInfo(`[Qdrant] Indexed project_id on ${collectionName}`);
       } catch (error: any) {
         // Index may already exist, ignore error if so
         const errorMsg = error?.message || String(error);
         if (!errorMsg.includes('already exists') && !errorMsg.includes('already exist')) {
-          logWarn(`[Qdrant] Failed to create git_root index on ${collectionName}: ${errorMsg}`);
+          logWarn(`[Qdrant] Failed to create project_id index on ${collectionName}: ${errorMsg}`);
         }
       }
     }
   }
 
   /**
-   * Get collection name for a given base type and git root
+   * Get collection name for a given base type and project ID
    * Supports per-project collections for stronger isolation
    */
-  getCollectionName(base: 'commits' | 'symbols' | 'patterns', gitRoot?: string): string {
+  getCollectionName(base: 'commits' | 'symbols' | 'patterns', projectId?: string): string {
     const config = getExtensionConfig();
-    if (config.perProjectQdrantCollections && gitRoot) {
-      // Hash last 8 chars of git root for collection suffix
-      const hash = gitRoot.slice(-8).replace(/[/\\]/g, '_');
-      return `${base}_${hash}`;
+    if (config.perProjectQdrantCollections && projectId) {
+      // Use project ID directly (already hashed and sanitized)
+      return `${base}_${projectId}`;
     }
     return base;
   }

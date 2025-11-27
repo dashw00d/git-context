@@ -48,6 +48,12 @@ export class WorkspaceIndexer {
     const filteredFiles = changedFiles.filter(file => {
       const { path: filePath, status } = file;
 
+      // 0. Validate file path
+      if (!filePath || typeof filePath !== 'string' || filePath.trim() === '') {
+        logDebug(`[WorkspaceIndexer] Skipping invalid file path: ${JSON.stringify(file)}`);
+        return false;
+      }
+
       // 1. Check extension
       const ext = path.extname(filePath).slice(1).toLowerCase();
       if (!allowedExtensions.has(ext)) return false;
@@ -123,7 +129,16 @@ export class WorkspaceIndexer {
 
       // Get workspace content
       const fullPath = path.join(gitRoot, filePath);
-      const workingContent = fs.readFileSync(fullPath, 'utf8');
+      let workingContent: string;
+      try {
+        workingContent = fs.readFileSync(fullPath, 'utf8');
+      } catch (error: any) {
+        // Provide detailed error with path information
+        throw new Error(
+          `Failed to read workspace file "${filePath}" (resolved to "${fullPath}"): ${error.message}\n` +
+          `This may indicate a git path parsing issue. File exists: ${fs.existsSync(fullPath)}`
+        );
+      }
       const workspaceBlobSha = 'WORKSPACE:' + crypto.createHash('sha256')
         .update(workingContent)
         .digest('hex');

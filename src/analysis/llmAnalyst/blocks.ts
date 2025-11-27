@@ -76,6 +76,8 @@ export interface LlmAnalysis {
     timestamp: string;
     /** Refactor health score (0-100) */
     healthScore?: number;
+    /** Number of validated evidence items */
+    validatedEvidenceCount?: number;
   };
   /** Rendered markdown version */
   markdown: string;
@@ -147,7 +149,7 @@ export class AnalysisBlockUtils {
   static createEvidenceAuto(path: string, context?: string, knownFiles?: Set<string> | string[]): EvidenceLink {
     const description = this.parseEvidencePathToDescription(path, context);
     const parsed = this.parseEvidencePath(path);
-    
+
     const evidence: EvidenceLink = {
       path,
       description,
@@ -170,7 +172,7 @@ export class AnalysisBlockUtils {
         };
       }
     }
-    
+
     return evidence;
   }
 
@@ -236,11 +238,11 @@ export class AnalysisBlockUtils {
     if (jsonPathMatch) {
       const section = jsonPathMatch[1];
       const subpath = jsonPathMatch[2];
-      
+
       // Clean up the subpath for display
       const parts = subpath.split('.');
       const lastPart = parts[parts.length - 1].replace(/\[\d+\]$/, '');
-      
+
       // Generate human-readable names
       const readableNames: Record<string, string> = {
         'incompleteness.missing': 'Missing symbols',
@@ -262,10 +264,10 @@ export class AnalysisBlockUtils {
         'absent': 'Symbols expected absent'
       };
 
-      const readableName = readableNames[subpath] || 
-                          readableNames[parts.slice(-2).join('.')] || 
-                          lastPart.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
-      
+      const readableName = readableNames[subpath] ||
+        readableNames[parts.slice(-2).join('.')] ||
+        lastPart.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
+
       return `${readableName}`;
     }
 
@@ -273,7 +275,7 @@ export class AnalysisBlockUtils {
     if (context) {
       return context;
     }
-    
+
     // Try to make the path more readable
     return path
       .replace(/\[/g, ': ')

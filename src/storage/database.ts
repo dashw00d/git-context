@@ -5,6 +5,12 @@ import { DATABASE_SCHEMA, CURRENT_VERSION, MIGRATIONS } from './schema';
 import { getGitRoot } from '../utils/config';
 
 // Wrapper to mimic better-sqlite3 API
+interface DatabaseStatement {
+  run: (params?: any[]) => { changes: number; lastInsertRowid: number };
+  get: (...params: any[]) => any;
+  all: (...params: any[]) => any[];
+}
+
 class StatementWrapper {
   constructor(private stmt: Statement, private dbManager: DatabaseManager) { }
 
@@ -78,17 +84,19 @@ export class DatabaseManager {
 
     // Return a proxy to intercept prepare calls and wrap statements
     return {
-      prepare: (sql: string) => {
+      prepare: (sql: string): DatabaseStatement => {
         // Return a wrapper that creates a fresh statement for each operation
         // This is necessary because sql.js statements can't be reused
         return {
-          run: (...params: any[]) => {
+          run: (params?: any[]) => {
             try {
               if (!this.db) {
                 throw new Error('Database not initialized');
               }
               const stmt = this.db.prepare(sql);
-              stmt.bind(params);
+              if (params && params.length > 0) {
+                stmt.bind(params);
+              }
               stmt.step();
               stmt.free(); // Free the statement immediately
               this.save();
@@ -261,49 +269,98 @@ export class DatabaseManager {
     }
   }
 
+  private getCurrentVersion(): number {
+    if (!this.db) return 0;
+    try {
+      const result = this.db.exec("SELECT MAX(version) as max_version FROM migration_log");
+      if (result.length > 0 && result[0].values.length > 0 && result[0].values[0][0] !== null) {
+        return result[0].values[0][0] as number;
+      }
+    } catch (error) {
+      // migration_log table doesn't exist yet (fresh DB)
+    }
+    return 0;
+  }
+
   private initializeSchema(): void {
     if (!this.db) return;
 
-    // Check current version
-    let currentVersion = 0;
-    try {
-      const versionResult = this.db.exec("SELECT value FROM pragma_user_version");
-      if (versionResult.length > 0 && versionResult[0].values.length > 0) {
-        currentVersion = versionResult[0].values[0][0] as number;
-      }
-    } catch (error) {
-      // No version table yet, start from 0
-      console.log('[DB-INIT] No version found, starting fresh');
-    }
+    // Ensure base schema is applied (creates migration_log table)
+    console.log('[DB-INIT] Ensuring base schema...');
+    this.db.exec(DATABASE_SCHEMA);
 
-    // Run initial schema if needed
+    // Get current version from migration_log
+    const currentVersion = this.getCurrentVersion();
+    console.log(`[DB-INIT] Current version: ${currentVersion}, target: ${CURRENT_VERSION}`);
+
+    // Run initial schema if needed (v1 = DATABASE_SCHEMA)
     if (currentVersion === 0) {
-      console.log('[DB-INIT] Running initial schema...');
-      this.db.exec(DATABASE_SCHEMA);
-      currentVersion = 1;
+      console.log('[DB-INIT] Fresh database, base schema applied');
+      // Mark v1 as applied for fresh databases
+      try {
+        this.db.exec(`INSERT OR IGNORE INTO migration_log (version, name, applied_at) VALUES (1, 'base_schema', datetime('now'))`);
+      } catch (e) {
+        // Ignore if migration_log doesn't exist yet (shouldn't happen)
+      }
+      // Update currentVersion to skip v1 migration
+      const updatedVersion = this.getCurrentVersion();
+      if (updatedVersion === 1) {
+        console.log('[DB-INIT] Marked base schema (v1) as applied');
+      }
     }
 
-    // Run migrations
-    for (let version = currentVersion; version < CURRENT_VERSION; version++) {
-      const migrationIndex = version; // Migration index matches version (version 1 = migration[1])
-      if (migrationIndex < MIGRATIONS.length) {
-        console.log(`[DB-INIT] Running migration ${version + 1}...`);
-        try {
-          this.db.exec(MIGRATIONS[migrationIndex]);
-          this.save();
-        } catch (error: any) {
-          // If migration fails due to columns already existing, that's okay (idempotent)
-          if (error.message && error.message.includes('duplicate column')) {
-            console.log(`[DB-INIT] Migration ${version + 1} already applied (columns exist)`);
+    // Run migrations in transaction
+    // Note: v1 is the base schema (DATABASE_SCHEMA), so we start from v2
+    if (currentVersion < CURRENT_VERSION) {
+      this.db.exec('BEGIN TRANSACTION');
+      try {
+        // Start from v2 (index 1) since v1 is the base schema
+        const startVersion = Math.max(2, currentVersion + 1);
+        for (let v = startVersion; v <= CURRENT_VERSION; v++) {
+          const migrationIndex = v - 1; // v2 = index 1, v12 = index 11, etc.
+          if (migrationIndex < MIGRATIONS.length) {
+            console.log(`[DB-INIT] Running migration v${v}...`);
+            try {
+              this.db.exec(MIGRATIONS[migrationIndex]);
+              this.save();
+            } catch (error: any) {
+              // If migration fails due to duplicate column, that's okay (idempotent)
+              if (error.message && (
+                error.message.includes('duplicate column') ||
+                error.message.includes('already exists')
+              )) {
+                console.log(`[DB-INIT] Migration v${v} already applied (${error.message})`);
+                // Still log the migration as applied
+                try {
+                  this.db.exec(`INSERT OR IGNORE INTO migration_log (version, name, applied_at) VALUES (${v}, 'migration_v${v}', datetime('now'))`);
+                } catch (e) {
+                  // Ignore if already logged
+                }
+              } else {
+                console.error(`[DB-INIT] Migration v${v} failed:`, error);
+                throw error;
+              }
+            }
           } else {
-            console.error(`[DB-INIT] Migration ${version + 1} failed:`, error);
-            throw error;
+            console.warn(`[DB-INIT] No migration script found for v${v}`);
           }
         }
+        this.db.exec('COMMIT');
+        console.log(`[DB-INIT] Migrated to v${CURRENT_VERSION}`);
+      } catch (error) {
+        this.db.exec('ROLLBACK');
+        console.error('[DB-INIT] Migration failed, rolled back:', error);
+        // Don't throw - allow graceful degradation
       }
     }
 
-    // Set version
+    // Final audit
+    const gaps = this.auditSchemaGaps();
+    if (gaps.length > 0) {
+      console.warn('[DB-INIT] Schema gaps detected (manual fix may be needed):', gaps);
+    }
+
+    // Set pragma version for compatibility
     try {
       this.db.exec(`PRAGMA user_version = ${CURRENT_VERSION}`);
       this.save();
@@ -313,6 +370,38 @@ export class DatabaseManager {
 
     // Cleanup stale metadata
     DatabaseHelpers.cleanupStaleMetadata(this.db);
+  }
+
+  public auditSchemaGaps(): string[] {
+    if (!this.db) return [];
+    
+    const expected: Record<string, string[]> = {
+      file_snapshots: ['body_hash'],
+      commits_analysis: ['status', 'structural_change_score', 'files_changed', 'hotspots_json'],
+    };
+
+    const gaps: string[] = [];
+
+    for (const [table, cols] of Object.entries(expected)) {
+      try {
+        const info = this.db.exec(`PRAGMA table_info(${table})`);
+        if (info.length === 0 || !info[0].values) {
+          gaps.push(`${table}: table not found`);
+          continue;
+        }
+
+        const existingCols = info[0].values.map((row: any) => row[1] as string);
+        const missing = cols.filter(c => !existingCols.includes(c));
+        
+        if (missing.length > 0) {
+          gaps.push(`${table} missing: ${missing.join(', ')}`);
+        }
+      } catch (error: any) {
+        gaps.push(`${table}: ${error.message}`);
+      }
+    }
+
+    return gaps;
   }
 
   save(): void {

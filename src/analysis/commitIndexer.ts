@@ -333,9 +333,9 @@ export class CommitIndexer {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO commits_analysis
       (sha, status, analysis_version, analyzed_at)
-      VALUES (?, 'pending', ?, ?)
+      VALUES (?, ?, ?, ?)
     `);
-    stmt.run([sha, ANALYSIS_VERSION, new Date().toISOString()]);
+    stmt.run([sha, 'pending', ANALYSIS_VERSION, new Date().toISOString()]);
   }
 
   private markComplete(sha: string, facts: CommitFacts): void {

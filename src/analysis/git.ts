@@ -55,18 +55,11 @@ export class GitOperations {
     const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
     const output = this.execGit(['show', '--no-patch', '--date=iso', format, sha]);
 
-    const lines = output.split('\n');
-    if (lines.length < 4) {
+    const result = this.parseLogCommits(output, 'single');
+    if (!result) {
       throw new Error(`Invalid commit format for SHA: ${sha}`);
     }
-
-    return {
-      sha: lines[0],
-      author: lines[1],
-      date: lines[2],
-      message: lines[3],
-      parent: lines[4] || undefined
-    };
+    return result as CommitInfo;
   }
 
   /**
@@ -76,22 +69,7 @@ export class GitOperations {
     const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
     const output = this.execGit(['log', '--no-merges', `-${count}`, '--date=iso', format]);
 
-    const commits: CommitInfo[] = [];
-    const lines = output.split('\n');
-
-    for (let i = 0; i < lines.length; i += 5) {
-      if (lines[i]) {
-        commits.push({
-          sha: lines[i],
-          author: lines[i + 1],
-          date: lines[i + 2],
-          message: lines[i + 3],
-          parent: lines[i + 4] || undefined
-        });
-      }
-    }
-
-    return commits;
+    return this.parseLogCommits(output, 'multi') as CommitInfo[];
   }
 
   /**
@@ -190,14 +168,7 @@ export class GitOperations {
     try {
       return this.execGit(['show', `${sha}:${filePath}`], { suppressLog: true });
     } catch (error: any) {
-      const msg = error.message || String(error);
-      // Check for common git errors indicating file doesn't exist
-      if (msg.includes('path') && (
-        msg.includes('does not exist') ||
-        msg.includes('did not match any file(s)') ||
-        msg.includes('exists on disk, but not in') ||
-        msg.includes('neither on disk nor in the index')
-      )) {
+      if (this.isGitPathMissing(error)) {
         return '';
       }
       throw error;
@@ -218,15 +189,7 @@ export class GitOperations {
     try {
       return this.getStagedContent(filePath);
     } catch (error: any) {
-      const msg = error.message || String(error);
-
-
-      if (msg.includes('path') && (
-        msg.includes('does not exist') ||
-        msg.includes('did not match any file(s)') ||
-        msg.includes('exists on disk, but not in') ||
-        msg.includes('neither on disk nor in the index')
-      )) {
+      if (this.isGitPathMissing(error)) {
         return '';
       }
       throw error;
@@ -261,7 +224,7 @@ export class GitOperations {
   isIgnored(filePath: string): boolean {
     try {
       // git check-ignore returns exit code 0 if ignored, 1 if not ignored
-      this.execGit(['check-ignore', '-q', filePath]);
+      this.execGit(['check-ignore', '-q', filePath], { suppressLog: true });
       return true;
     } catch (error) {
       return false;
@@ -282,22 +245,17 @@ export class GitOperations {
   getBlobSha(sha: string, filePath: string): string {
     try {
       const output = this.execGit(['ls-tree', '-r', sha, '--', filePath]);
-      const lines = output.trim().split('\n').filter(l => l.length > 0);
+      const lines = output.trim().split('\n').filter(l => l.trim());
 
-      if (lines.length === 0) {
-        throw new Error(`File ${filePath} not found at commit ${sha}`);
+      for (const line of lines) {
+        const parsed = this.parseLsTreeLine(line);
+        if (parsed && parsed.path === filePath) {
+          return parsed.sha;
+        }
       }
 
-      if (lines.length > 1) {
-        console.warn(`Multiple blobs found for ${filePath} at ${sha}, using first match`);
-      }
-
-      const parts = lines[0].split(/\s+/);
-      if (parts.length < 3) {
-        throw new Error(`Invalid ls-tree output for ${filePath} at ${sha}`);
-      }
-
-      return parts[2];
+      console.warn(`No matching ls-tree entry for ${filePath} at ${sha}`);
+      throw new Error(`File ${filePath} not found at commit ${sha}`);
     } catch (error) {
       throw new Error(`Failed to get blob SHA for ${filePath} at ${sha}: ${error}`);
     }
@@ -338,7 +296,7 @@ export class GitOperations {
   getBranchCommits(branch: string, limit: number = 100): string[] {
     try {
       const output = this.execGit(['log', branch, `--max-count=${limit}`, '--format=%H']);
-      return output.split('\n').map(line => line.trim()).filter(Boolean);
+      return this.parseFileList(output);
     } catch {
       return [];
     }
@@ -383,7 +341,9 @@ export class GitOperations {
 
       git.on('close', (code) => {
         if (code === 0) {
-          resolve(stdout.trim());
+          // Don't trim() here as it removes leading spaces from first line
+          // which are significant in git status --porcelain output
+          resolve(stdout);
         } else {
           reject(new Error(`Git command failed: git ${args.join(' ')}\n${stderr}`));
         }
@@ -407,9 +367,10 @@ export class GitOperations {
 
       for (const line of lines) {
         const status = line.substring(0, 2).trim();
-        const filePath = line.substring(3);
+        const filePath = this.parseGitPath(line.substring(3)); // Now consistently parsed like staged/unstaged
 
         // Map git status codes to our status types
+        // Note: checks full 2-char XY for staged+unstaged presence vs charAt(0/1) in split methods
         let changeStatus: FileChange['status'];
         if (status.includes('A')) {
           changeStatus = 'A';
@@ -441,6 +402,86 @@ export class GitOperations {
   }
 
   /**
+   * Parse file path from git status output, handling quoted paths and octal escapes.
+   * Call on all line.substring(3) from porcelain output.
+   */
+  private parseGitPath(rawPath: string): string {
+    // Git quotes paths with special characters and uses octal escapes
+    if (rawPath.startsWith('"') && rawPath.endsWith('"')) {
+      // Remove quotes and decode escape sequences
+      const unquoted = rawPath.slice(1, -1);
+      // Replace octal escapes (e.g., \141 -> 'a')
+      return unquoted.replace(/\\(\d{3})/g, (_, oct) =>
+        String.fromCharCode(parseInt(oct, 8))
+      ).replace(/\\\\/g, '\\'); // Replace \\\\ with \\
+    }
+    return rawPath;
+  }
+
+  /**
+   * Parse a single line from git ls-tree output (mode<TAB>type<TAB>sha<TAB>path)
+   * Handles paths with spaces correctly using TAB separation.
+   */
+  private parseLsTreeLine(rawLine: string): {mode: string, type: string, sha: string, path: string} | null {
+    const tabIdx = rawLine.lastIndexOf('\t');
+    if (tabIdx === -1 || tabIdx < 1) return null;
+
+    const path = rawLine.slice(tabIdx + 1);
+    const preSha = rawLine.slice(0, tabIdx).trim();
+    const preParts = preSha.split(/\s+/);  // split on whitespace
+
+    if (preParts.length < 3) return null;
+
+    return {mode: preParts[0], type: preParts[1], sha: preParts[2], path};
+  }
+
+  /**
+   * Check if a git error indicates a missing file path
+   * Handles various git error message formats for missing files.
+   */
+  private isGitPathMissing(error: any): boolean {
+    const msg = (error.message || String(error)).toLowerCase();
+    return (
+      msg.includes('does not exist') ||
+      msg.includes('did not match any file') ||
+      msg.includes('exists on disk, but not in') ||
+      msg.includes('neither on disk nor in')
+    );
+  }
+
+  /**
+   * Parse git log output into CommitInfo objects
+   * Handles multi-commit and single-commit formats.
+   */
+  private parseLogCommits(rawOutput: string, mode: 'multi' | 'single'): CommitInfo[] | CommitInfo {
+    const lines = rawOutput.split('\n');
+    const blockSize = mode === 'single' ? 4 : 5;  // single mode doesn't include parent
+    const commits: CommitInfo[] = [];
+
+    for (let i = 0; i < lines.length; i += blockSize) {
+      if (!lines[i] || !lines[i].trim()) continue;
+
+      commits.push({
+        sha: lines[i],
+        author: lines[i + 1] || '',
+        date: lines[i + 2] || '',
+        message: lines[i + 3] || '',
+        parent: mode === 'multi' ? lines[i + 4] || undefined : undefined
+      });
+    }
+
+    return mode === 'single' ? commits[0] || null : commits;
+  }
+
+  /**
+   * Parse git file list output (one file per line)
+   * Normalizes whitespace and filters empty lines.
+   */
+  private parseFileList(raw: string): string[] {
+    return raw.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  }
+
+  /**
    * Get staged files only
    */
   async getStagedFiles(): Promise<FileChange[]> {
@@ -452,7 +493,7 @@ export class GitOperations {
 
       for (const line of lines) {
         const status = line.substring(0, 2);
-        const filePath = line.substring(3);
+        const filePath = this.parseGitPath(line.substring(3));
 
         // First character indicates staged status (not space, not ?)
         if (status.charAt(0) !== ' ' && status.charAt(0) !== '?') {
@@ -495,7 +536,7 @@ export class GitOperations {
 
       for (const line of lines) {
         const status = line.substring(0, 2);
-        const filePath = line.substring(3);
+        const filePath = this.parseGitPath(line.substring(3));
 
         // Second character indicates unstaged status (not space)
         // Include untracked files (?) as unstaged
@@ -526,8 +567,8 @@ export class GitOperations {
       // Also include untracked files from ls-files
       try {
         const untrackedOutput = await this.execGitStream(['ls-files', '--others', '--exclude-standard']);
-        const untrackedLines = untrackedOutput.split('\n').filter(f => f.trim());
-        for (const filePath of untrackedLines) {
+        const untrackedFiles = this.parseFileList(untrackedOutput);
+        for (const filePath of untrackedFiles) {
           // Only add if not already in unstaged (avoid duplicates)
           if (!unstaged.some(f => f.path === filePath)) {
             unstaged.push({

@@ -16,12 +16,33 @@ import { WorkspaceFacts } from '../analysis/workspaceIndexer';
 
 /**
  * Build RefactorBundleFacts from pipeline state (CommitFacts + WorkspaceFacts)
- * Simplified version for the new layered pipeline
+ * Enhanced version that uses full logic from assembleFacts when additional data is provided
  */
-export function buildRefactorBundleFacts(
+export async function buildRefactorBundleFacts(
   commitFacts: CommitFacts[],
-  workspaceFacts: WorkspaceFacts | null
-): RefactorBundleFacts {
+  workspaceFacts: WorkspaceFacts | null,
+  options?: {
+    commitShas?: string[];
+    scope?: ScopeSet;
+    intended?: Map<string, IntendedState>;
+    working?: WorkingSnapshot;
+    drift?: DriftFindings;
+    legacy?: LegacyAuditResult;
+  }
+): Promise<RefactorBundleFacts> {
+  // If full pipeline data is provided, use the comprehensive assembleFacts logic
+  if (options?.commitShas && options.scope && options.intended && options.working && options.drift && options.legacy) {
+    return assembleFacts(
+      options.commitShas,
+      options.scope,
+      options.intended,
+      options.working,
+      options.drift,
+      options.legacy
+    );
+  }
+
+  // Fallback to simplified logic for backward compatibility
   let totalSymbols = commitFacts.reduce((sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved, 0);
   const totalEdges = commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0);
   let totalFiles = commitFacts.reduce((sum, c) => sum + c.filesChanged, 0);
