@@ -226,7 +226,10 @@ export async function assembleFacts(
           new: item.new.symbol_id,
           confidence: item.confidence
         }))
-      }
+      },
+      unresolvedCallers: drift.unresolved_callers ? {
+        total: drift.unresolved_callers.length
+      } : undefined
     },
     evidence: {
       // Scope evidence
@@ -275,6 +278,8 @@ export async function assembleFacts(
       } : undefined,
 
       "findings.patternDrift.mixedConventionFiles": drift.mixedConventionFiles || undefined,
+
+      "findings.unresolvedCallers": drift.unresolved_callers || undefined,
 
       // Legacy fields for backward compatibility
       missing: drift.missing_symbols.map(m => ({ symbol_id: m.symbol_id, expected: m.expected })),

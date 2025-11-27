@@ -26,6 +26,8 @@ export interface SymbolSearchFilters {
   pathPattern?: string;    // e.g., "auth/**"
   changeType?: string;     // added, modified, removed
   minSimilarity?: number;  // 0.0-1.0
+  dateRange?: { gte?: string; lte?: string }; // ISO date strings
+  tags?: string[];         // e.g. ["risk:high", "theme:migration"]
 }
 
 export interface SymbolContextForLLM {
@@ -49,7 +51,13 @@ export interface SymbolContextForLLM {
 }
 
 export class SearchIndex {
-  private qdrant = getQdrantClient();
+  private qdrant: any;
+  private dbManager: any;
+
+  constructor(dbManager?: any, qdrant?: any) {
+    this.dbManager = dbManager || { getDatabase: () => getDatabase() };
+    this.qdrant = qdrant || getQdrantClient();
+  }
 
   /**
    * Enhanced search with Qdrant fallback to LIKE
@@ -192,6 +200,22 @@ export class SearchIndex {
       must.push({ key: 'path', match: { text: pathFilter } });
     }
 
+    // New: Date range filtering
+    if (filters.dateRange) {
+      const range: any = {};
+      if (filters.dateRange.gte) range.gte = filters.dateRange.gte;
+      if (filters.dateRange.lte) range.lte = filters.dateRange.lte;
+      must.push({ key: 'date', range: range });
+    }
+
+    // New: Tag filtering (should match any of the provided tags)
+    if (filters.tags && filters.tags.length > 0) {
+      // Use 'should' clause for tags (OR logic) nested inside a 'must' (AND logic)
+      // But Qdrant filter structure is a bit specific, let's use 'match' with 'any' for array fields
+      // Assuming 'tags' is a keyword array in payload
+      must.push({ key: 'tags', match: { any: filters.tags } });
+    }
+
     const results = await client.search('symbols', {
       vector: queryEmbedding,
       limit,
@@ -201,7 +225,7 @@ export class SearchIndex {
     });
 
     // Convert to SearchResult format
-    return results.map(result => {
+    return results.map((result: any) => {
       const payload = result.payload as any;
       return {
         name: payload.name,
@@ -348,7 +372,7 @@ export class SearchIndex {
     if (!client) {
       return [];
     }
-    
+
     // Get symbol's vector from Qdrant (use hashed ID)
     const pointId = stringToPointId(symbolId);
     const point = await client.retrieve('symbols', {
@@ -436,8 +460,8 @@ export class SearchIndex {
     });
 
     return results
-      .filter(r => (r.payload as any).sha !== sha)
-      .map(r => ({
+      .filter((r: any) => (r.payload as any).sha !== sha)
+      .map((r: any) => ({
         sha: (r.payload as any).sha,
         message: (r.payload as any).message,
         author: (r.payload as any).author,
@@ -469,7 +493,7 @@ export class SearchIndex {
       score_threshold: 0.3
     });
 
-    return results.map(r => ({
+    return results.map((r: any) => ({
       sha: (r.payload as any).sha,
       message: (r.payload as any).message,
       author: (r.payload as any).author,
@@ -477,6 +501,95 @@ export class SearchIndex {
       similarity: r.score || 0,
       risks: (r.payload as any).risks || []
     }));
+  }
+
+  /**
+   * Search patterns (new semantic memory layer)
+   */
+  async searchPatterns(query: string, limit: number = 10): Promise<SearchResult[]> {
+    if (!(await this.qdrant.isEnabled())) return [];
+
+    const client = await this.qdrant.getClient();
+    if (!client) return [];
+
+    const queryEmbedding = await generateEmbedding(query);
+    const results = await client.search('patterns', {
+      vector: queryEmbedding,
+      limit,
+      with_payload: true,
+      score_threshold: 0.4
+    });
+
+    return results.map((r: any) => ({
+      name: `Theme: ${(r.payload as any).theme_id}`,
+      path: 'pattern',
+      sha: '',
+      summary_snippet: (r.payload as any).text || '',
+      rank: r.score || 0
+    }));
+  }
+
+  /**
+   * Retrieve bundle context with multi-index reranking
+   */
+  async retrieveBundleContext(
+    query: string,
+    bundleFacts: any, // BundleFacts type
+    topK: number = 10
+  ): Promise<SearchResult[]> {
+    const { getExtensionConfig } = await import('../utils/config');
+    const config = getExtensionConfig();
+    const weights = config.rerankingWeights || { drift: 1.2, hotspot: 1.3, theme: 1.1 };
+
+    // Parallel search across all indexes
+    const [commits, symbols, patterns] = await Promise.all([
+      this.searchCommits(query, topK),
+      this.searchSymbolsHybrid(query, { minSimilarity: 0.4 }, topK),
+      this.searchPatterns(query, topK)
+    ]);
+
+    // Normalize and tag sources
+    const allResults = [
+      ...commits.map(c => ({ ...c, source: 'commit', type: 'commit' } as any)),
+      ...symbols.map(s => ({ ...s, source: 'symbol', type: 'symbol' } as any)),
+      ...patterns.map(p => ({ ...p, source: 'pattern', type: 'pattern' } as any))
+    ];
+
+    // Generate query embedding for reranking (if not already cached/available)
+    // Note: In a real implementation, we'd reuse the embedding from the searches above
+    // but for now we'll rely on the initial similarity score
+
+    // Rerank: similarity * fact_match (drift/hotspot overlap)
+    allResults.sort((a, b) => {
+      const aScore = (a.similarity || a.rank || 0) * this.factMatchScore(a, bundleFacts, weights);
+      const bScore = (b.similarity || b.rank || 0) * this.factMatchScore(b, bundleFacts, weights);
+      return bScore - aScore;
+    });
+
+    return allResults.slice(0, topK);
+  }
+
+  private factMatchScore(result: any, bundle: any, weights: any): number {
+    let score = 1.0;
+    const payload = result.payload || result; // Handle raw payload vs result object
+
+    // Boost if result has hotspots that match bundle hotspots
+    if (bundle.hotspots && payload.hotspots) {
+      const hasOverlap = bundle.hotspots.some((h: string) => payload.hotspots.includes(h));
+      if (hasOverlap) score *= weights.hotspot;
+    }
+
+    // Boost if result shows high drift and bundle has high drift
+    if (bundle.drift?.avg > 0.5 && payload.structural_change_score > 0.5) {
+      score *= weights.drift;
+    }
+
+    // Boost themes if bundle has recurring patterns
+    if (result.source === 'pattern') {
+      score *= weights.theme;
+    }
+
+    return score;
   }
 
   /**
@@ -646,7 +759,7 @@ export class SearchIndex {
       score_threshold: 0.4
     });
 
-    return results.map(r => {
+    return results.map((r: any) => {
       const payload = r.payload as any;
       return {
         name: payload.name,
@@ -790,9 +903,9 @@ export class SearchIndex {
     // Filter out bundle commits
     const bundleSet = new Set(bundleShas);
     return results
-      .filter(r => !bundleSet.has((r.payload as any).sha))
+      .filter((r: any) => !bundleSet.has((r.payload as any).sha))
       .slice(0, limit)
-      .map(r => ({
+      .map((r: any) => ({
         sha: (r.payload as any).sha,
         message: (r.payload as any).message,
         author: (r.payload as any).author,
@@ -833,7 +946,7 @@ export class SearchIndex {
     driftSymbols: number;
   }>> {
     const db = getDatabase();
-    
+
     let query = `
       SELECT
         c.sha,
@@ -843,19 +956,19 @@ export class SearchIndex {
       FROM commits_metadata c
       LEFT JOIN symbols s ON s.sha = c.sha
     `;
-    
+
     const params: any[] = [convention];
-    
+
     if (sinceSha) {
       query += ` WHERE c.sha >= ?`;
       params.push(sinceSha);
     }
-    
+
     query += `
       GROUP BY c.sha, c.date
       ORDER BY c.date ASC
     `;
-    
+
     const stmt = db.prepare(query);
     const results = stmt.all(...params) as Array<{
       sha: string;
@@ -863,18 +976,18 @@ export class SearchIndex {
       total_symbols: number;
       convention_symbols: number;
     }>;
-    
+
     // Calculate cumulative adoption
     let cumulativeTotal = 0;
     let cumulativeConvention = 0;
-    
+
     return results.map(r => {
       cumulativeTotal += r.total_symbols;
       cumulativeConvention += r.convention_symbols;
-      const adoptionPercent = cumulativeTotal > 0 
-        ? (cumulativeConvention / cumulativeTotal) * 100 
+      const adoptionPercent = cumulativeTotal > 0
+        ? (cumulativeConvention / cumulativeTotal) * 100
         : 0;
-      
+
       return {
         sha: r.sha,
         date: r.date,
@@ -901,7 +1014,7 @@ export class SearchIndex {
     suggestedName: string;
   }>> {
     const db = getDatabase();
-    
+
     let query = `
       SELECT 
         s.symbol_id,
@@ -913,18 +1026,18 @@ export class SearchIndex {
       JOIN commits_metadata c ON s.sha = c.sha
       WHERE s.naming_convention = ?
     `;
-    
+
     const params: any[] = [oldConvention];
-    
+
     if (sinceSha) {
       query += ` AND c.sha >= ?`;
       params.push(sinceSha);
     }
-    
+
     query += `
       ORDER BY c.date DESC
     `;
-    
+
     const stmt = db.prepare(query);
     const results = stmt.all(...params) as Array<{
       symbol_id: string;
@@ -933,7 +1046,7 @@ export class SearchIndex {
       naming_convention: string;
       last_modified: string;
     }>;
-    
+
     return results.map(r => ({
       symbolId: r.symbol_id,
       name: r.name,
@@ -955,7 +1068,7 @@ export class SearchIndex {
     symbolCount: number;
   }>> {
     const db = getDatabase();
-    
+
     const stmt = db.prepare(`
       SELECT 
         fc.sha,
@@ -968,7 +1081,7 @@ export class SearchIndex {
       WHERE fc.path = ?
       ORDER BY c.date ASC
     `);
-    
+
     const results = stmt.all(path) as Array<{
       sha: string;
       date: string;
@@ -976,7 +1089,7 @@ export class SearchIndex {
       drift_percent: number;
       symbol_count: number;
     }>;
-    
+
     return results.map(r => ({
       sha: r.sha,
       date: r.date,
@@ -1038,7 +1151,7 @@ export class SearchIndex {
     // For each symbol, find similar ones
     for (const symbol of symbols.slice(0, limit)) {
       const pointId = stringToPointId(symbol.symbol_id);
-      
+
       try {
         const point = await client.retrieve('symbols', {
           ids: [pointId],
@@ -1065,7 +1178,7 @@ export class SearchIndex {
 
           // Create cluster key based on semantic similarity
           const clusterKey = `${symbol.symbol_id}_${payload.symbol_id}`;
-          
+
           if (!clusters.has(clusterKey)) {
             clusters.set(clusterKey, []);
           }
@@ -1177,7 +1290,7 @@ export class SearchIndex {
     for (const result of results) {
       const payload = result.payload as any;
       const sha = payload.sha;
-      
+
       // Get dominant convention from this commit's symbols
       const conventionStmt = db.prepare(`
         SELECT naming_convention, COUNT(*) as count
@@ -1188,7 +1301,7 @@ export class SearchIndex {
         LIMIT 1
       `);
       const conventionResult = conventionStmt.get(sha) as { naming_convention: string } | undefined;
-      
+
       if (conventionResult) {
         const convention = conventionResult.naming_convention as NamingConvention;
         conventionCounts.set(convention, (conventionCounts.get(convention) || 0) + 1);

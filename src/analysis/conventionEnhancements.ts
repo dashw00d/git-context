@@ -7,6 +7,7 @@
  */
 
 import * as path from 'path';
+import { getSupportedExtensions, isJSLanguage, isPHPLanguage } from '../utils/config';
 
 export type ImportPathStyle = 
   | 'absolute'        // /src/components/Button
@@ -64,10 +65,11 @@ export function detectImportPathStyle(importPath: string): ImportPathStyle {
     
     // Check for extension
     const ext = path.extname(importPath);
-    if (ext && ext !== '.ts' && ext !== '.tsx' && ext !== '.js' && ext !== '.jsx') {
+    const supportedExts = getSupportedExtensions();
+    if (ext && !supportedExts.includes(ext.slice(1))) { // Remove leading dot
       return 'extension';
     }
-    if (!ext || ext === '.ts' || ext === '.tsx' || ext === '.js' || ext === '.jsx') {
+    if (!ext || supportedExts.includes(ext.slice(1))) {
       return 'no-extension';
     }
     
@@ -87,7 +89,7 @@ export function extractImportPaths(content: string, language: string): ImportPat
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
 
-    if (language === 'javascript' || language === 'typescript') {
+    if (isJSLanguage(language)) {
       // ES6 imports: import ... from 'path'
       const importMatch = line.match(/import\s+.*?\s+from\s+['"]([^'"]+)['"]/);
       if (importMatch) {
@@ -109,7 +111,7 @@ export function extractImportPaths(content: string, language: string): ImportPat
       }
     }
 
-    if (language === 'php') {
+    if (isPHPLanguage(language)) {
       // PHP use statements: use Namespace\Class;
       const useMatch = line.match(/^use\s+([^;]+);/);
       if (useMatch) {

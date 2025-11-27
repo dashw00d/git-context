@@ -9,7 +9,7 @@ import { getDatabaseManager, ensureDatabaseInitialized } from '../storage/databa
 import { AnalysisResult, SymbolInfo, SymbolDelta } from '../types';
 import { detectNamingConvention, analyzeConventionDrift } from '../analysis/namingConventions';
 import { extractImportPaths, analyzeImportPathDrift, detectFileNamingConvention } from '../analysis/conventionEnhancements';
-import { detectLanguage } from '../analysis/tree-sitter';
+import { detectLanguage } from '../utils/config';
 
 // Analysis functions have been moved to RefactorPipeline service
 // Use getRefactorPipeline() to access analysis functionality

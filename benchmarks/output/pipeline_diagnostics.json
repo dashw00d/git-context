@@ -1,0 +1,95 @@
+{
+  "startTime": "2025-11-27T15:08:43.393Z",
+  "steps": [
+    {
+      "stepId": "intended",
+      "hash": "97d170e1550eee4afc0af065b78cda302a97674c",
+      "note": "",
+      "summary": "symbols=0, present=0, absent=0, renamed=0"
+    },
+    {
+      "stepId": "hotspots",
+      "hash": "d4e5f3e92676a4f70e9cf91aa7a939ebf35842b9",
+      "note": "",
+      "summary": ""
+    },
+    {
+      "stepId": "scope",
+      "hash": "f56edd51dcf3d960a1c153d43298433215d8f3f3",
+      "note": "",
+      "summary": "files=155, working=37, blast=0"
+    },
+    {
+      "stepId": "index_commits",
+      "hash": "4a1dc61659d5f4cd64f214c043fc1ea0bbbe2688",
+      "note": "",
+      "summary": "commits=6"
+    },
+    {
+      "stepId": "workspace_overlay",
+      "hash": "3bfb62b00cfbe03ece32fb3122955eb42838174f",
+      "note": "",
+      "summary": "files=6, symbols=146"
+    },
+    {
+      "stepId": "working",
+      "hash": "58de5e625bd1b555913101e0cf9e326bfd4cdffa",
+      "note": "",
+      "summary": "symbols=3534, edges=21826, paths=155"
+    },
+    {
+      "stepId": "drift",
+      "hash": "632e9fc87472990e1a18a9cd634e4e218ee9916e",
+      "note": "",
+      "summary": "missing=0, zombies=0, divergent=0"
+    },
+    {
+      "stepId": "legacy",
+      "hash": "c3f11aa2be6f44ef8404916cd9a9be19c9b765bb",
+      "note": "",
+      "summary": "dead=53, legacyUsed=0, leftovers=0"
+    },
+    {
+      "stepId": "bundle_facts",
+      "hash": "837658ed6e0298665453b86960bf39049b8addb9",
+      "note": "",
+      "summary": "intended.present=0, absent=0, renamed=0"
+    },
+    {
+      "stepId": "retrieve_history",
+      "hash": "n/a",
+      "note": "",
+      "summary": ""
+    },
+    {
+      "stepId": "embedding_index",
+      "hash": "n/a",
+      "note": "",
+      "summary": ""
+    },
+    {
+      "stepId": "llm_story",
+      "hash": "n/a",
+      "note": "",
+      "summary": ""
+    }
+  ],
+  "errors": [],
+  "endTime": "2025-11-27T15:17:10.975Z",
+  "totalTimeMs": 507582,
+  "completedSteps": [
+    "intended",
+    "hotspots",
+    "scope",
+    "index_commits",
+    "workspace_overlay",
+    "working",
+    "drift",
+    "legacy",
+    "bundle_facts",
+    "retrieve_history",
+    "embedding_index",
+    "llm_story"
+  ],
+  "errorCount": 0
+}

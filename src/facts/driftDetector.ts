@@ -30,6 +30,18 @@ export interface DriftFindings {
   }>;
   divergentClusters?: Array<Set<SymbolContext>>;
   suggestedConsolidations?: Array<{symbols: string[], similarity: number}>;
+  unresolved_callers?: Array<UnresolvedCallerFact>;
+}
+
+export interface UnresolvedCallerFact {
+  caller_symbol_id?: string;
+  caller_name?: string;
+  caller_path?: string;
+  caller_line?: number;
+  callee_name: string;
+  guessed_target_dna_id?: string | null;
+  occurrence_count: number;
+  severity: number; // 0-1
 }
 
 /**
@@ -409,6 +421,9 @@ export function detectDrift(
     findings.mixedConventionFiles = conventionDrift.mixedConventionFiles;
   }
 
+  // Detect unresolved callers (call sites that don't resolve to a current symbol)
+  findings.unresolved_callers = detectUnresolvedCallers(working, intended);
+
   // Enhanced divergent detection with AST shape clustering
   const enhancedDivergent = detectDivergentClusters(working, intended);
   if (enhancedDivergent.divergentClusters.length > 0) {
@@ -419,6 +434,99 @@ export function detectDrift(
   }
 
   return findings;
+}
+
+/**
+ * Detect unresolved callers (call sites that don't resolve to a current symbol)
+ */
+function detectUnresolvedCallers(
+  working: WorkingSnapshot,
+  intended?: Map<string, IntendedState>
+): UnresolvedCallerFact[] {
+  const nameIndex = new Map<string, string[]>(); // lowerName -> symbol_ids
+  for (const [symbolId, symbol] of working.symbolsById) {
+    const key = symbol.name.toLowerCase();
+    if (!nameIndex.has(key)) {
+      nameIndex.set(key, []);
+    }
+    nameIndex.get(key)!.push(symbolId);
+  }
+
+  const facts = new Map<string, UnresolvedCallerFact & { count: number }>();
+
+  for (const edge of working.edges) {
+    if (edge.edge_type !== 'calls') continue;
+
+    // Skip if target is a known symbol
+    if (edge.to_symbol_id && working.symbolsById.has(edge.to_symbol_id)) continue;
+
+    const caller = edge.from_symbol_id ? working.symbolsById.get(edge.from_symbol_id) : undefined;
+    const calleeRaw = edge.to_symbol_id || '';
+    const calleeName = extractCalleeName(calleeRaw);
+
+    // Try to guess a target by name match
+    const guessed = guessTarget(calleeName, nameIndex, intended);
+
+    const key = `${edge.from_symbol_id || 'unknown'}::${calleeName || calleeRaw}`;
+    const current = facts.get(key) || {
+      caller_symbol_id: edge.from_symbol_id,
+      caller_name: caller?.name,
+      caller_path: caller?.symbol_id?.split(':')[0],
+      callee_name: calleeName || calleeRaw,
+      guessed_target_dna_id: guessed,
+      caller_line: caller?.loc_post?.start?.line || caller?.loc_pre?.start?.line,
+      occurrence_count: 0,
+      severity: 0,
+      count: 0
+    };
+
+    current.count += 1;
+    facts.set(key, current);
+  }
+
+  const results: UnresolvedCallerFact[] = [];
+  for (const fact of facts.values()) {
+    const base = Math.min(1, Math.log1p(fact.count) / Math.log1p(5));
+    const unknownBump = fact.guessed_target_dna_id ? 0 : 0.1;
+    fact.severity = Math.min(1, base + unknownBump);
+    fact.occurrence_count = fact.count;
+    delete (fact as any).count;
+    results.push(fact);
+  }
+
+  return results.sort((a, b) => b.severity - a.severity);
+}
+
+function extractCalleeName(raw: string): string {
+  if (!raw) return '';
+  // Try to take the last identifier-like token
+  const tokens = raw.split(/[:.\s]/).filter(Boolean);
+  const last = tokens[tokens.length - 1] || raw;
+  return last.replace(/[^A-Za-z0-9_]/g, '');
+}
+
+function guessTarget(
+  calleeName: string,
+  nameIndex: Map<string, string[]>,
+  intended?: Map<string, IntendedState>
+): string | null | undefined {
+  if (!calleeName) return null;
+  const matches = nameIndex.get(calleeName.toLowerCase()) || [];
+  if (matches.length === 1) {
+    return matches[0];
+  }
+
+  // Try intended map names
+  if (intended) {
+    const intendedMatch = Array.from(intended.entries()).find(([, st]) =>
+      st.lastName && st.lastName.toLowerCase() === calleeName.toLowerCase()
+    );
+    if (intendedMatch) {
+      return intendedMatch[0];
+    }
+  }
+
+  return null;
 }
 
 /**

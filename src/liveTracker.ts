@@ -1,8 +1,12 @@
 import * as vscode from 'vscode';
+import { EventEmitter } from 'events';
 import { debounce } from 'lodash';
 import { GitOperations } from './analysis/git';
 import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
 import { logDebug, logInfo, logError } from './utils/logger';
+import { getSupportedExtensions } from './utils/config';
+import { SymbolExtractor } from './analysis/symbols';
+import type { SymbolInfo } from './types';
 
 interface ThresholdConfig {
     lines: number;
@@ -10,17 +14,21 @@ interface ThresholdConfig {
     extensions: string[];
 }
 
-export class LiveDiffTracker {
+export class LiveDiffTracker extends EventEmitter {
     private changeBuffers = new Map<string, vscode.TextDocumentContentChangeEvent[]>();
-    private threshold: ThresholdConfig = { lines: 50, symbols: 5, extensions: ['php', 'js', 'ts', 'tsx', 'jsx'] };
+    private threshold: ThresholdConfig = { lines: 50, symbols: 5, extensions: getSupportedExtensions() }; // Will be updated in updateConfig()
     private disposables: vscode.Disposable[] = [];
     private watcher: vscode.FileSystemWatcher | undefined;
     private git: GitOperations;
+    private symbolExtractor: SymbolExtractor;
+    private symbolCache = new Map<string, SymbolInfo[]>();
     private autoRunAfterEdits: number = 50;
     private editCounts = new Map<string, number>();
 
     constructor() {
+        super();
         this.git = new GitOperations();
+        this.symbolExtractor = new SymbolExtractor(this.git);
 
         this.disposables.push(
             vscode.workspace.onDidChangeTextDocument(this.handleChange, this),
@@ -31,7 +39,7 @@ export class LiveDiffTracker {
         this.setupWatcher();
 
         vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('commitTracker')) {
+            if (e.affectsConfiguration('git-context.live')) {
                 this.updateConfig();
                 this.setupWatcher();
             }
@@ -39,16 +47,25 @@ export class LiveDiffTracker {
     }
 
     private updateConfig() {
-        const config = vscode.workspace.getConfiguration('commitTracker');
-        const liveConfig = config.get<{ thresholds: ThresholdConfig; autoRunAfterEdits: number }>('live') || {
-            thresholds: { lines: 50, symbols: 5, extensions: ['php', 'js', 'ts', 'tsx', 'jsx'] },
-            autoRunAfterEdits: 50
-        };
+        const config = vscode.workspace.getConfiguration('git-context.live');
+        // VS Code automatically uses package.json defaults
+        const enabled = config.get<boolean>('enabled');
+        if (!enabled) {
+            return;
+        }
+
+        // Get nested threshold values - VS Code handles nested keys with dot notation
+        const linesThreshold = config.get<number>('thresholds.lines');
+        const symbolsThreshold = config.get<number>('thresholds.symbols');
+        const extensions = config.get<string[]>('extensions') || getSupportedExtensions();
+        const autoRunAfterEdits = config.get<number>('autoRunAfterEdits');
+
         this.threshold = {
-            ...liveConfig.thresholds,
-            extensions: liveConfig.thresholds.extensions || ['php', 'js', 'ts', 'tsx', 'jsx']
+            lines: linesThreshold ?? 50, // Fallback if somehow not set
+            symbols: symbolsThreshold ?? 5, // Fallback if somehow not set
+            extensions: extensions.length > 0 ? extensions : getSupportedExtensions()
         };
-        this.autoRunAfterEdits = liveConfig.autoRunAfterEdits;
+        this.autoRunAfterEdits = autoRunAfterEdits ?? 50; // Fallback if somehow not set
     }
 
     private setupWatcher() {
@@ -104,6 +121,33 @@ export class LiveDiffTracker {
         }
     }
 
+    private async parseLiveDiff(doc: vscode.TextDocument): Promise<{
+        symbols: SymbolInfo[];
+        delta: {
+            added: SymbolInfo[];
+            removed: SymbolInfo[];
+            modified: import('./types').SymbolDelta[];
+        };
+    }> {
+        const uri = doc.uri.toString();
+        const prevSymbols = this.symbolCache.get(uri) || [];
+        const buffer = this.changeBuffers.get(uri) || [];
+        const content = doc.getText();
+        const path = doc.uri.fsPath;
+
+        const result = await this.symbolExtractor.extractIncremental(
+            prevSymbols,
+            buffer,
+            content,
+            path
+        );
+
+        // Cache new symbols for next check
+        this.symbolCache.set(uri, result.symbols);
+
+        return result;
+    }
+
     private debouncedCheck = debounce(async (uri: string) => {
         const buffer = this.changeBuffers.get(uri);
         if (!buffer || buffer.length === 0) return;
@@ -111,20 +155,58 @@ export class LiveDiffTracker {
         const editCount = this.editCounts.get(uri) || 0;
         const linesChanged = buffer.reduce((sum, c) => sum + (c.text.split('\n').length - 1), 0);
 
-        // Check thresholds
-        if (linesChanged < this.threshold.lines && editCount < this.autoRunAfterEdits) {
-            return;
-        }
-
         const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri);
         if (!doc) return;
 
-        logDebug(`[LiveTracker] Threshold reached for ${uri} (lines: ${linesChanged}, edits: ${editCount})`);
+        // Parse symbols and check symbol threshold
+        let symbolDelta: { added: SymbolInfo[]; removed: SymbolInfo[]; modified: import('./types').SymbolDelta[] } = { 
+            added: [], 
+            removed: [], 
+            modified: [] 
+        };
+        let symbolCount = 0;
+        try {
+            const parseResult = await this.parseLiveDiff(doc);
+            symbolDelta = parseResult.delta;
+            symbolCount = symbolDelta.added.length + symbolDelta.modified.length;
+        } catch (error) {
+            logError('[LiveTracker] Failed to parse symbols', error);
+            // Continue with line-based threshold if symbol parsing fails
+        }
+
+        // Check thresholds (lines OR symbols OR edit count)
+        const linesThresholdMet = linesChanged >= this.threshold.lines;
+        const symbolsThresholdMet = symbolCount >= this.threshold.symbols;
+        const editsThresholdMet = editCount >= this.autoRunAfterEdits;
+
+        if (!linesThresholdMet && !symbolsThresholdMet && !editsThresholdMet) {
+            // Emit changes updated event even if threshold not met
+            this.emit('changesUpdated', {
+                uri,
+                pendingChanges: this.hasPendingChanges(),
+                linesChanged,
+                symbolCount,
+                editCount
+            });
+            return;
+        }
+
+        logDebug(`[LiveTracker] Threshold reached for ${uri} (lines: ${linesChanged}, symbols: ${symbolCount}, edits: ${editCount})`);
 
         const relativePath = vscode.workspace.asRelativePath(doc.uri, false);
         const stagedFiles = await this.git.getStagedFiles();
         const isStaged = stagedFiles.some(f => f.path === relativePath);
         const mode = isStaged ? 'staged' : 'unstaged';
+
+        // Emit changes updated event
+        this.emit('changesUpdated', {
+            uri,
+            pendingChanges: this.hasPendingChanges(),
+            linesChanged,
+            symbolCount,
+            editCount,
+            thresholdReached: true
+        });
 
         if (this.autoRunAfterEdits > 0) {
             logInfo(`Live threshold reached for ${mode} changes, triggering analysis`);
@@ -148,14 +230,17 @@ export class LiveDiffTracker {
     }
 
     private clearBuffer(uri: vscode.Uri) {
-        this.changeBuffers.delete(uri.toString());
-        this.editCounts.delete(uri.toString());
-        logDebug(`[LiveTracker] Cleared buffer for ${uri.toString()}`);
+        const uriString = uri.toString();
+        this.changeBuffers.delete(uriString);
+        this.editCounts.delete(uriString);
+        this.symbolCache.delete(uriString);
+        logDebug(`[LiveTracker] Cleared buffer for ${uriString}`);
     }
 
     public clearAllBuffers() {
         this.changeBuffers.clear();
         this.editCounts.clear();
+        this.symbolCache.clear();
     }
 
     public hasPendingChanges(): { files: number; totalEdits: number } {
@@ -177,8 +262,10 @@ export class LiveDiffTracker {
     }
 
     public dispose() {
+        this.removeAllListeners();
         this.disposables.forEach(d => d.dispose());
         this.changeBuffers.clear();
         this.editCounts.clear();
+        this.symbolCache.clear();
     }
 }

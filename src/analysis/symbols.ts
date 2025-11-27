@@ -1,5 +1,7 @@
+import * as vscode from 'vscode';
 import { SymbolInfo, SymbolDelta, SymbolChangeType, FileChange } from '../types';
-import { getTreeSitterParser, detectLanguage } from './tree-sitter';
+import { getTreeSitterParser } from './tree-sitter';
+import { detectLanguage, getTestFilePattern } from '../utils/config';
 import { GitOperations } from './git';
 import { SemanticChangeDetector } from './semanticChanges';
 
@@ -271,6 +273,39 @@ export class SymbolExtractor {
   /**
    * Extract symbols from file content
    */
+  /**
+   * Extract symbols incrementally from live changes
+   * Compares previous symbols with current content to determine changes
+   */
+  public async extractIncremental(
+    prevSymbols: SymbolInfo[],
+    changes: vscode.TextDocumentContentChangeEvent[],
+    content: string,
+    path: string
+  ): Promise<{
+    symbols: SymbolInfo[];
+    delta: {
+      added: SymbolInfo[];
+      removed: SymbolInfo[];
+      modified: SymbolDelta[];
+    };
+  }> {
+    // Parse current content to get new symbols
+    const newSymbols = await this.extractSymbolsFromContent(content, path);
+    
+    // Use existing compareSymbolSets for change classification
+    const delta = this.compareSymbolSets(prevSymbols, newSymbols, path);
+    
+    return {
+      symbols: newSymbols,
+      delta: {
+        added: delta.added,
+        removed: delta.removed,
+        modified: delta.modified
+      }
+    };
+  }
+
   public async extractSymbolsFromContent(content: string, filePath: string): Promise<SymbolInfo[]> {
     const language = detectLanguage(filePath);
     if (!language) {
@@ -420,9 +455,7 @@ export class SymbolExtractor {
       /build/,
       /vendor/,
       /\.min\./,
-      /test.*\.(js|ts|php)$/,
-      /spec.*\.(js|ts|php)$/,
-      /\.(test|spec)\.(js|ts|php)$/
+      getTestFilePattern()
     ];
 
     return !skipPatterns.some(pattern => pattern.test(filePath));

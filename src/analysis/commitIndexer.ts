@@ -9,7 +9,7 @@ import { Database } from 'sql.js';
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { logDebug, logInfo } from '../utils/logger';
 import pLimit from 'p-limit';
-import { getExtensionConfig } from '../utils/config';
+import { getExtensionConfig, getSupportedExtensions } from '../utils/config';
 import * as pathModule from 'path';
 
 export interface CommitFacts {
@@ -163,8 +163,9 @@ export class CommitIndexer {
 
     // Process each changed file
     const config = getExtensionConfig();
-    const allowedExtensions = new Set(config.allowedExtensions || ['php', 'js', 'ts', 'tsx', 'jsx']);
-    const maxFileSize = config.maxFileSize || 100 * 1024;
+    const allowedExtensions = new Set(config.allowedExtensions || getSupportedExtensions());
+    // maxFileSize should always have a default from package.json via getExtensionConfig
+    const maxFileSize = config.maxFileSize ?? 102400;
 
     for (const file of files) {
       const { path, status } = file;

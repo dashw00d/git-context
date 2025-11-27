@@ -1,0 +1,366 @@
+{
+  "stepId": "index_commits",
+  "data": [
+    {
+      "sha": "eb64ffb08b93451473f3c9db471d80d3a3606195",
+      "symbolsAdded": 102,
+      "symbolsModified": 0,
+      "symbolsRemoved": 0,
+      "edgesAdded": 474,
+      "edgesRemoved": 0,
+      "risks": [
+        "schema-migration",
+        "refactor",
+        "security",
+        "auth",
+        "payment"
+      ],
+      "structuralChangeScore": 0,
+      "filesChanged": 74,
+      "blastRadius": 0,
+      "hotspots": [
+        {
+          "symbolId": "benchmarks/mocks/fixtures/difftastic.ts:const_difftasticFixtures",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/fixtures/movedBlocks.ts:const_movedBlockFixtures",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/framework/testPipelineState.ts:method_fromFixture",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/framework/testPipelineState.ts:const_state",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/framework/testPipelineState.ts:method_toPipelineState",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/framework/testPipelineState.ts:method_markSuiteCompleted",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/framework/testPipelineState.ts:method_recordError",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/framework/testPipelineState.ts:method_getSummary",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/framework/testPipelineState.ts:const_parts",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/metrics/bundleFactsAssembly.test.ts:const_bundleFactsAssemblyTests",
+          "impactScore": 0,
+          "changeType": "unknown"
+        }
+      ]
+    },
+    {
+      "sha": "be9ff2852aa7163d357434506dfc7ad284e9dac2",
+      "symbolsAdded": 429,
+      "symbolsModified": 0,
+      "symbolsRemoved": 0,
+      "edgesAdded": 2252,
+      "edgesRemoved": 0,
+      "risks": [
+        "schema-migration",
+        "refactor",
+        "security",
+        "auth",
+        "payment"
+      ],
+      "structuralChangeScore": 0,
+      "filesChanged": 55,
+      "blastRadius": 0,
+      "hotspots": [
+        {
+          "symbolId": "benchmarks/mocks/dataFactory.ts:method_createCommit",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/dataFactory.ts:method_createSymbol",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/dataFactory.ts:method_createEdge",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/dataFactory.ts:method_createFileChange",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/dataFactory.ts:method_createWorkspace",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/dataFactory.ts:method_createExpectedInsights",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/dataFactory.ts:method_createScenario",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/fixtures/edges.ts:method_calls",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/fixtures/edges.ts:method_implements",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/mocks/fixtures/edges.ts:method_inherits",
+          "impactScore": 0,
+          "changeType": "unknown"
+        }
+      ]
+    },
+    {
+      "sha": "0676e247877b7f18bde5cefd412acdb738dd46a0",
+      "symbolsAdded": 0,
+      "symbolsModified": 0,
+      "symbolsRemoved": 0,
+      "edgesAdded": 0,
+      "edgesRemoved": 0,
+      "risks": [],
+      "structuralChangeScore": 0,
+      "filesChanged": 1,
+      "blastRadius": 0,
+      "hotspots": []
+    },
+    {
+      "sha": "459804923ec8f55547c2df43e2d163d6c1dee2db",
+      "symbolsAdded": 530,
+      "symbolsModified": 0,
+      "symbolsRemoved": 0,
+      "edgesAdded": 2628,
+      "edgesRemoved": 0,
+      "risks": [
+        "schema-migration",
+        "refactor",
+        "security",
+        "performance",
+        "auth",
+        "payment"
+      ],
+      "structuralChangeScore": 0,
+      "filesChanged": 49,
+      "blastRadius": 0,
+      "hotspots": [
+        {
+          "symbolId": "benchmarks/pipeline_benchmark.ts:const_BENCHMARK_CONFIG",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/pipeline_benchmark.ts:method_start",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/pipeline_benchmark.ts:method_end",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/pipeline_benchmark.ts:const_endTime",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/pipeline_benchmark.ts:const_endMemory",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/pipeline_benchmark.ts:function_prepareTestData",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/pipeline_benchmark.ts:const_git",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/pipeline_benchmark.ts:const_recentCommits",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/pipeline_benchmark.ts:function_benchmarkCommitIndexing",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "benchmarks/pipeline_benchmark.ts:const_monitor",
+          "impactScore": 0,
+          "changeType": "unknown"
+        }
+      ]
+    },
+    {
+      "sha": "b9c38691d1362aaae7509221ee2a647ddf879f33",
+      "symbolsAdded": 105,
+      "symbolsModified": 0,
+      "symbolsRemoved": 0,
+      "edgesAdded": 892,
+      "edgesRemoved": 0,
+      "risks": [
+        "schema-migration",
+        "refactor",
+        "security",
+        "payment"
+      ],
+      "structuralChangeScore": 0,
+      "filesChanged": 22,
+      "blastRadius": 0,
+      "hotspots": [
+        {
+          "symbolId": "test_pipeline_integration.ts:const_logFilePath",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "test_pipeline_integration.ts:function_initLogFile",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "test_pipeline_integration.ts:function_writeToLog",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "test_pipeline_integration.ts:function_closeLogFile",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "test_pipeline_integration.ts:const_originalConsoleLog",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "test_pipeline_integration.ts:const_originalConsoleWarn",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "test_pipeline_integration.ts:const_originalConsoleError",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "test_pipeline_integration.ts:const_message",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "test_pipeline_integration.ts:const_logCounts",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "test_pipeline_integration.ts:function_logOnce",
+          "impactScore": 0,
+          "changeType": "unknown"
+        }
+      ]
+    },
+    {
+      "sha": "7fae5f76c8747ec54b3105f58a1a51664f1b1abc",
+      "symbolsAdded": 27,
+      "symbolsModified": 0,
+      "symbolsRemoved": 0,
+      "edgesAdded": 135,
+      "edgesRemoved": 0,
+      "risks": [
+        "schema-migration",
+        "refactor"
+      ],
+      "structuralChangeScore": 0,
+      "filesChanged": 34,
+      "blastRadius": 0,
+      "hotspots": [
+        {
+          "symbolId": "src/storage/branchManager.ts:method_constructor",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "src/storage/branchManager.ts:method_recordCommit",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "src/storage/branchManager.ts:const_stmt",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "src/storage/branchManager.ts:method_updateBranchHead",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "src/storage/branchManager.ts:method_getCommitsOnBranch",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "src/storage/branchManager.ts:const_rows",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "src/storage/branchManager.ts:method_getCommitsNotOnBranch",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "src/storage/branchManager.ts:method_getTrackedBranches",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "src/utils/workspace.ts:function_makeWorkspaceSha",
+          "impactScore": 0,
+          "changeType": "unknown"
+        },
+        {
+          "symbolId": "src/utils/workspace.ts:const_normalizedBranch",
+          "impactScore": 0,
+          "changeType": "unknown"
+        }
+      ]
+    }
+  ],
+  "hash": "4a1dc61659d5f4cd64f214c043fc1ea0bbbe2688"
+}

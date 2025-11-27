@@ -204,8 +204,17 @@ export interface ExtensionConfig {
   difftasticPath?: string;
   defaultCommitCount: number;
   tokensPerStep?: { [key: string]: number };
-  customPrompts?: { [key: string]: string };
-  customIgnorePaths?: string[];
+  customPrompts?: {
+    [key: string]: string;
+  } | null;
+  customIgnorePaths?: string[] | null;
+  rerankingWeights?: {
+    drift: number;
+    hotspot: number;
+    theme: number;
+  };
+
+  // Qdrant configUrl?: string;
   qdrantUrl?: string;
   qdrantApiKey?: string;
   embeddingProvider?: string;

@@ -163,7 +163,7 @@ To add more languages: Add to `src/analysis/tree-sitter.ts` and ensure WASM is a
 
 When running tests or using the CLI outside VS Code, create `.git-context.config.json` in the project root:
 ```bash
-cp .git-context.config.example.json .git-context.config.json
+# Create .git-context.config.json with your settings (see CONFIG.md for format)
 # Edit with your API keys and paths
 ```
 

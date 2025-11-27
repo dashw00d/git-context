@@ -48,7 +48,6 @@ async function computeBlastRadiusNeighbors(
     const symbolsStmt = db.prepare(`
       SELECT symbol_id FROM symbols
       WHERE path LIKE ? AND change_type IN ('added', 'modified', 'removed')
-      ORDER BY date DESC
       LIMIT 50  -- Limit per file to avoid explosion
     `);
     const symbols = symbolsStmt.all(`${filePath}%`) as any[];
@@ -61,7 +60,7 @@ async function computeBlastRadiusNeighbors(
   }
 
   // Build full repo adjacency map from all edges (not just selected commits)
-  const adjacencyMap = new Map<string, Array<{neighborId: string, confidence: number}>>();
+  const adjacencyMap = new Map<string, Array<{ neighborId: string, confidence: number }>>();
   const edgesStmt = db.prepare(`
     SELECT from_symbol_id, to_symbol_id, confidence
     FROM edges
@@ -90,19 +89,19 @@ async function computeBlastRadiusNeighbors(
   }
 
   // Depth-limited BFS from changed symbols (depth 2-3)
-  const queue: Array<{symbolId: string, depth: number}> = Array.from(changedSymbols).map(id => ({symbolId: id, depth: 0}));
+  const queue: Array<{ symbolId: string, depth: number }> = Array.from(changedSymbols).map(id => ({ symbolId: id, depth: 0 }));
   const visited = new Set<string>(changedSymbols);
   const maxDepth = 3;
   const maxTotalFiles = Math.max(maxNeighbors * 2, 50); // Allow more files for BFS exploration
   const neighborFiles = new Map<string, number>();
 
   while (queue.length > 0 && neighborFiles.size < maxTotalFiles) {
-    const {symbolId, depth} = queue.shift()!;
+    const { symbolId, depth } = queue.shift()!;
     if (depth > maxDepth || visited.has(symbolId)) continue;
     visited.add(symbolId);
 
     const neighbors = adjacencyMap.get(symbolId) || [];
-    for (const {neighborId, confidence} of neighbors) {
+    for (const { neighborId, confidence } of neighbors) {
       if (changedSymbols.has(neighborId)) continue; // Skip changed symbols
 
       const filePath = extractFileFromSymbolId(neighborId);
@@ -114,7 +113,7 @@ async function computeBlastRadiusNeighbors(
 
         // Continue BFS to next depth
         if (depth < maxDepth) {
-          queue.push({symbolId: neighborId, depth: depth + 1});
+          queue.push({ symbolId: neighborId, depth: depth + 1 });
         }
       }
     }

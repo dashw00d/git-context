@@ -101,6 +101,32 @@ Note: No API key needed for Ollama - it runs locally!
 3. Start Ollama: `ollama serve`
 4. Configure the extension to use `http://localhost:11434/v1` as the API endpoint
 
+#### Grok-4.1-fast-reasoning via MCP (Cursor/Kilo Code)
+
+This extension includes a local proxy server that enables full native xAI tools (code_execution, web_search, X/Twitter tools, etc.) for Grok-4.1-fast-reasoning in Cursor and Kilo Code.
+
+**Quick Start:**
+
+1. **Get XAI API key** from [console.x.ai](https://console.x.ai)
+2. **Create `.env` file** in project root:
+   ```bash
+   XAI_API_KEY=your_key_from_console.x.ai
+   ```
+3. **The proxy server starts automatically** when the extension loads in Cursor/VS Code
+   - Or start manually: `npm run proxy:xai`
+4. **Configure Cursor or Kilo Code**:
+   - **Cursor**: See [Cursor MCP Setup](docs/cursor-mcp-setup.md)
+   - **Kilo Code**: See [Kilo Code MCP Setup](docs/kilo-mcp-setup.md)
+
+**Benefits:**
+- Full native xAI tools (code_execution, web_search, browse_page, X tools)
+- Aggressive parallel tool calling
+- Real-time X/Twitter search
+- Server-side code execution sandbox
+- Works seamlessly with Cursor/Kilo's own tools
+
+**Alternative:** Direct OpenRouter integration (no proxy needed, free tier available) - see detailed setup guides above.
+
 ## Usage
 
 ### VS Code Extension

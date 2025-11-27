@@ -4,6 +4,7 @@ import { SymbolExtractor } from './symbols';
 import { DependencyExtractor } from './dependencies';
 import { assignDNAIds, computeBodyHash } from './symbolDna';
 import { logDebug } from '../utils/logger';
+import { detectLanguage } from '../utils/config';
 import NodeCache from 'node-cache';
 
 export interface FileSnapshot {
@@ -151,19 +152,7 @@ export class SnapshotManager {
   }
 
   private detectLanguage(filePath: string): string {
-    const ext = filePath.split('.').pop()?.toLowerCase();
-    switch (ext) {
-      case 'ts':
-      case 'tsx':
-        return 'typescript';
-      case 'js':
-      case 'jsx':
-        return 'javascript';
-      case 'php':
-        return 'php';
-      default:
-        return 'unknown';
-    }
+    return detectLanguage(filePath) || 'unknown';
   }
 
   private computeShapeHash(symbols: SymbolInfo[]): string {

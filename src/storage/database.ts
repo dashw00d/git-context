@@ -65,7 +65,13 @@ export class DatabaseManager {
   private dbPath: string;
   private transactionDepth = 0;
 
-  constructor() {
+  constructor(customPath?: string) {
+    if (customPath) {
+      this.dbPath = customPath;
+      console.log(`DatabaseManager initialized with custom path: ${this.dbPath}`);
+      return;
+    }
+
     const gitRoot = getGitRoot();
     if (!gitRoot) {
       throw new Error('Not in a git repository');
@@ -348,7 +354,15 @@ export class DatabaseManager {
         this.db.exec('COMMIT');
         console.log(`[DB-INIT] Migrated to v${CURRENT_VERSION}`);
       } catch (error) {
-        this.db.exec('ROLLBACK');
+        try {
+          this.db.exec('ROLLBACK');
+        } catch (rollbackError: any) {
+          // Ignore "no transaction is active" error, as it might have been the cause of the original error
+          // or the transaction might have never started
+          if (!rollbackError.message?.includes('no transaction is active')) {
+            console.error('[DB-INIT] Rollback failed:', rollbackError);
+          }
+        }
         console.error('[DB-INIT] Migration failed, rolled back:', error);
         // Don't throw - allow graceful degradation
       }
@@ -374,7 +388,7 @@ export class DatabaseManager {
 
   public auditSchemaGaps(): string[] {
     if (!this.db) return [];
-    
+
     const expected: Record<string, string[]> = {
       file_snapshots: ['body_hash'],
       commits_analysis: ['status', 'structural_change_score', 'files_changed', 'hotspots_json'],
@@ -392,7 +406,7 @@ export class DatabaseManager {
 
         const existingCols = info[0].values.map((row: any) => row[1] as string);
         const missing = cols.filter(c => !existingCols.includes(c));
-        
+
         if (missing.length > 0) {
           gaps.push(`${table} missing: ${missing.join(', ')}`);
         }

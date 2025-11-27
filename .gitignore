@@ -7,3 +7,4 @@
 /.cursor.git-context.config.json
 /archive
 /resources
+.env

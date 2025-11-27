@@ -50,6 +50,9 @@ export interface RefactorBundleFacts {
         confidence: number;
       }>;
     };
+    unresolvedCallers?: {
+      total: number;
+    };
   };
   evidence: Record<string, any>;
 }
@@ -64,4 +67,3 @@ export interface RefactorPattern {
   bundleShas: string[]; // Which commit bundles discovered this pattern
   refactorType?: string; // auth, api, migration, etc. (extracted from context)
 }
-

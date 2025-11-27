@@ -5,8 +5,9 @@ This extension supports multiple ways to configure settings, with the following 
 ## Configuration Priority
 
 1. **Local Config File** (`.git-context.config.json`) - Highest priority
-2. **VS Code Settings** - When running as extension
-3. **Environment Variables** - Fallback
+2. **VS Code Settings** - When running as extension (with package.json defaults)
+3. **Environment Variables** - Fallback for CLI/test mode
+4. **Package.json Defaults** - Final fallback (defined in `package.json`)
 
 ## Local Config File
 
@@ -15,14 +16,17 @@ Create a `.git-context.config.json` file in your project root with your settings
 ```json
 {
   "openRouterApiKey": "your-api-key-here",
-  "openRouterModel": "anthropic/claude-3-haiku:beta",
+  "openRouterModel": "x-ai/grok-4.1-fast:free",
   "apiEndpoint": "https://openrouter.ai/api/v1",
-  "difftasticPath": "/home/ryan/bin/difftastic",
+  "difftasticPath": "/path/to/difftastic",
   "defaultCommitCount": 5,
   "qdrantUrl": "",
   "qdrantApiKey": "",
-  "embeddingProvider": "",
-  "embeddingModel": "text-embedding-3-small"
+  "embeddingProvider": "https://openrouter.ai/api/v1",
+  "embeddingModel": "openai/text-embedding-3-small",
+  "allowedExtensions": ["php", "js", "ts", "tsx", "jsx"],
+  "maxFileSize": 102400,
+  "perProjectQdrantCollections": false
 }
 ```
 
@@ -34,28 +38,27 @@ Create a `.git-context.config.json` file in your project root with your settings
 
 ## Available Settings
 
-| Setting | Type | Description | Default |
-|---------|------|-------------|---------|
-| `openRouterApiKey` | string | OpenRouter API key for LLM analysis | - |
-| `openRouterModel` | string | OpenRouter model to use | `anthropic/claude-3-haiku:beta` |
-| `apiEndpoint` | string | API endpoint for LLM provider | `https://openrouter.ai/api/v1` |
-| `difftasticPath` | string | Path to difftastic binary | Auto-detected |
-| `defaultCommitCount` | number | Default number of commits to analyze | `5` |
-| `qdrantUrl` | string | Qdrant vector database URL | - |
-| `qdrantApiKey` | string | Qdrant API key | - |
-| `embeddingProvider` | string | Embedding provider endpoint | Uses LLM provider |
-| `embeddingModel` | string | Embedding model to use | `text-embedding-3-small` |
-| `tokensPerStep` | object | Token limits per analysis step | - |
-| `customPrompts` | object | Custom prompts for LLM analysis | - |
-| `customIgnorePaths` | array | Custom paths to ignore during analysis | - |
+All settings and their defaults are defined in `package.json`. See VS Code Settings UI or check `package.json` for the complete list with defaults.
+
+Key settings:
+- `openRouterApiKey` - OpenRouter API key (required)
+- `openRouterModel` - Model to use (default: `x-ai/grok-4.1-fast:free`)
+- `apiEndpoint` - API endpoint (default: `https://openrouter.ai/api/v1`)
+- `defaultCommitCount` - Default commits to analyze (default: `5`)
+- `allowedExtensions` - File extensions to analyze (default: `["php", "js", "ts", "tsx", "jsx"]`)
+- `maxFileSize` - Max file size in bytes (default: `102400` = 100KB)
+- `live.*` - Live tracking configuration (see package.json for defaults)
 
 ## For Testing
 
 When running tests, create `.git-context.config.json` in the project root:
 
 ```bash
-cp .git-context.config.example.json .git-context.config.json
-# Edit .git-context.config.json with your settings
+# Create .git-context.config.json with your settings
+{
+  "openRouterApiKey": "your-key",
+  "openRouterModel": "x-ai/grok-4.1-fast:free"
+}
 ```
 
 The test scripts will automatically use this config.

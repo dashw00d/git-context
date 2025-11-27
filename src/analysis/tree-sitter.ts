@@ -1,27 +1,10 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { SymbolInfo } from '../types';
+import { detectLanguage, getSupportedLanguages, LANGUAGES } from '../utils/config';
 
 // Use require to avoid type issues with web-tree-sitter
 const { Parser, Language } = require('web-tree-sitter');
-
-// Language detection based on file extension
-export function detectLanguage(filePath: string): string | null {
-  const ext = filePath.split('.').pop()?.toLowerCase();
-
-  switch (ext) {
-    case 'php':
-      return 'php';
-    case 'ts':
-    case 'tsx':
-      return 'typescript';
-    case 'js':
-    case 'jsx':
-      return 'javascript';
-    default:
-      return null;
-  }
-}
 
 export class TreeSitterParser {
   private parsers: Map<string, any> = new Map();
@@ -33,35 +16,46 @@ export class TreeSitterParser {
     try {
       await Parser.init();
 
-      // Load languages
-      const languages = ['typescript', 'javascript', 'php'];
+      // Load configured languages
+      const languages = getSupportedLanguages();
+      const failed: string[] = [];
 
       for (const lang of languages) {
-        // Look for WASM in the out directory (where it's copied/downloaded to)
-        const wasmPath = path.join(__dirname, '..', '..', 'out', `tree-sitter-${lang}.wasm`);
-        if (fs.existsSync(wasmPath)) {
-          const language = await Language.load(wasmPath);
-          const parser = new Parser();
-          parser.setLanguage(language);
-          this.parsers.set(lang, parser);
-          console.log(`✓ Loaded tree-sitter parser for ${lang}`);
-        } else {
-          // Fallback to checking root if not in out yet (dev mode)
-          const rootWasmPath = path.join(__dirname, '..', '..', `tree-sitter-${lang}.wasm`);
-          if (fs.existsSync(rootWasmPath)) {
-            const language = await Language.load(rootWasmPath);
+        try {
+          // Look for WASM in the out directory (where it's copied/downloaded to)
+          const wasmPath = path.join(__dirname, '..', '..', 'out', `tree-sitter-${lang}.wasm`);
+          if (fs.existsSync(wasmPath)) {
+            const language = await Language.load(wasmPath);
             const parser = new Parser();
             parser.setLanguage(language);
             this.parsers.set(lang, parser);
-            console.log(`✓ Loaded tree-sitter parser for ${lang} (dev mode)`);
+            console.log(`✓ Loaded tree-sitter parser for ${lang}`);
           } else {
-            console.warn(`✗ Language WASM not found for ${lang}: ${wasmPath}`);
+            // Fallback to checking root if not in out yet (dev mode)
+            const rootWasmPath = path.join(__dirname, '..', '..', `tree-sitter-${lang}.wasm`);
+            if (fs.existsSync(rootWasmPath)) {
+              const language = await Language.load(rootWasmPath);
+              const parser = new Parser();
+              parser.setLanguage(language);
+              this.parsers.set(lang, parser);
+              console.log(`✓ Loaded tree-sitter parser for ${lang} (dev mode)`);
+            } else {
+              failed.push(lang);
+              console.warn(`✗ Language WASM not found for ${lang}, skipping`);
+            }
           }
+        } catch (error) {
+          failed.push(lang);
+          console.error(`✗ Failed to load tree-sitter parser for ${lang}:`, error);
         }
       }
 
       this.initialized = true;
       console.log(`Tree-sitter initialized with ${this.parsers.size} parsers`);
+
+      if (failed.length > 0) {
+        console.warn(`[TreeSitter] Failed to load ${failed.length} language(s): ${failed.join(', ')}`);
+      }
     } catch (error) {
       console.error('Failed to initialize tree-sitter parsers:', error);
       // Don't throw, just log. This allows the extension to work without tree-sitter
@@ -71,11 +65,11 @@ export class TreeSitterParser {
   getParser(languageId: string): any | undefined {
     // Map VS Code language IDs to tree-sitter languages
     const map: Record<string, string> = {
-      'typescript': 'typescript',
-      'typescriptreact': 'typescript',
-      'javascript': 'javascript',
-      'javascriptreact': 'javascript',
-      'php': 'php'
+      'typescript': LANGUAGES.TYPESCRIPT,
+      'typescriptreact': LANGUAGES.TYPESCRIPT,
+      'javascript': LANGUAGES.JAVASCRIPT,
+      'javascriptreact': LANGUAGES.JAVASCRIPT,
+      'php': LANGUAGES.PHP
     };
 
     const lang = map[languageId] || languageId;
@@ -129,10 +123,10 @@ export class TreeSitterParser {
 
   private extractSymbolFromNode(node: any, filePath: string, language: string): SymbolInfo | null {
     switch (language) {
-      case 'php':
+      case LANGUAGES.PHP:
         return this.extractPHPSymbol(node, filePath);
-      case 'typescript':
-      case 'javascript':
+      case LANGUAGES.TYPESCRIPT:
+      case LANGUAGES.JAVASCRIPT:
         return this.extractJSSymbol(node, filePath, language);
       default:
         return null;

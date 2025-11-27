@@ -117,7 +117,7 @@ async function updateCommitsState(reason = 'commits:update') {
   const currentState = orchestrator.getState();
   const { getExtensionConfig } = await import('./utils/config');
   const config = getExtensionConfig();
-  const baseLimit = config.defaultCommitCount || 20;
+      const baseLimit = config.defaultCommitCount;
 
   const [commits, selection, workspaceFiles] = await Promise.all([
     commitsProvider.exportCommitsDto(baseLimit + commitsProvider.loadMoreOffset),
@@ -326,6 +326,37 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize LiveDiffTracker
     const liveTracker = new LiveDiffTracker();
+    
+    // Initialize LiveAnalysisEngine
+    const { LiveAnalysisEngine } = await import('./analysis/liveAnalysis');
+    const liveEngine = new LiveAnalysisEngine(liveTracker, orchestrator);
+    
+    // Store liveEngine reference for command access
+    (orchestrator as any).liveEngine = liveEngine;
+    
+    // Subscribe to live tracker events for state synchronization
+    liveTracker.on('changesUpdated', (data: {
+      uri: string;
+      pendingChanges: { files: number; totalEdits: number };
+      linesChanged?: number;
+      symbolCount?: number;
+      editCount?: number;
+      thresholdReached?: boolean;
+    }) => {
+      orchestrator.updateLiveState({
+        pendingChanges: data.pendingChanges.files,
+        totalEdits: data.pendingChanges.totalEdits,
+        isTracking: true
+      }, 'liveTracker:changesUpdated');
+    });
+    
+    // Cleanup event listeners on deactivation
+    context.subscriptions.push({
+      dispose: () => {
+        liveTracker.removeAllListeners('changesUpdated');
+      }
+    });
+    
     context.subscriptions.push(liveTracker);
 
     const commitWatcher = new GitCommitWatcher(async () => {
@@ -333,7 +364,6 @@ export async function activate(context: vscode.ExtensionContext) {
     });
     await commitWatcher.start();
     context.subscriptions.push(commitWatcher);
-
 
     // Initialize context keys
     await updateContextKeys();

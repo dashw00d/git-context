@@ -28,7 +28,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       });
 
       const response = await client.embeddings.create({
-        model: config.embeddingModel || 'text-embedding-3-small',
+        // embeddingModel should have default from package.json via getExtensionConfig
+        model: config.embeddingModel || 'openai/text-embedding-3-small', // Fallback to package.json default
         input: text
       });
 

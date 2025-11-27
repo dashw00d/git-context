@@ -6,8 +6,17 @@ import { logInfo, logDebug } from '../../utils/logger';
  */
 function buildDepGraph(steps: PipelineStep[]): Record<string, string[]> {
   const graph: Record<string, string[]> = {};
+  const stepIds = new Set(steps.map(s => s.id));
 
   for (const step of steps) {
+    // Validate dependencies exist
+    if (step.deps) {
+      for (const dep of step.deps) {
+        if (!stepIds.has(dep)) {
+          throw new Error(`Step '${step.id}' depends on missing step '${dep}'`);
+        }
+      }
+    }
     graph[step.id] = step.deps || [];
   }
 

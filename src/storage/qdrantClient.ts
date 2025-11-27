@@ -22,10 +22,13 @@ export class QdrantClientWrapper {
 
   private async initialize(): Promise<void> {
     const config = getExtensionConfig();
+    // qdrantUrl should have default from package.json via getExtensionConfig
     const url = config.qdrantUrl?.trim() || 'http://localhost:6333';
 
     // Get embedding dimension from model
-    this.embeddingDimension = getEmbeddingDimension(config.embeddingModel || 'text-embedding-3-small');
+    // embeddingModel should have default from package.json via getExtensionConfig
+    const model = config.embeddingModel || 'openai/text-embedding-3-small'; // Fallback to package.json default
+    this.embeddingDimension = getEmbeddingDimension(model);
 
     if (!url) {
       this.isAvailable = false;
@@ -100,12 +103,34 @@ export class QdrantClientWrapper {
           field_name: 'project_id',
           field_schema: { type: 'keyword' }
         });
-        logInfo(`[Qdrant] Indexed project_id on ${collectionName}`);
+
+        // Add indexes for new semantic memory features
+        if (collectionName.includes('commits') || collectionName.includes('symbols')) {
+          await this.client!.createPayloadIndex(collectionName, {
+            field_name: 'date',
+            field_schema: { type: 'keyword' } // ISO dates sortable as strings
+          });
+        }
+
+        if (collectionName.includes('patterns')) {
+          await this.client!.createPayloadIndex(collectionName, {
+            field_name: 'theme_id',
+            field_schema: { type: 'keyword' }
+          });
+        }
+
+        // Tags are useful everywhere
+        await this.client!.createPayloadIndex(collectionName, {
+          field_name: 'tags',
+          field_schema: { type: 'keyword' } // Array of keywords
+        });
+
+        logInfo(`[Qdrant] Indexed fields on ${collectionName}`);
       } catch (error: any) {
         // Index may already exist, ignore error if so
         const errorMsg = error?.message || String(error);
         if (!errorMsg.includes('already exists') && !errorMsg.includes('already exist')) {
-          logWarn(`[Qdrant] Failed to create project_id index on ${collectionName}: ${errorMsg}`);
+          logWarn(`[Qdrant] Failed to create indexes on ${collectionName}: ${errorMsg}`);
         }
       }
     }

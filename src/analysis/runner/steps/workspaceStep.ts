@@ -15,7 +15,12 @@ export function createWorkspaceOverlayStep(
         return;
       }
 
-      const facts = await workspaceIndexer.analyzeWorkspace('staged');
+      // Priority: unstaged -> staged (unstaged is most recent work)
+      let facts = await workspaceIndexer.analyzeWorkspace('unstaged');
+      if (!facts) {
+        facts = await workspaceIndexer.analyzeWorkspace('staged');
+      }
+
       state.workspaceFacts = facts;
     }
   };

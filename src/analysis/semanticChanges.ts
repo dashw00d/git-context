@@ -1,5 +1,5 @@
 import { SymbolInfo, SymbolDelta, ChangeType, ModReason } from '../types';
-import { detectLanguage } from './tree-sitter';
+import { detectLanguage } from '../utils/config';
 
 /**
  * Semantic change detection for enhanced LLM context

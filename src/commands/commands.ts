@@ -612,6 +612,31 @@ export async function registerCommands(
       }
     );
 
+    // Register generateLiveReport command
+    const generateLiveReportCmd = vscode.commands.registerCommand(
+      'git-context.generateLiveReport',
+      async () => {
+        try {
+          const liveEngine = (orchestrator as any).liveEngine;
+          if (!liveEngine) {
+            vscode.window.showWarningMessage('Live analysis engine not available. Please reload the window.');
+            return;
+          }
+          
+          await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Generating live analysis report...',
+            cancellable: false
+          }, async () => {
+            await liveEngine.analyze();
+          });
+        } catch (error) {
+          logError('Failed to generate live report', error);
+          vscode.window.showErrorMessage(`Failed to generate live report: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    );
+
     // Register all commands
     context.subscriptions.push(
       analyzeLastCommitsCmd,
@@ -637,7 +662,8 @@ export async function registerCommands(
       bundleCancelCmd,
       bundleExportCmd,
       scrollToReportSectionCmd,
-      openSymbolHistoryCmd
+      openSymbolHistoryCmd,
+      generateLiveReportCmd
     );
 
     logInfo('Git Context commands registered successfully');

@@ -11,5 +11,10 @@
   "embeddingModel": "text-embedding-3-small",
   "tokensPerStep": null,
   "customPrompts": null,
-  "customIgnorePaths": null
+  "customIgnorePaths": null,
+  "rerankingWeights": {
+    "drift": 1.2,
+    "hotspot": 1.3,
+    "theme": 1.1
+  }
 }

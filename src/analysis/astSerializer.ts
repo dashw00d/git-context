@@ -1,4 +1,5 @@
-import { getTreeSitterParser, detectLanguage } from './tree-sitter';
+import { getTreeSitterParser } from './tree-sitter';
+import { detectLanguage } from '../utils/config';
 
 export interface SerializedNode {
     type: string;

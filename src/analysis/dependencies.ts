@@ -1,5 +1,5 @@
 import { SymbolInfo, EdgeInfo, EdgeDelta, FileChange } from '../types';
-import { detectLanguage } from './tree-sitter';
+import { detectLanguage, isJSLanguage, isPHPLanguage } from '../utils/config';
 import { getDatabaseManager } from '../storage/database';
 import { GitOperations } from './git';
 import { getDefaultThreshold } from '../utils/edgeThresholds';
@@ -54,7 +54,7 @@ export class DependencyExtractor {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
 
-      if (language === 'php') {
+      if (isPHPLanguage(language)) {
         // PHP imports: use, require, include
         const useMatch = line.match(/^use\s+([^;]+);/);
         if (useMatch) {
@@ -81,7 +81,7 @@ export class DependencyExtractor {
         }
       }
 
-      if (language === 'javascript' || language === 'typescript') {
+      if (isJSLanguage(language)) {
         // JS/TS imports
         const importMatch = line.match(/import\s+.*?\s+from\s+['"]([^'"]+)['"]/);
         if (importMatch) {
@@ -133,7 +133,7 @@ export class DependencyExtractor {
     const symbolContent = lines.slice(startLine, endLine + 1).join('\n');
 
     // Extract calls based on language
-    if (language === 'php') {
+    if (isPHPLanguage(language)) {
       const callMatches = symbolContent.matchAll(/(\w+)\s*\(/g);
       for (const match of callMatches) {
         const calledFunction = match[1];
@@ -163,7 +163,7 @@ export class DependencyExtractor {
       }
     }
 
-    if (language === 'javascript' || language === 'typescript') {
+    if (isJSLanguage(language)) {
       // Extract function calls
       const callMatches = symbolContent.matchAll(/(\w+)\s*\(/g);
       for (const match of callMatches) {

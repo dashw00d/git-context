@@ -2,12 +2,53 @@ import { ExtensionConfig } from '../types';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import {
+  getSupportedExtensions,
+  getSupportedLanguages,
+  getTestFilePattern,
+  detectLanguage,
+  invalidateCache as invalidateSupportedLanguagesCache,
+  LANGUAGES,
+  isJSLanguage,
+  isPHPLanguage,
+  getJSLanguages
+} from './supportedLanguages';
 
 let vscode: any;
 try {
   vscode = require('vscode');
 } catch {
   // Ignore, running in CLI
+}
+
+/**
+ * Get default value from package.json configuration schema
+ * Reads package.json at runtime to avoid TypeScript rootDir issues
+ */
+let cachedPackageJson: any = null;
+function getPackageJson(): any {
+  if (!cachedPackageJson) {
+    try {
+      const packageJsonPath = path.join(__dirname, '../../package.json');
+      const content = fs.readFileSync(packageJsonPath, 'utf-8');
+      cachedPackageJson = JSON.parse(content);
+    } catch (error) {
+      console.warn('[CONFIG] Failed to load package.json:', error);
+      cachedPackageJson = {};
+    }
+  }
+  return cachedPackageJson;
+}
+
+/**
+ * Get default value from package.json configuration schema
+ * Exported for use in other modules
+ */
+export function getPackageJsonDefault(key: string): any {
+  const packageJson = getPackageJson();
+  const props = packageJson?.contributes?.configuration?.properties || {};
+  const fullKey = `git-context.${key}`;
+  return (props as Record<string, any>)[fullKey]?.default;
 }
 
 /**
@@ -39,61 +80,84 @@ function loadConfigFile(): Partial<ExtensionConfig> | null {
 }
 
 export function getExtensionConfig(): ExtensionConfig {
-  // Priority: 1. Local config file, 2. VS Code settings, 3. Environment variables
+  // Priority: 1. Local config file, 2. VS Code settings (with package.json defaults), 3. Environment variables
   const fileConfig = loadConfigFile();
 
   if (vscode) {
     const config = vscode.workspace.getConfiguration('git-context');
-    const apiEndpoint = fileConfig?.apiEndpoint || config.get('apiEndpoint', 'https://openrouter.ai/api/v1');
-    const embeddingProvider = fileConfig?.embeddingProvider || config.get('embeddingProvider', '');
+    // VS Code automatically uses package.json defaults when calling config.get() without a default parameter
+    const apiEndpoint = fileConfig?.apiEndpoint || config.get('apiEndpoint');
+    const embeddingProvider = fileConfig?.embeddingProvider || config.get('embeddingProvider') || apiEndpoint;
 
     return {
       openRouterApiKey: fileConfig?.openRouterApiKey || config.get('openRouterApiKey') || process.env.OPENROUTER_API_KEY,
-      openRouterModel: fileConfig?.openRouterModel || config.get('openRouterModel', 'anthropic/claude-3-haiku:beta'),
+      openRouterModel: fileConfig?.openRouterModel || config.get('openRouterModel'),
       apiEndpoint,
       difftasticPath: fileConfig?.difftasticPath || config.get('difftasticPath') || process.env.DIFFTASTIC_PATH,
-      defaultCommitCount: fileConfig?.defaultCommitCount || config.get('defaultCommitCount', 5),
+      defaultCommitCount: fileConfig?.defaultCommitCount || config.get('defaultCommitCount'),
       tokensPerStep: fileConfig?.tokensPerStep || config.get('tokensPerStep'),
       customPrompts: fileConfig?.customPrompts || config.get('customPrompts'),
       customIgnorePaths: fileConfig?.customIgnorePaths || config.get('customIgnorePaths'),
+      rerankingWeights: fileConfig?.rerankingWeights || config.get('rerankingWeights'),
       // Qdrant config
-      qdrantUrl: fileConfig?.qdrantUrl || config.get('qdrantUrl', ''),
-      qdrantApiKey: fileConfig?.qdrantApiKey || config.get('qdrantApiKey', ''),
+      qdrantUrl: fileConfig?.qdrantUrl || config.get('qdrantUrl'),
+      qdrantApiKey: fileConfig?.qdrantApiKey || config.get('qdrantApiKey'),
       // Embedding config
-      embeddingProvider: embeddingProvider || apiEndpoint,
-      embeddingModel: fileConfig?.embeddingModel || config.get('embeddingModel', 'text-embedding-3-small'),
-      allowedExtensions: fileConfig?.allowedExtensions || config.get('allowedExtensions', ['php', 'js', 'ts', 'tsx', 'jsx']),
-      maxFileSize: fileConfig?.maxFileSize || config.get('maxFileSize', 100 * 1024), // 100KB default
+      embeddingProvider,
+      embeddingModel: fileConfig?.embeddingModel || config.get('embeddingModel'),
+      allowedExtensions: fileConfig?.allowedExtensions || config.get('allowedExtensions'),
+      maxFileSize: fileConfig?.maxFileSize || config.get('maxFileSize'),
       // Qdrant isolation config
-      perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || config.get('perProjectQdrantCollections', false)
+      perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || config.get('perProjectQdrantCollections')
     };
   } else {
-    // CLI/Test fallback: config file > environment variables
-    const apiEndpoint = fileConfig?.apiEndpoint || process.env.API_ENDPOINT || 'https://openrouter.ai/api/v1';
-    const embeddingProvider = fileConfig?.embeddingProvider || process.env.EMBEDDING_PROVIDER || '';
+    // CLI/Test fallback: config file > environment variables > package.json defaults
+    const apiEndpoint = fileConfig?.apiEndpoint || process.env.API_ENDPOINT || getPackageJsonDefault('apiEndpoint');
+    const embeddingProvider = fileConfig?.embeddingProvider || process.env.EMBEDDING_PROVIDER || getPackageJsonDefault('embeddingProvider') || apiEndpoint;
 
     return {
-      openRouterApiKey: fileConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY,
-      openRouterModel: fileConfig?.openRouterModel || process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku:beta',
+      openRouterApiKey: fileConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY || getPackageJsonDefault('openRouterApiKey'),
+      openRouterModel: fileConfig?.openRouterModel || process.env.OPENROUTER_MODEL || getPackageJsonDefault('openRouterModel'),
       apiEndpoint,
       difftasticPath: fileConfig?.difftasticPath || process.env.DIFFTASTIC_PATH,
-      defaultCommitCount: fileConfig?.defaultCommitCount || parseInt(process.env.DEFAULT_COMMIT_COUNT || '5'),
-      tokensPerStep: fileConfig?.tokensPerStep || (process.env.TOKENS_PER_STEP ? JSON.parse(process.env.TOKENS_PER_STEP) : undefined),
-      customPrompts: fileConfig?.customPrompts || (process.env.CUSTOM_PROMPTS ? JSON.parse(process.env.CUSTOM_PROMPTS) : undefined),
-      customIgnorePaths: fileConfig?.customIgnorePaths || (process.env.CUSTOM_IGNORE_PATHS ? process.env.CUSTOM_IGNORE_PATHS.split(',') : undefined),
+      defaultCommitCount: fileConfig?.defaultCommitCount || parseInt(process.env.DEFAULT_COMMIT_COUNT || String(getPackageJsonDefault('defaultCommitCount') || '5')),
+      tokensPerStep: fileConfig?.tokensPerStep || (process.env.TOKENS_PER_STEP ? JSON.parse(process.env.TOKENS_PER_STEP) : getPackageJsonDefault('tokensPerStep')),
+      customPrompts: fileConfig?.customPrompts || (process.env.CUSTOM_PROMPTS ? JSON.parse(process.env.CUSTOM_PROMPTS) : getPackageJsonDefault('customPrompts')),
+      customIgnorePaths: fileConfig?.customIgnorePaths || (process.env.CUSTOM_IGNORE_PATHS ? process.env.CUSTOM_IGNORE_PATHS.split(',') : getPackageJsonDefault('customIgnorePaths')),
       // Qdrant config
-      qdrantUrl: fileConfig?.qdrantUrl || process.env.QDRANT_URL || '',
-      qdrantApiKey: fileConfig?.qdrantApiKey || process.env.QDRANT_API_KEY || '',
+      qdrantUrl: fileConfig?.qdrantUrl || process.env.QDRANT_URL || getPackageJsonDefault('qdrantUrl'),
+      qdrantApiKey: fileConfig?.qdrantApiKey || process.env.QDRANT_API_KEY || getPackageJsonDefault('qdrantApiKey'),
       // Embedding config
-      embeddingProvider: embeddingProvider || apiEndpoint,
-      embeddingModel: fileConfig?.embeddingModel || process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
-      allowedExtensions: fileConfig?.allowedExtensions || (process.env.ALLOWED_EXTENSIONS ? process.env.ALLOWED_EXTENSIONS.split(',') : ['php', 'js', 'ts', 'tsx', 'jsx']),
-      maxFileSize: fileConfig?.maxFileSize || (process.env.MAX_FILE_SIZE ? parseInt(process.env.MAX_FILE_SIZE) : 100 * 1024),
+      embeddingProvider,
+      embeddingModel: fileConfig?.embeddingModel || process.env.EMBEDDING_MODEL || getPackageJsonDefault('embeddingModel'),
+      allowedExtensions: fileConfig?.allowedExtensions || (process.env.ALLOWED_EXTENSIONS ? process.env.ALLOWED_EXTENSIONS.split(',') : getPackageJsonDefault('allowedExtensions')),
+      maxFileSize: fileConfig?.maxFileSize || (process.env.MAX_FILE_SIZE ? parseInt(process.env.MAX_FILE_SIZE) : getPackageJsonDefault('maxFileSize')),
       // Qdrant isolation config
-      perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || (process.env.PER_PROJECT_QDRANT_COLLECTIONS === 'true')
+      perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || (process.env.PER_PROJECT_QDRANT_COLLECTIONS === 'true' || getPackageJsonDefault('perProjectQdrantCollections'))
     };
   }
 }
+
+// Setup config change listener (VS Code only)
+if (vscode) {
+  vscode.workspace.onDidChangeConfiguration((e: any) => {
+    if (e.affectsConfiguration('git-context.allowedExtensions')) {
+      invalidateSupportedLanguagesCache();
+    }
+  });
+}
+
+// Re-export supportedLanguages functions for convenience
+export {
+  getSupportedExtensions,
+  getSupportedLanguages,
+  getTestFilePattern,
+  detectLanguage,
+  LANGUAGES,
+  isJSLanguage,
+  isPHPLanguage,
+  getJSLanguages
+};
 
 export function getWorkspaceRoot(): string | undefined {
   if (vscode) {

@@ -2,8 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-const languages = ['typescript', 'javascript', 'php'];
-const baseUrl = 'https://github.com/tree-sitter/tree-sitter-';
+const { SUPPORTED_LANGUAGES, WASM_URLS } = require('./src/utils/supportedLanguages-constants');
+const languages = SUPPORTED_LANGUAGES;
 
 const outDir = path.join(__dirname, 'out');
 if (!fs.existsSync(outDir)) {
@@ -69,17 +69,8 @@ async function downloadFile(url, dest) {
   });
 }
 
-// URLs for pre-built WASM files
-// Note: Using a CDN or direct GitHub releases is better. 
-// For now, we'll try to find a reliable source or build them.
-// Actually, web-tree-sitter usually requires generating them.
-// A common source is https://unpkg.com/tree-sitter-wasms/out/
-
-const wasmUrls = {
-  'typescript': 'https://unpkg.com/tree-sitter-wasms/out/tree-sitter-typescript.wasm',
-  'javascript': 'https://unpkg.com/tree-sitter-wasms/out/tree-sitter-javascript.wasm',
-  'php': 'https://unpkg.com/tree-sitter-wasms/out/tree-sitter-php.wasm'
-};
+// URLs for pre-built WASM files from shared constants
+const wasmUrls = WASM_URLS;
 
 async function main() {
   for (const lang of languages) {

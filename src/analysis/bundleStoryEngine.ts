@@ -130,22 +130,32 @@ export class BundleStoryEngine {
     };
 
     // Query 1: Similar commits (episodic memory)
-    const similarCommits = await client.search(commitsCollection, {
-      vector: queryEmbedding,
-      limit: 20,
-      with_payload: true,
-      score_threshold: 0.6,
-      filter: projectFilter  // ONLY CURRENT PROJECT
-    });
+    let similarCommits: any[] = [];
+    try {
+      similarCommits = await client.search(commitsCollection, {
+        vector: queryEmbedding,
+        limit: 20,
+        with_payload: true,
+        score_threshold: 0.6,
+        filter: projectFilter  // ONLY CURRENT PROJECT
+      });
+    } catch (error) {
+      logWarn(`[BundleStory] Failed to search commits: ${error}`);
+    }
 
     // Query 2: Similar symbols (fine-grained history)
-    const similarSymbols = await client.search(symbolsCollection, {
-      vector: queryEmbedding,
-      limit: 30,
-      with_payload: true,
-      score_threshold: 0.65,
-      filter: projectFilter  // ONLY CURRENT PROJECT
-    });
+    let similarSymbols: any[] = [];
+    try {
+      similarSymbols = await client.search(symbolsCollection, {
+        vector: queryEmbedding,
+        limit: 30,
+        with_payload: true,
+        score_threshold: 0.65,
+        filter: projectFilter  // ONLY CURRENT PROJECT
+      });
+    } catch (error) {
+      logWarn(`[BundleStory] Failed to search symbols: ${error}`);
+    }
 
     // Query 3: Refactors with high structural change (similar complexity)
     const refactorFilter = {
@@ -163,12 +173,17 @@ export class BundleStoryEngine {
       ]
     };
 
-    const relatedRefactors = await client.search(commitsCollection, {
-      vector: queryEmbedding,
-      limit: 10,
-      filter: refactorFilter,
-      with_payload: true
-    });
+    let relatedRefactors: any[] = [];
+    try {
+      relatedRefactors = await client.search(commitsCollection, {
+        vector: queryEmbedding,
+        limit: 10,
+        filter: refactorFilter,
+        with_payload: true
+      });
+    } catch (error) {
+      logWarn(`[BundleStory] Failed to search related refactors: ${error}`);
+    }
 
     // Build symbol evolution timelines
     const symbolEvolution = await this.buildSymbolEvolution(similarSymbols);

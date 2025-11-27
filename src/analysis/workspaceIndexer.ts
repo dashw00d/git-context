@@ -6,7 +6,7 @@ import { logDebug } from '../utils/logger';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getExtensionConfig } from '../utils/config';
+import { getExtensionConfig, getSupportedExtensions } from '../utils/config';
 
 export interface WorkspaceFacts {
   workspaceHash: string;
@@ -41,8 +41,9 @@ export class WorkspaceIndexer {
 
     // Filter files
     const config = getExtensionConfig();
-    const allowedExtensions = new Set(config.allowedExtensions || ['php', 'js', 'ts', 'tsx', 'jsx']);
-    const maxFileSize = config.maxFileSize || 100 * 1024;
+    const allowedExtensions = new Set(config.allowedExtensions || getSupportedExtensions());
+    // maxFileSize should always have a default from package.json via getExtensionConfig
+    const maxFileSize = config.maxFileSize ?? 102400;
     const gitRoot = this.git.getRoot();
 
     const filteredFiles = changedFiles.filter(file => {
