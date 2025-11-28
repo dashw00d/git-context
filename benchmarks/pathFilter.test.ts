@@ -182,23 +182,23 @@ function runTests() {
   });
 
   // Test 8: filterPath convenience wrapper
-  test('filterPath should return boolean', () => {
-    const result1 = filterPath('test.ts', createOptions());
+  test('filterPath should return boolean', async () => {
+    const result1 = await filterPath('test.ts', createOptions());
     if (typeof result1 !== 'boolean') {
       throw new Error('filterPath should return boolean');
     }
 
-    const result2 = filterPath('node_modules/test.js', createOptions());
+    const result2 = await filterPath('node_modules/test.js', createOptions());
     if (result2 !== false) {
       throw new Error('filterPath should return false for excluded paths');
     }
   });
 
   // Test 9: shouldProcessPathWithLog includes logging
-  test('shouldProcessPathWithLog should log rejections', () => {
+  test('shouldProcessPathWithLog should log rejections', async () => {
     // This test verifies the function doesn't throw
     // Actual logging is tested via integration tests
-    const result = shouldProcessPathWithLog('node_modules/test.js', createOptions(), 'TestContext');
+    const result = await shouldProcessPathWithLog('node_modules/test.js', createOptions(), 'TestContext');
     if (result.shouldProcess) {
       throw new Error('Expected excluded path to be rejected');
     }

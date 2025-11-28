@@ -295,19 +295,17 @@ export function getGitRoot(): string | undefined {
  * Get a unique project identifier for Qdrant isolation
  * Uses git remote URL if available, otherwise folder name + hash
  */
-export function getProjectId(): string | undefined {
+export async function getProjectId(): Promise<string | undefined> {
   const gitRoot = getGitRoot();
   if (!gitRoot) return undefined;
 
   try {
     // Try to get git remote URL (most unique identifier)
-    const { execSync } = require('child_process');
+    const simpleGit = require('simple-git');
+    const git = simpleGit(gitRoot);
     try {
-      const remoteUrl = execSync('git config --get remote.origin.url', {
-        cwd: gitRoot,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore']
-      }).trim();
+      const config = await git.getConfig('remote.origin.url');
+      const remoteUrl = config.value || '';
 
       if (remoteUrl) {
         // Hash the remote URL for a stable, unique ID

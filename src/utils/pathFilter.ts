@@ -34,10 +34,10 @@ const filterCache = new LRUCache<string, boolean>({
  * Centralized path filter that all code paths must use
  * Checks: extension, git ignore, custom ignore paths, file size, hardcoded exclusions
  */
-export function shouldProcessPath(
+export async function shouldProcessPath(
   filePath: string,
   options: PathFilterOptions = {}
-): PathFilterResult {
+): Promise<PathFilterResult> {
   // 0. Validate file path
   if (!filePath || typeof filePath !== 'string' || filePath.trim() === '') {
     return { shouldProcess: false, reason: 'invalid path' };
@@ -48,7 +48,7 @@ export function shouldProcessPath(
   // 1. Check hardcoded exclusions (build artifacts, node_modules)
   const config = getExtensionConfig();
   const excludedPrefixes = config.excludedPrefixes || DEFAULT_EXCLUDED_PREFIXES;
-  
+
   for (const prefix of excludedPrefixes) {
     if (normalized.startsWith(prefix) || normalized.includes('/' + prefix)) {
       return { shouldProcess: false, reason: `hardcoded exclusion: ${prefix}` };
@@ -66,15 +66,15 @@ export function shouldProcessPath(
   if (options.git) {
     const cacheKey = `${filePath}:workspace:gitignore`;
     let isIgnored: boolean;
-    
+
     const cached = filterCache.get(cacheKey);
     if (cached !== undefined) {
       isIgnored = cached;
     } else {
-      isIgnored = options.git.isIgnored(filePath);
+      isIgnored = await options.git.isIgnored(filePath);
       filterCache.set(cacheKey, isIgnored);
     }
-    
+
     if (isIgnored) {
       return { shouldProcess: false, reason: 'ignored by git' };
     }
@@ -84,21 +84,21 @@ export function shouldProcessPath(
   if (options.git && options.commitSha) {
     const cacheKey = `${filePath}:${options.commitSha}:gitignore-commit`;
     let isIgnored: boolean;
-    
+
     const cached = filterCache.get(cacheKey);
     if (cached !== undefined) {
       isIgnored = cached;
     } else {
       // Check if GitOperations has isIgnoredAtCommit method
       if (typeof (options.git as any).isIgnoredAtCommit === 'function') {
-        isIgnored = (options.git as any).isIgnoredAtCommit(options.commitSha, filePath);
+        isIgnored = await (options.git as any).isIgnoredAtCommit(options.commitSha, filePath);
       } else {
         // Fallback to current workspace ignore if method not available
-        isIgnored = options.git.isIgnored(filePath);
+        isIgnored = await options.git.isIgnored(filePath);
       }
       filterCache.set(cacheKey, isIgnored);
     }
-    
+
     if (isIgnored) {
       return { shouldProcess: false, reason: `ignored by git at commit ${options.commitSha.substring(0, 8)}` };
     }
@@ -119,12 +119,12 @@ export function shouldProcessPath(
       // For commit files, use blob size
       const cacheKey = `${filePath}:${options.commitSha}:size`;
       const cachedSize = filterCache.get(cacheKey);
-      
+
       if (cachedSize !== undefined) {
         // Cache stores boolean (true = should process), but we need actual size
         // So we'll fetch it fresh if not in cache
         try {
-          fileSize = options.git.getBlobSize(options.commitSha, filePath);
+          fileSize = await options.git.getBlobSize(options.commitSha, filePath);
           // Cache the size check result (true if under limit, false if over)
           filterCache.set(cacheKey, fileSize <= maxFileSize);
         } catch (e) {
@@ -133,7 +133,7 @@ export function shouldProcessPath(
         }
       } else {
         try {
-          fileSize = options.git.getBlobSize(options.commitSha, filePath);
+          fileSize = await options.git.getBlobSize(options.commitSha, filePath);
           filterCache.set(cacheKey, fileSize <= maxFileSize);
         } catch (e) {
           fileSize = null;
@@ -143,7 +143,7 @@ export function shouldProcessPath(
       // For workspace files, use filesystem size
       const cacheKey = `${filePath}:workspace:size`;
       const cached = filterCache.get(cacheKey);
-      
+
       if (cached !== undefined) {
         // We cached the boolean result, but need actual size
         // Fetch fresh if we need the actual value
@@ -182,19 +182,20 @@ export function shouldProcessPath(
 /**
  * Convenience wrapper that returns boolean (for filter() usage)
  */
-export function filterPath(filePath: string, options: PathFilterOptions = {}): boolean {
-  return shouldProcessPath(filePath, options).shouldProcess;
+export async function filterPath(filePath: string, options: PathFilterOptions = {}): Promise<boolean> {
+  const result = await shouldProcessPath(filePath, options);
+  return result.shouldProcess;
 }
 
 /**
  * Log filtered paths for debugging
  */
-export function shouldProcessPathWithLog(
+export async function shouldProcessPathWithLog(
   filePath: string,
   options: PathFilterOptions = {},
   context?: string  // e.g., 'CommitIndexer', 'WorkspaceIndexer'
-): PathFilterResult {
-  const result = shouldProcessPath(filePath, options);
+): Promise<PathFilterResult> {
+  const result = await shouldProcessPath(filePath, options);
   if (!result.shouldProcess && result.reason) {
     logDebug(`[${context || 'PathFilter'}] Skipping ${filePath}: ${result.reason}`);
   }

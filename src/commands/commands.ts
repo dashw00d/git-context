@@ -50,16 +50,31 @@ export async function registerCommands(
               const { getRefactorPipeline } = await import('../extension');
               const pipeline = await getRefactorPipeline();
               const git = new GitOperations();
-              const commits = git.getRecentCommits(parseInt(count));
+              const commits = await git.getRecentCommits(parseInt(count));
               const shas = commits.map(c => c.sha);
 
+              // Report progress
+              progress.report({ increment: 0, message: `Analyzing ${shas.length} commits...` });
+
+              // Check for cancellation
+              if (token.isCancellationRequested) {
+                return;
+              }
+
               // Just index commits (quick metadata load)
+              progress.report({ increment: 25, message: 'Indexing commits...' });
+              if (token.isCancellationRequested) return;
+              
               await pipeline.indexCommits(shas);
 
               // Refresh UI to show indexed commits
-              commitsProvider.refresh();
+              progress.report({ increment: 50, message: 'Refreshing UI...' });
+              if (token.isCancellationRequested) return;
+
+              await commitsProvider.refresh();
               await refreshCockpitState('command:analyzeLastCommits');
 
+              progress.report({ increment: 100, message: 'Complete' });
               vscode.window.showInformationMessage(`Indexed ${shas.length} commits`);
             } catch (error) {
               vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
@@ -91,7 +106,7 @@ export async function registerCommands(
             activeSection: 'live'
           }, 'command:analyzeStagedChanges');
 
-          commitsProvider.refresh();
+          await commitsProvider.refresh();
           await refreshCockpitState('command:analyzeStaged');
 
           vscode.window.showInformationMessage(`Analyzed ${facts.filesChanged} staged files`);
@@ -121,7 +136,7 @@ export async function registerCommands(
             activeSection: 'live'
           }, 'command:analyzeUnstagedChanges');
 
-          commitsProvider.refresh();
+          await commitsProvider.refresh();
           await refreshCockpitState('command:analyzeUnstaged');
           vscode.window.showInformationMessage(`Analyzed ${facts.filesChanged} unstaged files`);
         } catch (error) {
@@ -255,7 +270,7 @@ export async function registerCommands(
             if (!branchLoaded) {
               const { GitOperations } = await import('../analysis/git');
               const git = new GitOperations();
-              branchName = git.getCurrentBranch();
+              branchName = await git.getCurrentBranch();
               branchLoaded = true;
             }
             return branchName;
@@ -323,7 +338,7 @@ export async function registerCommands(
             let estFiles = 0;
             for (const sha of commitShas) {
               try {
-                const files = git.getFileChanges(sha);
+                const files = await git.getFileChanges(sha);
                 estFiles += files.length;
               } catch (error) {
                 // Skip on error
@@ -331,7 +346,7 @@ export async function registerCommands(
             }
             if (estFiles < 10) {
               try {
-                const headSha = git.getHeadSha();
+                const headSha = await git.getHeadSha();
                 if (!shas.includes(headSha)) {
                   logInfo(`[Auto-include] Adding HEAD (${headSha.substring(0, 8)}) to selection (${estFiles} files < 10 threshold)`);
                   shas.push(headSha);
@@ -353,7 +368,7 @@ export async function registerCommands(
             await updateContexts();
             await refreshCockpitState('command:analyze');
           } finally {
-            commitsProvider.refresh();
+            await commitsProvider.refresh();
           }
         } catch (error) {
           // Update UI state on error
@@ -444,16 +459,16 @@ export async function registerCommands(
           // Simple validation - if it looks like a SHA, use it
           if (!/^[0-9a-f]{7,40}$/i.test(shaOrRef)) {
             // Try to resolve as a ref using git command
-            const { execSync } = await import('child_process');
-            const { getGitRoot } = await import('../utils/config');
-            const gitRoot = getGitRoot();
-            if (gitRoot) {
-              try {
-                sha = execSync(`git rev-parse ${shaOrRef}`, { cwd: gitRoot, encoding: 'utf8' }).trim();
-              } catch {
-                vscode.window.showErrorMessage(`Could not resolve ref: ${shaOrRef}`);
-                return;
-              }
+            const { GitOperations } = await import('../analysis/git');
+            try {
+              const git = new GitOperations();
+              const simpleGit = require('simple-git');
+              const gitRoot = git.getRoot();
+              const gitInstance = simpleGit(gitRoot);
+              sha = await gitInstance.revparse([shaOrRef]);
+            } catch {
+              vscode.window.showErrorMessage(`Could not resolve ref: ${shaOrRef}`);
+              return;
             }
           }
           if (sha) {
@@ -495,7 +510,7 @@ export async function registerCommands(
       async () => {
         try {
           commitsProvider.loadMoreOffset += 20;
-          commitsProvider.refresh();
+          await commitsProvider.refresh();
           await refreshCockpitState();
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to load more commits: ${error}`);

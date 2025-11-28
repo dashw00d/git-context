@@ -239,6 +239,22 @@ export class AnalysisBlockUtils {
       const section = jsonPathMatch[1];
       const subpath = jsonPathMatch[2];
 
+      // Group evidence by section for better organization
+      // Sections: findings, intended, working, scope, bundle, evidence
+      const sectionGroups: Record<string, string[]> = {
+        findings: ['incompleteness', 'legacy', 'drift'],
+        intended: ['symbols', 'edges'],
+        working: ['symbols', 'edges'],
+        scope: ['files', 'paths'],
+        bundle: ['commits', 'shas'],
+        evidence: ['claims', 'actions']
+      };
+
+      // Validate section is recognized
+      if (!Object.keys(sectionGroups).includes(section)) {
+        return `Unknown section: ${section}`; // Unknown section
+      }
+
       // Clean up the subpath for display
       const parts = subpath.split('.');
       const lastPart = parts[parts.length - 1].replace(/\[\d+\]$/, '');

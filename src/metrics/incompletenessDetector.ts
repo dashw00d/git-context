@@ -1,14 +1,14 @@
 /**
  * Incompleteness Detector Adapter
  *
- * Adapter for incompleteness detection using real detectDrift() function
- * This adapter transforms test data to call the same function used by driftStep.ts
+ * Adapter for incompleteness detection using DriftDetector V2
+ * This adapter transforms test data to call the same detector used by driftStep.ts
  *
- * NOTE: Tests in benchmarks/mocks/metrics/incompleteness.test.ts call detectDrift() directly.
- * This adapter is provided for consistency and as a convenience wrapper.
+ * NOTE: Tests in benchmarks/mocks/metrics/incompleteness.test.ts may call detectDrift() directly.
+ * This adapter uses V2 detector for consistency with the pipeline.
  */
 
-import { detectDrift } from '../facts/driftDetector';
+import { DriftDetector } from '../facts/driftDetector';
 import { IntendedState } from '../facts/intendedMap';
 import { WorkingSnapshot } from '../facts/workingSnapshot';
 import { SymbolContext, EdgeContext } from '../contracts/llmContext';
@@ -24,13 +24,13 @@ export interface IncompletenessMetrics {
 }
 
 /**
- * Detect incompleteness from symbol and edge data using real detectDrift() function
- * This calls the same function used by driftStep.ts in the runner
+ * Detect incompleteness from symbol and edge data using DriftDetector V2
+ * This calls the same detector used by driftStep.ts in the runner
  */
-export function detectIncompletenessFromFacts(
+export async function detectIncompletenessFromFacts(
   symbols: Array<{ id: string; zombie?: boolean; status: string; filePath?: string; type?: string; lineNumber?: number }>,
   edges: Array<{ from: string; to: string; type?: string; confidence?: number }>
-): IncompletenessMetrics {
+): Promise<IncompletenessMetrics> {
   // Transform test data to IntendedState and WorkingSnapshot format
   const intended = new Map<string, IntendedState>();
   const workingSymbols = new Map<string, SymbolContext>();
@@ -98,8 +98,13 @@ export function detectIncompletenessFromFacts(
     analyzedPaths: new Set(Array.from(workingSymbolsByFile.keys()))
   };
 
-  // CALL REAL PIPELINE FUNCTION (same as driftStep.ts)
-  const driftFindings = detectDrift(intended, working);
+  // Use V2 detector with BaseDetector enhancements (same as driftStep.ts)
+  const driftDetector = new DriftDetector();
+  const driftFindings = await driftDetector.detect({
+    intended,
+    working,
+    commitShas: undefined // Test data doesn't have commit SHAs
+  });
 
   // Transform drift findings to test metrics
   const missingSymbols = driftFindings.missing_symbols.length;
@@ -144,7 +149,7 @@ export function detectIncompletenessFromFacts(
 
 /**
  * Test-specific helper: Detect incomplete migrations
- * NOTE: This is a simplified heuristic. Real migration detection would use detectDrift() findings.
+ * NOTE: This is a simplified heuristic. Real migration detection would use DriftDetector V2 findings.
  */
 function detectIncompleteMigrations(
   symbols: Array<{ id: string; zombie?: boolean; status: string }>,
@@ -210,7 +215,7 @@ function detectSuggestedConsolidations(symbols: Array<{ id: string; zombie?: boo
 }
 
 /**
- * DEPRECATED: This function is no longer used - detectDrift() handles divergent symbol detection.
+ * DEPRECATED: This function is no longer used - DriftDetector V2 handles divergent symbol detection.
  * Kept for reference only.
  */
 function detectDivergentSymbols(symbols: Array<{ id: string; zombie?: boolean; status: string }>): number {

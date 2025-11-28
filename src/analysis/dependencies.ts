@@ -155,11 +155,21 @@ export class DependencyExtractor {
       for (const match of methodMatches) {
         const variable = match[1];
         const method = match[2];
+        // Add edge for method call
         edges.push({
           from: symbol.id,
           to: `method_${method} `,
           type: 'calls'
         });
+        // Also track variable-to-object relationship if variable represents an object
+        // This helps track object dependencies
+        if (variable && variable.length > 0) {
+          edges.push({
+            from: symbol.id,
+            to: `variable_${variable}`,
+            type: 'uses'
+          });
+        }
       }
     }
 
@@ -183,11 +193,21 @@ export class DependencyExtractor {
       for (const match of methodMatches) {
         const object = match[1];
         const method = match[2];
+        // Add edge for method call
         edges.push({
           from: symbol.id,
           to: `method_${method} `,
           type: 'calls'
         });
+        // Also track object dependency
+        // This helps build a more complete dependency graph
+        if (object && object.length > 0 && !['this', 'self', 'super'].includes(object.toLowerCase())) {
+          edges.push({
+            from: symbol.id,
+            to: `object_${object}`,
+            type: 'uses'
+          });
+        }
       }
     }
 
@@ -307,7 +327,7 @@ export class DependencyExtractor {
 
     for (const filePath of modifiedFiles) {
       try {
-        const commitInfo = git.getCommitInfo(sha);
+        const commitInfo = await git.getCommitInfo(sha);
         if (commitInfo.parent) {
           // Determine correct path for parent commit (handle renames)
           const fileChange = files.find(f => f.path === filePath);
@@ -316,7 +336,7 @@ export class DependencyExtractor {
             : filePath;
 
           // Get previous content safely
-          const previousContent = git.safeGetFileContent(commitInfo.parent, parentPath);
+          const previousContent = await git.safeGetFileContent(commitInfo.parent, parentPath);
 
           // Get previous symbols (we need to reconstruct or fetch them)
           // For now, we'll use the previousSymbol from modified deltas

@@ -172,7 +172,7 @@ export async function computeScope(
 
   // 1. Files touched by selected commits
   for (const sha of commitShas) {
-    const commitFiles = git.getFileChanges(sha);
+    const commitFiles = await git.getFileChanges(sha);
     commitFiles.forEach(f => scope.commitFiles.add(f.path));
   }
 
@@ -222,7 +222,7 @@ export async function computeScope(
   const filteredPaths = new Set<string>();
   
   for (const p of allPaths) {
-    if (filterPath(p, { git })) {
+    if (await filterPath(p, { git })) {
       filteredPaths.add(p);
     }
   }
@@ -249,7 +249,7 @@ export async function computeScope(
       } else {
         // Specific commit SHA - check if this commit touched the file
         const git = new GitOperations();
-        const commitFiles = git.getFileChanges(version);
+        const commitFiles = await git.getFileChanges(version);
         versionFiles = new Set(commitFiles.map(f => f.path));
       }
       

@@ -24,6 +24,15 @@ export class LlmAnalyst {
     let totalTokens = 0;
     let totalCalls = 0;
 
+    // Track performance metrics
+    const performanceMetrics = {
+      startTime,
+      endTime: 0,
+      duration: 0,
+      totalTokens,
+      totalCalls
+    };
+
     // Get config for maxInputChars
     const config = getExtensionConfig();
     this.maxInputChars = (config as any).maxInputChars || 1000000;
@@ -76,6 +85,15 @@ export class LlmAnalyst {
       }
       const summary = this.generateSummary(blocks, facts);
       const markdown = this.generateMarkdown(blocks, facts);
+
+      // Calculate performance metrics
+      performanceMetrics.endTime = Date.now();
+      performanceMetrics.duration = performanceMetrics.endTime - performanceMetrics.startTime;
+      performanceMetrics.totalTokens = totalTokens;
+      performanceMetrics.totalCalls = totalCalls;
+
+      // Log performance metrics
+      console.log(`[LLMAnalyst] Analysis completed in ${performanceMetrics.duration}ms (${totalCalls} calls, ~${totalTokens} tokens)`);
 
       // Calculate health score
       const healthScore = this.calculateHealthScore(facts);

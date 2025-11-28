@@ -1,153 +1,153 @@
 # Pipeline Diagnostics Report
 
-**Run Time:** 2025-11-28T13:16:28.718Z to 2025-11-28T13:16:53.733Z (25.01s)
-**Overall Health Score:** 0.00/100
+**Run Time:** 2025-11-28T15:28:32.404Z to 2025-11-28T15:30:51.510Z (139.11s)
+**Overall Health Score:** 7.21/100
 
 ## Key Metrics
 
 - **totalCommits**: 3
-- **totalSymbols**: 2274
-- **totalEdges**: 14630
-- **totalDriftIssues**: 100
+- **totalSymbols**: 3137
+- **totalEdges**: 20365
+- **totalDriftIssues**: 167
 - **unresolvedCallers**: 0
-- **totalHotspots**: 30
-- **bundleIncompleteness**: 100
-- **patternDrift**: 8
-- **totalLegacyDead**: 20
+- **totalHotspots**: 50
+- **bundleIncompleteness**: 167
+- **patternDrift**: 9
+- **totalLegacyDead**: 21
 - **llmTotalCalls**: 6
 - **llmTotalTokens**: 0
-- **overallHealthScore**: 0.00
+- **overallHealthScore**: 7.21
 
 ## Step Details
 
-### scope
-
-- **Hash:** 21be5a4f63f640cfe86c9c10f026ba8ff0e44912
-- **Status:** no baseline
-- **Summary:** files=172, working=42, blast=0
-- **Timestamp:** 2025-11-28T13:16:29.571Z
-- **Duration:** 842ms
-- **Metrics:**
-  - commitFiles: 172
-  - workingChanged: 42
-  - blastRadiusFiles: 0
-  - allPaths: 68
-
 ### workspace_overlay
 
-- **Hash:** eb3eb91be991ed15d63a1964c7e128177b2d5e3a
+- **Hash:** 6f4c674ad8a67f658fee75b6d68e0509b421ba86
 - **Status:** no baseline
-- **Summary:** staged: files=0, symbols=0 | unstaged: files=42, symbols=380
-- **Timestamp:** 2025-11-28T13:16:37.400Z
-- **Duration:** 8680ms
+- **Summary:** staged: files=32, symbols=331 | unstaged: files=35, symbols=378
+- **Timestamp:** 2025-11-28T15:28:41.692Z
+- **Duration:** 9287ms
 - **Metrics:**
-  - stagedFiles: 0
-  - stagedSymbols: 0
-  - unstagedFiles: 42
-  - unstagedSymbols: 380
+  - stagedFiles: 32
+  - stagedSymbols: 331
+  - unstagedFiles: 35
+  - unstagedSymbols: 378
+
+### scope
+
+- **Hash:** fbea42e15b55401cff876c07fab431bf20984004
+- **Status:** no baseline
+- **Summary:** files=142, working=57, blast=0
+- **Timestamp:** 2025-11-28T15:28:41.725Z
+- **Duration:** 9320ms
+- **Metrics:**
+  - commitFiles: 142
+  - workingChanged: 57
+  - blastRadiusFiles: 0
+  - allPaths: 93
 
 ### working
 
-- **Hash:** d1e5847541791a8ed2563dc9503899b7d9c32e92
+- **Hash:** 6976bd2dcb90f93416f1405f141d519c493b4dee
 - **Status:** no baseline
-- **Summary:** symbols=2174, edges=14630, paths=68
-- **Timestamp:** 2025-11-28T13:16:41.714Z
-- **Duration:** 4314ms
+- **Summary:** symbols=2412, edges=20365, paths=90
+- **Timestamp:** 2025-11-28T15:28:42.324Z
+- **Duration:** 598ms
 - **Metrics:**
-  - symbols: 2174
-  - edges: 14630
-  - analyzedPaths: 68
+  - symbols: 2412
+  - edges: 20365
+  - analyzedPaths: 90
 
 ### index_commits
 
-- **Hash:** d1ef2761764aaf307ab3ae16ec6673da9d69078d
+- **Hash:** 9a7069cbee1201c74d21ab98074e2ae7c337c213
 - **Status:** no baseline
 - **Summary:** commits=3
-- **Timestamp:** 2025-11-28T13:16:46.963Z
-- **Duration:** 9563ms
+- **Timestamp:** 2025-11-28T15:29:36.377Z
+- **Duration:** 54652ms
 - **Metrics:**
   - commitCount: 3
-  - totalSymbols: 0
-  - totalEdges: 0
+  - totalSymbols: 1338
+  - totalEdges: 5924
 
 ### intended
 
-- **Hash:** 6fdc1043e3238bb3497a13b5ac4c851047f62734
+- **Hash:** f944a2370cca1ae8a40c5d08232070e879a2e1e7
 - **Status:** no baseline
-- **Summary:** symbols=100, present=100, absent=0, renamed=0
-- **Timestamp:** 2025-11-28T13:16:46.969Z
-- **Duration:** 5ms
+- **Summary:** symbols=725, present=511, absent=214, renamed=0
+- **Timestamp:** 2025-11-28T15:29:36.415Z
+- **Duration:** 38ms
 - **Metrics:**
-  - totalSymbols: 100
-  - present: 100
-  - absent: 0
+  - totalSymbols: 725
+  - present: 511
+  - absent: 214
   - renamed: 0
+
+### hotspots
+
+- **Hash:** e040695df35fbf4537606e6e040048225a6574ec
+- **Status:** no baseline
+- **Timestamp:** 2025-11-28T15:29:41.391Z
+- **Duration:** 5003ms
+- **Metrics:**
+  - topHotspots: 50
+  - totalChurn: 0
+  - withVersionTracking: 25
+  - versionDescriptions: ["3/6 versions","3/6 versions","5/6 versions","4/6 versions","4/6 versions","2/6 versions","2/6 vers
 
 ### moved_blocks
 
 - **Hash:** 97d170e1550eee4afc0af065b78cda302a97674c
 - **Status:** no baseline
-- **Timestamp:** 2025-11-28T13:16:46.978Z
-- **Duration:** 11ms
+- **Timestamp:** 2025-11-28T15:30:13.529Z
+- **Duration:** 37134ms
 - **Metrics:**
   - totalMoves: 0
   - withVersionDescription: 0
   - moveTypes: {"rename":0,"relocate":0,"refactor":0}
 
-### hotspots
-
-- **Hash:** a8b0374a0aa68b6151ace6cecc936199e26a9482
-- **Status:** no baseline
-- **Timestamp:** 2025-11-28T13:16:47.255Z
-- **Duration:** 290ms
-- **Metrics:**
-  - topHotspots: 30
-  - totalChurn: 0
-  - withVersionTracking: 0
-  - versionDescriptions: []
-
 ### drift
 
-- **Hash:** d1d5f896a4b7315e4999f9713bb3e953166f9f85
+- **Hash:** 24c37574f5c91add178d5d755bb6c2fc6b2b6ab9
 - **Status:** no baseline
-- **Summary:** missing=100, zombies=0, divergent=0, hybrid=0
-- **Timestamp:** 2025-11-28T13:16:47.441Z
-- **Duration:** 186ms
+- **Summary:** missing=1, zombies=166, divergent=0, hybrid=0
+- **Timestamp:** 2025-11-28T15:30:15.221Z
+- **Duration:** 1691ms
 - **Metrics:**
-  - missing_symbols: 100
-  - zombie_symbols: 0
+  - missing_symbols: 1
+  - zombie_symbols: 166
   - divergent_symbols: 0
-  - missing_edges: 0
-  - zombie_edges: 0
+  - missing_edges: 190
+  - zombie_edges: 5661
   - unresolved_callers: 0
   - hybridDrifts: 0
-  - conventionDrift: 26
-  - mixedConventionFiles: 7
+  - conventionDrift: 28
+  - mixedConventionFiles: 8
 
 ### legacy
 
-- **Hash:** 49f141671fbc3d187ec3e6c5194ade5d496d4d8c
+- **Hash:** 58e2c4448c9e98b332bce44c68840895ab37de64
 - **Status:** no baseline
-- **Summary:** dead=20, legacyUsed=0, leftovers=0
-- **Timestamp:** 2025-11-28T13:16:47.746Z
-- **Duration:** 305ms
+- **Summary:** dead=21, legacyUsed=0, leftovers=27
+- **Timestamp:** 2025-11-28T15:30:17.800Z
+- **Duration:** 2578ms
 - **Metrics:**
-  - dead: 20
+  - dead: 21
   - legacyUsed: 0
-  - replacedLeftovers: 0
+  - replacedLeftovers: 27
 
 ### bundle_facts
 
-- **Hash:** 2b97f47ff031a70eb9dda76f623d5223ee9e256e
+- **Hash:** 21562cad8575c59c7a9795e7b09bb6f426f2c1b9
 - **Status:** no baseline
-- **Summary:** intended.present=100, absent=0, renamed=0, hybridFacts=0 (0 files)
-- **Timestamp:** 2025-11-28T13:16:47.797Z
-- **Duration:** 51ms
+- **Summary:** intended.present=511, absent=214, renamed=0, hybridFacts=0 (0 files)
+- **Timestamp:** 2025-11-28T15:30:17.865Z
+- **Duration:** 65ms
 - **Metrics:**
-  - incompleteness: 100
-  - patternDrift: 8
-  - legacySummary: 20
-  - intended: {"present":100,"absent":0,"renamed":0}
+  - incompleteness: 167
+  - patternDrift: 9
+  - legacySummary: 21
+  - intended: {"present":511,"absent":214,"renamed":0}
   - hybridFactsCount: 0
   - hybridFilesCount: 0
 
@@ -155,39 +155,39 @@
 
 - **Hash:** n/a (external/complex)
 - **Status:** no baseline
-- **Timestamp:** 2025-11-28T13:16:52.899Z
-- **Duration:** 5102ms
+- **Timestamp:** 2025-11-28T15:30:50.640Z
+- **Duration:** 32773ms
 
 ### retrieve_history
 
 - **Hash:** n/a (external/complex)
 - **Status:** no baseline
-- **Timestamp:** 2025-11-28T13:16:53.328Z
-- **Duration:** 429ms
+- **Timestamp:** 2025-11-28T15:30:51.022Z
+- **Duration:** 382ms
 - **Metrics:**
-  - historyItems: 0
+  - historyItems: 3
   - retrievedCommits: 0
 
 ### llm_story
 
 - **Hash:** n/a (external/complex)
 - **Status:** no baseline
-- **Timestamp:** 2025-11-28T13:16:53.732Z
-- **Duration:** 404ms
+- **Timestamp:** 2025-11-28T15:30:51.509Z
+- **Duration:** 487ms
 - **Metrics:**
   - storyLength: 1
-  - totalHealthScore: 0
+  - totalHealthScore: 7.205638474295185
   - totalTokens: 0
   - totalCalls: 6
   - blocksCount: 4
 - **LLM Summary:**
   - Summary: ## Key Insights
 
-**Refactor Health:** 0/100 🔴
+**Refactor Health:** 7/100 🔴
 
-**Quick Stats:** 3 commits, 2174 symbols analyzed, 120 issues (0 high-priority actions)
+**Quick Stats:** 3 commits, 2412 symbols analyzed, 188 issues (0 high-priority actions)
 ...
-  - Health Score: 0/100
+  - Health Score: 7.205638474295185/100
   - Blocks: 4
 
 ## LLM Analysis Summaries
@@ -196,16 +196,16 @@
 
 ## Key Insights
 
-**Refactor Health:** 0/100 🔴
+**Refactor Health:** 7/100 🔴
 
-**Quick Stats:** 3 commits, 2174 symbols analyzed, 120 issues (0 high-priority actions)
+**Quick Stats:** 3 commits, 2412 symbols analyzed, 188 issues (0 high-priority actions)
 
 
 #### Full Markdown Output
 
 # LLM Analysis Report
 
-**Generated:** 11/28/2025, 7:16:53 AM
+**Generated:** 11/28/2025, 9:30:51 AM
 
 **Bundle:** 3 commits
 
@@ -220,28 +220,29 @@
 
 
 **Metadata:**
-- Health Score: 0/100
+- Health Score: 7.205638474295185/100
 - LLM Calls: 6
 - Model: x-ai/grok-4.1-fast:free
 - Validated Evidence: 0
 - Analysis Blocks: 4
-- Generated: 2025-11-28T13:16:53.728Z
+- Generated: 2025-11-28T15:30:51.504Z
 
 ## Visualization
 
 ```mermaid
 graph TD
-  A[High Churn Files] --> B[Top 30 Hotspots]
-  C[Drift Detection] --> D[100 Issues Found]
-  D --> E[100 Missing]
+  A[High Churn Files] --> B[Top 50 Hotspots]
+  C[Drift Detection] --> D[167 Issues Found]
+  D --> E[1 Missing]
+  D --> F[166 Zombies]
 ```
 
 ## Summary
 
 - **Total Steps:** 13
 - **Errors:** 0
-- **Total Symbols:** 2274
-- **Total Edges:** 14630
-- **Drift Issues:** 100
+- **Total Symbols:** 3137
+- **Total Edges:** 20365
+- **Drift Issues:** 167
 
-*Generated by pipeline diagnostics at 2025-11-28T13:16:53.735Z*
+*Generated by pipeline diagnostics at 2025-11-28T15:30:51.512Z*

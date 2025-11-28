@@ -189,6 +189,13 @@ export function detectFileNamingConvention(filePath: string): FileNamingConventi
   const startsUpper = /^[A-Z]/.test(filename);
   const allUpper = filename === filename.toUpperCase() && hasUnderscore;
 
+  // Analyze directory structure for path-based conventions
+  // Check if parent directory follows a naming pattern that might influence file naming
+  const dirParts = dir.split(path.sep).filter(part => part.length > 0);
+  const parentDir = dirParts.length > 0 ? dirParts[dirParts.length - 1] : '';
+  const hasDirUnderscore = parentDir.includes('_');
+  const hasDirHyphen = parentDir.includes('-');
+
   let style: FileNamingConvention['style'];
   
   if (allUpper) {
@@ -204,7 +211,14 @@ export function detectFileNamingConvention(filePath: string): FileNamingConventi
   } else if ((hasUnderscore && hasUppercase) || (hasHyphen && hasUppercase)) {
     style = 'mixed';
   } else {
-    style = 'camelCase'; // Default
+    // If filename doesn't have clear pattern, check if directory suggests a convention
+    if (hasDirUnderscore && !hasDirHyphen) {
+      style = 'snake_case'; // Directory uses snake_case, likely convention
+    } else if (hasDirHyphen && !hasDirUnderscore) {
+      style = 'kebab-case'; // Directory uses kebab-case, likely convention
+    } else {
+      style = 'camelCase'; // Default
+    }
   }
 
   return {

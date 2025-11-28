@@ -26,7 +26,7 @@ export class MermaidGenerator {
       nodes.add(this.formatNodeId(edge.from));
       nodes.add(this.formatNodeId(edge.to));
 
-      const style = this.getEdgeStyle(edge, showConfidence);
+      const style = this.getEdgeStyle(edge);
       const label = this.getEdgeLabel(edge, showConfidence);
 
       edgeDefinitions.push(`${this.formatNodeId(edge.from)} -->|"${label}"| ${this.formatNodeId(edge.to)}`);
@@ -116,9 +116,9 @@ export class MermaidGenerator {
   }
 
   /**
-   * Get edge styling based on type and confidence
+   * Get edge styling based on type
    */
-  private getEdgeStyle(edge: EdgeInfo, showConfidence: boolean): string {
+  private getEdgeStyle(edge: EdgeInfo): string {
     let style = '';
 
     // Different line styles for different edge types

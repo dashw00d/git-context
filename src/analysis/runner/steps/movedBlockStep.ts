@@ -44,14 +44,14 @@ async function getSymbolsForVersion(
       
       // For deleted symbols, get blob SHA from parent commit
       if (row.change_type === 'removed') {
-        const commitInfo = git.getCommitInfo(sha);
+        const commitInfo = await git.getCommitInfo(sha);
         if (!commitInfo.parent) {
           continue; // Can't get parent, skip
         }
-        blobSha = git.getBlobSha(commitInfo.parent, row.path);
+        blobSha = await git.getBlobSha(commitInfo.parent, row.path);
       } else {
         // For added symbols, get blob SHA from current commit
-        blobSha = git.getBlobSha(sha, row.path);
+        blobSha = await git.getBlobSha(sha, row.path);
       }
       
       // Get snapshot with full symbol data

@@ -80,6 +80,7 @@ export interface SymbolContext {
     name: string;
     kind: string;        // "class" | "method" | "function" | ...
     signature?: string;
+    dnaId?: string;      // DNA hash for similarity clustering
     loc_pre?: Loc;
     loc_post?: Loc;
     mod_reason?: ModReason;

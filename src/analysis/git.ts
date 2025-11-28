@@ -1,10 +1,13 @@
-import { execSync, spawn } from 'child_process';
 import * as path from 'path';
+import * as fs from 'fs';
+import simpleGit, { SimpleGit } from 'simple-git';
 import { CommitInfo, FileChange } from '../types';
 import { getGitRoot } from '../utils/config';
+import { logDebug, logWarn, logError } from '../utils/logger';
 
 export class GitOperations {
   private gitRoot: string;
+  private git: SimpleGit;
 
   constructor() {
     const root = getGitRoot();
@@ -12,6 +15,7 @@ export class GitOperations {
       throw new Error('Not in a git repository');
     }
     this.gitRoot = root;
+    this.git = simpleGit(root);
   }
 
   public getRoot(): string {
@@ -19,154 +23,175 @@ export class GitOperations {
   }
 
   /**
-   * Execute a git command and return the output
-   */
-  /**
-   * Execute a git command and return the output
-   */
-  private execGit(args: string[], options: { suppressLog?: boolean } = {}): string {
-    const start = Date.now();
-    const cmd = `git ${args.join(' ')}`;
-    try {
-      const out = execSync(cmd, {
-        cwd: this.gitRoot,
-        encoding: 'utf8',
-        maxBuffer: 1024 * 1024 * 10 // 10MB buffer
-      }).trim();
-      const duration = Date.now() - start;
-      // Log slow commands or errors (optional: could be verbose logging)
-      if (duration > 1000 && !options.suppressLog) {
-        console.log(`[Git] Slow command: ${cmd} (${duration}ms)`);
-      }
-      return out;
-    } catch (error: any) {
-      const duration = Date.now() - start;
-      if (!options.suppressLog) {
-        console.error(`[Git] Command failed: ${cmd} (${duration}ms)`);
-      }
-      throw new Error(`Git command failed: ${cmd}\n${error.message}`);
-    }
-  }
-
-  /**
    * Get basic commit information
    */
-  getCommitInfo(sha: string): CommitInfo {
-    const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
-    const output = this.execGit(['show', '--no-patch', '--date=iso', format, sha]);
+  async getCommitInfo(sha: string): Promise<CommitInfo> {
+    try {
+      const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
+      const output = await this.git.raw(['show', '--no-patch', '--date=iso', format, sha]);
 
-    const result = this.parseLogCommits(output, 'single');
-    if (!result) {
-      throw new Error(`Invalid commit format for SHA: ${sha}`);
+      const lines = output.split('\n');
+      if (lines.length < 4) {
+        throw new Error(`Invalid commit format for SHA: ${sha}`);
+      }
+
+      return {
+        sha: lines[0],
+        author: lines[1] || '',
+        date: lines[2] || '',
+        message: lines[3] || '',
+        parent: lines[4] || undefined
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to get commit info for ${sha}: ${error.message}`);
     }
-    return result as CommitInfo;
   }
 
   /**
    * Get list of commits (newest first)
    */
-  getRecentCommits(count: number = 5): CommitInfo[] {
-    const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
-    const output = this.execGit(['log', '--no-merges', `-${count}`, '--date=iso', format]);
+  async getRecentCommits(count: number = 5): Promise<CommitInfo[]> {
+    try {
+      const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
+      const output = await this.git.raw(['log', '--no-merges', `-${count}`, '--date=iso', format]);
 
-    return this.parseLogCommits(output, 'multi') as CommitInfo[];
+      const commits: CommitInfo[] = [];
+      const lines = output.split('\n');
+      const blockSize = 5;
+
+      for (let i = 0; i < lines.length; i += blockSize) {
+        if (!lines[i] || !lines[i].trim()) continue;
+
+        commits.push({
+          sha: lines[i],
+          author: lines[i + 1] || '',
+          date: lines[i + 2] || '',
+          message: lines[i + 3] || '',
+          parent: lines[i + 4] || undefined
+        });
+      }
+
+      return commits;
+    } catch (error: any) {
+      throw new Error(`Failed to get recent commits: ${error.message}`);
+    }
   }
 
   /**
    * Get file changes for a commit
    */
-  getFileChanges(sha: string): FileChange[] {
-    // git diff-tree -r --no-commit-id --name-status sha : changes vs parent(s)
-    let output: string;
+  async getFileChanges(sha: string): Promise<FileChange[]> {
     try {
-      output = this.execGit(['diff-tree', '-r', '--no-commit-id', '--name-status', sha]);
-    } catch (e) {
-      // Fallback for root commits - compare with empty tree
+      let output: string;
       try {
-        // 4b825dc642cb6eb9a060e54bf8d69288fbee4904 is the hash of an empty tree in git
-        output = this.execGit(['diff-tree', '-r', '--no-commit-id', '--name-status', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', sha]);
-      } catch (innerError) {
-        console.warn(`Failed to get file changes for ${sha} (even with empty tree fallback):`, innerError);
-        return [];
-      }
-    }
-
-    const changes: FileChange[] = [];
-    const lines = output.split('\n').filter(line => line.trim());
-
-    for (const line of lines) {
-      const parts = line.split('\t');
-      if (parts.length >= 2) {
-        const status = parts[0];
-        const filePath = parts[1];
-        let oldPath: string | undefined;
-
-        // Handle renamed and copied files
-        if (status.startsWith('R') || status.startsWith('C')) {
-          oldPath = parts[2];
+        output = await this.git.raw(['diff-tree', '-r', '--no-commit-id', '--name-status', sha]);
+      } catch (e) {
+        // Fallback for root commits - compare with empty tree
+        try {
+          // 4b825dc642cb6eb9a060e54bf8d69288fbee4904 is the hash of an empty tree in git
+          output = await this.git.raw(['diff-tree', '-r', '--no-commit-id', '--name-status', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', sha]);
+        } catch (innerError) {
+          logWarn(`Failed to get file changes for ${sha} (even with empty tree fallback): ${innerError}`);
+          return [];
         }
-
-        changes.push({
-          path: filePath,
-          status: status.charAt(0) as FileChange['status'],  // A/M/D/R/C
-          oldPath
-        });
       }
-    }
 
-    return changes;
+      const changes: FileChange[] = [];
+      const lines = output.split('\n').filter(line => line.trim());
+
+      for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length >= 2) {
+          const status = parts[0];
+          const filePath = parts[1];
+          let oldPath: string | undefined;
+
+          // Handle renamed and copied files
+          if (status.startsWith('R') || status.startsWith('C')) {
+            oldPath = parts[2];
+          }
+
+          changes.push({
+            path: filePath,
+            status: status.charAt(0) as FileChange['status'],  // A/M/D/R/C
+            oldPath
+          });
+        }
+      }
+
+      return changes;
+    } catch (error: any) {
+      logWarn(`Failed to get file changes for ${sha}: ${error}`);
+      return [];
+    }
   }
 
   /**
    * Get raw diff for a commit
    */
-  getCommitDiff(sha: string): string {
-    return this.execGit(['show', '--pretty=format:', sha]);
+  async getCommitDiff(sha: string): Promise<string> {
+    try {
+      return await this.git.show([sha, '--pretty=format:']);
+    } catch (error: any) {
+      throw new Error(`Failed to get commit diff for ${sha}: ${error.message}`);
+    }
   }
 
   /**
    * Get diff for a specific file in a commit
    */
-  getFileDiff(sha: string, filePath: string): string {
-    // Use show with patch format for specific file
-    return this.execGit(['show', '--pretty=format:', '--patch', sha, '--', filePath]);
+  async getFileDiff(sha: string, filePath: string): Promise<string> {
+    try {
+      return await this.git.show([sha, '--pretty=format:', '--patch', '--', filePath]);
+    } catch (error: any) {
+      throw new Error(`Failed to get file diff for ${filePath} at ${sha}: ${error.message}`);
+    }
   }
 
   /**
    * Get diff for a file across a range of commits (bundle)
    */
-  getBundleDiff(startSha: string, endSha: string, filePath: string): string {
-    // Diff from parent of start to end
-    // If startSha has no parent (root), just diff startSha..endSha (which misses startSha changes if using ..)
-    // Safest is startSha~1..endSha
+  async getBundleDiff(startSha: string, endSha: string, filePath: string): Promise<string> {
     try {
-      return this.execGit(['diff', `${startSha}~1..${endSha}`, '--', filePath]);
+      return await this.git.diff([`${startSha}~1..${endSha}`, '--', filePath]);
     } catch (e) {
       // Fallback if no parent (e.g. shallow clone or root)
-      return this.execGit(['diff', `${startSha}..${endSha}`, '--', filePath]);
+      try {
+        return await this.git.diff([`${startSha}..${endSha}`, '--', filePath]);
+      } catch (error: any) {
+        throw new Error(`Failed to get bundle diff for ${filePath}: ${error.message}`);
+      }
     }
   }
 
   /**
    * Get staged changes diff
    */
-  getStagedDiff(): string {
-    return this.execGit(['diff', '--cached']);
+  async getStagedDiff(): Promise<string> {
+    try {
+      return await this.git.diff(['--cached']);
+    } catch (error: any) {
+      throw new Error(`Failed to get staged diff: ${error.message}`);
+    }
   }
 
   /**
    * Get file content at specific commit
    */
-  getFileContent(sha: string, filePath: string): string {
-    return this.execGit(['show', `${sha}:${filePath}`]);
+  async getFileContent(sha: string, filePath: string): Promise<string> {
+    try {
+      return await this.git.show([`${sha}:${filePath}`]);
+    } catch (error: any) {
+      throw new Error(`Failed to get file content for ${filePath} at ${sha}: ${error.message}`);
+    }
   }
 
   /**
    * Safely get file content, returning empty string if file doesn't exist
    */
-  safeGetFileContent(sha: string, filePath: string): string {
+  async safeGetFileContent(sha: string, filePath: string): Promise<string> {
     try {
-      return this.execGit(['show', `${sha}:${filePath}`], { suppressLog: true });
+      return await this.git.show([`${sha}:${filePath}`]);
     } catch (error: any) {
       if (this.isGitPathMissing(error)) {
         return '';
@@ -178,16 +203,20 @@ export class GitOperations {
   /**
    * Get staged file content (from index)
    */
-  getStagedContent(filePath: string): string {
-    return this.execGit(['show', `:${filePath}`]);
+  async getStagedContent(filePath: string): Promise<string> {
+    try {
+      return await this.git.show([`:${filePath}`]);
+    } catch (error: any) {
+      throw new Error(`Failed to get staged content for ${filePath}: ${error.message}`);
+    }
   }
 
   /**
    * Safely get staged file content, returning empty string if file doesn't exist in index
    */
-  safeGetStagedContent(filePath: string): string {
+  async safeGetStagedContent(filePath: string): Promise<string> {
     try {
-      return this.getStagedContent(filePath);
+      return await this.getStagedContent(filePath);
     } catch (error: any) {
       if (this.isGitPathMissing(error)) {
         return '';
@@ -200,8 +229,6 @@ export class GitOperations {
    * Get working directory file content
    */
   getWorkingContent(filePath: string): string {
-    const fs = require('fs');
-    const path = require('path');
     const fullPath = path.join(this.gitRoot, filePath);
     return fs.readFileSync(fullPath, 'utf8');
   }
@@ -221,12 +248,15 @@ export class GitOperations {
   /**
    * Check if a file is ignored by git
    */
-  isIgnored(filePath: string): boolean {
+  async isIgnored(filePath: string): Promise<boolean> {
     try {
-      // git check-ignore returns exit code 0 if ignored, 1 if not ignored
-      this.execGit(['check-ignore', '-q', filePath], { suppressLog: true });
-      return true;
+      const result = await this.git.checkIgnore([filePath]);
+      if (result.length > 0) {
+        console.log(`[GitDebug] ${filePath} IS IGNORED. Result: ${JSON.stringify(result)}`);
+      }
+      return result.length > 0;
     } catch (error) {
+      // console.log(`[GitDebug] checkIgnore error for ${filePath}: ${error}`);
       return false;
     }
   }
@@ -237,7 +267,7 @@ export class GitOperations {
    * as .gitignore rules rarely change dramatically between commits.
    * This is a reasonable approximation for path filtering purposes.
    */
-  isIgnoredAtCommit(sha: string, filePath: string): boolean {
+  async isIgnoredAtCommit(sha: string, filePath: string): Promise<boolean> {
     // Use current workspace ignore check as approximation
     // Historical .gitignore checking would require complex git worktree manipulation
     // and the current rules are usually sufficient for filtering
@@ -247,17 +277,21 @@ export class GitOperations {
   /**
    * Get current HEAD SHA
    */
-  getHeadSha(): string {
-    return this.execGit(['rev-parse', 'HEAD']);
+  async getHeadSha(): Promise<string> {
+    try {
+      return await this.git.revparse(['HEAD']);
+    } catch (error: any) {
+      throw new Error(`Failed to get HEAD SHA: ${error.message}`);
+    }
   }
 
   /**
    * Get blob SHA for a file at a specific commit
    * @throws Error if file doesn't exist at the given commit
    */
-  getBlobSha(sha: string, filePath: string): string {
+  async getBlobSha(sha: string, filePath: string): Promise<string> {
     try {
-      const output = this.execGit(['ls-tree', '-r', sha, '--', filePath]);
+      const output = await this.git.raw(['ls-tree', '-r', sha, '--', filePath]);
       const lines = output.trim().split('\n').filter(l => l.trim());
 
       for (const line of lines) {
@@ -267,20 +301,20 @@ export class GitOperations {
         }
       }
 
-      console.warn(`No matching ls-tree entry for ${filePath} at ${sha}`);
+      logWarn(`No matching ls-tree entry for ${filePath} at ${sha}`);
       throw new Error(`File ${filePath} not found at commit ${sha}`);
-    } catch (error) {
-      throw new Error(`Failed to get blob SHA for ${filePath} at ${sha}: ${error}`);
+    } catch (error: any) {
+      throw new Error(`Failed to get blob SHA for ${filePath} at ${sha}: ${error.message}`);
     }
   }
 
   /**
    * Get size of a blob in bytes
    */
-  getBlobSize(sha: string, filePath: string): number {
+  async getBlobSize(sha: string, filePath: string): Promise<number> {
     try {
       // git cat-file -s <sha>:<path>
-      const output = this.execGit(['cat-file', '-s', `${sha}:${filePath}`]);
+      const output = await this.git.raw(['cat-file', '-s', `${sha}:${filePath}`]);
       return parseInt(output.trim(), 10) || 0;
     } catch (error) {
       // If file doesn't exist or other error, return 0 (safe fallback)
@@ -291,9 +325,9 @@ export class GitOperations {
   /**
    * Get current branch name (null when detached)
    */
-  getCurrentBranch(): string | null {
+  async getCurrentBranch(): Promise<string | null> {
     try {
-      const branch = this.execGit(['branch', '--show-current']);
+      const branch = await this.git.revparse(['--abbrev-ref', 'HEAD']);
       if (!branch || branch === 'HEAD') {
         return null;
       }
@@ -306,10 +340,16 @@ export class GitOperations {
   /**
    * Get commits reachable from a branch (newest first)
    */
-  getBranchCommits(branch: string, limit: number = 100): string[] {
+  async getBranchCommits(branch: string, limit: number = 100): Promise<string[]> {
     try {
-      const output = this.execGit(['log', branch, `--max-count=${limit}`, '--format=%H']);
-      return this.parseFileList(output);
+      const log = await this.git.log({
+        from: branch,
+        maxCount: limit,
+        format: {
+          hash: '%H'
+        }
+      });
+      return log.all.map(commit => commit.hash);
     } catch {
       return [];
     }
@@ -318,72 +358,32 @@ export class GitOperations {
   /**
    * Check if repository is clean (no uncommitted changes)
    */
-  isClean(): boolean {
+  async isClean(): Promise<boolean> {
     try {
-      this.execGit(['diff', '--quiet']);
-      this.execGit(['diff', '--cached', '--quiet']);
+      await this.git.diff(['--quiet']);
+      await this.git.diff(['--cached', '--quiet']);
       return true;
     } catch {
       return false;
     }
   }
 
-  /**
-   * Get list of changed files in working directory
-   */
-  /**
-   * Execute a git command and return the output via stream (for large outputs)
-   */
-  private async execGitStream(args: string[]): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const git = spawn('git', args, {
-        cwd: this.gitRoot,
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      git.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      git.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      git.on('close', (code) => {
-        if (code === 0) {
-          // Don't trim() here as it removes leading spaces from first line
-          // which are significant in git status --porcelain output
-          resolve(stdout);
-        } else {
-          reject(new Error(`Git command failed: git ${args.join(' ')}\n${stderr}`));
-        }
-      });
-
-      git.on('error', (error) => {
-        reject(error);
-      });
-    });
-  }
 
   /**
    * Get list of changed files in working directory
    */
   async getWorkingDirectoryChanges(): Promise<FileChange[]> {
     try {
-      const output = await this.execGitStream(['status', '--porcelain']);
+      const output = await this.git.raw(['status', '--porcelain']);
 
       const changes: FileChange[] = [];
       const lines = output.split('\n').filter(line => line.trim());
 
       for (const line of lines) {
         const status = line.substring(0, 2).trim();
-        const filePath = this.parseGitPath(line.substring(3)); // Now consistently parsed like staged/unstaged
+        const filePath = this.parseGitPath(line.substring(3));
 
         // Map git status codes to our status types
-        // Note: checks full 2-char XY for staged+unstaged presence vs charAt(0/1) in split methods
         let changeStatus: FileChange['status'];
         if (status.includes('A')) {
           changeStatus = 'A';
@@ -409,7 +409,7 @@ export class GitOperations {
 
       return changes;
     } catch (error) {
-      console.error('Failed to get working directory changes:', error);
+      logError('Failed to get working directory changes:', error);
       return [];
     }
   }
@@ -435,7 +435,7 @@ export class GitOperations {
    * Parse a single line from git ls-tree output (mode<TAB>type<TAB>sha<TAB>path)
    * Handles paths with spaces correctly using TAB separation.
    */
-  private parseLsTreeLine(rawLine: string): {mode: string, type: string, sha: string, path: string} | null {
+  private parseLsTreeLine(rawLine: string): { mode: string, type: string, sha: string, path: string } | null {
     const tabIdx = rawLine.lastIndexOf('\t');
     if (tabIdx === -1 || tabIdx < 1) return null;
 
@@ -445,7 +445,7 @@ export class GitOperations {
 
     if (preParts.length < 3) return null;
 
-    return {mode: preParts[0], type: preParts[1], sha: preParts[2], path};
+    return { mode: preParts[0], type: preParts[1], sha: preParts[2], path };
   }
 
   /**
@@ -462,29 +462,6 @@ export class GitOperations {
     );
   }
 
-  /**
-   * Parse git log output into CommitInfo objects
-   * Handles multi-commit and single-commit formats.
-   */
-  private parseLogCommits(rawOutput: string, mode: 'multi' | 'single'): CommitInfo[] | CommitInfo {
-    const lines = rawOutput.split('\n');
-    const blockSize = mode === 'single' ? 4 : 5;  // single mode doesn't include parent
-    const commits: CommitInfo[] = [];
-
-    for (let i = 0; i < lines.length; i += blockSize) {
-      if (!lines[i] || !lines[i].trim()) continue;
-
-      commits.push({
-        sha: lines[i],
-        author: lines[i + 1] || '',
-        date: lines[i + 2] || '',
-        message: lines[i + 3] || '',
-        parent: mode === 'multi' ? lines[i + 4] || undefined : undefined
-      });
-    }
-
-    return mode === 'single' ? commits[0] || null : commits;
-  }
 
   /**
    * Parse git file list output (one file per line)
@@ -499,7 +476,7 @@ export class GitOperations {
    */
   async getStagedFiles(): Promise<FileChange[]> {
     try {
-      const output = await this.execGitStream(['status', '--porcelain']);
+      const output = await this.git.raw(['status', '--porcelain']);
 
       const staged: FileChange[] = [];
       const lines = output.split('\n').filter(line => line.trim());
@@ -532,7 +509,7 @@ export class GitOperations {
 
       return staged;
     } catch (error) {
-      console.error('Failed to get staged files:', error);
+      logError('Failed to get staged files:', error);
       return [];
     }
   }
@@ -542,7 +519,7 @@ export class GitOperations {
    */
   async getUnstagedFiles(): Promise<FileChange[]> {
     try {
-      const output = await this.execGitStream(['status', '--porcelain']);
+      const output = await this.git.raw(['status', '--porcelain']);
 
       const unstaged: FileChange[] = [];
       const lines = output.split('\n').filter(line => line.trim());
@@ -579,7 +556,7 @@ export class GitOperations {
 
       // Also include untracked files from ls-files
       try {
-        const untrackedOutput = await this.execGitStream(['ls-files', '--others', '--exclude-standard']);
+        const untrackedOutput = await this.git.raw(['ls-files', '--others', '--exclude-standard']);
         const untrackedFiles = this.parseFileList(untrackedOutput);
         for (const filePath of untrackedFiles) {
           // Only add if not already in unstaged (avoid duplicates)
@@ -596,7 +573,7 @@ export class GitOperations {
 
       return unstaged;
     } catch (error) {
-      console.error('Failed to get unstaged files:', error);
+      logError('Failed to get unstaged files:', error);
       return [];
     }
   }
@@ -604,10 +581,10 @@ export class GitOperations {
   /**
    * Get diff stats for a specific file (added/removed lines)
    */
-  getFileDiffStats(filePath: string, staged: boolean = false): { added: number; removed: number } {
+  async getFileDiffStats(filePath: string, staged: boolean = false): Promise<{ added: number; removed: number }> {
     try {
       const args = staged ? ['diff', '--cached', '--numstat', '--', filePath] : ['diff', '--numstat', '--', filePath];
-      const output = this.execGit(args);
+      const output = await this.git.raw(args);
 
       if (!output.trim()) {
         return { added: 0, removed: 0 };
@@ -629,37 +606,15 @@ export class GitOperations {
   }
 
   /**
-   * Spawn a git command asynchronously
+   * Spawn a git command asynchronously (using simple-git raw)
    */
   async spawnGit(args: string[]): Promise<{ stdout: string; stderr: string }> {
-    return new Promise((resolve, reject) => {
-      const git = spawn('git', args, {
-        cwd: this.gitRoot,
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-
-      let stdout = '';
-      let stderr = '';
-
-      git.stdout.on('data', (data) => {
-        stdout += data.toString();
-      });
-
-      git.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      git.on('close', (code) => {
-        if (code === 0) {
-          resolve({ stdout, stderr });
-        } else {
-          reject(new Error(`Git command failed with code ${code}: ${stderr}`));
-        }
-      });
-
-      git.on('error', (error) => {
-        reject(error);
-      });
-    });
+    try {
+      const stdout = await this.git.raw(args);
+      return { stdout, stderr: '' };
+    } catch (error: any) {
+      // simple-git throws errors, but we want to return stderr
+      return { stdout: '', stderr: error.message || String(error) };
+    }
   }
 }

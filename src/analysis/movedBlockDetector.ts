@@ -552,18 +552,31 @@ export class MovedBlockDetector {
   }
 
   private hasMultipleMovesToSameFile(filePath: string): boolean {
-    // Simplified - would check if multiple blocks moved to same file
-    return false; // Placeholder
+    // Check if multiple blocks moved to same file
+    // This requires access to all detected moves in the current batch, which is available
+    // in the calling context (classifyMoveReason is called for each candidate).
+    // For proper implementation, this should track moves per destination file.
+    // TODO: Implement by tracking destination files in detectMovedBlocks and passing context
+    // For now, this is a placeholder that would need to be enhanced with move tracking
+    return false;
   }
 
   private isNewFile(filePath: string): boolean {
-    // Simplified - would check if file was recently created
-    return false; // Placeholder
+    // Check if file was recently created
+    // This is a heuristic - files in certain directories or with certain patterns
+    // might be considered "new" even if they have some history
+    // For now, use a simple heuristic based on file path patterns
+    const newFilePatterns = ['/new/', '/temp/', '/test/', '/spec/'];
+    return newFilePatterns.some(pattern => filePath.toLowerCase().includes(pattern));
   }
 
   private isLargeFile(filePath: string): boolean {
-    // Simplified - would check file size
-    return false; // Placeholder
+    // Check if file is large based on path heuristics
+    // Large files are often in specific directories or have certain patterns
+    // This is a placeholder - proper implementation would check actual file size
+    // TODO: Implement by reading file content and counting lines, or using git to get file size
+    const largeFilePatterns = ['/generated/', '/vendor/', '/node_modules/', '.min.', '.bundle.'];
+    return largeFilePatterns.some(pattern => filePath.toLowerCase().includes(pattern));
   }
 
   private isFileRename(sourcePath: string, destPath: string): boolean {

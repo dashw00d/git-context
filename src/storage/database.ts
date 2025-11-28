@@ -94,15 +94,21 @@ export class DatabaseManager {
         // Return a wrapper that creates a fresh statement for each operation
         // This is necessary because sql.js statements can't be reused
         return {
-          run: (params?: any[]) => {
+
+          run: (...params: any[]) => {
             try {
               if (!this.db) {
                 throw new Error('Database not initialized');
               }
               const stmt = this.db.prepare(sql);
-              if (params && params.length > 0) {
+              // Handle case where params is passed as a single array (legacy/compat)
+              // or as multiple arguments
+              if (params.length === 1 && Array.isArray(params[0])) {
+                stmt.bind(params[0]);
+              } else if (params.length > 0) {
                 stmt.bind(params);
               }
+
               stmt.step();
               stmt.free(); // Free the statement immediately
               this.save();

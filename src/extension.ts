@@ -38,16 +38,10 @@ async function getRepoContext(): Promise<Pick<CockpitState, 'repoName' | 'branch
     if (gitRoot) {
       const path = await import('path');
       repoName = path.basename(gitRoot);
-      const { promisify } = await import('util');
-      const { exec } = await import('child_process');
-      const execAsync = promisify(exec);
+      const { GitOperations } = await import('./analysis/git');
       try {
-        const { stdout } = await execAsync('git rev-parse --abbrev-ref HEAD', {
-          cwd: gitRoot,
-          encoding: 'utf8',
-          timeout: 2000
-        });
-        branchName = stdout.trim();
+        const git = new GitOperations();
+        branchName = await git.getCurrentBranch();
       } catch {
         // best-effort branch lookup
       }
@@ -433,11 +427,11 @@ export async function activate(context: vscode.ExtensionContext) {
         // Load recent commits directly
         const git = new GitOperations();
         const branchManager = new BranchManager(db);
-        const recentCommits = git.getRecentCommits(config.defaultCommitCount);
+        const recentCommits = await git.getRecentCommits(config.defaultCommitCount);
         const shas = recentCommits.map(c => c.sha);
 
         // Record commits in branch manager
-        const branch = git.getCurrentBranch();
+        const branch = await git.getCurrentBranch();
         if (branch && recentCommits.length > 0) {
           for (const commit of recentCommits) {
             branchManager.recordCommit(commit.sha, branch);
@@ -449,7 +443,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const refactorPipeline = await getRefactorPipeline();
         await refactorPipeline.indexCommits(shas);
 
-        commitsProvider.refresh(); // This will trigger orchestrator updates
+        await commitsProvider.refresh(); // This will trigger orchestrator updates
         logInfo('[Cockpit] Initial commits loaded successfully');
       } else {
         logInfo(`[Cockpit] Database already has ${commitCount} commits, skipping initial load`);
@@ -512,17 +506,17 @@ export async function activate(context: vscode.ExtensionContext) {
           clearTimeout(refreshTimeout);
         }
 
-        refreshTimeout = setTimeout(() => {
+        refreshTimeout = setTimeout(async () => {
           try {
             // Only refresh if providers are initialized
             if (activeBundleProvider) {
               activeBundleProvider.refresh();
             }
             if (commitsProvider) {
-              commitsProvider.refresh();
+              await commitsProvider.refresh();
             }
             if (symbolHistoryProvider) {
-              symbolHistoryProvider.refresh();
+              await symbolHistoryProvider.refresh();
             }
             // Refresh reports via orchestrator
             updateReportsState('db:facts').catch(err => {
@@ -553,7 +547,7 @@ export async function activate(context: vscode.ExtensionContext) {
           clearTimeout(factsRefreshTimeout);
         }
 
-        factsRefreshTimeout = setTimeout(() => {
+        factsRefreshTimeout = setTimeout(async () => {
           try {
             // Get gitRoot dynamically in case workspace changed
             const currentGitRoot = getGitRoot();
@@ -566,7 +560,7 @@ export async function activate(context: vscode.ExtensionContext) {
               activeBundleProvider.refresh();
             }
             if (commitsProvider) {
-              commitsProvider.refresh();
+              await commitsProvider.refresh();
             }
             // Refresh reports
             updateReportsState('facts:update').catch(err => {
@@ -619,7 +613,7 @@ export async function activate(context: vscode.ExtensionContext) {
           activeBundleProvider.refresh();
         }
         if (commitsProvider) {
-          commitsProvider.refresh();
+          await commitsProvider.refresh();
         }
         if (symbolHistoryProvider) {
           symbolHistoryProvider.refresh();
@@ -637,9 +631,9 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.window.showWarningMessage(
         'Git Context: Failed to load commit data. Try refreshing the view or reloading the window.',
         'Refresh'
-      ).then((choice) => {
+      ).then(async (choice) => {
         if (choice === 'Refresh') {
-          commitsProvider.refresh();
+          await commitsProvider.refresh();
         }
       });
     });

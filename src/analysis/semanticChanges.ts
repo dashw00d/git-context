@@ -320,7 +320,12 @@ export class SemanticChangeDetector {
     const extractSnippet = (content: string, location: typeof symbol.location): string => {
       const lines = content.split('\n');
       const startLine = Math.max(0, location.start.line - 3);
-      const endLine = Math.min(lines.length, location.end.line + 3);
+      // Respect maxLines parameter to limit snippet size
+      const endLine = Math.min(
+        lines.length,
+        location.end.line + 3,
+        startLine + maxLines
+      );
 
       return lines.slice(startLine, endLine).join('\n');
     };

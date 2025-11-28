@@ -197,7 +197,7 @@ export function createHotspotStep(): PipelineStep {
               const sha = version === 'HEAD' 
                 ? (state.selectedCommitShas?.[state.selectedCommitShas.length - 1] || 'HEAD')
                 : version;
-              const commitFiles = git.getFileChanges(sha);
+              const commitFiles = await git.getFileChanges(sha);
               wasTouched = commitFiles.some(f => f.path === hotspot.filePath);
             }
             

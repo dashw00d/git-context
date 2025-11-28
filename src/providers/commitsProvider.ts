@@ -25,13 +25,9 @@ export class CommitsProvider {
 
   constructor(private context: vscode.ExtensionContext, private activeBundleProvider: ActiveBundleProvider) {
     this.branchManager = new BranchManager();
-    try {
-      this.git = new GitOperations();
-      this.currentBranch = this.git.getCurrentBranch();
-    } catch {
-      this.git = null;
-      this.currentBranch = null;
-    }
+    // Initialize git lazily in async methods
+    this.git = null;
+    this.currentBranch = null;
     this.manualCommits = new Set(context.workspaceState.get<string[]>('commit-tracker.manualCommits', []));
 
     // DEPRECATED: State moved to CockpitOrchestrator
@@ -45,16 +41,16 @@ export class CommitsProvider {
     this.loadMoreOffset = context.workspaceState.get('loadMoreOffset', 0);
   }
 
-  refresh(): void {
-    this.updateBranchCursor();
+  async refresh(): Promise<void> {
+    await this.updateBranchCursor();
     // TreeView removed - no event firing needed
   }
 
 
-  private updateBranchCursor() {
+  private async updateBranchCursor() {
     if (this.git) {
       try {
-        this.currentBranch = this.git.getCurrentBranch();
+        this.currentBranch = await this.git.getCurrentBranch();
       } catch {
         this.currentBranch = null;
       }

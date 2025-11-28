@@ -44,49 +44,70 @@ import {
   stableHash
 } from './mocks/framework/snapshot';
 
+import { Command } from 'commander';
+
 type CliOptions = {
-  freeze: boolean;
-  replayStep?: string;
-  replayFrom?: string;
-  snapshotDir: string;
-  focusSteps?: Set<string>;
   commitCount: number;
   includeWorkspace: boolean;
   resetDb: boolean;
-  enableCst: boolean;
-  enableAugment: boolean;
-  testHybrid: boolean;
-  validateTimeline: boolean;
-  noEmbeddings: boolean;
-  noSnapshotCache: boolean;
-  fullReport: boolean;
+  snapshotDir: string;
+  freeze: boolean;
+  replayStep?: string;
+  replayFrom?: string;
+  validateTimeline?: boolean;
+  noIsolate?: boolean;
+  realLlm?: boolean;
+  program?: any;
+  noSnapshotCache?: boolean;
+  noEmbeddings?: boolean;
+  enableCst?: boolean;
+  enableAugment?: boolean;
+  testHybrid?: boolean;
+  fullReport?: boolean;
+  focusSteps?: Set<string>;
 };
 
 function parseArgs(args: string[]): CliOptions {
-  const flag = (name: string) => args.includes(name);
-  const getArg = (name: string, defaultValue = '') => {
-    const prefix = `${name}=`;
-    const found = args.find(a => a.startsWith(prefix));
-    return found ? found.substring(prefix.length) : defaultValue;
-  };
+  const program = new Command();
+  program
+    .option('-c, --commit-count <number>', 'Number of commits to analyze', '3')
+    .option('-w, --include-workspace', 'Include workspace changes', true)
+    .option('-r, --reset-db', 'Reset database before run', false)
+    .option('-s, --snapshot-dir <path>', 'Directory to save/load snapshots', './benchmarks/snapshots')
+    .option('-f, --freeze', 'Freeze intermediate states to disk', false)
+    .option('--replay-step <stepId>', 'Replay a specific step from frozen state')
+    .option('--replay-from <stepId>', 'Replay pipeline starting from a specific step')
+    .option('--validate-timeline', 'Validate hybrid facts database consistency')
+    .option('--no-isolate', 'Do not isolate analysis to /src (analyze all files)')
+    .option('--real-llm', 'Use real LLM calls instead of capturing prompts (costs money!)')
+    .option('--no-snapshot-cache', 'Disable snapshot caching')
+    .option('--no-embeddings', 'Disable embedding generation')
+    .option('--no-cst', 'Disable CST')
+    .option('--no-augment', 'Disable augmentation')
+    .option('--test-hybrid', 'Test hybrid mode')
+    .option('--full-report', 'Generate full report');
 
-  const focusArg = getArg('--focus');
+  program.parse(process.argv);
+  const opts = program.opts();
+
   return {
-    freeze: flag('--freeze'),
-    replayStep: getArg('--replay') || undefined,
-    replayFrom: getArg('--replay-from') || undefined,
-    snapshotDir: getArg('--out', path.join(process.cwd(), 'benchmarks', 'fixtures', 'pipeline_frozen')),
-    focusSteps: focusArg ? new Set(focusArg.split(',').map(s => s.trim()).filter(Boolean)) : undefined,
-    commitCount: parseInt(getArg('--commits', '6'), 10) || 6,
-    includeWorkspace: !flag('--no-workspace'),
-    resetDb: flag('--reset-db'),
-    enableCst: !flag('--no-cst'), // Default: true
-    enableAugment: flag('--enable-augment'), // Default: false
-    testHybrid: flag('--test-hybrid'),
-    validateTimeline: flag('--validate-timeline'),
-    noEmbeddings: flag('--no-embeddings'),
-    noSnapshotCache: flag('--no-snapshot-cache'),
-    fullReport: flag('--full-report')
+    commitCount: parseInt(opts.commitCount),
+    includeWorkspace: opts.includeWorkspace !== false,
+    resetDb: opts.resetDb || false,
+    snapshotDir: opts.snapshotDir,
+    freeze: opts.freeze || false,
+    replayStep: opts.replayStep,
+    replayFrom: opts.replayFrom,
+    validateTimeline: opts.validateTimeline || false,
+    noIsolate: opts.isolate === false, // Handles --no-isolate
+    realLlm: opts.realLlm || false,
+    noSnapshotCache: opts.snapshotCache === false, // Handles --no-snapshot-cache
+    noEmbeddings: opts.embeddings === false, // Handles --no-embeddings
+    enableCst: opts.cst !== false, // Default true unless --no-cst
+    enableAugment: opts.augment !== false, // Default true unless --no-augment
+    testHybrid: opts.testHybrid || false,
+    fullReport: opts.fullReport || false,
+    program
   };
 }
 
@@ -139,11 +160,17 @@ function extractStepMetrics(stepId: string, data: any): Record<string, any> {
   switch (stepId) {
     case 'index_commits':
       if (Array.isArray(data)) {
-        return {
+        const metrics = {
           commitCount: data.length,
-          totalSymbols: data.reduce((sum: number, c: any) => sum + (c.symbols?.length || 0), 0),
-          totalEdges: data.reduce((sum: number, c: any) => sum + (c.edges?.length || 0), 0)
+          totalSymbols: data.reduce((sum: number, c: any) => sum + ((c.symbolsAdded || 0) + (c.symbolsModified || 0) + (c.symbolsRemoved || 0)), 0),
+          totalEdges: data.reduce((sum: number, c: any) => sum + ((c.edgesAdded || 0) + (c.edgesRemoved || 0)), 0)
         };
+
+        // Validation: Warn if commits exist but symbols are 0
+        if (metrics.commitCount > 0 && metrics.totalSymbols === 0) {
+          console.warn(`[Metrics] WARNING: ${metrics.commitCount} commits indexed but 0 symbols found. Check path filtering or parsing.`);
+        }
+        return metrics;
       }
       return { commitCount: 0, totalSymbols: 0, totalEdges: 0 };
 
@@ -663,14 +690,23 @@ function buildSteps(workspaceIndexer: WorkspaceIndexer, commitIndexer: CommitInd
   ];
 }
 
+
+
 async function main() {
-  const opts = parseArgs(process.argv.slice(2));
+  const options = parseArgs(process.argv.slice(2));
+  // Options are already parsed in parseArgs, no need to re-parse or add options here
+  // The previous attempt to add options here caused the type error because we were trying to access program on the returned options object
+  // which didn't have it typed correctly. Now it does, but we moved the option definition to parseArgs anyway.
 
-  console.log('🔬 Pipeline diagnostics');
-  console.log('='.repeat(40));
-  console.log(`Freeze: ${opts.freeze ? 'on' : 'off'}, Replay: ${opts.replayStep || opts.replayFrom || 'none'}, Snapshot dir: ${opts.snapshotDir}`);
+  console.log('🚀 Starting Pipeline Diagnostics...');
+  console.log(`📂 Workspace: ${process.cwd()}`);
+  console.log(`Commit count: ${options.commitCount}`);
+  console.log(`Include workspace: ${options.includeWorkspace}`);
+  console.log(`Reset DB: ${options.resetDb}`);
+  console.log(`Isolate to /src: ${!options.noIsolate}`);
+  console.log(`Real LLM: ${options.realLlm}`);
 
-  deleteDatabaseIfRequested(opts.resetDb);
+  deleteDatabaseIfRequested(options.resetDb);
   await ensureDatabaseInitialized();
   const dbManager = getDatabaseManager();
   const db = dbManager.getDatabase();
@@ -684,7 +720,7 @@ async function main() {
   }
 
   // Configure cache if disabled (set environment variable before creating SnapshotManager)
-  if (opts.noSnapshotCache) {
+  if (options.noSnapshotCache) {
     process.env.SNAPSHOT_CACHE_ENABLED = 'false';
     console.log('🔧 Snapshot cache: disabled (--no-snapshot-cache flag)');
   } else {
@@ -693,18 +729,38 @@ async function main() {
     console.log('🔧 Snapshot cache: size increased to 500 for diagnostics');
   }
 
-  // Ignore everything except /src/** using gitignore syntax that works with 'ignore' package
-  // Pattern: /* matches top-level dirs, then !/src un-ignores src
-  process.env.CUSTOM_IGNORE_PATHS = '/*, !/src';
-  console.log('🔧 Ignore paths: isolating to src/** (all other top-level paths ignored)');
+  // Ignore paths configuration
+  if (!options.noIsolate) {
+    // Ignore everything except /src/** using gitignore syntax that works with 'ignore' package
+    // Pattern: /* matches top-level dirs, then !/src un-ignores src
+    process.env.CUSTOM_IGNORE_PATHS = 'backlog/*, benchmarks/*, resources/*, archive/*, .cursor/*, .examples/*, .vscode/*, .git/*';
+    console.log('🔧 Ignore paths: isolating to src/** (all other top-level paths ignored)');
+  } else {
+    console.log('🔧 Ignore paths: standard .gitignore only (no extra isolation)');
+  }
 
   const git = new GitOperations();
+
+  // Log changed files in recent commits to help debug empty metrics
+  try {
+    console.log('🔍 Verifying commit content...');
+    const recentCommits = await git.getRecentCommits(3);
+    for (const commit of recentCommits) {
+      const files = await git.getFileChanges(commit.sha);
+      const filePaths = files.map(f => f.path).slice(0, 5);
+      const more = files.length > 5 ? `... (+${files.length - 5} more)` : '';
+      console.log(`  Commit ${commit.sha.substring(0, 7)}: ${files.length} files changed (${filePaths.join(', ')}${more})`);
+    }
+  } catch (e) {
+    console.warn('  Could not verify commit content:', e);
+  }
+
   const symbolExtractor = new SymbolExtractor(git);
   const dependencyExtractor = new DependencyExtractor();
   const snapshotManager = new SnapshotManager(db, symbolExtractor, dependencyExtractor);
 
   // Clear cache on reset-db
-  if (opts.resetDb) {
+  if (options.resetDb) {
     snapshotManager.clearCache();
   }
   const structuralDiffManager = new StructuralDiffManager(db);
@@ -736,62 +792,91 @@ async function main() {
   let steps = buildSteps(workspaceIndexer, commitIndexer, embeddingIndexer, storyEngine);
 
   // Skip embedding step if --no-embeddings flag is set
-  if (opts.noEmbeddings) {
+  if (options.noEmbeddings) {
     steps = steps.filter(s => s.id !== 'embedding_index');
     console.log('🔧 Embeddings: disabled (--no-embeddings flag)');
   }
 
-  const commits = git.getRecentCommits(opts.commitCount);
+  const commits = await git.getRecentCommits(options.commitCount);
   if (!commits.length) {
     throw new Error('No commits available to analyze');
   }
 
   // Configure CST/hybrid facts settings (note: config is read-only in test context)
-  if (opts.enableCst || opts.enableAugment || opts.testHybrid) {
-    console.log(`🔧 CST Tracking: ${opts.enableCst ? 'enabled' : 'disabled'}, Augmentation: ${opts.enableAugment ? 'enabled' : 'disabled'}`);
+  if (options.enableCst || options.enableAugment || options.testHybrid) {
+    console.log(`🔧 CST Tracking: ${options.enableCst ? 'enabled' : 'disabled'}, Augmentation: ${options.enableAugment ? 'enabled' : 'disabled'}`);
   }
 
   // Ensure HEAD is in the list (it should be, but verify)
-  const headSha = git.getHeadSha();
-  const headIncluded = commits.some(c => c.sha === headSha);
+  const headSha = await git.getHeadSha();
+  const headIncluded = commits.some((c: any) => c.sha === headSha);
   if (!headIncluded) {
     // Add HEAD as the first commit (most recent)
-    const headCommit = git.getCommitInfo(headSha);
+    const headCommit = await git.getCommitInfo(headSha);
     commits.unshift(headCommit);
     // Limit to requested count
-    commits.splice(opts.commitCount);
+    commits.splice(options.commitCount);
   }
 
-  console.log(`📋 Analyzing ${commits.length} commits (HEAD: ${headSha.substring(0, 8)})`);
+  // Populate commits_metadata
+  const { DatabaseHelpers } = await import('../src/storage/database');
+
+  console.log(`📝 Populating metadata for ${commits.length} commits...`);
+
+  // Fetch file counts first
+  const commitsWithFiles = await Promise.all(commits.map(async (c) => {
+    const files = await git.getFileChanges(c.sha);
+    return { ...c, fileCount: files.length };
+  }));
+
+  db.transaction(() => {
+    for (const commit of commitsWithFiles) {
+      if (!commit.author) {
+        console.warn(`⚠️ Missing author for ${commit.sha}, defaulting to 'Unknown'`);
+      }
+      DatabaseHelpers.insertCommitMetadata(db, {
+        sha: commit.sha,
+        author: commit.author || 'Unknown',
+        date: commit.date, // Already ISO string
+        message: commit.message,
+        parent: commit.parent,
+        filesChanged: commit.fileCount,
+        loadedAt: new Date().toISOString()
+      });
+    }
+  })();
+
+  const shas = commits.map(c => c.sha);
+  console.log(`📋 Analyzing ${shas.length} commits (HEAD: ${shas[0].substring(0, 8)})`);
 
   // Build explicit timeline (like refactorPipeline.ts does)
-  const workspaceParts = opts.includeWorkspace
+  const workspaceParts = options.includeWorkspace
     ? new Set<'staged' | 'unstaged'>(['staged', 'unstaged'])
     : undefined;
 
   const explicitTimeline = buildExplicitTimeline({
-    includeUnstaged: opts.includeWorkspace && (workspaceParts?.has('unstaged') ?? true),
-    includeStaged: opts.includeWorkspace && (workspaceParts?.has('staged') ?? true),
-    selectedCommitShas: commits.map(c => c.sha)
+    includeUnstaged: options.includeWorkspace && (workspaceParts?.has('unstaged') ?? true),
+    includeStaged: options.includeWorkspace && (workspaceParts?.has('staged') ?? true),
+    selectedCommitShas: commits.map((c: any) => c.sha)
   });
 
   const initialState: any = {
-    selectedCommitShas: commits.map(c => c.sha),
-    includeWorkspace: opts.includeWorkspace,
+    selectedCommitShas: commits.map((c: any) => c.sha),
+    includeWorkspace: options.includeWorkspace,
     workspaceParts,
     explicitTimeline,
     completedSteps: new Set(),
     errors: []
   };
 
-  const replayAnchor = opts.replayFrom || opts.replayStep || '';
+  const replayAnchor = options.replayFrom || options.replayStep || '';
   let replayIndex = replayAnchor ? steps.findIndex(s => s.id === replayAnchor) : -1;
   if (replayAnchor && replayIndex === -1) {
     console.warn(`⚠ Replay target '${replayAnchor}' not found; running full pipeline`);
   } else if (replayIndex >= 0) {
-    const snap = loadStepSnapshot(replayAnchor, opts.snapshotDir);
+    const snap = loadStepSnapshot(replayAnchor, options.snapshotDir);
     if (!snap) {
-      throw new Error(`Snapshot for '${replayAnchor}' not found at ${opts.snapshotDir}`);
+      throw new Error(`Snapshot for '${replayAnchor}' not found at ${options.snapshotDir}`);
     }
     applySnapshotToState(initialState, snap as any);
     for (let i = 0; i < replayIndex; i++) {
@@ -804,6 +889,9 @@ async function main() {
       };
     }
   }
+
+
+
 
   const diagnostics: any = {
     startTime: new Date().toISOString(),
@@ -846,18 +934,18 @@ async function main() {
       const stepId = event.step.id;
       const stepStartTime = stepStartTimes.get(stepId) || Date.now();
 
-      if (opts.focusSteps && !opts.focusSteps.has(stepId)) {
+      if (options.focusSteps && !options.focusSteps.has(stepId)) {
         console.log(`✅ ${event.step.label} (not focused)`);
         return;
       }
 
       // Use deep serialization if fullReport is enabled, otherwise use shallow
-      const fullData = opts.fullReport
+      const fullData = options.fullReport
         ? deepSerializeStepState(stepId, event.state)
         : serializeStepState(stepId, event.state);
 
       // Extract metrics from full data
-      const metrics = opts.fullReport ? extractStepMetrics(stepId, fullData) : {};
+      const metrics = options.fullReport ? extractStepMetrics(stepId, fullData) : {};
 
       // For hash calculation, use shallow serialization to maintain compatibility
       const data = serializeStepState(stepId, event.state);
@@ -869,7 +957,7 @@ async function main() {
 
       // Measure snapshot load performance
       const loadStart = Date.now();
-      const baseline = loadStepSnapshot(stepId, opts.snapshotDir);
+      const baseline = loadStepSnapshot(stepId, options.snapshotDir);
       const loadTime = Date.now() - loadStart;
       if (loadTime > 10) {
         console.warn(`[Diagnostics] Slow snapshot load for ${stepId}: ${loadTime}ms`);
@@ -987,21 +1075,21 @@ async function main() {
         note = `Δ baseline (expected ${baseline.hash.substring(0, 8)})`;
       } else if (baseline) {
         note = 'matches baseline';
-      } else if (!opts.freeze) {
+      } else if (!options.freeze) {
         note = 'no baseline';
       }
 
       const stepEndTime = Date.now();
       const stepDuration = stepEndTime - stepStartTime;
 
-      if (opts.fullReport) {
+      if (options.fullReport) {
         console.log(`✅ ${event.step.label} :: hash=${hash.toString().substring(0, 8)} ${note} ${summary ? `:: ${summary}` : ''} | Metrics: ${JSON.stringify(metrics).substring(0, 100)}...`);
       } else {
         console.log(`✅ ${event.step.label} :: hash=${hash.toString().substring(0, 8)} ${note} ${summary ? `:: ${summary}` : ''}`);
       }
 
-      if (opts.freeze && data) {
-        saveStepSnapshot(stepId, event.state, opts.snapshotDir);
+      if (options.freeze && data) {
+        saveStepSnapshot(stepId, event.state, options.snapshotDir);
       }
 
       const stepEntry: any = {
@@ -1013,7 +1101,7 @@ async function main() {
         durationMs: stepDuration
       };
 
-      if (opts.fullReport) {
+      if (options.fullReport) {
         stepEntry.metrics = metrics;
         if (llmSummary) {
           stepEntry.llmSummary = llmSummary;
@@ -1032,7 +1120,7 @@ async function main() {
   let driftEndTime = 0;
 
   // Wrap drift step to measure performance if testing hybrid
-  if (opts.testHybrid) {
+  if (options.testHybrid) {
     const driftIndex = steps.findIndex(s => s.id === 'drift');
     if (driftIndex >= 0) {
       const originalDriftStep = steps[driftIndex];
@@ -1097,7 +1185,7 @@ async function main() {
   }
 
   // Aggregate metrics from all steps (if fullReport enabled)
-  if (opts.fullReport) {
+  if (options.fullReport) {
     const indexCommitsStep = diagnostics.steps.find((s: any) => s.stepId === 'index_commits');
     const workingStep = diagnostics.steps.find((s: any) => s.stepId === 'working');
     const intendedStep = diagnostics.steps.find((s: any) => s.stepId === 'intended');
@@ -1245,7 +1333,7 @@ async function main() {
   console.log(`Diagnostics saved to ${diagPath}`);
 
   // Generate markdown report if fullReport is enabled
-  if (opts.fullReport) {
+  if (options.fullReport) {
     const reportPath = path.join(outDir, 'pipeline_report.md');
     let reportMd = `# Pipeline Diagnostics Report\n\n`;
 
@@ -1390,8 +1478,8 @@ async function main() {
   }
 
   // Validate hybrid facts database if requested
-  if (opts.validateTimeline) {
-    await validateHybridFactsDatabase(db, commits.map(c => c.sha), finalState.explicitTimeline || []);
+  if (options.validateTimeline) {
+    await validateHybridFactsDatabase(db, commits.map((c: any) => c.sha), finalState.explicitTimeline || []);
   }
 
   if (finalState.errors.length > 0) {

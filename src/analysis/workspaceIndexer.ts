@@ -43,7 +43,7 @@ export class WorkspaceIndexer {
    * Analyze workspace overlay (staged or unstaged changes)
    */
   async analyzeWorkspace(mode: 'staged' | 'unstaged'): Promise<WorkspaceFacts | null> {
-    const headSha = this.git.getHeadSha();
+    const headSha = await this.git.getHeadSha();
     const changedFiles = mode === 'staged'
       ? await this.git.getStagedFiles()
       : await this.git.getUnstagedFiles();
@@ -51,14 +51,17 @@ export class WorkspaceIndexer {
     // Filter files using centralized path filter
     const gitRoot = this.git.getRoot();
 
-    const filteredFiles = changedFiles.filter(file => 
-      filterPath(file.path, {
+    const filteredFiles = [];
+    for (const file of changedFiles) {
+      if (await filterPath(file.path, {
         git: this.git,
         gitRoot,
         status: file.status,
         skipSizeCheck: file.status === 'D'
-      })
-    );
+      })) {
+        filteredFiles.push(file);
+      }
+    }
 
     if (filteredFiles.length === 0) {
       return null;
@@ -99,8 +102,8 @@ export class WorkspaceIndexer {
         try {
           if (status === 'D') {
             // FILE DELETED
-            const headBlobSha = this.git.getBlobSha('HEAD', filePath);
-            const headContent = this.git.safeGetFileContent('HEAD', filePath);
+            const headBlobSha = await this.git.getBlobSha('HEAD', filePath);
+            const headContent = await this.git.safeGetFileContent('HEAD', filePath);
             const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
               filePath,
               headBlobSha,
@@ -160,8 +163,8 @@ export class WorkspaceIndexer {
             };
           } else {
             // FILE MODIFIED (exists at HEAD)
-            const headBlobSha = this.git.getBlobSha('HEAD', filePath);
-            const headContent = this.git.safeGetFileContent('HEAD', filePath);
+            const headBlobSha = await this.git.getBlobSha('HEAD', filePath);
+            const headContent = await this.git.safeGetFileContent('HEAD', filePath);
             const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
               filePath,
               headBlobSha,
@@ -186,7 +189,7 @@ export class WorkspaceIndexer {
             );
 
             // Extract and save hybrid facts for modified workspace files with mode-specific version
-            const headFileHash = await this.computeFileHashForFacts(filePath, 'HEAD', headContent, headSnapshot.symbols);
+            const headFileHash = await this.computeFileHashForFacts(filePath, 'HEAD', headContent);
             await this.extractAndSaveHybridFacts(filePath, version, workingContent, workspaceSnapshot.symbols, headFileHash);
 
             // Risk detection
@@ -434,8 +437,7 @@ export class WorkspaceIndexer {
   private async computeFileHashForFacts(
     filePath: string,
     version: string,
-    content: string,
-    existingSymbols: any[]
+    content: string
   ): Promise<string | undefined> {
     const language = detectLanguage(filePath);
     if (!language) return undefined;

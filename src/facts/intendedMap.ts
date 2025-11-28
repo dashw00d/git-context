@@ -29,7 +29,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
   for (const sha of orderedShas) {
     // Load symbol deltas for this commit
     const symbolsStmt = db.prepare(`
-      SELECT symbol_id, name, path, signature_post, signature_pre, change_type, mod_reason
+      SELECT symbol_id, name, path, signature, change_type, mod_reason
       FROM symbols WHERE sha = ?
     `);
     const symbols = symbolsStmt.all(sha) as any[];
@@ -50,7 +50,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
           expect: 'present',
           lastName: symbol.name,
           lastPath: symbol.path,
-          lastSig: symbol.signature_post || symbol.signature_pre,
+          lastSig: symbol.signature,
           lastSha: sha
         });
       } else if (symbol.change_type === 'modified') {
@@ -59,7 +59,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
           expect: 'present',
           lastName: symbol.name,
           lastPath: symbol.path,
-          lastSig: symbol.signature_post || symbol.signature_pre,
+          lastSig: symbol.signature,
           lastSha: sha
         });
       }
@@ -78,7 +78,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
       if (oldState && oldState.expect === 'present') {
         // Remove the old symbol entry
         intended.delete(oldKey);
-        
+
         // Set new symbol as present, marking it as renamed
         intended.set(newKey, {
           expect: 'present',
@@ -104,12 +104,12 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
     for (const symbol of symbols) {
       if (symbol.change_type === 'removed') {
         const key = symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
-        
+
         // Skip if this symbol was renamed (continuity, not removal)
         if (renamedOldIds.has(key)) {
           continue;
         }
-        
+
         intended.set(key, {
           expect: 'absent',
           lastSha: sha

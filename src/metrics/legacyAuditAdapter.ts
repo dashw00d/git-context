@@ -1,11 +1,11 @@
 /**
  * Legacy Audit Adapter
  *
- * Minimal adapter for auditLegacy() function
- * Transforms test data to call the real legacy audit logic
+ * Minimal adapter for LegacyDetector V2
+ * Transforms test data to call the real legacy audit logic via V2 detector
  */
 
-import { auditLegacy, LegacyAuditResult } from '../facts/legacyAudit';
+import { LegacyDetector, LegacyAuditResult } from '../facts/legacyAudit';
 import { IntendedState } from '../facts/intendedMap';
 import { WorkingSnapshot } from '../facts/workingSnapshot';
 import { ScopeSet } from '../facts/scope';
@@ -90,8 +90,13 @@ export async function auditLegacyFromFacts(
       allPaths: new Set([...allPaths, ...workingSymbols.map(s => s.id)])
     };
 
-    // Run real legacy audit
-    const result = await auditLegacy(intended, working, scope);
+    // Use V2 detector with BaseDetector enhancements
+    const legacyDetector = new LegacyDetector();
+    const result = await legacyDetector.detect({
+      intended,
+      working,
+      scope
+    });
 
     // Transform result to test metrics
     return {
@@ -120,8 +125,8 @@ export async function auditLegacyFromFacts(
 }
 
 /**
- * Simplified legacy audit for when real auditLegacy is not available
- * NOTE: This is a fallback - prefer auditLegacyFromFacts which calls real auditLegacy()
+ * Simplified legacy audit for when real LegacyDetector is not available
+ * NOTE: This is a fallback - prefer auditLegacyFromFacts which calls real LegacyDetector V2
  */
 export function auditLegacySimple(
   intendedSymbols: Array<{ id: string; expect?: 'present' | 'absent' }>,

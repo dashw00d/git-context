@@ -5,6 +5,7 @@ import { detectLanguage, getTestFilePattern } from '../utils/config';
 import { filterPath } from '../utils/pathFilter';
 import { GitOperations } from './git';
 import { SemanticChangeDetector } from './semanticChanges';
+import { logDebug } from '../utils/logger';
 
 import { assignDNAIds } from './symbolDna';
 
@@ -33,7 +34,7 @@ export class SymbolExtractor {
 
     // Collect symbols from all files
     for (const file of files) {
-      if (this.shouldAnalyzeFile(file.path)) {
+      if (await this.shouldAnalyzeFile(file.path)) {
         const fileSymbols = await this.extractFileSymbols(sha, file);
         added.push(...fileSymbols.added);
         removed.push(...fileSymbols.removed);
@@ -44,7 +45,7 @@ export class SymbolExtractor {
     // Get parent commit for comparison
     let parentSha: string | undefined;
     try {
-      const commitInfo = this.git.getCommitInfo(sha);
+      const commitInfo = await this.git.getCommitInfo(sha);
       parentSha = commitInfo.parent;
     } catch (error) {
       // No parent commit available
@@ -95,7 +96,7 @@ export class SymbolExtractor {
 
       // Get current file content (use safe method to handle path mismatches)
       console.log(`[SYMBOLS] Extracting ${file.path} at ${sha.substring(0, 8)} (status: ${file.status})`);
-      const currentContent = this.git.safeGetFileContent(sha, file.path);
+      const currentContent = await this.git.safeGetFileContent(sha, file.path);
 
       // Skip if file doesn't exist at this SHA (path mismatch, rename, or file added later)
       if (!currentContent) {
@@ -107,18 +108,20 @@ export class SymbolExtractor {
       let previousContent: string | null = null;
       if (file.status !== 'A' && file.oldPath) {
         try {
-          const parentSha = this.git.getCommitInfo(sha).parent;
+          const commitInfo = await this.git.getCommitInfo(sha);
+          const parentSha = commitInfo.parent;
           if (parentSha) {
-            previousContent = this.git.safeGetFileContent(parentSha, file.oldPath);
+            previousContent = await this.git.safeGetFileContent(parentSha, file.oldPath);
           }
         } catch {
           // File didn't exist in parent, treat as new
         }
       } else if (file.status !== 'A') {
         try {
-          const parentSha = this.git.getCommitInfo(sha).parent;
+          const commitInfo = await this.git.getCommitInfo(sha);
+          const parentSha = commitInfo.parent;
           if (parentSha) {
-            previousContent = this.git.safeGetFileContent(parentSha, file.path);
+            previousContent = await this.git.safeGetFileContent(parentSha, file.path);
           }
         } catch {
           // File didn't exist in parent, treat as new
@@ -145,8 +148,8 @@ export class SymbolExtractor {
         previousSymbolsWithDNA = assignDNAIds(previousSymbols, bodyTexts);
       }
 
-      // Compare and categorize changes
-      const changes = this.compareSymbolSets(previousSymbols, currentSymbols, file.path);
+      // Compare and categorize changes using DNA-based symbols for accurate tracking
+      const changes = this.compareSymbolSets(previousSymbolsWithDNA, currentSymbolsWithDNA, file.path);
 
       // Enhance modified symbols with semantic information
       for (const delta of changes.modified) {
@@ -189,7 +192,7 @@ export class SymbolExtractor {
     const modified: SymbolDelta[] = [];
 
     for (const file of files) {
-      if (this.shouldAnalyzeFile(file.path)) {
+      if (await this.shouldAnalyzeFile(file.path)) {
         const fileSymbols = await this.extractWorkingTreeFileSymbols(file, options);
         added.push(...fileSymbols.added);
         removed.push(...fileSymbols.removed);
@@ -215,7 +218,7 @@ export class SymbolExtractor {
     try {
       // Get current working tree content (staged or unstaged)
       const currentContent = options.staged
-        ? this.git.safeGetStagedContent(file.path)
+        ? await this.git.safeGetStagedContent(file.path)
         : this.git.safeGetWorkingContent(file.path);
 
       if (!currentContent) {
@@ -224,7 +227,7 @@ export class SymbolExtractor {
       }
 
       // Get HEAD content for comparison
-      const headContent = this.git.safeGetFileContent('HEAD', file.path);
+      const headContent = await this.git.safeGetFileContent('HEAD', file.path);
 
       // Extract symbols from both versions
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
@@ -444,12 +447,12 @@ export class SymbolExtractor {
   /**
    * Check if a file should be analyzed for symbols
    */
-  private shouldAnalyzeFile(filePath: string): boolean {
+  private async shouldAnalyzeFile(filePath: string): Promise<boolean> {
     const language = detectLanguage(filePath);
     if (!language) return false;
 
     // Use centralized path filter (primary check)
-    if (!filterPath(filePath, { git: this.git })) {
+    if (!(await filterPath(filePath, { git: this.git }))) {
       return false;
     }
 
@@ -477,15 +480,19 @@ export class SymbolExtractor {
     const modified: SymbolDelta[] = [];
 
     for (const file of stagedChanges) {
-      if (file.status === 'M' && this.shouldAnalyzeFile(file.path)) {
+      if (file.status === 'M' && await this.shouldAnalyzeFile(file.path)) {
         try {
-          // Get staged content
-          const stagedContent = this.git.getStagedDiff();
-          // This is complex - we'd need to parse the diff to extract staged content
-          // For now, just mark as modified
-          console.log(`Staged changes in ${file.path} - would extract symbols`);
+          // TODO: Implement staged content extraction
+          // This requires parsing git diff output to extract the staged version of the file
+          // For now, we mark files as modified but don't extract symbols from staged changes
+          // Future implementation should:
+          // 1. Get staged diff for the file: this.git.getStagedDiff(file.path)
+          // 2. Parse diff to extract staged content
+          // 3. Extract symbols from staged content
+          // 4. Compare with working tree symbols to detect changes
+          logDebug(`[SymbolExtractor] Staged changes in ${file.path} - symbol extraction not yet implemented`);
         } catch (error) {
-          console.warn(`Failed to extract staged symbols from ${file.path}:`, error);
+          logDebug(`[SymbolExtractor] Failed to process staged changes for ${file.path}: ${error}`);
         }
       }
     }

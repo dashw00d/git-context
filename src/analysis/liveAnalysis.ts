@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import { LiveDiffTracker } from '../liveTracker';
 import { CockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { getWorkingSnapshot } from '../facts/workingSnapshot';
-import { detectDrift } from '../facts/driftDetector';
-import { auditLegacy } from '../facts/legacyAudit';
+import { DriftDetector } from '../facts/driftDetector';
+import { LegacyDetector } from '../facts/legacyAudit';
 import { ScopeSet } from '../facts/scope';
 import { IntendedState, buildIntendedMap } from '../facts/intendedMap';
 import { logInfo, logDebug, logError } from '../utils/logger';
@@ -89,8 +89,13 @@ export class LiveAnalysisEngine {
             // 4. Get Working Snapshot (with Live Overrides)
             const working = await getWorkingSnapshot(scopePaths, liveOverrides);
 
-            // 5. Run Detectors
-            const drift = detectDrift(intended, working);
+            // 5. Run Detectors (using V2 detectors with BaseDetector enhancements)
+            const driftDetector = new DriftDetector();
+            const drift = await driftDetector.detect({
+                intended,
+                working,
+                commitShas: state.bundleFacts.bundle.shas || []
+            });
 
             // Detect hybrid drifts (CST facts)
             const config = getExtensionConfig();
@@ -136,7 +141,12 @@ export class LiveAnalysisEngine {
                 drift.hybridDrifts = hybridDrifts;
             }
 
-            const legacy = await auditLegacy(intended, working, scope);
+            const legacyDetector = new LegacyDetector();
+            const legacy = await legacyDetector.detect({
+                intended,
+                working,
+                scope
+            });
 
             // 6. Update State
             this.orchestrator.updateLiveState({

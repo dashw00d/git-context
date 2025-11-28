@@ -67,6 +67,9 @@ export function detectPatternDriftSimple(
 ): PatternDriftMetrics {
   // Simple heuristics for pattern drift detection
 
+  // Create a map of intended symbols for comparison
+  const intendedMap = new Map(intendedSymbols.map(s => [s.id, s]));
+
   // Detect mixed targets (symbols with similar names but different patterns)
   const nameGroups = new Map<string, string[]>();
   for (const symbol of workingSymbols) {
@@ -91,13 +94,27 @@ export function detectPatternDriftSimple(
     oldNamespacePatterns.some(pattern => pattern.test(symbol.name))
   ).length;
 
+  // Compare working symbols against intended state to detect drift
+  // Symbols that exist in working but are marked as 'absent' in intended indicate drift
+  let driftCount = 0;
+  for (const symbol of workingSymbols) {
+    const intended = intendedMap.get(symbol.id);
+    if (intended && intended.expect === 'absent') {
+      driftCount++;
+    }
+  }
+
+  const driftPercent = intendedSymbols.length > 0
+    ? driftCount / intendedSymbols.length
+    : oldNamespaces / Math.max(workingSymbols.length, 1);
+
   return {
     mixedTargets,
     oldNamespaces,
     conventionDrift: {
       dominantConvention: 'camelCase', // Simplified
-      driftPercent: oldNamespaces / Math.max(workingSymbols.length, 1),
-      driftSymbolCount: oldNamespaces
+      driftPercent,
+      driftSymbolCount: driftCount || oldNamespaces
     }
   };
 }

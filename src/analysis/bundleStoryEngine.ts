@@ -116,7 +116,7 @@ export class BundleStoryEngine {
       : await generateEmbedding(this.buildBundleShard(bundleFacts, commitFacts));
 
     // PROJECT ISOLATION: Filter by project ID
-    const projectId = getProjectId();
+    const projectId = await getProjectId();
     if (!projectId) {
       logInfo('[BundleStory] No project ID found, skipping retrieval');
       return this.emptyHistory();

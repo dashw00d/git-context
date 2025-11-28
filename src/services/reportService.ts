@@ -5,7 +5,6 @@ import { GitOperations } from '../analysis/git';
 import { getReportManager } from '../storage/reportManager';
 import { getDatabaseManager } from '../storage/database';
 import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
-import { LlmAnalyst } from '../analysis/llmAnalyst/runner';
 import { getExtensionConfig } from '../utils/config';
 import { RefactorBundleFacts } from '../facts/types';
 import { CommitAnalysis } from '../types';

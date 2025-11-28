@@ -265,8 +265,9 @@ export class LiveDiffTracker extends EventEmitter {
             const tree = await this.parser.parse(content, language);
             if (!tree) return;
 
-            // Get existing symbols for hybrid augmentation
-            const existingSymbols = this.symbolCache.get(doc.uri.toString()) || [];
+            // Get existing symbols for hybrid augmentation (future use)
+            // TODO: Use existingSymbols for hybrid augmentation when implementing CST+semantic hybrid facts
+            // const existingSymbols = this.symbolCache.get(doc.uri.toString()) || [];
 
             // Extract hybrid facts
             const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);

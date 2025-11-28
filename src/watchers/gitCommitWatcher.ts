@@ -34,7 +34,7 @@ export class GitCommitWatcher {
       // Just re-index the new commit
       const pipeline = await getRefactorPipeline();
       const git = new GitOperations();
-      const newSha = git.getHeadSha();
+      const newSha = await git.getHeadSha();
 
       await pipeline.indexCommits([newSha]);
 

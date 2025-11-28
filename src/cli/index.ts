@@ -34,11 +34,11 @@ program
       const branchManager = new BranchManager(db);
 
       // Load recent commits directly
-      const recentCommits = git.getRecentCommits(count);
+      const recentCommits = await git.getRecentCommits(count);
       const shas = recentCommits.map(c => c.sha);
 
       // Record commits in branch manager
-      const branch = git.getCurrentBranch();
+      const branch = await git.getCurrentBranch();
       if (branch && recentCommits.length > 0) {
         for (const commit of recentCommits) {
           branchManager.recordCommit(commit.sha, branch);
@@ -191,7 +191,7 @@ program
         logInfo(chalk.blue(`Reindexing ${shas.length} commits for modules: ${modules.join(', ')}...`));
       } else {
         // Index recent commits
-        const recentCommits = git.getRecentCommits(10);
+        const recentCommits = await git.getRecentCommits(10);
         shas = recentCommits.map(c => c.sha);
         logInfo(chalk.blue(`Indexing ${shas.length} recent commits...`));
       }

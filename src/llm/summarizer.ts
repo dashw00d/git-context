@@ -180,8 +180,8 @@ export class LLMSummarizer {
       try {
         // Get diff context around missing symbol
         // Use parent commit for "before" and the commit where it was last seen for "after"
-        const beforeContent = git.safeGetFileContent(`${lastSha}~1`, filePath) || '';
-        const afterContent = git.safeGetFileContent(lastSha, filePath) || '';
+        const beforeContent = (await git.safeGetFileContent(`${lastSha}~1`, filePath)) || '';
+        const afterContent = (await git.safeGetFileContent(lastSha, filePath)) || '';
 
         if (beforeContent || afterContent) {
           snippets.push({

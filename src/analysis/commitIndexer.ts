@@ -160,8 +160,8 @@ export class CommitIndexer {
   private async indexCommit(sha: string, opts?: { force?: boolean; modules?: string[] }): Promise<CommitFacts> {
     logInfo(`[CommitIndexer] Indexing commit ${sha}`);
 
-    const commitInfo = this.git.getCommitInfo(sha);
-    const files = this.git.getFileChanges(sha);
+    const commitInfo = await this.git.getCommitInfo(sha);
+    const files = await this.git.getFileChanges(sha);
     const parentSha = commitInfo.parent;
 
     let totalSymbolsAdded = 0;
@@ -178,11 +178,12 @@ export class CommitIndexer {
     const symbolChanges = new Map<string, { type: string; symbol: any; filePath: string }>();
 
     // Process each changed file
+    logInfo(`[CommitIndexer] Processing ${files.length} files for ${sha}`);
     for (const file of files) {
       const { path, status } = file;
 
       // Use centralized path filter
-      const filterResult = shouldProcessPathWithLog(path, {
+      const filterResult = await shouldProcessPathWithLog(path, {
         git: this.git,
         status,
         commitSha: sha,
@@ -195,10 +196,10 @@ export class CommitIndexer {
 
       if (status === 'D') {
         // File deleted - get parent snapshot only
-        
+
         if (parentSha) {
-          const parentBlobSha = this.git.getBlobSha(parentSha, path);
-          const parentContent = this.git.safeGetFileContent(parentSha, path);
+          const parentBlobSha = await this.git.getBlobSha(parentSha, path);
+          const parentContent = await this.git.safeGetFileContent(parentSha, path);
           const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
             path,
             parentBlobSha,
@@ -216,13 +217,19 @@ export class CommitIndexer {
       }
 
       // Get current blob
-      const currentBlobSha = this.git.getBlobSha(sha, path);
-      const currentContent = this.git.safeGetFileContent(sha, path);
+      const currentBlobSha = await this.git.getBlobSha(sha, path);
+      const currentContent = await this.git.safeGetFileContent(sha, path);
       const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
         path,
         currentBlobSha,
         currentContent
       );
+
+      if (currentSnapshot.symbols.length > 0) {
+        logDebug(`[CommitIndexer] Found ${currentSnapshot.symbols.length} symbols in ${path}`);
+      } else {
+        logDebug(`[CommitIndexer] No symbols found in ${path} (lang: ${currentSnapshot.language})`);
+      }
 
       // Extract and save hybrid facts (CST-only or hybrid augmentation)
       await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
@@ -239,8 +246,8 @@ export class CommitIndexer {
         }
       } else if (status === 'M' && parentSha) {
         // File modified - compare snapshots
-        const parentBlobSha = this.git.getBlobSha(parentSha, path);
-        
+        const parentBlobSha = await this.git.getBlobSha(parentSha, path);
+
         // Quick check: if blob SHAs are identical, skip expensive operations
         if (parentBlobSha === currentBlobSha) {
           logDebug(`[CommitIndexer] Skipping diff for ${path} - identical blob SHA`);
@@ -249,8 +256,8 @@ export class CommitIndexer {
           await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
           continue;
         }
-        
-        const parentContent = this.git.safeGetFileContent(parentSha, path);
+
+        const parentContent = await this.git.safeGetFileContent(parentSha, path);
         const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
           path,
           parentBlobSha,
@@ -297,7 +304,7 @@ export class CommitIndexer {
         maxStructuralChange = Math.max(maxStructuralChange, structDiff.structuralChangeScore);
 
         // Extract and save hybrid facts for modified files (with prior hash)
-        const parentFileHash = await this.computeFileHashForFacts(path, parentSha, parentContent, parentSnapshot.symbols);
+        const parentFileHash = await this.computeFileHashForFacts(path, parentSha, parentContent);
         await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols, parentFileHash);
 
         // Detect risks based on structural changes
@@ -360,7 +367,11 @@ export class CommitIndexer {
     };
 
     // Store symbol history for detailed tracking
+    logInfo(`[CommitIndexer] Storing ${symbolChanges.size} symbol changes for ${sha}`);
     await this.storeSymbolHistory(sha, symbolChanges, blastRadiusResult.impactScore);
+
+    // Store symbols into symbols table (legacy support for intendedMap)
+    await this.storeSymbols(sha, symbolChanges);
 
     // Store edges into edges table (skip if modules filter excludes edges)
     if (!opts?.modules || opts.modules.includes('edges')) {
@@ -381,6 +392,42 @@ export class CommitIndexer {
     await this.updateHotspots(sha, symbolChanges, files);
 
     return facts;
+  }
+
+  /**
+   * Store symbols into the legacy symbols table
+   */
+  private async storeSymbols(
+    sha: string,
+    symbolChanges: Map<string, { type: string; symbol: any; filePath: string }>
+  ): Promise<void> {
+    const db = getDatabaseManager().getDatabase();
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO symbols
+      (sha, path, symbol_id, name, kind, signature, change_type, diff_snippet_pre, diff_snippet_post, confidence)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    db.transaction(() => {
+      for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
+        // Map symbol data to table columns
+        // Note: signature_pre/post are not in schema, using signature for now
+        // diff_snippet_pre/post are in schema
+
+        stmt.run([
+          sha,
+          filePath,
+          symbol.id, // Use symbol.id (e.g. "path:kind:name") or dnaId? Schema says symbol_id.
+          symbol.name,
+          symbol.kind,
+          symbol.signature || '',
+          type,
+          '', // diff_snippet_pre (not easily available here without diffing again)
+          '', // diff_snippet_post
+          1.0 // confidence
+        ]);
+      }
+    })();
   }
 
   /**
@@ -433,8 +480,7 @@ export class CommitIndexer {
   private async computeFileHashForFacts(
     filePath: string,
     commitSha: string,
-    content: string,
-    existingSymbols: any[]
+    content: string
   ): Promise<string | undefined> {
     const language = detectLanguage(filePath);
     if (!language) return undefined;
@@ -593,7 +639,7 @@ export class CommitIndexer {
       const { path, status } = file;
 
       // Use centralized path filter
-      const filterResult = shouldProcessPathWithLog(path, {
+      const filterResult = await shouldProcessPathWithLog(path, {
         git: this.git,
         status: status as 'A' | 'M' | 'D' | 'R' | 'C' | 'U',
         commitSha: sha,
@@ -607,8 +653,8 @@ export class CommitIndexer {
       if (status === 'D') {
         // File deleted - get parent snapshot edges as removed
         if (parentSha) {
-          const parentBlobSha = this.git.getBlobSha(parentSha, path);
-          const parentContent = this.git.safeGetFileContent(parentSha, path);
+          const parentBlobSha = await this.git.getBlobSha(parentSha, path);
+          const parentContent = await this.git.safeGetFileContent(parentSha, path);
           const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
             path,
             parentBlobSha,
@@ -631,8 +677,8 @@ export class CommitIndexer {
       }
 
       // Get current snapshot edges
-      const currentBlobSha = this.git.getBlobSha(sha, path);
-      const currentContent = this.git.safeGetFileContent(sha, path);
+      const currentBlobSha = await this.git.getBlobSha(sha, path);
+      const currentContent = await this.git.safeGetFileContent(sha, path);
       const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
         path,
         currentBlobSha,
@@ -654,8 +700,8 @@ export class CommitIndexer {
         }
       } else if (status === 'M' && parentSha) {
         // File modified - compare edges
-        const parentBlobSha = this.git.getBlobSha(parentSha, path);
-        const parentContent = this.git.safeGetFileContent(parentSha, path);
+        const parentBlobSha = await this.git.getBlobSha(parentSha, path);
+        const parentContent = await this.git.safeGetFileContent(parentSha, path);
         const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
           path,
           parentBlobSha,
@@ -725,7 +771,7 @@ export class CommitIndexer {
     symbolChanges: Map<string, { type: string; symbol: any }>,
     files: any[]
   ): Promise<void> {
-    const commitInfo = this.git.getCommitInfo(sha);
+    const commitInfo = await this.git.getCommitInfo(sha);
     const author = commitInfo.author;
 
     // Update file-level hotspots (with threshold check)

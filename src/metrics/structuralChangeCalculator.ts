@@ -3,9 +3,11 @@
  *
  * Adapter for StructuralDiffManager.getOrCreateStructuralDiff()
  * Provides structural change metrics for tests
+ * 
+ * NOTE: This intentionally uses simplified calculation for test adapters.
+ * In production, use StructuralDiffManager.getOrCreateStructuralDiff() directly
+ * which requires database access and difftastic integration.
  */
-
-import { StructuralDiffManager, StructuralDiffMetrics } from '../analysis/structuralDiffManager';
 
 export interface StructuralChangeMetrics {
   structuralChangeScore: number; // 0-1

@@ -46,7 +46,7 @@ export class EmbeddingIndexer {
    */
   private async indexCommitShards(commitFacts: CommitFacts[], client: any): Promise<void> {
     const qdrant = getQdrantClient();
-    const projectId = getProjectId() || 'unknown'; // Get unique project identifier
+    const projectId = (await getProjectId()) || 'unknown'; // Get unique project identifier
     const collectionName = qdrant.getCollectionName('commits', projectId);
     
     // Ensure collection exists (handles both base and project-specific collections)
@@ -74,7 +74,7 @@ export class EmbeddingIndexer {
    */
   private async indexSymbolShards(commitFacts: CommitFacts[], client: any): Promise<void> {
     const qdrant = getQdrantClient();
-    const projectId = getProjectId() || 'unknown'; // Get unique project identifier
+    const projectId = (await getProjectId()) || 'unknown'; // Get unique project identifier
     const collectionName = qdrant.getCollectionName('symbols', projectId);
     
     // Ensure collection exists (handles both base and project-specific collections)
@@ -235,7 +235,7 @@ export class EmbeddingIndexer {
    */
   private async indexThemeShards(commitFacts: CommitFacts[], client: any): Promise<void> {
     const qdrant = getQdrantClient();
-    const projectId = getProjectId() || 'unknown';
+    const projectId = (await getProjectId()) || 'unknown';
     const collectionName = qdrant.getCollectionName('patterns', projectId);
     
     // Ensure collection exists (handles both base and project-specific collections)

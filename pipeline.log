@@ -1,0 +1,985 @@
+🚀 Starting Pipeline Diagnostics...
+📂 Workspace: /home/ryan/plugins/git-context
+Commit count: 3
+Include workspace: true
+Reset DB: true
+Isolate to /src: false
+Real LLM: false
+DatabaseManager initialized with path: /home/ryan/plugins/git-context/.git/commit-tracker/commit_tracker.db
+🧹 Closed existing database connection
+🧹 Deleted existing database file at /home/ryan/plugins/git-context/.git/commit-tracker/commit_tracker.db
+[DB-INIT] Starting database initialization...
+[DB-INIT] Loading SQL.js WASM...
+[DB-INIT] WASM loaded in 6ms
+[DB-INIT] Initializing schema...
+[DB-INIT] Running modular schema migration...
+[MIGRATION] edges v1 requires reindex: run 'ct index --reindex'
+[DB-INIT] Schema initialized in 76ms
+[DB-INIT] Total initialization time: 85ms
+📊 Schema: 9 modules, audit gaps: 0
+🔧 Snapshot cache: size increased to 500 for diagnostics
+🔧 Ignore paths: standard .gitignore only (no extra isolation)
+🔍 Verifying commit content...
+  Commit 3a5fa79: 40 files changed (benchmarks/output/llm_prompt_cleanup.txt, benchmarks/output/llm_prompt_discover.txt, benchmarks/output/llm_prompt_drift.txt, benchmarks/output/llm_prompt_intent.txt, benchmarks/output/llm_summarized_facts.json... (+35 more))
+  Commit 7bbd0eb: 97 files changed (backlog/IMPORTANCE-SCORE.md, benchmarks/fixtures/pipeline_frozen/bundle_facts.json, benchmarks/fixtures/pipeline_frozen/drift.json, benchmarks/fixtures/pipeline_frozen/hotspots.json, benchmarks/fixtures/pipeline_frozen/index_commits.json... (+92 more))
+  Commit 66b4ad7: 91 files changed (README.md, benchmarks/fixtures/sample.css, benchmarks/fixtures/sample.js, benchmarks/fixtures/sample.json, benchmarks/fixtures/sample.md... (+86 more))
+[BaseDetector:HotspotDetectorV2] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+[BaseDetector:MovedBlockDetectorV2] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+🔧 CST Tracking: enabled, Augmentation: enabled
+📝 Populating metadata for 3 commits...
+📋 Analyzing 3 commits (HEAD: 3a5fa79f)
+[Pipeline] Starting pipeline execution with 9 levels and 13 steps
+▶️  Analyze workspace changes
+[Pipeline] Started step: Analyze workspace changes
+▶️  Calculate analysis scope
+[Pipeline] Started step: Calculate analysis scope
+[Snapshot] Creating snapshot for benchmarks/output/llm_summarized_facts.json@WORKSPAC
+[Snapshot] Creating snapshot for benchmarks/output/pipeline_diagnostics.json@WORKSPAC
+[Snapshot] Creating snapshot for benchmarks/output/pipeline_report.md@WORKSPAC
+[Snapshot] Creating snapshot for benchmarks/pathFilter.test.ts@WORKSPAC
+[Snapshot] Creating snapshot for benchmarks/pipeline_diagnostics.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/bundleStoryEngine.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/commitIndexer.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/dependencies.ts@WORKSPAC
+✗ Failed to load tree-sitter parser for php: Error: Incompatible language version 0. Compatibility range 13 through 15.
+    at Parser.setLanguage (/home/ryan/plugins/git-context/node_modules/web-tree-sitter/src/parser.ts:158:15)
+    at TreeSitterParser.initializeParsers (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:32:20)
+    at async TreeSitterParser.parse (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:83:7)
+    at async TreeSitterParser.parseFile (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:94:18)
+    at async SymbolExtractor.extractSymbolsFromContent (/home/ryan/plugins/git-context/src/analysis/symbols.ts:319:18)
+    at async SymbolExtractor.extractSymbolsWithBodies (/home/ryan/plugins/git-context/src/analysis/symbols.ts:342:21)
+    at async SnapshotManager.getOrCreateSnapshot (/home/ryan/plugins/git-context/src/analysis/snapshotManager.ts:121:36)
+    at async /home/ryan/plugins/git-context/src/analysis/workspaceIndexer.ts:142:37
+✗ Failed to load tree-sitter parser for php: Error: Incompatible language version 0. Compatibility range 13 through 15.
+    at Parser.setLanguage (/home/ryan/plugins/git-context/node_modules/web-tree-sitter/src/parser.ts:158:15)
+    at TreeSitterParser.initializeParsers (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:32:20)
+    at async TreeSitterParser.parse (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:83:7)
+    at async TreeSitterParser.parseFile (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:94:18)
+    at async SymbolExtractor.extractSymbolsFromContent (/home/ryan/plugins/git-context/src/analysis/symbols.ts:319:18)
+    at async SymbolExtractor.extractSymbolsWithBodies (/home/ryan/plugins/git-context/src/analysis/symbols.ts:342:21)
+    at async SnapshotManager.getOrCreateSnapshot (/home/ryan/plugins/git-context/src/analysis/snapshotManager.ts:121:36)
+    at async /home/ryan/plugins/git-context/src/analysis/workspaceIndexer.ts:142:37
+✗ Failed to load tree-sitter parser for php: Error: Incompatible language version 0. Compatibility range 13 through 15.
+    at Parser.setLanguage (/home/ryan/plugins/git-context/node_modules/web-tree-sitter/src/parser.ts:158:15)
+    at TreeSitterParser.initializeParsers (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:32:20)
+    at async TreeSitterParser.parse (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:83:7)
+    at async TreeSitterParser.parseFile (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:94:18)
+    at async SymbolExtractor.extractSymbolsFromContent (/home/ryan/plugins/git-context/src/analysis/symbols.ts:319:18)
+    at async SymbolExtractor.extractSymbolsWithBodies (/home/ryan/plugins/git-context/src/analysis/symbols.ts:342:21)
+    at async SnapshotManager.getOrCreateSnapshot (/home/ryan/plugins/git-context/src/analysis/snapshotManager.ts:121:36)
+    at async /home/ryan/plugins/git-context/src/analysis/workspaceIndexer.ts:142:37
+✗ Failed to load tree-sitter parser for php: Error: Incompatible language version 0. Compatibility range 13 through 15.
+    at Parser.setLanguage (/home/ryan/plugins/git-context/node_modules/web-tree-sitter/src/parser.ts:158:15)
+    at TreeSitterParser.initializeParsers (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:32:20)
+    at async TreeSitterParser.parse (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:83:7)
+    at async TreeSitterParser.parseFile (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:94:18)
+    at async SymbolExtractor.extractSymbolsFromContent (/home/ryan/plugins/git-context/src/analysis/symbols.ts:319:18)
+    at async SymbolExtractor.extractSymbolsWithBodies (/home/ryan/plugins/git-context/src/analysis/symbols.ts:342:21)
+    at async SnapshotManager.getOrCreateSnapshot (/home/ryan/plugins/git-context/src/analysis/snapshotManager.ts:121:36)
+    at async /home/ryan/plugins/git-context/src/analysis/workspaceIndexer.ts:142:37
+✗ Failed to load tree-sitter parser for php: Error: Incompatible language version 0. Compatibility range 13 through 15.
+    at Parser.setLanguage (/home/ryan/plugins/git-context/node_modules/web-tree-sitter/src/parser.ts:158:15)
+    at TreeSitterParser.initializeParsers (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:32:20)
+    at async TreeSitterParser.parse (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:83:7)
+    at async TreeSitterParser.parseFile (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:94:18)
+    at async SymbolExtractor.extractSymbolsFromContent (/home/ryan/plugins/git-context/src/analysis/symbols.ts:319:18)
+    at async SymbolExtractor.extractSymbolsWithBodies (/home/ryan/plugins/git-context/src/analysis/symbols.ts:342:21)
+    at async SnapshotManager.getOrCreateSnapshot (/home/ryan/plugins/git-context/src/analysis/snapshotManager.ts:121:36)
+    at async /home/ryan/plugins/git-context/src/analysis/workspaceIndexer.ts:142:37
+✗ Failed to load tree-sitter parser for php: Error: Incompatible language version 0. Compatibility range 13 through 15.
+    at Parser.setLanguage (/home/ryan/plugins/git-context/node_modules/web-tree-sitter/src/parser.ts:158:15)
+    at TreeSitterParser.initializeParsers (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:32:20)
+    at async TreeSitterParser.parse (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:83:7)
+    at async TreeSitterParser.parseFile (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:94:18)
+    at async SymbolExtractor.extractSymbolsFromContent (/home/ryan/plugins/git-context/src/analysis/symbols.ts:319:18)
+    at async SymbolExtractor.extractSymbolsWithBodies (/home/ryan/plugins/git-context/src/analysis/symbols.ts:342:21)
+    at async SnapshotManager.getOrCreateSnapshot (/home/ryan/plugins/git-context/src/analysis/snapshotManager.ts:121:36)
+    at async /home/ryan/plugins/git-context/src/analysis/workspaceIndexer.ts:142:37
+✗ Failed to load tree-sitter parser for php: Error: Incompatible language version 0. Compatibility range 13 through 15.
+    at Parser.setLanguage (/home/ryan/plugins/git-context/node_modules/web-tree-sitter/src/parser.ts:158:15)
+    at TreeSitterParser.initializeParsers (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:32:20)
+    at async TreeSitterParser.parse (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:83:7)
+    at async TreeSitterParser.parseFile (/home/ryan/plugins/git-context/src/analysis/tree-sitter.ts:94:18)
+    at async SymbolExtractor.extractSymbolsFromContent (/home/ryan/plugins/git-context/src/analysis/symbols.ts:319:18)
+    at async SymbolExtractor.extractSymbolsWithBodies (/home/ryan/plugins/git-context/src/analysis/symbols.ts:342:21)
+    at async SnapshotManager.getOrCreateSnapshot (/home/ryan/plugins/git-context/src/analysis/snapshotManager.ts:121:36)
+    at async /home/ryan/plugins/git-context/src/analysis/workspaceIndexer.ts:142:37
+✓ Loaded tree-sitter parser for php
+✓ Loaded tree-sitter parser for javascript
+✓ Loaded tree-sitter parser for javascript
+✓ Loaded tree-sitter parser for javascript
+✓ Loaded tree-sitter parser for javascript
+✓ Loaded tree-sitter parser for javascript
+✓ Loaded tree-sitter parser for javascript
+✓ Loaded tree-sitter parser for javascript
+✓ Loaded tree-sitter parser for javascript
+✓ Loaded tree-sitter parser for typescript
+✓ Loaded tree-sitter parser for typescript
+✓ Loaded tree-sitter parser for typescript
+✓ Loaded tree-sitter parser for typescript
+✓ Loaded tree-sitter parser for typescript
+✓ Loaded tree-sitter parser for typescript
+✓ Loaded tree-sitter parser for typescript
+✓ Loaded tree-sitter parser for typescript
+✓ Loaded tree-sitter parser for tsx
+✓ Loaded tree-sitter parser for tsx
+✓ Loaded tree-sitter parser for tsx
+✓ Loaded tree-sitter parser for tsx
+✓ Loaded tree-sitter parser for tsx
+✓ Loaded tree-sitter parser for tsx
+✓ Loaded tree-sitter parser for tsx
+✓ Loaded tree-sitter parser for tsx
+✓ Loaded tree-sitter parser for json
+✓ Loaded tree-sitter parser for json
+✓ Loaded tree-sitter parser for json
+✓ Loaded tree-sitter parser for json
+✓ Loaded tree-sitter parser for json
+✓ Loaded tree-sitter parser for json
+✓ Loaded tree-sitter parser for json
+✓ Loaded tree-sitter parser for json
+✓ Loaded tree-sitter parser for markdown
+✓ Loaded tree-sitter parser for markdown
+✓ Loaded tree-sitter parser for markdown
+✓ Loaded tree-sitter parser for markdown
+✓ Loaded tree-sitter parser for markdown
+✓ Loaded tree-sitter parser for markdown
+✓ Loaded tree-sitter parser for markdown
+✓ Loaded tree-sitter parser for markdown
+✓ Loaded tree-sitter parser for css
+Tree-sitter initialized with 7 parsers
+[TreeSitter] Failed to load 1 language(s): php
+✓ Loaded tree-sitter parser for css
+Tree-sitter initialized with 7 parsers
+[TreeSitter] Failed to load 1 language(s): php
+[CstTimeline] Saved 9 hybrid facts for benchmarks/output/llm_summarized_facts.json@workspac
+[WorkspaceIndexer] Saved 9 hybrid facts for benchmarks/output/llm_summarized_facts.json@workspace-unstaged
+✓ Loaded tree-sitter parser for css
+Tree-sitter initialized with 7 parsers
+[TreeSitter] Failed to load 1 language(s): php
+[CstTimeline] Saved 11 hybrid facts for benchmarks/output/pipeline_diagnostics.json@workspac
+[WorkspaceIndexer] Saved 11 hybrid facts for benchmarks/output/pipeline_diagnostics.json@workspace-unstaged
+✓ Loaded tree-sitter parser for css
+Tree-sitter initialized with 7 parsers
+[TreeSitter] Failed to load 1 language(s): php
+[CstTimeline] Saved 0 hybrid facts for benchmarks/output/pipeline_report.md@workspac
+✓ Loaded tree-sitter parser for css
+Tree-sitter initialized with 7 parsers
+[TreeSitter] Failed to load 1 language(s): php
+✓ Loaded tree-sitter parser for css
+Tree-sitter initialized with 7 parsers
+[TreeSitter] Failed to load 1 language(s): php
+✓ Loaded tree-sitter parser for css
+Tree-sitter initialized with 7 parsers
+✓ Loaded tree-sitter parser for css
+Tree-sitter initialized with 7 parsers
+[TreeSitter] Failed to load 1 language(s): php
+[Snapshot] Creating snapshot for benchmarks/output/pipeline_report.md@2a425614
+[StructDiff] Computing diff for benchmarks/output/pipeline_report.md
+[Snapshot] Creating snapshot for src/analysis/bundleStoryEngine.ts@7752addd
+[StructDiff] Computing diff for src/analysis/bundleStoryEngine.ts
+[Snapshot] Creating snapshot for src/analysis/commitIndexer.ts@fc361f25
+[StructDiff] Computing diff for src/analysis/commitIndexer.ts
+[Snapshot] Creating snapshot for benchmarks/output/llm_summarized_facts.json@66c95e71
+[StructDiff] Computing diff for benchmarks/output/llm_summarized_facts.json
+[Snapshot] Creating snapshot for benchmarks/output/pipeline_diagnostics.json@71c4ff00
+[StructDiff] Computing diff for benchmarks/output/pipeline_diagnostics.json
+[Snapshot] Creating snapshot for benchmarks/pathFilter.test.ts@ce2d64f7
+[StructDiff] Computing diff for benchmarks/pathFilter.test.ts
+[Snapshot] Creating snapshot for src/analysis/dependencies.ts@c79c3532
+[StructDiff] Computing diff for src/analysis/dependencies.ts
+[Snapshot] Creating snapshot for benchmarks/pipeline_diagnostics.ts@19588dc6
+[StructDiff] Computing diff for benchmarks/pipeline_diagnostics.ts
+[Snapshot] Creating snapshot for src/analysis/embeddingIndexer.ts@WORKSPAC
+[CstTimeline] Saved 0 hybrid facts for benchmarks/output/pipeline_report.md@workspac
+[Snapshot] Creating snapshot for src/analysis/llmAnalyst/blocks.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/runner/steps/hotspotStep.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/runner/steps/movedBlockStep.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/embeddingIndexer.ts@d02b380e
+[StructDiff] Computing diff for src/analysis/embeddingIndexer.ts
+[Snapshot] Creating snapshot for src/analysis/llmAnalyst/blocks.ts@8069ac0b
+[StructDiff] Computing diff for src/analysis/llmAnalyst/blocks.ts
+[Snapshot] Creating snapshot for src/analysis/symbols.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/workspaceIndexer.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/cli/index.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/runner/steps/hotspotStep.ts@7d8b8a7c
+[StructDiff] Computing diff for src/analysis/runner/steps/hotspotStep.ts
+[Snapshot] Creating snapshot for src/analysis/runner/steps/movedBlockStep.ts@fc7144ca
+[StructDiff] Computing diff for src/analysis/runner/steps/movedBlockStep.ts
+[Snapshot] Creating snapshot for src/cli/index.ts@2e0af984
+[StructDiff] Computing diff for src/cli/index.ts
+[Snapshot] Creating snapshot for src/commands/commands.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/contracts/llmContext.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/extension.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/workspaceIndexer.ts@f6fb3754
+[StructDiff] Computing diff for src/analysis/workspaceIndexer.ts
+[Snapshot] Creating snapshot for src/commands/commands.ts@2717fecf
+[StructDiff] Computing diff for src/commands/commands.ts
+[Snapshot] Creating snapshot for src/contracts/llmContext.ts@63a51a04
+[StructDiff] Computing diff for src/contracts/llmContext.ts
+[Snapshot] Creating snapshot for src/extension.ts@65c0be71
+[StructDiff] Computing diff for src/extension.ts
+[Snapshot] Creating snapshot for src/analysis/symbols.ts@54f2fcc9
+[StructDiff] Computing diff for src/analysis/symbols.ts
+[Snapshot] Creating snapshot for src/facts/driftDetector.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/facts/intendedMap.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/facts/intendedMap.ts@69389ded
+[StructDiff] Computing diff for src/facts/intendedMap.ts
+[Snapshot] Creating snapshot for src/facts/scope.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/facts/driftDetector.ts@22e81a56
+[StructDiff] Computing diff for src/facts/driftDetector.ts
+[Snapshot] Creating snapshot for src/llm/summarizer.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/providers/commitsProvider.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/facts/scope.ts@5d3795f4
+[StructDiff] Computing diff for src/facts/scope.ts
+[Snapshot] Creating snapshot for src/llm/summarizer.ts@bccfbf44
+[StructDiff] Computing diff for src/llm/summarizer.ts
+[Snapshot] Creating snapshot for src/providers/commitsProvider.ts@e056b012
+[StructDiff] Computing diff for src/providers/commitsProvider.ts
+[Snapshot] Creating snapshot for src/storage/database.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/utils/pathFilter.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/watchers/gitCommitWatcher.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/storage/database.ts@b9d30ba2
+[SnapshotManager] Batched 50 snapshot writes
+[StructDiff] Computing diff for src/storage/database.ts
+[Snapshot] Creating snapshot for src/utils/pathFilter.ts@86db62d2
+[StructDiff] Computing diff for src/utils/pathFilter.ts
+[Snapshot] Creating snapshot for src/watchers/gitCommitWatcher.ts@33ca5b84
+[StructDiff] Computing diff for src/watchers/gitCommitWatcher.ts
+[Snapshot] Creating snapshot for benchmarks/output/test-results.json@WORKSPAC
+[CstTimeline] Saved 13 hybrid facts for benchmarks/output/test-results.json@workspac
+[WorkspaceIndexer] Saved 13 hybrid facts for benchmarks/output/test-results.json@workspace-unstaged
+[Snapshot] Creating snapshot for debug_db.ts@WORKSPAC
+[CstTimeline] Saved 11 hybrid facts for benchmarks/output/pipeline_diagnostics.json@workspac
+[WorkspaceIndexer] Saved 11 hybrid facts for benchmarks/output/pipeline_diagnostics.json@workspace-unstaged
+[CstTimeline] Saved 9 hybrid facts for benchmarks/output/llm_summarized_facts.json@workspac
+[WorkspaceIndexer] Saved 9 hybrid facts for benchmarks/output/llm_summarized_facts.json@workspace-unstaged
+[WorkspaceIndexer] Processed 28 files in 4814ms (5.8 files/sec)
+[SnapshotManager] Batched 4 snapshot writes
+[StructuralDiffManager] Batched 26 diff writes
+[Snapshot] Creating snapshot for PLAN_PACKAGE_ENHANCEMENTS.md@WORKSPAC
+[Snapshot] Creating snapshot for TODO.md@WORKSPAC
+[Snapshot] Creating snapshot for docs/UNUSED_IMPORTS_AUDIT.md@WORKSPAC
+[Snapshot] Creating snapshot for file-restructure-plan.md@WORKSPAC
+[Snapshot] Creating snapshot for package.json@WORKSPAC
+[Snapshot] LRU cache hit for src/analysis/commitIndexer.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/contextExporter.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/conventionEnhancements.ts@WORKSPAC
+[CstTimeline] Saved 0 hybrid facts for PLAN_PACKAGE_ENHANCEMENTS.md@workspac
+[CstTimeline] Saved 0 hybrid facts for TODO.md@workspac
+[CstTimeline] Saved 0 hybrid facts for docs/UNUSED_IMPORTS_AUDIT.md@workspac
+[CstTimeline] Saved 0 hybrid facts for file-restructure-plan.md@workspac
+[Snapshot] LRU cache hit for src/analysis/dependencies.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/git.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/liveAnalysis.ts@WORKSPAC
+[Snapshot] LRU cache hit for src/analysis/llmAnalyst/blocks.ts@WORKSPAC
+[CstTimeline] Saved 15 hybrid facts for package.json@workspac
+[WorkspaceIndexer] Saved 15 hybrid facts for package.json@workspace-staged
+[Snapshot] LRU cache hit for src/analysis/llmAnalyst/blocks.ts@8069ac0b
+[StructDiff] Computing diff for src/analysis/llmAnalyst/blocks.ts
+[Snapshot] LRU cache hit for src/analysis/commitIndexer.ts@fc361f25
+[StructDiff] Computing diff for src/analysis/commitIndexer.ts
+[Snapshot] Creating snapshot for src/analysis/contextExporter.ts@885730fc
+[StructDiff] Computing diff for src/analysis/contextExporter.ts
+[Snapshot] Creating snapshot for src/analysis/conventionEnhancements.ts@3f615f04
+[StructDiff] Computing diff for src/analysis/conventionEnhancements.ts
+[Snapshot] LRU cache hit for src/analysis/dependencies.ts@c79c3532
+[StructDiff] Computing diff for src/analysis/dependencies.ts
+[Snapshot] Creating snapshot for src/analysis/git.ts@c72fe053
+[StructDiff] Computing diff for src/analysis/git.ts
+[Snapshot] Creating snapshot for src/analysis/liveAnalysis.ts@281b8937
+[StructDiff] Computing diff for src/analysis/liveAnalysis.ts
+[Snapshot] Creating snapshot for src/analysis/llmAnalyst/runner.ts@WORKSPAC
+[Snapshot] Creating snapshot for package.json@c5fc80cf
+[StructDiff] Computing diff for package.json
+[Snapshot] Creating snapshot for src/analysis/mermaidGenerator.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/movedBlockDetector.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/llmAnalyst/runner.ts@123d02c4
+[StructDiff] Computing diff for src/analysis/llmAnalyst/runner.ts
+[CstTimeline] Saved 15 hybrid facts for package.json@workspac
+[WorkspaceIndexer] Saved 15 hybrid facts for package.json@workspace-staged
+[Snapshot] Creating snapshot for src/analysis/semanticChanges.ts@WORKSPAC
+[Snapshot] LRU cache hit for src/analysis/symbols.ts@WORKSPAC
+[Snapshot] LRU cache hit for src/analysis/workspaceIndexer.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/mermaidGenerator.ts@2d1e6bd0
+[StructDiff] Computing diff for src/analysis/mermaidGenerator.ts
+[Snapshot] LRU cache hit for src/commands/commands.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/semanticChanges.ts@02a5059c
+[StructDiff] Computing diff for src/analysis/semanticChanges.ts
+[Snapshot] LRU cache hit for src/analysis/symbols.ts@54f2fcc9
+[StructDiff] Computing diff for src/analysis/symbols.ts
+[Snapshot] LRU cache hit for src/analysis/workspaceIndexer.ts@f6fb3754
+[StructDiff] Computing diff for src/analysis/workspaceIndexer.ts
+[Snapshot] Creating snapshot for src/cli/analyze.ts@b63246c6
+[Snapshot] LRU cache hit for src/extension.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/analysis/movedBlockDetector.ts@3bc5d23d
+[StructDiff] Computing diff for src/analysis/movedBlockDetector.ts
+[Snapshot] LRU cache hit for src/facts/scope.ts@WORKSPAC
+[Snapshot] LRU cache hit for src/commands/commands.ts@2717fecf
+[StructDiff] Computing diff for src/commands/commands.ts
+[Snapshot] Creating snapshot for src/liveTracker.ts@WORKSPAC
+[Snapshot] LRU cache hit for src/extension.ts@65c0be71
+[StructDiff] Computing diff for src/extension.ts
+[Snapshot] LRU cache hit for src/facts/scope.ts@5d3795f4
+[StructDiff] Computing diff for src/facts/scope.ts
+[Snapshot] Creating snapshot for src/metrics/incompletenessDetector.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/metrics/legacyAuditAdapter.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/metrics/patternDriftAdapter.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/metrics/incompletenessDetector.ts@5b7b6735
+[StructDiff] Computing diff for src/metrics/incompletenessDetector.ts
+[Snapshot] Creating snapshot for src/metrics/structuralChangeCalculator.ts@WORKSPAC
+[Snapshot] LRU cache hit for src/providers/commitsProvider.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/metrics/patternDriftAdapter.ts@8623cb18
+[StructDiff] Computing diff for src/metrics/patternDriftAdapter.ts
+[Snapshot] Creating snapshot for src/metrics/legacyAuditAdapter.ts@5e68072f
+[StructDiff] Computing diff for src/metrics/legacyAuditAdapter.ts
+[Snapshot] Creating snapshot for src/metrics/structuralChangeCalculator.ts@a501bf6a
+[StructDiff] Computing diff for src/metrics/structuralChangeCalculator.ts
+[Snapshot] LRU cache hit for src/providers/commitsProvider.ts@e056b012
+[StructDiff] Computing diff for src/providers/commitsProvider.ts
+[Snapshot] Creating snapshot for src/services/reportService.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/liveTracker.ts@772b36e1
+[StructDiff] Computing diff for src/liveTracker.ts
+[Snapshot] Creating snapshot for src/utils/config.ts@WORKSPAC
+[Snapshot] Creating snapshot for src/services/reportService.ts@15e48419
+[StructDiff] Computing diff for src/services/reportService.ts
+[Snapshot] Creating snapshot for src/utils/config.ts@c1ff9e51
+[StructDiff] Computing diff for src/utils/config.ts
+[Scope] staged=32, unstaged=33, total working=56, commits=142, blast=0, all=150
+✅ Calculate analysis scope :: hash=7c0fc80f no baseline :: files=142, working=56, blast=0
+[Pipeline] Completed step: Calculate analysis scope (9762ms)
+[WorkspaceIndexer] Processed 30 files in 2847ms (10.5 files/sec)
+[SnapshotManager] Batched 37 snapshot writes
+[StructuralDiffManager] Batched 25 diff writes
+✅ Analyze workspace changes :: hash=6473ddd4 no baseline :: staged: files=32, symbols=330 | unstaged: files=33, symbols=357
+[Pipeline] Completed step: Analyze workspace changes (10173ms)
+▶️  Index commits (snapshots + diffs)
+[Pipeline] Started step: Index commits (snapshots + diffs)
+▶️  Build working snapshot
+[Pipeline] Started step: Build working snapshot
+[CommitIndexer] Indexing commit 3a5fa79fc6560caa4448cbd11f0f0776ddeea9b3
+[CommitIndexer] Indexing commit 7bbd0eb5079eb664f4548e4d349ba30d93272e01
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/fixtures/pipeline_frozen/bundle_facts.json
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/fixtures/pipeline_frozen/drift.json
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/fixtures/pipeline_frozen/hotspots.json
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/fixtures/pipeline_frozen/index_commits.json
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/fixtures/pipeline_frozen/intended.json
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/fixtures/pipeline_frozen/legacy.json
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/fixtures/pipeline_frozen/scope.json
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/fixtures/pipeline_frozen/working.json
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/fixtures/pipeline_frozen/workspace_overlay.json
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/astSerializer.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/cstDiff.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/cstExtractor.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/cstTimeline.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/dependencies.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/difftastic.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/git.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/hotspotDetector.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/movedBlockDetector.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/namingConventions.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/runner/pipelineTypes.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/semanticChanges.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/snapshotManager.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/structuralDiffManager.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/symbolDna.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/symbols.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/tree-sitter.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/analysis/workspaceIndexer.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/contracts/llmContext.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/facts/driftDetector.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/facts/intendedMap.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/facts/legacyAudit.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/facts/scope.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/facts/workingSnapshot.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/storage/database.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/storage/schema.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/types/cstFacts.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/types/index.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/utils/config.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/utils/edgeThresholds.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/utils/logger.js
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/src/utils/supportedLanguages.js
+[WORKING-SNAPSHOT] Skipping non-existent path: cst-only-tracking.md
+[WORKING-SNAPSHOT] Skipping non-existent path: modular-summarizer.md
+[WORKING-SNAPSHOT] Skipping non-existent path: benchmarks/mocks/framework/snapshot.js
+[WORKING-SNAPSHOT] Skipping non-existent path: src/cli/analyze.ts
+✅ Build working snapshot :: hash=86afa5ac no baseline :: symbols=2713, edges=23718, paths=105
+[Pipeline] Completed step: Build working snapshot (805ms)
+[CommitIndexer] Processing 97 files for 7bbd0eb5079eb664f4548e4d349ba30d93272e01
+[CommitIndexer] Skipping backlog/IMPORTANCE-SCORE.md: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/fixtures/pipeline_frozen/bundle_facts.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/fixtures/pipeline_frozen/drift.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/fixtures/pipeline_frozen/hotspots.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/fixtures/pipeline_frozen/index_commits.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/fixtures/pipeline_frozen/intended.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/fixtures/pipeline_frozen/legacy.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/fixtures/pipeline_frozen/scope.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/fixtures/pipeline_frozen/working.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/fixtures/pipeline_frozen/workspace_overlay.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/snapshot.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/astSerializer.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/cstDiff.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/cstExtractor.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/cstTimeline.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/dependencies.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/difftastic.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/git.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/hotspotDetector.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/movedBlockDetector.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/namingConventions.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/runner/pipelineTypes.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/semanticChanges.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/snapshotManager.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/structuralDiffManager.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/symbolDna.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/symbols.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/tree-sitter.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/workspaceIndexer.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/contracts/llmContext.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/facts/driftDetector.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/facts/intendedMap.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/facts/legacyAudit.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/facts/scope.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/facts/workingSnapshot.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/storage/database.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/storage/schema.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/types/cstFacts.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/types/index.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/utils/config.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/utils/edgeThresholds.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/utils/logger.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/utils/supportedLanguages.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/output/llm_prompt_cleanup.txt: extension .txt not allowed
+[CommitIndexer] Skipping benchmarks/output/llm_prompt_discover.txt: extension .txt not allowed
+[CommitIndexer] Skipping benchmarks/output/llm_prompt_drift.txt: extension .txt not allowed
+[CommitIndexer] Skipping benchmarks/output/llm_prompt_intent.txt: extension .txt not allowed
+[CommitIndexer] Skipping benchmarks/output/llm_prompt_plan.txt: extension .txt not allowed
+[CommitIndexer] Skipping benchmarks/output/llm_prompt_quantify.txt: extension .txt not allowed
+[CommitIndexer] Skipping benchmarks/output/llm_summarized_facts.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/output/pipeline_diagnostics.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/output/pipeline_report.md: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/output/test-results.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/pathFilter.test.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping benchmarks/pipeline_diagnostics.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping cst-only-tracking.md: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping docs/pipeline-dependency-audit.md: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping modular-summarizer.md: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/commitIndexer.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/cstTimeline.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/git.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/hotspotDetector.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/hybridDriftDetector.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/liveAnalysis.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/llmAnalyst/runner.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/movedBlockDetector.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/refactorPipeline.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/runner/pipelineTypes.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/runner/steps/bundleFactsStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/runner/steps/driftStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/runner/steps/hotspotStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/runner/steps/intendedStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/runner/steps/legacyStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/runner/steps/movedBlockStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/runner/steps/scopeStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/runner/steps/workspaceStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/snapshotManager.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/structuralDiffManager.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/symbols.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/analysis/workspaceIndexer.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/cli/index.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/facts/driftDetector.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/facts/factsAssembler.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/facts/scope.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/facts/types.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/liveTracker.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/llm/prompts.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/llm/summarizer.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/metrics/legacyAuditAdapter.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/metrics/scopeCalculator.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/services/reportService.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/storage/database.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/storage/schema.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/types/index.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/utils/config.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/utils/pathFilter.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Skipping src/utils/timeline.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer] Storing 0 symbol changes for 7bbd0eb5079eb664f4548e4d349ba30d93272e01
+[CommitIndexer.storeEdges] Skipping backlog/IMPORTANCE-SCORE.md: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/pipeline_frozen/bundle_facts.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/pipeline_frozen/drift.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/pipeline_frozen/hotspots.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/pipeline_frozen/index_commits.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/pipeline_frozen/intended.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/pipeline_frozen/legacy.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/pipeline_frozen/scope.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/pipeline_frozen/working.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/pipeline_frozen/workspace_overlay.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/snapshot.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/astSerializer.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/cstDiff.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/cstExtractor.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/cstTimeline.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/dependencies.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/difftastic.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/git.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/hotspotDetector.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/movedBlockDetector.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/namingConventions.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/runner/pipelineTypes.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/semanticChanges.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/snapshotManager.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/structuralDiffManager.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/symbolDna.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/symbols.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/tree-sitter.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/workspaceIndexer.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/contracts/llmContext.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/facts/driftDetector.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/facts/intendedMap.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/facts/legacyAudit.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/facts/scope.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/facts/workingSnapshot.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/storage/database.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/storage/schema.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/types/cstFacts.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/types/index.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/utils/config.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/utils/edgeThresholds.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/utils/logger.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/utils/supportedLanguages.js: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_prompt_cleanup.txt: extension .txt not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_prompt_discover.txt: extension .txt not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_prompt_drift.txt: extension .txt not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_prompt_intent.txt: extension .txt not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_prompt_plan.txt: extension .txt not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_prompt_quantify.txt: extension .txt not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_summarized_facts.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/output/pipeline_diagnostics.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/output/pipeline_report.md: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/output/test-results.json: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/pathFilter.test.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping benchmarks/pipeline_diagnostics.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping cst-only-tracking.md: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping docs/pipeline-dependency-audit.md: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping modular-summarizer.md: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/commitIndexer.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/cstTimeline.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/git.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/hotspotDetector.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/hybridDriftDetector.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/liveAnalysis.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/llmAnalyst/runner.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/movedBlockDetector.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/refactorPipeline.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/pipelineTypes.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/bundleFactsStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/driftStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/hotspotStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/intendedStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/legacyStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/movedBlockStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/scopeStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/workspaceStep.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/snapshotManager.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/structuralDiffManager.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/symbols.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/analysis/workspaceIndexer.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/cli/index.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/facts/driftDetector.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/facts/factsAssembler.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/facts/scope.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/facts/types.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/liveTracker.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/llm/prompts.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/llm/summarizer.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/metrics/legacyAuditAdapter.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/metrics/scopeCalculator.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/services/reportService.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/storage/database.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/storage/schema.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/types/index.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/utils/config.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/utils/pathFilter.ts: ignored by git at commit 7bbd0eb5
+[CommitIndexer.storeEdges] Skipping src/utils/timeline.ts: ignored by git at commit 7bbd0eb5
+[MovedBlockDetector] Detecting moves for commit 7bbd0eb5
+[MovedBlockDetector] Found 0 moved blocks, 0 lineage entries
+[CommitIndexer] Processing 40 files for 3a5fa79fc6560caa4448cbd11f0f0776ddeea9b3
+[CommitIndexer] Skipping benchmarks/output/llm_prompt_cleanup.txt: extension .txt not allowed
+[CommitIndexer] Skipping benchmarks/output/llm_prompt_discover.txt: extension .txt not allowed
+[CommitIndexer] Skipping benchmarks/output/llm_prompt_drift.txt: extension .txt not allowed
+[CommitIndexer] Skipping benchmarks/output/llm_prompt_intent.txt: extension .txt not allowed
+[CommitIndexer] Skipping benchmarks/output/llm_summarized_facts.json: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping benchmarks/output/pipeline_diagnostics.json: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping benchmarks/output/pipeline_report.md: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping benchmarks/pipeline_diagnostics.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping benchmarks/qdrant_integration_test.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping docs/V2_DETECTOR_MIGRATION.md: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping package-lock.json: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping package.json: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/commitIndexer.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/contextExporter.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/detectors/BaseDetector.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/embeddingIndexer.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/git.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/hotspotDetector.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/movedBlockDetector.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/runner/steps/driftStep.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/runner/steps/hotspotStep.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/runner/steps/intendedStep.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/runner/steps/legacyStep.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/analysis/runner/steps/movedBlockStep.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/cli/index.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/cli/queries.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/extension.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/facts/driftDetector.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/facts/legacyAudit.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/metrics/base/MetricsBase.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/metrics/hotspotCalculator.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/metrics/movedBlockAdapter.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/providers/commitsProvider.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/services/base/ServiceBase.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/services/databaseService.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/services/symbolService.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/types/index.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/utils/config.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/utils/errors.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Skipping src/utils/fingerprint.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer] Storing 0 symbol changes for 3a5fa79fc6560caa4448cbd11f0f0776ddeea9b3
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_prompt_cleanup.txt: extension .txt not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_prompt_discover.txt: extension .txt not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_prompt_drift.txt: extension .txt not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_prompt_intent.txt: extension .txt not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/output/llm_summarized_facts.json: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping benchmarks/output/pipeline_diagnostics.json: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping benchmarks/output/pipeline_report.md: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping benchmarks/pipeline_diagnostics.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping benchmarks/qdrant_integration_test.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping docs/V2_DETECTOR_MIGRATION.md: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping package-lock.json: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping package.json: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/commitIndexer.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/contextExporter.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/detectors/BaseDetector.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/embeddingIndexer.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/git.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/hotspotDetector.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/movedBlockDetector.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/driftStep.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/hotspotStep.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/intendedStep.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/legacyStep.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/movedBlockStep.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/cli/index.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/cli/queries.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/extension.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/facts/driftDetector.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/facts/legacyAudit.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/metrics/base/MetricsBase.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/metrics/hotspotCalculator.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/metrics/movedBlockAdapter.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/providers/commitsProvider.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/services/base/ServiceBase.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/services/databaseService.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/services/symbolService.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/types/index.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/utils/config.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/utils/errors.ts: ignored by git at commit 3a5fa79f
+[CommitIndexer.storeEdges] Skipping src/utils/fingerprint.ts: ignored by git at commit 3a5fa79f
+[MovedBlockDetector] Detecting moves for commit 3a5fa79f
+[MovedBlockDetector] Found 0 moved blocks, 0 lineage entries
+[CommitIndexer] Indexing commit 66b4ad726dccaf0f8f002c95be2ed9a900897395
+[CommitIndexer] Processing 91 files for 66b4ad726dccaf0f8f002c95be2ed9a900897395
+[CommitIndexer] Skipping README.md: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/fixtures/sample.css: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/fixtures/sample.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/fixtures/sample.json: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/fixtures/sample.md: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/fixtures/sample.php: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/fixtures/sample.yaml: extension .yaml not allowed
+[CommitIndexer] Skipping benchmarks/mocks/framework/benchmarks/mocks/framework/snapshot.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/snapshot.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/snapshot.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/astSerializer.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/cstDiff.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/cstExtractor.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/cstTimeline.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/dependencies.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/difftastic.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/git.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/hotspotDetector.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/movedBlockDetector.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/namingConventions.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/runner/pipelineTypes.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/semanticChanges.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/snapshotManager.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/structuralDiffManager.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/symbolDna.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/symbols.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/tree-sitter.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/analysis/workspaceIndexer.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/contracts/llmContext.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/facts/driftDetector.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/facts/intendedMap.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/facts/legacyAudit.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/facts/scope.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/facts/workingSnapshot.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/storage/database.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/storage/schema.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/types/cstFacts.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/types/index.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/utils/config.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/utils/edgeThresholds.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/utils/logger.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/mocks/framework/src/utils/supportedLanguages.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/output/pipeline_diagnostics.json: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/output/pipeline_report.md: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping benchmarks/pipeline_diagnostics.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping binaries/tree-sitter-svelte.wasm: extension .wasm not allowed
+[CommitIndexer] Skipping cst-only-tracking.md: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping docs/cst-extractors.md: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping docs/hybrid-drift-optimization-plan.md: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping docs/pipeline-diagnostics-cst-integration-plan.md: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping modular-summarizer.md: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping package-lock.json: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping package.json: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping scripts/copy-wasm.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping scripts/download-wasm.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping scripts/remove-source-compiled.js: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/commitIndexer.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/cstDiff.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/cstExtractor.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/cstTimeline.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/embeddingIndexer.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/hotspotDetector.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/hybridDriftDetector.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/liveAnalysis.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/llmAnalyst/runner.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/movedBlockDetector.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/runner/steps/driftStep.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/runner/steps/hotspotStep.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/runner/steps/intendedStep.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/runner/steps/legacyStep.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/snapshotManager.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/structuralDiffManager.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/symbolDna.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/tree-sitter.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/analysis/workspaceIndexer.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/commands/commands.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/facts/driftDetector.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/facts/factsAssembler.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/facts/intendedMap.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/facts/legacyAudit.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/facts/scope.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/facts/types.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/liveTracker.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/storage/database.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/storage/schema.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/types/cockpit.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/types/cstFacts.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/types/index.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/utils/config.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Skipping src/utils/supportedLanguages-constants.js: ignored by git
+[CommitIndexer] Skipping src/utils/supportedLanguages.ts: ignored by git at commit 66b4ad72
+[CommitIndexer] Storing 0 symbol changes for 66b4ad726dccaf0f8f002c95be2ed9a900897395
+[CommitIndexer.storeEdges] Skipping README.md: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/sample.css: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/sample.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/sample.json: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/sample.md: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/sample.php: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/fixtures/sample.yaml: extension .yaml not allowed
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/benchmarks/mocks/framework/snapshot.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/snapshot.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/snapshot.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/astSerializer.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/cstDiff.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/cstExtractor.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/cstTimeline.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/dependencies.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/difftastic.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/git.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/hotspotDetector.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/movedBlockDetector.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/namingConventions.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/runner/pipelineTypes.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/semanticChanges.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/snapshotManager.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/structuralDiffManager.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/symbolDna.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/symbols.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/tree-sitter.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/analysis/workspaceIndexer.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/contracts/llmContext.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/facts/driftDetector.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/facts/intendedMap.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/facts/legacyAudit.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/facts/scope.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/facts/workingSnapshot.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/storage/database.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/storage/schema.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/types/cstFacts.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/types/index.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/utils/config.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/utils/edgeThresholds.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/utils/logger.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/mocks/framework/src/utils/supportedLanguages.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/output/pipeline_diagnostics.json: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/output/pipeline_report.md: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping benchmarks/pipeline_diagnostics.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping binaries/tree-sitter-svelte.wasm: extension .wasm not allowed
+[CommitIndexer.storeEdges] Skipping cst-only-tracking.md: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping docs/cst-extractors.md: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping docs/hybrid-drift-optimization-plan.md: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping docs/pipeline-diagnostics-cst-integration-plan.md: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping modular-summarizer.md: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping package-lock.json: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping package.json: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping scripts/copy-wasm.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping scripts/download-wasm.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping scripts/remove-source-compiled.js: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/commitIndexer.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/cstDiff.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/cstExtractor.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/cstTimeline.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/embeddingIndexer.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/hotspotDetector.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/hybridDriftDetector.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/liveAnalysis.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/llmAnalyst/runner.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/movedBlockDetector.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/driftStep.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/hotspotStep.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/intendedStep.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/runner/steps/legacyStep.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/snapshotManager.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/structuralDiffManager.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/symbolDna.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/tree-sitter.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/analysis/workspaceIndexer.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/commands/commands.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/facts/driftDetector.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/facts/factsAssembler.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/facts/intendedMap.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/facts/legacyAudit.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/facts/scope.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/facts/types.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/liveTracker.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/storage/database.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/storage/schema.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/types/cockpit.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/types/cstFacts.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/types/index.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/utils/config.ts: ignored by git at commit 66b4ad72
+[CommitIndexer.storeEdges] Skipping src/utils/supportedLanguages-constants.js: ignored by git
+[CommitIndexer.storeEdges] Skipping src/utils/supportedLanguages.ts: ignored by git at commit 66b4ad72
+[MovedBlockDetector] Detecting moves for commit 66b4ad72
+[MovedBlockDetector] Found 0 moved blocks, 0 lineage entries
+[CommitIndexer] Cache performance: 0 hits, 3 misses (0.0% hit rate)
+✅ Index commits (snapshots + diffs) :: hash=9b89b8d0 no baseline :: commits=3
+[Pipeline] Completed step: Index commits (snapshots + diffs) (4223ms)
+▶️  Build intended state map
+[Pipeline] Started step: Build intended state map
+Intended map: 0 symbols, 0 renamed
+[IntendedMap] Intended map is empty, using fallback heuristics from hotspots and moved blocks
+▶️  Update hotspot metrics
+[Pipeline] Started step: Update hotspot metrics
+[BaseDetector:HotspotDetectorV2] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+▶️  Detect moved code blocks
+[Pipeline] Started step: Detect moved code blocks
+[BaseDetector:MovedBlockDetectorV2] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+[IntendedMap] Fallback added 0 symbols from hotspots/moved blocks
+[IntendedMap] WARNING: Intended map is still empty after fallback. No symbols found in commits.
+[IntendedStep] WARNING: Intended map is empty. No symbols found in 3 commits.
+[IntendedStep] Attempting fallback: seeding from hotspots...
+[BaseDetector:HotspotDetectorV2] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+[MovedBlockStep] Detecting cross-version moves across 6 versions
+[IntendedStep] Fallback failed: No hotspots with score >60 found.
+✅ Build intended state map :: hash=97d170e1 no baseline :: symbols=0, present=0, absent=0, renamed=0
+[Pipeline] Completed step: Build intended state map (4ms)
+✅ Update hotspot metrics :: hash=97d170e1 no baseline 
+[Pipeline] Completed step: Update hotspot metrics (5ms)
+[MovedBlockStep] Found 0 cross-version symbol moves
+✅ Detect moved code blocks :: hash=97d170e1 no baseline 
+[Pipeline] Completed step: Detect moved code blocks (5ms)
+▶️  Detect drift (missing/zombie/divergent)
+[Pipeline] Started step: Detect drift (missing/zombie/divergent)
+[BaseDetector:DriftDetector] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+[DriftStep] Processing 31 files for hybrid drift (CST: true, Augment: false)
+[DriftStep] Retrieved 0 hybrid facts across 0 files
+[DriftStep] Processed 31 files in 1ms (31000.0 files/sec)
+✅ Detect drift (missing/zombie/divergent) :: hash=836e5d91 no baseline :: missing=0, zombies=0, divergent=0, hybrid=0
+[Pipeline] Completed step: Detect drift (missing/zombie/divergent) (58ms)
+▶️  Audit legacy code
+[Pipeline] Started step: Audit legacy code
+[BaseDetector:LegacyDetector] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+[BaseDetector:LegacyDetector] Cache miss, stored: detector:LegacyDetector:44136fa355b3678a1146ad16f7...
+[LegacyStep] Enhanced 21 dead symbols with timeline context
+✅ Audit legacy code :: hash=6f5b8f1f no baseline :: dead=21, legacyUsed=0, leftovers=0
+[Pipeline] Completed step: Audit legacy code (707ms)
+▶️  Aggregate bundle facts
+[Pipeline] Started step: Aggregate bundle facts
+[BundleFacts] Inputs: intended=0, hybridFacts=0 files, working.symbols=2713
+[BundleFacts] WARNING: intended.present === 0. Consider using --enable-cst to populate intended state.
+✅ Aggregate bundle facts :: hash=d2ce24e4 no baseline :: intended.present=0, absent=0, renamed=0, hybridFacts=0 (0 files)
+[Pipeline] Completed step: Aggregate bundle facts (8ms)
+▶️  Index embeddings
+[Pipeline] Started step: Index embeddings
+[Qdrant] Connected to http://localhost:6333 (embedding dim: 1536, model: openai/text-embedding-3-small)
+[Qdrant] Indexed fields on symbols
+[Qdrant] Indexed fields on commits
+[Qdrant] Indexed fields on patterns
+[EmbeddingIndexer] Indexing 3 commits...
+[Qdrant] Indexed fields on commits
+[EmbeddingIndexer] Indexed commit 3a5fa79f to commits
+[EmbeddingIndexer] Indexed commit 7bbd0eb5 to commits
+[EmbeddingIndexer] Indexed commit 66b4ad72 to commits
+[Qdrant] Indexed fields on symbols
+[EmbeddingIndexer] Indexing 0 symbol shards to symbols...
+[Qdrant] Indexed fields on patterns
+[EmbeddingIndexer] Indexing 1 theme shards to patterns
+[EmbeddingIndexer] Indexing complete
+✅ Index embeddings :: hash=n/a (ext no baseline 
+[Pipeline] Completed step: Index embeddings (1035ms)
+▶️  Retrieve cross-time history
+[Pipeline] Started step: Retrieve cross-time history
+[Qdrant] Indexed fields on commits
+[Qdrant] Indexed fields on symbols
+✅ Retrieve cross-time history :: hash=n/a (ext no baseline 
+[Pipeline] Completed step: Retrieve cross-time history (356ms)
+▶️  Generate story + drift + plan
+[Pipeline] Started step: Generate story + drift + plan
+[BundleStory] Retrieving historical context...
+[Qdrant] Indexed fields on commits
+[Qdrant] Indexed fields on symbols
+[BundleStory] Running LLM analysis...
+LLM Analyst: Facts size (5445928 chars) exceeds max (1000000), summarizing...
+LLM Analyst: Summarized to 31208 chars (99.4% reduction)
+LLM Analyst: Running intent analysis...
+LLM Analyst: Running drift verification...
+LLM Analyst: Generating cleanup plan...
+LLM Analyst: Running pattern discovery...
+💾 Saved summarized facts (31208 chars) to /home/ryan/plugins/git-context/benchmarks/output/llm_summarized_facts.json
+💾 Saved 6 LLM prompts:
+   intent: 44.0KB -> /home/ryan/plugins/git-context/benchmarks/output/llm_prompt_intent.txt
+   drift: 44.3KB -> /home/ryan/plugins/git-context/benchmarks/output/llm_prompt_drift.txt
+   cleanup: 44.0KB -> /home/ryan/plugins/git-context/benchmarks/output/llm_prompt_cleanup.txt
+   discover: 4.9KB -> /home/ryan/plugins/git-context/benchmarks/output/llm_prompt_discover.txt
+   quantify: 1.1KB -> /home/ryan/plugins/git-context/benchmarks/output/llm_prompt_quantify.txt
+   plan: 0.9KB -> /home/ryan/plugins/git-context/benchmarks/output/llm_prompt_plan.txt
+✅ Generate story + drift + plan :: hash=n/a (ext no baseline 
+[Pipeline] Completed step: Generate story + drift + plan (1076ms)
+[Pipeline] Pipeline completed in 17692ms
+[Pipeline] Steps completed: 13/13
+[Pipeline] Step timing summary:
+  workspace_overlay: 10173ms
+  scope: 9762ms
+  index_commits: 4223ms
+  llm_story: 1076ms
+  embedding_index: 1035ms
+
+📊 Summary
+==============================
+Time: 17.69s
+Steps completed: 13/13
+Errors: 0
+Diagnostics saved to /home/ryan/plugins/git-context/benchmarks/output/pipeline_diagnostics.json

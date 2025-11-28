@@ -5,12 +5,13 @@ import { getDatabaseManager } from '../storage/database';
 import { getGitRoot } from '../utils/config';
 import { MermaidGenerator } from './mermaidGenerator';
 import { DependencyExtractor } from './dependencies';
-import { auditLegacy } from '../facts/legacyAudit';
+import { LegacyDetector } from '../facts/legacyAudit';
 import { buildIntendedMap } from '../facts/intendedMap';
 import { getWorkingSnapshot } from '../facts/workingSnapshot';
 import { computeScope } from '../facts/scope';
 import { LegacyAuditReport } from '../contracts/llmContext';
 import { getDynamicThreshold } from '../utils/edgeThresholds';
+import { logDebug } from '../utils/logger';
 
 /**
  * Export LLM context in structured JSON format
@@ -33,7 +34,6 @@ export class ContextExporter {
       throw new Error('Not in a git repository');
     }
 
-    const db = getDatabaseManager().getDatabase();
     const commits: CommitContext[] = [];
     const globalRisks: any[] = [];
 
@@ -394,8 +394,10 @@ export class ContextExporter {
    */
   private async getCurrentBranch(): Promise<string> {
     try {
-      const { execSync } = require('child_process');
-      return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
+      const { GitOperations } = await import('./git');
+      const git = new GitOperations();
+      const branch = await git.getCurrentBranch();
+      return branch || 'unknown';
     } catch {
       return 'unknown';
     }
@@ -406,6 +408,11 @@ export class ContextExporter {
    */
   private async generateGraphs(commits: CommitContext[], shas: string[]): Promise<LlmContextReport['graphs']> {
     try {
+      // Validate that commits match the requested shas
+      if (commits.length !== shas.length) {
+        logDebug(`[ContextExporter] Warning: commit count (${commits.length}) doesn't match sha count (${shas.length})`);
+      }
+
       // Collect all edges and symbols across commits
       const allEdges: any[] = [];
       const allSymbols: any[] = [];
@@ -469,13 +476,18 @@ export class ContextExporter {
    */
   private async performLegacyAudit(shas: string[]): Promise<LegacyAuditReport> {
     try {
-      // Build required inputs for auditLegacy
+      // Build required inputs for legacy audit
       const scope = await computeScope(shas);
       const intended = await buildIntendedMap(shas);
       const working = await getWorkingSnapshot(scope.allPaths);
 
-      // Call the production-ready audit function
-      const result = await auditLegacy(intended, working, scope);
+      // Use V2 detector with BaseDetector enhancements
+      const legacyDetector = new LegacyDetector();
+      const result = await legacyDetector.detect({
+        intended,
+        working,
+        scope
+      });
 
       // Convert LegacyAuditResult to LegacyAuditReport format
       return {
