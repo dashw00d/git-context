@@ -7,7 +7,7 @@ export function createHistoryRetrievalStep(
   return {
     id: 'retrieve_history',
     label: 'Retrieve cross-time history',
-    deps: ['bundle_facts'],
+    deps: ['bundle_facts', 'embedding_index'],
 
     async run(state: PipelineState) {
       if (!state.bundleFacts) {

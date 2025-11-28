@@ -85,6 +85,13 @@ function summarizeStep(stepId: string, data: any): string {
     case 'legacy':
       return `dead=${data.dead?.length || 0}, legacyUsed=${data.legacyUsed?.length || 0}, leftovers=${data.replacedLeftovers?.length || 0}`;
     case 'workspace_overlay':
+      // Handle new structured format with staged/unstaged
+      if (data && typeof data === 'object' && ('staged' in data || 'unstaged' in data)) {
+        const staged = data.staged || {};
+        const unstaged = data.unstaged || {};
+        return `staged: files=${staged.filesChanged || 0}, symbols=${(staged.symbolsAdded || 0) + (staged.symbolsModified || 0) + (staged.symbolsRemoved || 0)} | unstaged: files=${unstaged.filesChanged || 0}, symbols=${(unstaged.symbolsAdded || 0) + (unstaged.symbolsModified || 0) + (unstaged.symbolsRemoved || 0)}`;
+      }
+      // Fallback for old format
       return `files=${data.filesChanged || 0}, symbols=${(data.symbolsAdded || 0) + (data.symbolsModified || 0) + (data.symbolsRemoved || 0)}`;
     case 'index_commits':
       return `commits=${data.length || 0}`;
@@ -140,6 +147,14 @@ async function main() {
   const dbManager = getDatabaseManager();
   const db = dbManager.getDatabase();
 
+  // Audit schema (migration already ran during ensureDatabaseInitialized)
+  const { auditAllModules, MODULE_SCHEMAS } = await import('../src/storage/schema');
+  const auditGaps = auditAllModules(db);
+  console.log(`📊 Schema: ${Object.keys(MODULE_SCHEMAS).length} modules, audit gaps: ${auditGaps.length}`);
+  if (auditGaps.length > 0) {
+    console.warn(`⚠️  Schema issues detected:`, { auditGaps });
+  }
+
   const git = new GitOperations();
   const symbolExtractor = new SymbolExtractor(git);
   const dependencyExtractor = new DependencyExtractor();
@@ -176,6 +191,19 @@ async function main() {
   if (!commits.length) {
     throw new Error('No commits available to analyze');
   }
+
+  // Ensure HEAD is in the list (it should be, but verify)
+  const headSha = git.getHeadSha();
+  const headIncluded = commits.some(c => c.sha === headSha);
+  if (!headIncluded) {
+    // Add HEAD as the first commit (most recent)
+    const headCommit = git.getCommitInfo(headSha);
+    commits.unshift(headCommit);
+    // Limit to requested count
+    commits.splice(opts.commitCount);
+  }
+
+  console.log(`📋 Analyzing ${commits.length} commits (HEAD: ${headSha.substring(0, 8)})`);
 
   const initialState: any = {
     selectedCommitShas: commits.map(c => c.sha),

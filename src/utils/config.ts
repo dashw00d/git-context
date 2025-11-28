@@ -100,11 +100,11 @@ export function getExtensionConfig(): ExtensionConfig {
       customIgnorePaths: fileConfig?.customIgnorePaths || config.get('customIgnorePaths'),
       rerankingWeights: fileConfig?.rerankingWeights || config.get('rerankingWeights'),
       // Qdrant config
-      qdrantUrl: fileConfig?.qdrantUrl || config.get('qdrantUrl'),
-      qdrantApiKey: fileConfig?.qdrantApiKey || config.get('qdrantApiKey'),
+      qdrantUrl: fileConfig?.qdrantUrl || config.get('qdrantUrl') || getPackageJsonDefault('qdrantUrl'),
+      qdrantApiKey: fileConfig?.qdrantApiKey || config.get('qdrantApiKey') || getPackageJsonDefault('qdrantApiKey'),
       // Embedding config
       embeddingProvider,
-      embeddingModel: fileConfig?.embeddingModel || config.get('embeddingModel'),
+      embeddingModel: fileConfig?.embeddingModel || config.get('embeddingModel') || getPackageJsonDefault('embeddingModel'),
       allowedExtensions: fileConfig?.allowedExtensions || config.get('allowedExtensions'),
       maxFileSize: fileConfig?.maxFileSize || config.get('maxFileSize'),
       // Qdrant isolation config

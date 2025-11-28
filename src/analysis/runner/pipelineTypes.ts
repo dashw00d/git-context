@@ -5,6 +5,7 @@ import type { DriftFindings } from '../../facts/driftDetector';
 import type { LegacyAuditResult } from '../../facts/legacyAudit';
 import type { FileHotspot, SymbolHotspot } from '../hotspotDetector';
 import type { MovedBlock } from '../movedBlockDetector';
+import type { WorkspaceFacts } from '../workspaceIndexer';
 
 export interface PipelineState {
   // Inputs
@@ -13,7 +14,10 @@ export interface PipelineState {
 
   // Intermediates
   commitFacts?: any[];
-  workspaceFacts?: any;
+  workspaceFacts?: {
+    staged: WorkspaceFacts | null;
+    unstaged: WorkspaceFacts | null;
+  };
   bundleFacts?: any;
   history?: any;
   llmOutputs?: any;

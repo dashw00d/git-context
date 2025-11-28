@@ -1,4 +1,6 @@
-import NodeCache from 'node-cache';
+// node-cache uses CommonJS export; use require style to avoid default import issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+import NodeCache = require('node-cache');
 import { getExtensionConfig, getPackageJsonDefault } from './config';
 
 // Language name constants

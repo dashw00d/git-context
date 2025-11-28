@@ -266,7 +266,14 @@ function generateRecommendations(results: TestResult[]): string {
 export function saveReport(results: TestResult[], filename?: string): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
   const defaultFilename = `mock_test_results_${timestamp}.md`;
-  const outputPath = filename || path.join(process.cwd(), defaultFilename);
+  
+  // Ensure benchmarks/output directory exists
+  const outputDir = path.join(process.cwd(), 'benchmarks', 'output');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+  
+  const outputPath = filename || path.join(outputDir, defaultFilename);
 
   generateReport(results, { outputPath });
   return outputPath;

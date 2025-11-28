@@ -2,7 +2,7 @@
   "name": "git-context",
   "displayName": "Git Context",
   "description": "Analyze git history and context",
-  "version": "0.1.2",
+  "version": "2.0.0",
   "publisher": "git-context",
   "repository": {
     "type": "git",
@@ -191,7 +191,13 @@
           "items": {
             "type": "string"
           },
-          "default": ["php", "js", "ts", "tsx", "jsx"],
+          "default": [
+            "php",
+            "js",
+            "ts",
+            "tsx",
+            "jsx"
+          ],
           "description": "File extensions to analyze (requires corresponding Tree-sitter WASM)"
         },
         "git-context.maxFileSize": {
@@ -243,15 +249,16 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && node copy-wasm.js && node download-wasm.js && npm run build:cockpit",
+    "compile": "tsc -p ./ && node scripts/copy-wasm.js && node scripts/download-wasm.js && npm run build:cockpit",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "build:cockpit": "esbuild src/webview/cockpit/index.tsx --bundle --outfile=media/cockpit.js --format=iife --platform=browser --loader:.tsx=tsx --loader:.ts=ts --jsx=automatic --sourcemap",
-    "test": "vitest",
+    "test": "vitest --reporter=json --reporter=default",
     "test:watch": "vitest --watch",
     "test:pipeline": "npx ts-node benchmarks/pipeline_metric_test.ts --shared-state",
-    "test:pipeline:ci": "node -e \"const cp = require('child_process'); const result = cp.spawnSync('npx', ['ts-node', 'benchmarks/pipeline_metric_test.ts', '--shared-state'], { stdio: 'pipe', encoding: 'utf8' }); console.log(result.stdout); const accuracyMatch = result.stdout.match(/Overall Accuracy: ([\\d.]+)%/); if (accuracyMatch && parseFloat(accuracyMatch[1]) < 85) { console.error('❌ Pipeline test accuracy below 85% threshold'); process.exit(1); } else if (accuracyMatch) { console.log('✅ Pipeline test accuracy meets 85% threshold'); } else { console.log('⚠️  Could not parse accuracy from test output'); process.exit(1); }\""
+    "test:pipeline:ci": "node -e \"const cp = require('child_process'); const result = cp.spawnSync('npx', ['ts-node', 'benchmarks/pipeline_metric_test.ts', '--shared-state'], { stdio: 'pipe', encoding: 'utf8' }); console.log(result.stdout); const accuracyMatch = result.stdout.match(/Overall Accuracy: ([\\d.]+)%/); if (accuracyMatch && parseFloat(accuracyMatch[1]) < 85) { console.error('\u274c Pipeline test accuracy below 85% threshold'); process.exit(1); } else if (accuracyMatch) { console.log('\u2705 Pipeline test accuracy meets 85% threshold'); } else { console.log('\u26a0\ufe0f  Could not parse accuracy from test output'); process.exit(1); }\"",
+    "clean:compiled": "find src -name \"*.js\" -o -name \"*.js.map\" -print -delete && rm -rf out"
   },
   "devDependencies": {
     "@types/express": "^4.17.0",

@@ -118,7 +118,7 @@ export class ContextExporter {
     const edges: EdgeContext[] = edgeRows.map(edge => ({
       from_symbol_id: edge.from_symbol_id,
       to_symbol_id: edge.to_symbol_id,
-      edge_type: edge.edge_type as any,
+      edge_type: (edge.edge_type || 'unknown') as any,
       change_type: edge.change_type as any,
       confidence: edge.confidence || 1.0,
       is_resolved: Boolean(edge.is_resolved ?? 1)

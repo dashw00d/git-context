@@ -12,8 +12,19 @@ vi.mock('../src/liveTracker', () => ({
   }
 }));
 
+const mockOrchestratorInstance = {
+  getState: vi.fn(() => ({
+    bundleFacts: {
+      bundle: { shas: [] },
+      evidence: {}
+    }
+  })),
+  updateLiveState: vi.fn()
+};
+
 vi.mock('../src/state/cockpitOrchestrator', () => ({
   CockpitOrchestrator: class {
+    static getInstance = vi.fn(() => mockOrchestratorInstance);
     getState = vi.fn(() => ({
       bundleFacts: {
         bundle: { shas: [] },
@@ -22,15 +33,7 @@ vi.mock('../src/state/cockpitOrchestrator', () => ({
     }));
     updateLiveState = vi.fn();
   },
-  getCockpitOrchestrator: vi.fn(() => ({
-    getState: vi.fn(() => ({
-      bundleFacts: {
-        bundle: { shas: [] },
-        evidence: {}
-      }
-    })),
-    updateLiveState: vi.fn()
-  }))
+  getCockpitOrchestrator: vi.fn(() => mockOrchestratorInstance)
 }));
 
 vi.mock('../src/facts/workingSnapshot', () => ({
@@ -68,8 +71,9 @@ describe('LiveAnalysisEngine', () => {
   let orchestrator: CockpitOrchestrator;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     tracker = new LiveDiffTracker() as any;
-    orchestrator = new CockpitOrchestrator() as any;
+    orchestrator = CockpitOrchestrator.getInstance();
     engine = new LiveAnalysisEngine(tracker, orchestrator);
   });
 

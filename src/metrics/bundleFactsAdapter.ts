@@ -39,7 +39,7 @@ export interface BundleFactsMetrics {
  */
 export async function assembleBundleFactsFromTestData(
   commitFacts: CommitFacts[],
-  workspaceFacts: WorkspaceFacts | null,
+  workspaceFacts: WorkspaceFacts | { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null } | null,
   options: {
     commitShas?: string[];
     scope?: ScopeSet;
@@ -51,13 +51,36 @@ export async function assembleBundleFactsFromTestData(
 ): Promise<BundleFactsMetrics> {
   const bundleFacts = await buildRefactorBundleFacts(commitFacts, workspaceFacts, options);
 
+  // Calculate workspace totals (handle both old and new format)
+  let workspaceSymbols = 0;
+  let workspaceEdges = 0;
+  let workspaceFiles = 0;
+  
+  if (workspaceFacts) {
+    if ('staged' in workspaceFacts || 'unstaged' in workspaceFacts) {
+      const structured = workspaceFacts as { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null };
+      if (structured.staged) {
+        workspaceSymbols += structured.staged.symbolsAdded + structured.staged.symbolsModified + structured.staged.symbolsRemoved;
+        workspaceEdges += structured.staged.edgesAdded + structured.staged.edgesRemoved;
+        workspaceFiles += structured.staged.filesChanged;
+      }
+      if (structured.unstaged) {
+        workspaceSymbols += structured.unstaged.symbolsAdded + structured.unstaged.symbolsModified + structured.unstaged.symbolsRemoved;
+        workspaceEdges += structured.unstaged.edgesAdded + structured.unstaged.edgesRemoved;
+        workspaceFiles += structured.unstaged.filesChanged;
+      }
+    } else {
+      const single = workspaceFacts as WorkspaceFacts;
+      workspaceSymbols = single.symbolsAdded + single.symbolsModified + single.symbolsRemoved;
+      workspaceEdges = single.edgesAdded + single.edgesRemoved;
+      workspaceFiles = single.filesChanged;
+    }
+  }
+
   return {
-    totalSymbols: commitFacts.reduce((sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved, 0) +
-                  (workspaceFacts ? workspaceFacts.symbolsAdded + workspaceFacts.symbolsModified + workspaceFacts.symbolsRemoved : 0),
-    totalEdges: commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0) +
-                (workspaceFacts ? workspaceFacts.edgesAdded + workspaceFacts.edgesRemoved : 0),
-    totalFiles: commitFacts.reduce((sum, c) => sum + c.filesChanged, 0) +
-                (workspaceFacts ? workspaceFacts.filesChanged : 0),
+    totalSymbols: commitFacts.reduce((sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved, 0) + workspaceSymbols,
+    totalEdges: commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0) + workspaceEdges,
+    totalFiles: commitFacts.reduce((sum, c) => sum + c.filesChanged, 0) + workspaceFiles,
     intendedPresent: bundleFacts.intended.present,
     intendedAbsent: bundleFacts.intended.absent,
     intendedRenamed: bundleFacts.intended.renamed,
@@ -79,14 +102,37 @@ export async function assembleBundleFactsFromTestData(
  */
 export function assembleBundleFactsSimple(
   commitFacts: CommitFacts[],
-  workspaceFacts: WorkspaceFacts | null
+  workspaceFacts: WorkspaceFacts | { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null } | null
 ): BundleFactsMetrics {
-  const totalSymbols = commitFacts.reduce((sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved, 0) +
-                      (workspaceFacts ? workspaceFacts.symbolsAdded + workspaceFacts.symbolsModified + workspaceFacts.symbolsRemoved : 0);
-  const totalEdges = commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0) +
-                    (workspaceFacts ? workspaceFacts.edgesAdded + workspaceFacts.edgesRemoved : 0);
-  const totalFiles = commitFacts.reduce((sum, c) => sum + c.filesChanged, 0) +
-                    (workspaceFacts ? workspaceFacts.filesChanged : 0);
+  // Calculate workspace totals (handle both old and new format)
+  let workspaceSymbols = 0;
+  let workspaceEdges = 0;
+  let workspaceFiles = 0;
+  
+  if (workspaceFacts) {
+    if ('staged' in workspaceFacts || 'unstaged' in workspaceFacts) {
+      const structured = workspaceFacts as { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null };
+      if (structured.staged) {
+        workspaceSymbols += structured.staged.symbolsAdded + structured.staged.symbolsModified + structured.staged.symbolsRemoved;
+        workspaceEdges += structured.staged.edgesAdded + structured.staged.edgesRemoved;
+        workspaceFiles += structured.staged.filesChanged;
+      }
+      if (structured.unstaged) {
+        workspaceSymbols += structured.unstaged.symbolsAdded + structured.unstaged.symbolsModified + structured.unstaged.symbolsRemoved;
+        workspaceEdges += structured.unstaged.edgesAdded + structured.unstaged.edgesRemoved;
+        workspaceFiles += structured.unstaged.filesChanged;
+      }
+    } else {
+      const single = workspaceFacts as WorkspaceFacts;
+      workspaceSymbols = single.symbolsAdded + single.symbolsModified + single.symbolsRemoved;
+      workspaceEdges = single.edgesAdded + single.edgesRemoved;
+      workspaceFiles = single.filesChanged;
+    }
+  }
+
+  const totalSymbols = commitFacts.reduce((sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved, 0) + workspaceSymbols;
+  const totalEdges = commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0) + workspaceEdges;
+  const totalFiles = commitFacts.reduce((sum, c) => sum + c.filesChanged, 0) + workspaceFiles;
 
   return {
     totalSymbols,

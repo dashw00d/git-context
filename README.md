@@ -174,6 +174,20 @@ This creates a `post-commit` hook that analyzes each new commit.
 
 ## Database Schema
 
+The extension uses a **modular schema system** (v2.0+) with per-module versioning and safe migrations. The schema is organized into 9 logical modules:
+
+- **core**: Migration tracking (`migration_log`)
+- **commits**: Commit metadata and analysis (`commits_metadata`, `commits_analysis`)
+- **symbols**: Symbol tracking (`symbol_versions`, `symbol_changes`)
+- **edges**: Dependency edges and renames (`edges`, `renames`, `import_conventions`)
+- **conventions**: Code style conventions (`import_conventions`)
+- **structural**: File snapshots and workspace analysis (`file_snapshots`, `workspace_analysis`)
+- **hotspots**: Hotspot detection (`file_hotspots`, `symbol_hotspots`)
+- **moved**: Block movement tracking (`moved_blocks`, `symbol_lineage`)
+- **reports**: Analysis reports (`reports`)
+
+Each module has its own version and migration history. Migrations are applied automatically on startup using `safeAddColumn` to prevent failures on existing databases.
+
 The extension stores analysis results in a local SQLite database at `.git/commit-tracker/commit_tracker.sqlite`:
 
 - `commits`: Commit metadata and LLM summaries
@@ -226,11 +240,16 @@ npm run test
 ### CLI Commands
 
 - `ct analyze [count]` - Analyze last N commits
+- `ct index [--reindex] [--modules <list>]` - Index commits (re-run analysis pipeline)
+  - `--reindex` - Force reindex all commits
+  - `--modules <list>` - Reindex specific modules (e.g., `--modules edges,symbols`)
 - `ct staged` - Analyze staged changes
 - `ct show <sha>` - Show commit analysis
 - `ct symbol <name>` - Search symbol history
 - `ct last [count]` - Show recent analyzed commits
 - `ct install-hooks` - Install git hooks
+
+**Note**: If you have a legacy database (pre-v2.0), run `ct index --reindex` to migrate edge data and fix the `edge_type` column.
 
 ### VS Code Commands
 

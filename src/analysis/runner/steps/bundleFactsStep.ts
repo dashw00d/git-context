@@ -27,7 +27,7 @@ export function createBundleFactsStep(): PipelineStep {
 
       const bundleFacts = await buildRefactorBundleFacts(
         state.commitFacts,
-        state.workspaceFacts,
+        state.workspaceFacts ?? null,
         options
       );
 

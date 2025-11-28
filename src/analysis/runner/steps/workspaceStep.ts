@@ -11,17 +11,18 @@ export function createWorkspaceOverlayStep(
 
     async run(state: PipelineState) {
       if (!state.includeWorkspace) {
-        state.workspaceFacts = null;
+        state.workspaceFacts = { staged: null, unstaged: null };
         return;
       }
 
-      // Priority: unstaged -> staged (unstaged is most recent work)
-      let facts = await workspaceIndexer.analyzeWorkspace('unstaged');
-      if (!facts) {
-        facts = await workspaceIndexer.analyzeWorkspace('staged');
-      }
+      // Analyze both staged and unstaged separately
+      const stagedFacts = await workspaceIndexer.analyzeWorkspace('staged');
+      const unstagedFacts = await workspaceIndexer.analyzeWorkspace('unstaged');
 
-      state.workspaceFacts = facts;
+      state.workspaceFacts = {
+        staged: stagedFacts,
+        unstaged: unstagedFacts
+      };
     }
   };
 }

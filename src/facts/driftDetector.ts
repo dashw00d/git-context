@@ -328,7 +328,7 @@ export function detectDrift(
       
       // Query intended edges from database (edges added/modified in commits)
       const intendedEdgesStmt = db.prepare(`
-        SELECT DISTINCT from_symbol_id, to_symbol_id, edge_type
+        SELECT DISTINCT from_symbol_id, to_symbol_id, COALESCE(edge_type, 'unknown') AS edge_type
         FROM edges
         WHERE sha IN (${placeholders})
           AND change_type IN ('added', 'modified')

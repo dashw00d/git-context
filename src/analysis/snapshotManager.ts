@@ -5,7 +5,9 @@ import { DependencyExtractor } from './dependencies';
 import { assignDNAIds, computeBodyHash } from './symbolDna';
 import { logDebug } from '../utils/logger';
 import { detectLanguage } from '../utils/config';
-import NodeCache from 'node-cache';
+// node-cache is CommonJS; use require style to avoid default import issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+import NodeCache = require('node-cache');
 
 export interface FileSnapshot {
   blobSha: string;
@@ -18,7 +20,7 @@ export interface FileSnapshot {
 }
 
 export class SnapshotManager {
-  private snapshotCache = new NodeCache({ stdTTL: 3600, checkperiod: 600 }); // 1 hour TTL, check every 10 minutes
+  private snapshotCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, useClones: false }); // 1 hour TTL, check every 10 minutes
   private cacheHits = 0;
   private cacheMisses = 0;
 

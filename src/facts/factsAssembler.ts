@@ -20,7 +20,7 @@ import { WorkspaceFacts } from '../analysis/workspaceIndexer';
  */
 export async function buildRefactorBundleFacts(
   commitFacts: CommitFacts[],
-  workspaceFacts: WorkspaceFacts | null,
+  workspaceFacts: WorkspaceFacts | { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null } | null,
   options?: {
     commitShas?: string[];
     scope?: ScopeSet;
@@ -49,11 +49,28 @@ export async function buildRefactorBundleFacts(
   const allRisks = Array.from(new Set(commitFacts.flatMap(c => c.risks)));
   const maxStructuralChange = Math.max(...commitFacts.map(c => c.structuralChangeScore), 0);
 
-  // Add workspace facts if available
+  // Add workspace facts if available (handle both old and new structure)
   if (workspaceFacts) {
-    totalSymbols += workspaceFacts.symbolsAdded + workspaceFacts.symbolsModified + workspaceFacts.symbolsRemoved;
-    totalFiles += workspaceFacts.filesChanged;
-    allRisks.push(...workspaceFacts.risks);
+    // Check if it's the new structured format
+    if ('staged' in workspaceFacts || 'unstaged' in workspaceFacts) {
+      const structured = workspaceFacts as { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null };
+      if (structured.staged) {
+        totalSymbols += structured.staged.symbolsAdded + structured.staged.symbolsModified + structured.staged.symbolsRemoved;
+        totalFiles += structured.staged.filesChanged;
+        allRisks.push(...structured.staged.risks);
+      }
+      if (structured.unstaged) {
+        totalSymbols += structured.unstaged.symbolsAdded + structured.unstaged.symbolsModified + structured.unstaged.symbolsRemoved;
+        totalFiles += structured.unstaged.filesChanged;
+        allRisks.push(...structured.unstaged.risks);
+      }
+    } else {
+      // Old format: single WorkspaceFacts object
+      const single = workspaceFacts as WorkspaceFacts;
+      totalSymbols += single.symbolsAdded + single.symbolsModified + single.symbolsRemoved;
+      totalFiles += single.filesChanged;
+      allRisks.push(...single.risks);
+    }
   }
 
   const oldestSha = commitFacts.length > 0 ? commitFacts[0].sha : 'unknown';

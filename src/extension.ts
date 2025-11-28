@@ -403,12 +403,26 @@ export async function activate(context: vscode.ExtensionContext) {
       const { ensureDatabaseInitialized, getDatabaseManager } = await import('./storage/database');
       await ensureDatabaseInitialized();
 
+      // Check for legacy DB issues
+      const { auditAllModules } = await import('./storage/schema');
+      const db = getDatabaseManager().getDatabase();
+      const gaps = auditAllModules(db);
+      const hasLegacy = gaps.some(g => g.includes('Legacy edges') || g.includes('legacy'));
+      if (hasLegacy) {
+        const action = await vscode.window.showWarningMessage(
+          'Legacy database detected—run `ct index --reindex` to fix edge_type column',
+          'Open Terminal'
+        );
+        if (action === 'Open Terminal') {
+          vscode.commands.executeCommand('workbench.action.terminal.new');
+        }
+      }
+
       const { BranchManager } = await import('./storage/branchManager');
       const { getExtensionConfig } = await import('./utils/config');
       const config = getExtensionConfig();
 
       // Check if database has any commits
-      const db = getDatabaseManager().getDatabase();
       const result = db.prepare('SELECT COUNT(*) as count FROM commits_metadata').get() as { count: number };
 
       if (result.count === 0) {

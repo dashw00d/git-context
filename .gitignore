@@ -5,6 +5,8 @@
 /.examples
 /.vscode
 /.cursor.git-context.config.json
+/src/**/*.js
+/src/**/*.js.map
 /archive
 /resources
 .env

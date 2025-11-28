@@ -50,9 +50,9 @@ export class QdrantClientWrapper {
       // Test connection
       await this.client.getCollections();
       this.isAvailable = true;
-      console.log(`[Qdrant] Connected to ${url} (embedding dim: ${this.embeddingDimension})`);
-    } catch (error) {
-      console.warn(`[Qdrant] Connection failed, falling back to SQLite search:`, error);
+      console.log(`[Qdrant] Connected to ${url} (embedding dim: ${this.embeddingDimension}, model: ${model})`);
+    } catch (error: any) {
+      console.warn(`[Qdrant] Connection failed to ${url}, falling back to SQLite search:`, error?.message || error);
       this.isAvailable = false;
       this.client = null;
     }
@@ -81,57 +81,92 @@ export class QdrantClientWrapper {
   async ensureCollections(): Promise<void> {
     if (!(await this.isEnabled())) return;
 
-    const collections = ['symbols', 'commits', 'patterns'];
+    const collections: Array<'symbols' | 'commits' | 'patterns'> = ['symbols', 'commits', 'patterns'];
 
     for (const collectionName of collections) {
-      try {
-        await this.client!.getCollection(collectionName);
-      } catch {
-        // Collection doesn't exist, create it
-        await this.client!.createCollection(collectionName, {
-          vectors: {
-            size: this.embeddingDimension,
-            distance: 'Cosine'
-          }
+      await this.ensureCollection(collectionName);
+    }
+  }
+
+  /**
+   * Ensure a specific collection exists (handles both base and project-specific collections)
+   * @param base - Base collection name ('commits', 'symbols', or 'patterns')
+   * @param projectId - Optional project ID for project-specific collections
+   */
+  async ensureCollection(base: 'commits' | 'symbols' | 'patterns', projectId?: string): Promise<void> {
+    if (!(await this.isEnabled())) return;
+
+    const collectionName = this.getCollectionName(base, projectId);
+    let collectionCreated = false;
+
+    try {
+      await this.client!.getCollection(collectionName);
+      // Collection exists, ensure indexes are added (idempotent - will skip if exists)
+    } catch {
+      // Collection doesn't exist, create it
+      await this.client!.createCollection(collectionName, {
+        vectors: {
+          size: this.embeddingDimension,
+          distance: 'Cosine'
+        }
+      });
+      logInfo(`[Qdrant] Created collection: ${collectionName} (dim: ${this.embeddingDimension})`);
+      collectionCreated = true;
+    }
+    
+    // Always ensure indexes exist (idempotent - safe to call multiple times)
+    // This ensures existing collections get new indexes added if they're missing
+    await this.ensureCollectionIndexes(collectionName);
+  }
+
+  /**
+   * Ensure indexes exist on a collection (idempotent)
+   */
+  private async ensureCollectionIndexes(collectionName: string): Promise<void> {
+    if (!(await this.isEnabled()) || !this.client) return;
+
+    try {
+      // Add keyword index on project_id for fast filtering (idempotent - will skip if exists)
+      await this.client.createPayloadIndex(collectionName, {
+        field_name: 'project_id',
+        field_schema: { type: 'keyword' }
+      });
+
+      // Add indexes for new semantic memory features
+      if (collectionName.includes('commits') || collectionName.includes('symbols')) {
+        await this.client.createPayloadIndex(collectionName, {
+          field_name: 'date',
+          field_schema: { type: 'keyword' } // ISO dates sortable as strings
         });
-        logInfo(`[Qdrant] Created collection: ${collectionName} (dim: ${this.embeddingDimension})`);
+        
+        // Add numeric index for structural_change_score to enable range queries
+        if (collectionName.includes('commits')) {
+          await this.client.createPayloadIndex(collectionName, {
+            field_name: 'structural_change_score',
+            field_schema: { type: 'float' } // Numeric type for range queries
+          });
+        }
       }
 
-      // Add keyword index on project_id for fast filtering (idempotent - will skip if exists)
-      try {
-        await this.client!.createPayloadIndex(collectionName, {
-          field_name: 'project_id',
+      if (collectionName.includes('patterns')) {
+        await this.client.createPayloadIndex(collectionName, {
+          field_name: 'theme_id',
           field_schema: { type: 'keyword' }
         });
+      }
 
-        // Add indexes for new semantic memory features
-        if (collectionName.includes('commits') || collectionName.includes('symbols')) {
-          await this.client!.createPayloadIndex(collectionName, {
-            field_name: 'date',
-            field_schema: { type: 'keyword' } // ISO dates sortable as strings
-          });
-        }
+      // Tags are useful everywhere
+      await this.client.createPayloadIndex(collectionName, {
+        field_name: 'tags',
+        field_schema: { type: 'keyword' } // Array of keywords
+      });
 
-        if (collectionName.includes('patterns')) {
-          await this.client!.createPayloadIndex(collectionName, {
-            field_name: 'theme_id',
-            field_schema: { type: 'keyword' }
-          });
-        }
-
-        // Tags are useful everywhere
-        await this.client!.createPayloadIndex(collectionName, {
-          field_name: 'tags',
-          field_schema: { type: 'keyword' } // Array of keywords
-        });
-
-        logInfo(`[Qdrant] Indexed fields on ${collectionName}`);
-      } catch (error: any) {
-        // Index may already exist, ignore error if so
-        const errorMsg = error?.message || String(error);
-        if (!errorMsg.includes('already exists') && !errorMsg.includes('already exist')) {
-          logWarn(`[Qdrant] Failed to create indexes on ${collectionName}: ${errorMsg}`);
-        }
+      logInfo(`[Qdrant] Indexed fields on ${collectionName}`);
+    } catch (error: any) {
+      // Index may already exist, ignore error if so
+      const errorMsg = error?.message || String(error);
+      if (!errorMsg.includes('already exists') && !errorMsg.includes('already exist')) {
+        logWarn(`[Qdrant] Failed to create indexes on ${collectionName}: ${errorMsg}`);
       }
     }
   }

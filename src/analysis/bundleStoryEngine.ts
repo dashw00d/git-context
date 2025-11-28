@@ -98,7 +98,7 @@ export class BundleStoryEngine {
   }
 
   private async retrieveHistory(
-    queryEmbedding: number[],
+    queryEmbedding: number[] | null,
     bundleFacts: RefactorBundleFacts,
     commitFacts: CommitFacts[]
   ): Promise<RetrievedHistory> {
@@ -110,6 +110,11 @@ export class BundleStoryEngine {
     const client = await qdrant.getClient();
     if (!client) return this.emptyHistory();
 
+    // Compute embedding if not provided (history step calls directly)
+    const effectiveEmbedding = queryEmbedding && queryEmbedding.length > 0
+      ? queryEmbedding
+      : await generateEmbedding(this.buildBundleShard(bundleFacts, commitFacts));
+
     // PROJECT ISOLATION: Filter by project ID
     const projectId = getProjectId();
     if (!projectId) {
@@ -119,6 +124,34 @@ export class BundleStoryEngine {
 
     const commitsCollection = qdrant.getCollectionName('commits', projectId);
     const symbolsCollection = qdrant.getCollectionName('symbols', projectId);
+    
+    // Ensure collections exist before searching (handles both base and project-specific collections)
+    await qdrant.ensureCollection('commits', projectId);
+    await qdrant.ensureCollection('symbols', projectId);
+
+    // Check collection sizes before searching to avoid unnecessary queries
+    const commitsInfo = await client.getCollection(commitsCollection);
+    const symbolsInfo = await client.getCollection(symbolsCollection);
+    
+    // Safely access points_count (Qdrant API returns this property)
+    const commitsCount = (commitsInfo as any).points_count ?? (commitsInfo as any).pointsCount ?? 0;
+    const symbolsCount = (symbolsInfo as any).points_count ?? (symbolsInfo as any).pointsCount ?? 0;
+    
+    const commitsEmpty = commitsCount === 0;
+    const symbolsEmpty = symbolsCount === 0;
+    
+    if (commitsEmpty && symbolsEmpty) {
+      logInfo('[BundleStory] Skipping search: both collections are empty');
+      return this.emptyHistory();
+    }
+    
+    if (commitsEmpty) {
+      logInfo(`[BundleStory] Commits collection is empty (${commitsCount} points), skipping commit search`);
+    }
+    
+    if (symbolsEmpty) {
+      logInfo(`[BundleStory] Symbols collection is empty (${symbolsCount} points), skipping symbol search`);
+    }
 
     const projectFilter = {
       must: [
@@ -131,30 +164,34 @@ export class BundleStoryEngine {
 
     // Query 1: Similar commits (episodic memory)
     let similarCommits: any[] = [];
+    if (!commitsEmpty) {
     try {
       similarCommits = await client.search(commitsCollection, {
-        vector: queryEmbedding,
+        vector: effectiveEmbedding,
         limit: 20,
         with_payload: true,
         score_threshold: 0.6,
         filter: projectFilter  // ONLY CURRENT PROJECT
       });
-    } catch (error) {
-      logWarn(`[BundleStory] Failed to search commits: ${error}`);
+      } catch (error: any) {
+        logWarn(`[BundleStory] Failed to search commits: ${error?.message || error}. Collection: ${commitsCollection}, Filter: ${JSON.stringify(projectFilter)}`);
+      }
     }
 
     // Query 2: Similar symbols (fine-grained history)
     let similarSymbols: any[] = [];
+    if (!symbolsEmpty) {
     try {
       similarSymbols = await client.search(symbolsCollection, {
-        vector: queryEmbedding,
+        vector: effectiveEmbedding,
         limit: 30,
         with_payload: true,
         score_threshold: 0.65,
         filter: projectFilter  // ONLY CURRENT PROJECT
       });
-    } catch (error) {
-      logWarn(`[BundleStory] Failed to search symbols: ${error}`);
+      } catch (error: any) {
+        logWarn(`[BundleStory] Failed to search symbols: ${error?.message || error}. Collection: ${symbolsCollection}, Filter: ${JSON.stringify(projectFilter)}`);
+      }
     }
 
     // Query 3: Refactors with high structural change (similar complexity)
@@ -174,15 +211,17 @@ export class BundleStoryEngine {
     };
 
     let relatedRefactors: any[] = [];
+    if (!commitsEmpty) {
     try {
       relatedRefactors = await client.search(commitsCollection, {
-        vector: queryEmbedding,
+        vector: effectiveEmbedding,
         limit: 10,
         filter: refactorFilter,
         with_payload: true
       });
-    } catch (error) {
-      logWarn(`[BundleStory] Failed to search related refactors: ${error}`);
+      } catch (error: any) {
+        logWarn(`[BundleStory] Failed to search related refactors: ${error?.message || error}. Collection: ${commitsCollection}, Filter: ${JSON.stringify(refactorFilter)}`);
+      }
     }
 
     // Build symbol evolution timelines

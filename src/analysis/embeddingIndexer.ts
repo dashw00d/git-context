@@ -44,6 +44,9 @@ export class EmbeddingIndexer {
     const qdrant = getQdrantClient();
     const projectId = getProjectId() || 'unknown'; // Get unique project identifier
     const collectionName = qdrant.getCollectionName('commits', projectId);
+    
+    // Ensure collection exists (handles both base and project-specific collections)
+    await qdrant.ensureCollection('commits', projectId);
 
     await runWithConcurrency(commitFacts, 5, async (facts) => {
       const shard = await this.buildCommitShard(facts, projectId);
@@ -69,6 +72,10 @@ export class EmbeddingIndexer {
     const qdrant = getQdrantClient();
     const projectId = getProjectId() || 'unknown'; // Get unique project identifier
     const collectionName = qdrant.getCollectionName('symbols', projectId);
+    
+    // Ensure collection exists (handles both base and project-specific collections)
+    await qdrant.ensureCollection('symbols', projectId);
+    
     const symbolShards = [];
 
     // Gather symbol history from DB
@@ -223,6 +230,10 @@ export class EmbeddingIndexer {
     const qdrant = getQdrantClient();
     const projectId = getProjectId() || 'unknown';
     const collectionName = qdrant.getCollectionName('patterns', projectId);
+    
+    // Ensure collection exists (handles both base and project-specific collections)
+    await qdrant.ensureCollection('patterns', projectId);
+    
     const themeShards: { text: string; metadata: any }[] = [];
 
     // Aggregate by inferred theme (risks + hotspots -> theme_id)

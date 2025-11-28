@@ -135,6 +135,80 @@ program
   });
 
 program
+  .command('index')
+  .description('Index commits into database')
+  .option('-r, --reindex', 'force reindex all commits or legacy modules')
+  .option('-m, --modules <list>', 'comma-separated list of modules to reindex (e.g., "edges")')
+  .action(async (options) => {
+    logInfo(chalk.blue('Indexing commits...'));
+
+    try {
+      const { CommitIndexer } = await import('../analysis/commitIndexer');
+      const { GitOperations } = await import('../analysis/git');
+      const { SnapshotManager } = await import('../analysis/snapshotManager');
+      const { StructuralDiffManager } = await import('../analysis/structuralDiffManager');
+      const { RiskDetector } = await import('../analysis/heuristics');
+      const { DependencyExtractor } = await import('../analysis/dependencies');
+      const { HotspotDetector } = await import('../analysis/hotspotDetector');
+      const { MovedBlockDetector } = await import('../analysis/movedBlockDetector');
+      const { getDatabaseManager } = await import('../storage/database');
+
+      const db = getDatabaseManager().getDatabase();
+      const git = new GitOperations();
+      const { SymbolExtractor } = await import('../analysis/symbols');
+      const symbolExtractor = new SymbolExtractor(git);
+      const dependencyExtractor = new DependencyExtractor();
+      const snapshotManager = new SnapshotManager(db, symbolExtractor, dependencyExtractor);
+      const structuralDiffManager = new StructuralDiffManager(db);
+      const riskDetector = new RiskDetector();
+      const hotspotDetector = new HotspotDetector();
+      const movedBlockDetector = new MovedBlockDetector();
+
+      const commitIndexer = new CommitIndexer(
+        db,
+        git,
+        snapshotManager,
+        structuralDiffManager,
+        riskDetector,
+        dependencyExtractor,
+        hotspotDetector,
+        movedBlockDetector
+      );
+
+      let shas: string[] = [];
+
+      if (options.reindex) {
+        // Force reindex all commits
+        const allShas = db.prepare('SELECT sha FROM commits_metadata').all().map((r: any) => r.sha);
+        shas = allShas;
+        logInfo(chalk.blue(`Reindexing ${shas.length} commits...`));
+      } else if (options.modules) {
+        // Reindex commits for specific modules
+        const modules = options.modules.split(',').map((m: string) => m.trim());
+        const modulePattern = modules.map((m: string) => `%legacy_${m}%`).join(' OR analysis_version LIKE ');
+        const stmt = db.prepare(`SELECT sha FROM commits_analysis WHERE analysis_version LIKE ${modulePattern}`);
+        shas = stmt.all().map((r: any) => r.sha);
+        logInfo(chalk.blue(`Reindexing ${shas.length} commits for modules: ${modules.join(', ')}...`));
+      } else {
+        // Index recent commits
+        const recentCommits = git.getRecentCommits(10);
+        shas = recentCommits.map(c => c.sha);
+        logInfo(chalk.blue(`Indexing ${shas.length} recent commits...`));
+      }
+
+      await commitIndexer.ensureCommitsIndexed(shas, 8, {
+        force: options.reindex,
+        modules: options.modules ? options.modules.split(',').map((m: string) => m.trim()) : undefined
+      });
+
+      logInfo(chalk.green('Indexing complete!'));
+    } catch (error) {
+      logError(chalk.red(`Indexing failed: ${error}`));
+      process.exit(1);
+    }
+  });
+
+program
   .command('install-hooks')
   .description('Install git hooks')
   .action(async () => {

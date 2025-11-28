@@ -8,7 +8,9 @@ import { MovedBlockDetector } from './movedBlockDetector';
 import { Database } from 'sql.js';
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { logDebug, logInfo } from '../utils/logger';
-import pLimit from 'p-limit';
+// p-limit is CommonJS; use require style to avoid default-import issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+import pLimit = require('p-limit');
 import { getExtensionConfig, getSupportedExtensions } from '../utils/config';
 import * as pathModule from 'path';
 
@@ -90,9 +92,9 @@ export class CommitIndexer {
   /**
    * Ensure commit is indexed (idempotent, cacheable)
    */
-  async ensureCommitIndexed(sha: string): Promise<CommitFacts> {
-    // Check if already indexed with current analysis version
-    if (this.isIndexed(sha)) {
+  async ensureCommitIndexed(sha: string, opts?: { force?: boolean; modules?: string[] }): Promise<CommitFacts> {
+    // Check if already indexed with current analysis version (unless force)
+    if (!opts?.force && this.isIndexed(sha)) {
       logDebug(`[CommitIndexer] ${sha} already indexed`);
       this.cacheHits++;
       return this.loadCommitFacts(sha);
@@ -105,7 +107,7 @@ export class CommitIndexer {
 
     try {
       // Run indexing pipeline
-      const facts = await this.indexCommit(sha);
+      const facts = await this.indexCommit(sha, opts);
 
       // Mark as complete
       this.markComplete(sha, facts);
@@ -122,12 +124,13 @@ export class CommitIndexer {
    */
   async ensureCommitsIndexed(
     shas: string[],
-    concurrency: number = 8
+    concurrency: number = 8,
+    opts?: { force?: boolean; modules?: string[] }
   ): Promise<CommitFacts[]> {
     const limit = pLimit(concurrency);
     const promises = shas.map(sha => limit(async () => {
       return this.retryWithBackoff(async () => {
-        const facts = await this.ensureCommitIndexed(sha);
+        const facts = await this.ensureCommitIndexed(sha, opts);
         return facts;
       });
     }));
@@ -141,7 +144,7 @@ export class CommitIndexer {
     return results;
   }
 
-  private async indexCommit(sha: string): Promise<CommitFacts> {
+  private async indexCommit(sha: string, opts?: { force?: boolean; modules?: string[] }): Promise<CommitFacts> {
     logInfo(`[CommitIndexer] Indexing commit ${sha}`);
 
     const commitInfo = this.git.getCommitInfo(sha);
@@ -343,6 +346,11 @@ export class CommitIndexer {
     // Store symbol history for detailed tracking
     await this.storeSymbolHistory(sha, symbolChanges, blastRadiusResult.impactScore);
 
+    // Store edges into edges table (skip if modules filter excludes edges)
+    if (!opts?.modules || opts.modules.includes('edges')) {
+      await this.storeEdges(sha, files, parentSha || null);
+    }
+
     // Detect moved blocks
     const { movedBlocks } = await this.movedBlockDetector.detectMovedBlocks(
       sha,
@@ -453,6 +461,119 @@ export class CommitIndexer {
         impactScore,
         new Date().toISOString()
       ]);
+    }
+  }
+
+  /**
+   * Store edges into edges table with edge_type
+   */
+  private async storeEdges(
+    sha: string,
+    files: Array<{ path: string; status: string }>,
+    parentSha: string | null
+  ): Promise<void> {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO edges
+      (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const file of files) {
+      const { path, status } = file;
+
+      if (status === 'D') {
+        // File deleted - get parent snapshot edges as removed
+        if (parentSha) {
+          const parentBlobSha = this.git.getBlobSha(parentSha, path);
+          const parentContent = this.git.safeGetFileContent(parentSha, path);
+          const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
+            path,
+            parentBlobSha,
+            parentContent
+          );
+
+          for (const edge of parentSnapshot.edges) {
+            stmt.run([
+              sha,
+              edge.from,
+              edge.to,
+              'removed',
+              (edge as any).type || 'unknown',
+              (edge as any).confidence || 1.0,
+              (edge as any).isResolved !== false ? 1 : 0
+            ]);
+          }
+        }
+        continue;
+      }
+
+      // Get current snapshot edges
+      const currentBlobSha = this.git.getBlobSha(sha, path);
+      const currentContent = this.git.safeGetFileContent(sha, path);
+      const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
+        path,
+        currentBlobSha,
+        currentContent
+      );
+
+      if (status === 'A') {
+        // File added - all edges are added
+        for (const edge of currentSnapshot.edges) {
+          stmt.run([
+            sha,
+            edge.from,
+            edge.to,
+            'added',
+            (edge as any).type || 'unknown',
+            (edge as any).confidence || 1.0,
+            (edge as any).isResolved !== false ? 1 : 0
+          ]);
+        }
+      } else if (status === 'M' && parentSha) {
+        // File modified - compare edges
+        const parentBlobSha = this.git.getBlobSha(parentSha, path);
+        const parentContent = this.git.safeGetFileContent(parentSha, path);
+        const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
+          path,
+          parentBlobSha,
+          parentContent
+        );
+
+        const parentEdgeIds = new Set(parentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`));
+        const currentEdgeIds = new Set(currentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`));
+
+        // Added edges
+        for (const edge of currentSnapshot.edges) {
+          const edgeKey = `${edge.from}-${edge.to}-${(edge as any).type || 'unknown'}`;
+          if (!parentEdgeIds.has(edgeKey)) {
+            stmt.run([
+              sha,
+              edge.from,
+              edge.to,
+              'added',
+              (edge as any).type || 'unknown',
+              (edge as any).confidence || 1.0,
+              (edge as any).isResolved !== false ? 1 : 0
+            ]);
+          }
+        }
+
+        // Removed edges
+        for (const edge of parentSnapshot.edges) {
+          const edgeKey = `${edge.from}-${edge.to}-${(edge as any).type || 'unknown'}`;
+          if (!currentEdgeIds.has(edgeKey)) {
+            stmt.run([
+              sha,
+              edge.from,
+              edge.to,
+              'removed',
+              (edge as any).type || 'unknown',
+              (edge as any).confidence || 1.0,
+              (edge as any).isResolved !== false ? 1 : 0
+            ]);
+          }
+        }
+      }
     }
   }
 

@@ -2,8 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-const { SUPPORTED_LANGUAGES, WASM_URLS } = require('./src/utils/supportedLanguages-constants');
-const languages = SUPPORTED_LANGUAGES;
+const languages = ['typescript', 'javascript', 'php'];
+const baseUrl = 'https://github.com/tree-sitter/tree-sitter-';
 
 const outDir = path.join(__dirname, 'out');
 if (!fs.existsSync(outDir)) {
@@ -69,8 +69,26 @@ async function downloadFile(url, dest) {
   });
 }
 
-// URLs for pre-built WASM files from shared constants
-const wasmUrls = WASM_URLS;
+// URLs for pre-built WASM files
+const wasmUrls = {
+    'bash': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-bash.wasm',
+    'c': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-c.wasm',
+    'cpp': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-cpp.wasm',
+    'c_sharp': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-c_sharp.wasm',
+    'css': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-css.wasm',
+    'go': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-go.wasm',
+    'html': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-html.wasm',
+    'java': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-java.wasm',
+    'javascript': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-javascript.wasm',
+    'json': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-json.wasm',
+    'php': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-php.wasm',
+    'python': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-python.wasm',
+    'ruby': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-ruby.wasm',
+    'rust': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-rust.wasm',
+    'scala': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-scala.wasm',
+    'tsx': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-tsx.wasm',
+    'typescript': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-typescript.wasm',
+  };
 
 async function main() {
   for (const lang of languages) {

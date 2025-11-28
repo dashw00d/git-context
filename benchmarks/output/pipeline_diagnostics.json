@@ -1,94 +1,94 @@
 {
-  "startTime": "2025-11-27T15:08:43.393Z",
+  "startTime": "2025-11-28T02:10:46.174Z",
   "steps": [
     {
       "stepId": "intended",
       "hash": "97d170e1550eee4afc0af065b78cda302a97674c",
-      "note": "",
+      "note": "matches baseline",
       "summary": "symbols=0, present=0, absent=0, renamed=0"
     },
     {
+      "stepId": "workspace_overlay",
+      "hash": "65f031615e9b7bde0e2e5af9d8d24f0562f4f6db",
+      "note": "Δ baseline (expected 3bfb62b0)",
+      "summary": "staged: files=0, symbols=0 | unstaged: files=0, symbols=0"
+    },
+    {
       "stepId": "hotspots",
-      "hash": "d4e5f3e92676a4f70e9cf91aa7a939ebf35842b9",
-      "note": "",
+      "hash": "97d170e1550eee4afc0af065b78cda302a97674c",
+      "note": "Δ baseline (expected d4e5f3e9)",
       "summary": ""
     },
     {
       "stepId": "scope",
-      "hash": "f56edd51dcf3d960a1c153d43298433215d8f3f3",
-      "note": "",
-      "summary": "files=155, working=37, blast=0"
+      "hash": "789fcd9495b152dda69404374f5a62f6c5caae09",
+      "note": "Δ baseline (expected f56edd51)",
+      "summary": "files=149, working=67, blast=0"
     },
     {
       "stepId": "index_commits",
-      "hash": "4a1dc61659d5f4cd64f214c043fc1ea0bbbe2688",
-      "note": "",
-      "summary": "commits=6"
-    },
-    {
-      "stepId": "workspace_overlay",
-      "hash": "3bfb62b00cfbe03ece32fb3122955eb42838174f",
-      "note": "",
-      "summary": "files=6, symbols=146"
+      "hash": "626e5ed8c4088a0b139afdc53b40536c3de2909c",
+      "note": "Δ baseline (expected 4a1dc616)",
+      "summary": "commits=3"
     },
     {
       "stepId": "working",
-      "hash": "58de5e625bd1b555913101e0cf9e326bfd4cdffa",
-      "note": "",
-      "summary": "symbols=3534, edges=21826, paths=155"
+      "hash": "e013e5737d5bbb1b6ebed15564cf20e5180f1e69",
+      "note": "Δ baseline (expected 58de5e62)",
+      "summary": "symbols=2242, edges=14401, paths=135"
     },
     {
       "stepId": "drift",
-      "hash": "632e9fc87472990e1a18a9cd634e4e218ee9916e",
-      "note": "",
+      "hash": "a83dd43c332acb398d3e1da75f186545ba1e0110",
+      "note": "Δ baseline (expected 632e9fc8)",
       "summary": "missing=0, zombies=0, divergent=0"
     },
     {
       "stepId": "legacy",
-      "hash": "c3f11aa2be6f44ef8404916cd9a9be19c9b765bb",
-      "note": "",
-      "summary": "dead=53, legacyUsed=0, leftovers=0"
+      "hash": "d6f5336e1687212240f4307f74940813c9bf0b2a",
+      "note": "Δ baseline (expected c3f11aa2)",
+      "summary": "dead=8, legacyUsed=0, leftovers=0"
     },
     {
       "stepId": "bundle_facts",
-      "hash": "837658ed6e0298665453b86960bf39049b8addb9",
-      "note": "",
+      "hash": "d519e0539e4e118c976ceca3b25428fad165c9a3",
+      "note": "Δ baseline (expected 837658ed)",
       "summary": "intended.present=0, absent=0, renamed=0"
-    },
-    {
-      "stepId": "retrieve_history",
-      "hash": "n/a",
-      "note": "",
-      "summary": ""
     },
     {
       "stepId": "embedding_index",
       "hash": "n/a",
-      "note": "",
+      "note": "no baseline",
+      "summary": ""
+    },
+    {
+      "stepId": "retrieve_history",
+      "hash": "n/a",
+      "note": "no baseline",
       "summary": ""
     },
     {
       "stepId": "llm_story",
       "hash": "n/a",
-      "note": "",
+      "note": "no baseline",
       "summary": ""
     }
   ],
   "errors": [],
-  "endTime": "2025-11-27T15:17:10.975Z",
-  "totalTimeMs": 507582,
+  "endTime": "2025-11-28T02:18:18.392Z",
+  "totalTimeMs": 452217,
   "completedSteps": [
     "intended",
+    "workspace_overlay",
     "hotspots",
     "scope",
     "index_commits",
-    "workspace_overlay",
     "working",
     "drift",
     "legacy",
     "bundle_facts",
-    "retrieve_history",
     "embedding_index",
+    "retrieve_history",
     "llm_story"
   ],
   "errorCount": 0

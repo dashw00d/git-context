@@ -85,9 +85,16 @@ export class SearchIndex {
     if (!client) {
       throw new Error('Qdrant client not available');
     }
+    
+    // Get project ID and ensure collection exists (handles both base and project-specific collections)
+    const { getProjectId } = await import('../utils/config');
+    const projectId = getProjectId();
+    const collectionName = this.qdrant.getCollectionName('symbols', projectId);
+    await this.qdrant.ensureCollection('symbols', projectId);
+    
     const queryEmbedding = await generateEmbedding(query);
 
-    const results = await client.search('symbols', {
+    const results = await client.search(collectionName, {
       vector: queryEmbedding,
       limit,
       with_payload: true,
@@ -690,8 +697,11 @@ export class SearchIndex {
       return;
     }
 
-    // Ensure collections exist before storing
-    await this.qdrant.ensureCollections();
+    // Get project ID and ensure collection exists (handles both base and project-specific collections)
+    const { getProjectId } = await import('../utils/config');
+    const projectId = getProjectId();
+    const collectionName = this.qdrant.getCollectionName('patterns', projectId);
+    await this.qdrant.ensureCollection('patterns', projectId);
 
     const points: any[] = [];
 
@@ -723,7 +733,7 @@ export class SearchIndex {
     }
 
     if (points.length > 0) {
-      await client.upsert('patterns', {
+      await client.upsert(collectionName, {
         wait: true,
         points
       });
@@ -751,8 +761,14 @@ export class SearchIndex {
     }
 
     const queryEmbedding = await generateEmbedding(query);
+    
+    // Get project ID and ensure collection exists (handles both base and project-specific collections)
+    const { getProjectId } = await import('../utils/config');
+    const projectId = getProjectId();
+    const collectionName = this.qdrant.getCollectionName('patterns', projectId);
+    await this.qdrant.ensureCollection('patterns', projectId);
 
-    const results = await client.search('patterns', {
+    const results = await client.search(collectionName, {
       vector: queryEmbedding,
       limit,
       with_payload: true,
