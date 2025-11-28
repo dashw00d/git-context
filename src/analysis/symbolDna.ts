@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import { SymbolInfo } from '../types';
+import { CstFact, HybridFact, isCstFact } from '../types/cstFacts';
 
 /**
  * Generate stable DNA hash for symbol (survives renames, moves)
@@ -76,4 +77,27 @@ export function assignDNAIds(symbols: SymbolInfo[], bodyTexts?: Map<string, stri
       bodyHash
     };
   });
+}
+
+/**
+ * Compute DNA for hybrid fact (symbol or CST fact)
+ */
+export function computeHybridDna(fact: HybridFact, bodyText?: string): string {
+  if (isCstFact(fact)) {
+    // For CST facts: kind + name + level + bodyShape + timeline.length
+    const parts = [
+      fact.kind,
+      fact.name,
+      fact.level !== undefined ? String(fact.level) : '',
+      fact.bodyShape,
+      String(fact.timeline.length)
+    ];
+    return crypto.createHash('sha256')
+      .update(parts.join('::'))
+      .digest('hex')
+      .substring(0, 16);
+  } else {
+    // For semantic symbols: use existing computeSymbolDNA
+    return computeSymbolDNA(fact, bodyText);
+  }
 }

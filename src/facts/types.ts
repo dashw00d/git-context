@@ -1,3 +1,5 @@
+import type { HybridFact } from '../types/cstFacts';
+
 /**
  * Single source of truth for RefactorBundleFacts interface
  * This is the canonical schema for v2.0 facts JSON
@@ -55,6 +57,12 @@ export interface RefactorBundleFacts {
     };
   };
   evidence: Record<string, any>;
+  /**
+   * Hybrid facts: semantic symbols + CST facts, keyed by file path
+   * For CST-only languages (markdown, json, yaml, css) and hybrid augmentation
+   * on supported languages (php, js/ts) to layer structural facts on top
+   */
+  hybridFacts?: Record<string, HybridFact[]>;
 }
 
 export interface RefactorPattern {

@@ -2,10 +2,13 @@ import { Database } from 'sql.js';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
 import { getDatabaseManager } from '../storage/database';
+import { GitOperations } from './git';
 
 export interface CodeBlock {
   file: string;
   symbolId?: string;
+  dnaId?: string; // Add DNA ID for matching
+  symbolKind?: string; // Add symbol kind for inferBlockType
   startLine: number;
   endLine: number;
   content: string;
@@ -58,7 +61,23 @@ export interface SymbolLineage {
 }
 
 export class MovedBlockDetector {
-  constructor(private dbManager = getDatabaseManager()) {}
+  private similarityThreshold: number = 0.6; // Configurable threshold (default 0.6)
+
+  constructor(
+    private dbManager = getDatabaseManager(),
+    private git?: GitOperations
+  ) {
+    if (!this.git) {
+      this.git = new GitOperations();
+    }
+  }
+
+  /**
+   * Set similarity threshold for move detection
+   */
+  setSimilarityThreshold(threshold: number): void {
+    this.similarityThreshold = Math.max(0.0, Math.min(1.0, threshold));
+  }
 
   /**
    * Main entry point: detect moved blocks between file changes
@@ -135,6 +154,8 @@ export class MovedBlockDetector {
         blocks.push({
           file: filePath,
           symbolId: symbol.dnaId,
+          dnaId: symbol.dnaId,
+          symbolKind: symbol.kind,
           startLine: symbol.location.start.line,
           endLine: symbol.location.end.line,
           content: symbolContent,
@@ -157,8 +178,8 @@ export class MovedBlockDetector {
 
     for (const deleted of deletedBlocks) {
       for (const added of addedBlocks) {
-        // Quick reject: different files must be involved
-        if (deleted.file === added.file) continue;
+        // Allow same-file moves (in-file refactoring)
+        // Match via stable DNA IDs for in-file moves
 
         let similarityScore = 0;
 
@@ -169,7 +190,7 @@ export class MovedBlockDetector {
         // Stage 2: Structure match (move with minor edits)
         else if (deleted.structureHash === added.structureHash) {
           similarityScore = this.calculateTextSimilarity(deleted.content, added.content);
-          if (similarityScore < 0.8) continue; // Too different
+          if (similarityScore < this.similarityThreshold) continue; // Too different
         }
         // Stage 3: Fuzzy match (partial moves)
         else {
@@ -177,7 +198,7 @@ export class MovedBlockDetector {
             deleted.normalizedHash,
             added.normalizedHash
           );
-          if (similarityScore < 0.85) continue; // Too different
+          if (similarityScore < this.similarityThreshold) continue; // Too different
         }
 
         candidates.push({
@@ -194,14 +215,13 @@ export class MovedBlockDetector {
 
   /**
    * Infer block type from symbol information
+   * Uses actual symbol kind from SymbolInfo, not regex on IDs
    */
   inferBlockType(block: CodeBlock): string {
-    // This is a simplified implementation
-    // In a full implementation, this would analyze the AST
-    if (block.symbolId?.startsWith('function_')) return 'function';
-    if (block.symbolId?.startsWith('class_')) return 'class';
-    if (block.symbolId?.startsWith('method_')) return 'method';
-    if (block.symbolId?.startsWith('const_')) return 'constant';
+    if (block.symbolKind) {
+      return block.symbolKind;
+    }
+    // Fallback to generic 'block' if kind not available
     return 'block';
   }
 
@@ -411,14 +431,17 @@ export class MovedBlockDetector {
 
   /**
    * Get file content for a given file and commit SHA
+   * Uses GitOperations to get historical file content
    */
   private async getFileContent(filePath: string, commitSha: string): Promise<string> {
-    // This is a simplified implementation
-    // In production, this would use GitOperations to get content at specific SHA
+    if (!this.git) {
+      logDebug(`[MovedBlockDetector] GitOperations not available, returning empty content`);
+      return '';
+    }
     try {
-      const fs = require('fs');
-      return fs.readFileSync(filePath, 'utf8');
-    } catch {
+      return this.git.safeGetFileContent(commitSha, filePath);
+    } catch (error: any) {
+      logDebug(`[MovedBlockDetector] Failed to get file content for ${filePath} at ${commitSha.substring(0, 8)}: ${error.message}`);
       return '';
     }
   }

@@ -2,10 +2,70 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-const languages = ['typescript', 'javascript', 'php'];
-const baseUrl = 'https://github.com/tree-sitter/tree-sitter-';
+// Read supported languages and WASM URLs from compiled TypeScript output
+// This assumes tsc has already run (which it does in the compile script)
+let languages, wasmUrls, getRequiredLanguagesForExtensions;
+try {
+  const supportedLanguagesPath = path.join(__dirname, '..', 'out', 'utils', 'supportedLanguages.js');
+  if (!fs.existsSync(supportedLanguagesPath)) {
+    throw new Error(`Compiled TypeScript file not found at ${supportedLanguagesPath}. Run 'tsc' first.`);
+  }
+  // Clear require cache to ensure fresh load
+  const resolvedPath = require.resolve(supportedLanguagesPath);
+  if (require.cache[resolvedPath]) {
+    delete require.cache[resolvedPath];
+  }
+  const { SUPPORTED_LANGUAGES, WASM_URLS, getRequiredLanguagesForExtensions: getRequiredLangs } = require(supportedLanguagesPath);
+  languages = SUPPORTED_LANGUAGES;
+  wasmUrls = WASM_URLS;
+  getRequiredLanguagesForExtensions = getRequiredLangs;
+  console.log(`Loaded ${languages.length} languages from TypeScript source`);
+} catch (err) {
+  console.error('Failed to load supportedLanguages from compiled output:', err.message);
+  console.error('Falling back to hardcoded values. Make sure to run "tsc" before this script.');
+  // Fallback values
+  languages = ['typescript', 'javascript', 'php'];
+  wasmUrls = {
+    'javascript': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-javascript.wasm',
+    'php': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-php.wasm',
+    'typescript': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-typescript.wasm'
+  };
+  getRequiredLanguagesForExtensions = null;
+}
 
-const outDir = path.join(__dirname, 'out');
+// Try to read user config to determine which languages are needed
+function getUserConfiguredExtensions() {
+  // Try VS Code config file
+  const vscodeConfigPath = path.join(__dirname, '..', '.vscode', 'settings.json');
+  if (fs.existsSync(vscodeConfigPath)) {
+    try {
+      const config = JSON.parse(fs.readFileSync(vscodeConfigPath, 'utf8'));
+      if (config['git-context.allowedExtensions']) {
+        return config['git-context.allowedExtensions'];
+      }
+    } catch (err) {
+      // Ignore parse errors
+    }
+  }
+  
+  // Try workspace config file
+  const workspaceConfigPath = path.join(__dirname, '..', '.git-context.config.json');
+  if (fs.existsSync(workspaceConfigPath)) {
+    try {
+      const config = JSON.parse(fs.readFileSync(workspaceConfigPath, 'utf8'));
+      if (config.allowedExtensions) {
+        return config.allowedExtensions;
+      }
+    } catch (err) {
+      // Ignore parse errors
+    }
+  }
+  
+  return null;
+}
+
+// Output to out/wasm/ directory
+const outDir = path.join(__dirname, '..', 'out', 'wasm');
 if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
 }
@@ -69,30 +129,56 @@ async function downloadFile(url, dest) {
   });
 }
 
-// URLs for pre-built WASM files
-const wasmUrls = {
-    'bash': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-bash.wasm',
-    'c': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-c.wasm',
-    'cpp': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-cpp.wasm',
-    'c_sharp': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-c_sharp.wasm',
-    'css': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-css.wasm',
-    'go': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-go.wasm',
-    'html': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-html.wasm',
-    'java': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-java.wasm',
-    'javascript': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-javascript.wasm',
-    'json': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-json.wasm',
-    'php': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-php.wasm',
-    'python': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-python.wasm',
-    'ruby': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-ruby.wasm',
-    'rust': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-rust.wasm',
-    'scala': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-scala.wasm',
-    'tsx': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-tsx.wasm',
-    'typescript': 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-typescript.wasm',
-  };
-
 async function main() {
-  for (const lang of languages) {
+  // Determine which languages to download
+  let languagesToDownload = languages;
+  
+  // Check if user has configured extensions
+  const userExtensions = getUserConfiguredExtensions();
+  if (userExtensions && getRequiredLanguagesForExtensions) {
+    console.log(`User configured extensions: ${userExtensions.join(', ')}`);
+    const requiredLangs = getRequiredLanguagesForExtensions(userExtensions);
+    console.log(`Required languages: ${requiredLangs.join(', ')}`);
+    
+    // Filter to only download languages that are needed and don't exist
+    // Check both new location (out/wasm/) and old location (out/) for migration
+    languagesToDownload = requiredLangs.filter(lang => {
+      const dest = path.join(outDir, `tree-sitter-${lang}.wasm`);
+      const oldDest = path.join(__dirname, '..', 'out', `tree-sitter-${lang}.wasm`);
+      return !fs.existsSync(dest) && !fs.existsSync(oldDest);
+    });
+    
+    if (languagesToDownload.length === 0) {
+      console.log('All required WASM files already exist. Skipping download.');
+      process.exit(0);
+    }
+    
+    console.log(`Downloading ${languagesToDownload.length} missing WASM file(s)...`);
+  } else {
+    // Default: download all languages that don't exist
+    // Check both new location (out/wasm/) and old location (out/) for migration
+    languagesToDownload = languages.filter(lang => {
+      const dest = path.join(outDir, `tree-sitter-${lang}.wasm`);
+      const oldDest = path.join(__dirname, '..', 'out', `tree-sitter-${lang}.wasm`);
+      return !fs.existsSync(dest) && !fs.existsSync(oldDest);
+    });
+    
+    if (languagesToDownload.length === 0) {
+      console.log('All WASM files already exist. Use --force to re-download.');
+      process.exit(0);
+    }
+    
+    console.log(`Downloading ${languagesToDownload.length} missing WASM file(s) out of ${languages.length} total...`);
+  }
+  
+  // Download missing files
+  for (const lang of languagesToDownload) {
     const url = wasmUrls[lang];
+    if (!url) {
+      console.warn(`No WASM URL found for language: ${lang}. Skipping.`);
+      continue;
+    }
+    
     const dest = path.join(outDir, `tree-sitter-${lang}.wasm`);
     console.log(`Downloading ${lang} WASM from ${url}...`);
     try {
@@ -100,9 +186,11 @@ async function main() {
       console.log(`Downloaded ${dest}`);
     } catch (err) {
       console.error(`Failed to download ${lang}:`, err);
-      process.exit(1);
+      // Don't exit on error, continue with other languages
     }
   }
+  
+  console.log('Download complete!');
   process.exit(0);
 }
 

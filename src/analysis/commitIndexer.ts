@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { GitOperations } from './git';
 import { SnapshotManager, FileSnapshot } from './snapshotManager';
 import { StructuralDiffManager, StructuralDiffMetrics } from './structuralDiffManager';
@@ -11,8 +12,12 @@ import { logDebug, logInfo } from '../utils/logger';
 // p-limit is CommonJS; use require style to avoid default-import issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 import pLimit = require('p-limit');
-import { getExtensionConfig, getSupportedExtensions } from '../utils/config';
+import { getExtensionConfig, getSupportedExtensions, detectLanguage, isCstOnlyLanguage } from '../utils/config';
 import * as pathModule from 'path';
+import { getCstTimelineManager } from './cstTimeline';
+import { getTreeSitterParser } from './tree-sitter';
+import type { HybridFact } from '../types/cstFacts';
+import type { SymbolInfo } from '../types';
 
 export interface CommitFacts {
   sha: string;
@@ -31,6 +36,8 @@ export interface CommitFacts {
 export class CommitIndexer {
   private cacheHits = 0;
   private cacheMisses = 0;
+  private cstTimelineManager = getCstTimelineManager();
+  private parser = getTreeSitterParser();
 
   constructor(
     private db: Database,
@@ -225,6 +232,9 @@ export class CommitIndexer {
         currentContent
       );
 
+      // Extract and save hybrid facts (CST-only or hybrid augmentation)
+      await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
+
       if (status === 'A') {
         // File added
         totalSymbolsAdded += currentSnapshot.symbols.length;
@@ -283,6 +293,10 @@ export class CommitIndexer {
         );
 
         maxStructuralChange = Math.max(maxStructuralChange, structDiff.structuralChangeScore);
+
+        // Extract and save hybrid facts for modified files (with prior hash)
+        const parentFileHash = await this.computeFileHashForFacts(path, parentSha, parentContent, parentSnapshot.symbols);
+        await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols, parentFileHash);
 
         // Detect risks based on structural changes
         if (structDiff.interfaceChanged) {
@@ -365,6 +379,80 @@ export class CommitIndexer {
     await this.updateHotspots(sha, symbolChanges, files);
 
     return facts;
+  }
+
+  /**
+   * Extract and save hybrid facts for a file
+   */
+  private async extractAndSaveHybridFacts(
+    filePath: string,
+    commitSha: string,
+    content: string,
+    existingSymbols: any[],
+    prevHash?: string
+  ): Promise<void> {
+    const config = getExtensionConfig();
+    const enableCst = config.enableCstTracking ?? true;
+    const enableAugment = config.enableCstAugmentation ?? false;
+
+    if (!enableCst && !enableAugment) {
+      return; // CST tracking disabled
+    }
+
+    const language = detectLanguage(filePath);
+    if (!language) return;
+
+    const isCstOnly = isCstOnlyLanguage(language);
+    if (!isCstOnly && !enableAugment) {
+      return; // Not CST-only and augmentation disabled
+    }
+
+    try {
+      // Parse file
+      const tree = await this.parser.parse(content, language);
+      if (!tree) return;
+
+      // Extract hybrid facts
+      const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
+
+      // Save via timeline manager
+      await this.cstTimelineManager.saveFacts(filePath, commitSha, hybridFacts, prevHash);
+    } catch (error) {
+      logDebug(`[CommitIndexer] Error extracting hybrid facts for ${filePath}: ${error}`);
+    }
+  }
+
+  /**
+   * Compute file hash for facts (for delta tracking)
+   */
+  private async computeFileHashForFacts(
+    filePath: string,
+    commitSha: string,
+    content: string,
+    existingSymbols: any[]
+  ): Promise<string | undefined> {
+    const language = detectLanguage(filePath);
+    if (!language) return undefined;
+
+    try {
+      const tree = await this.parser.parse(content, language);
+      if (!tree) return undefined;
+
+      const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
+      const serialized = JSON.stringify(hybridFacts.map(f => ({
+        id: f.id,
+        dnaId: f.dnaId,
+        name: f.name,
+        kind: f.kind
+      })));
+      return crypto.createHash('sha256')
+        .update(serialized)
+        .digest('hex')
+        .substring(0, 16);
+    } catch (error) {
+      logDebug(`[CommitIndexer] Error computing file hash for ${filePath}: ${error}`);
+      return undefined;
+    }
   }
 
   private isIndexed(sha: string): boolean {
@@ -588,7 +676,7 @@ export class CommitIndexer {
     const commitInfo = this.git.getCommitInfo(sha);
     const author = commitInfo.author;
 
-    // Update file-level hotspots
+    // Update file-level hotspots (with threshold check)
     for (const file of files) {
       const { path } = file;
       // Get symbol changes for this file
@@ -596,12 +684,34 @@ export class CommitIndexer {
         .filter(change => change.symbol.id.startsWith(`${path}:`))
         .map(change => change.symbol);
 
-      await this.hotspotDetector.updateFileHotspot(path, sha, fileSymbols, author);
+      // Skip if symbol changes < 5 (threshold)
+      if (fileSymbols.length >= 5) {
+        await this.hotspotDetector.updateFileHotspot(path, sha, fileSymbols, author);
+      }
     }
 
-    // Update symbol-level hotspots
-    for (const { symbol } of symbolChanges.values()) {
-      await this.hotspotDetector.updateSymbolHotspot(symbol, sha);
+    // Batch update symbol-level hotspots with concurrency
+    const symbols = Array.from(symbolChanges.values())
+      .map(change => change.symbol)
+      .filter(s => s && s.id && s.dnaId);
+
+    if (symbols.length > 0) {
+      // Use batch method with concurrency limit of 8
+      const limit = pLimit(8);
+      const batches: SymbolInfo[][] = [];
+      const batchSize = 50; // Process 50 symbols per batch
+
+      for (let i = 0; i < symbols.length; i += batchSize) {
+        batches.push(symbols.slice(i, i + batchSize));
+      }
+
+      await Promise.all(
+        batches.map(batch =>
+          limit(async () => {
+            await this.hotspotDetector.batchUpdateSymbols(batch, sha);
+          })
+        )
+      );
     }
 
     // Optionally create snapshot for trend analysis (every 10 commits)

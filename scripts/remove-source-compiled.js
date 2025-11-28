@@ -1,3 +1,9 @@
+// Use this script to remove all .js files in the src directory that have a corresponding .ts file.
+
+
+// node scripts/remove-source-compiled.js
+
+
 const fs = require('fs');
 const path = require('path');
 

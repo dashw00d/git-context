@@ -30,12 +30,14 @@ import { createEmbeddingStep } from '../src/analysis/runner/steps/embeddingStep'
 import { createBundleFactsStep } from '../src/analysis/runner/steps/bundleFactsStep';
 import { createHistoryRetrievalStep } from '../src/analysis/runner/steps/historyStep';
 import { createStoryStep } from '../src/analysis/runner/steps/storyStep';
+import { getCstTimelineManager } from '../src/analysis/cstTimeline';
 
 import {
   applySnapshotToState,
   loadStepSnapshot,
   saveStepSnapshot,
   serializeStepState,
+  deepSerializeStepState,
   stableHash
 } from './mocks/framework/snapshot';
 
@@ -48,6 +50,13 @@ type CliOptions = {
   commitCount: number;
   includeWorkspace: boolean;
   resetDb: boolean;
+  enableCst: boolean;
+  enableAugment: boolean;
+  testHybrid: boolean;
+  validateTimeline: boolean;
+  noEmbeddings: boolean;
+  noSnapshotCache: boolean;
+  fullReport: boolean;
 };
 
 function parseArgs(args: string[]): CliOptions {
@@ -67,7 +76,14 @@ function parseArgs(args: string[]): CliOptions {
     focusSteps: focusArg ? new Set(focusArg.split(',').map(s => s.trim()).filter(Boolean)) : undefined,
     commitCount: parseInt(getArg('--commits', '6'), 10) || 6,
     includeWorkspace: !flag('--no-workspace'),
-    resetDb: flag('--reset-db')
+    resetDb: flag('--reset-db'),
+    enableCst: !flag('--no-cst'), // Default: true
+    enableAugment: flag('--enable-augment'), // Default: false
+    testHybrid: flag('--test-hybrid'),
+    validateTimeline: flag('--validate-timeline'),
+    noEmbeddings: flag('--no-embeddings'),
+    noSnapshotCache: flag('--no-snapshot-cache'),
+    fullReport: flag('--full-report')
   };
 }
 
@@ -81,7 +97,8 @@ function summarizeStep(stepId: string, data: any): string {
     case 'working':
       return `symbols=${(data.symbols || []).length}, edges=${(data.edges || []).length}, paths=${(data.analyzedPaths || []).length}`;
     case 'drift':
-      return `missing=${data.missing_symbols?.length || 0}, zombies=${data.zombie_symbols?.length || 0}, divergent=${data.divergent_symbols?.length || 0}`;
+      const hybridCount = data.hybridDrifts?.length || 0;
+      return `missing=${data.missing_symbols?.length || 0}, zombies=${data.zombie_symbols?.length || 0}, divergent=${data.divergent_symbols?.length || 0}, hybrid=${hybridCount}`;
     case 'legacy':
       return `dead=${data.dead?.length || 0}, legacyUsed=${data.legacyUsed?.length || 0}, leftovers=${data.replacedLeftovers?.length || 0}`;
     case 'workspace_overlay':
@@ -89,16 +106,160 @@ function summarizeStep(stepId: string, data: any): string {
       if (data && typeof data === 'object' && ('staged' in data || 'unstaged' in data)) {
         const staged = data.staged || {};
         const unstaged = data.unstaged || {};
+        // Note: Hybrid facts are stored in database, not in workspaceFacts structure
+        // Count would require DB query, so we just show symbol counts
         return `staged: files=${staged.filesChanged || 0}, symbols=${(staged.symbolsAdded || 0) + (staged.symbolsModified || 0) + (staged.symbolsRemoved || 0)} | unstaged: files=${unstaged.filesChanged || 0}, symbols=${(unstaged.symbolsAdded || 0) + (unstaged.symbolsModified || 0) + (unstaged.symbolsRemoved || 0)}`;
       }
       // Fallback for old format
       return `files=${data.filesChanged || 0}, symbols=${(data.symbolsAdded || 0) + (data.symbolsModified || 0) + (data.symbolsRemoved || 0)}`;
     case 'index_commits':
+      // Note: Hybrid facts are stored in database, not in commitFacts array
+      // Count would require DB query, so we just show commit count
       return `commits=${data.length || 0}`;
     case 'bundle_facts':
-      return `intended.present=${data.intended?.present || 0}, absent=${data.intended?.absent || 0}, renamed=${data.intended?.renamed || 0}`;
+      const hybridFactsCount = data.hybridFacts 
+        ? Object.keys(data.hybridFacts).reduce((sum, key) => sum + (data.hybridFacts[key]?.length || 0), 0)
+        : 0;
+      const hybridFilesCount = data.hybridFacts ? Object.keys(data.hybridFacts).length : 0;
+      return `intended.present=${data.intended?.present || 0}, absent=${data.intended?.absent || 0}, renamed=${data.intended?.renamed || 0}, hybridFacts=${hybridFactsCount} (${hybridFilesCount} files)`;
     default:
       return '';
+  }
+}
+
+/**
+ * Extract structured metrics from deep-serialized step data
+ */
+function extractStepMetrics(stepId: string, data: any): Record<string, any> {
+  if (!data) return {};
+
+  switch (stepId) {
+    case 'index_commits':
+      if (Array.isArray(data)) {
+        return {
+          commitCount: data.length,
+          totalSymbols: data.reduce((sum: number, c: any) => sum + (c.symbols?.length || 0), 0),
+          totalEdges: data.reduce((sum: number, c: any) => sum + (c.edges?.length || 0), 0)
+        };
+      }
+      return { commitCount: 0, totalSymbols: 0, totalEdges: 0 };
+
+    case 'scope':
+      return {
+        commitFiles: (data.commitFiles || []).length,
+        workingChanged: (data.workingChanged || []).length,
+        blastRadiusFiles: (data.blastRadius || []).length,
+        allPaths: (data.allPaths || []).length
+      };
+
+    case 'intended':
+      if (Array.isArray(data)) {
+        return {
+          totalSymbols: data.length,
+          present: data.filter((i: any) => i.expect === 'present').length,
+          absent: data.filter((i: any) => i.expect === 'absent').length,
+          renamed: data.filter((i: any) => i.isRenamed).length
+        };
+      }
+      return { totalSymbols: 0, present: 0, absent: 0, renamed: 0 };
+
+    case 'working':
+      return {
+        symbols: (data.symbols || []).length,
+        edges: (data.edges || []).length,
+        analyzedPaths: (data.analyzedPaths || []).length
+      };
+
+    case 'drift':
+      return {
+        missing_symbols: data.missing_symbols?.length || 0,
+        zombie_symbols: data.zombie_symbols?.length || 0,
+        divergent_symbols: data.divergent_symbols?.length || 0,
+        missing_edges: data.missing_edges?.length || 0,
+        zombie_edges: data.zombie_edges?.length || 0,
+        unresolved_callers: data.unresolved_callers?.length || 0,
+        hybridDrifts: data.hybridDrifts?.length || 0,
+        conventionDrift: data.conventionDrift ? (data.conventionDrift.driftSymbols?.length || 0) : 0,
+        mixedConventionFiles: data.mixedConventionFiles?.length || 0
+      };
+
+    case 'legacy':
+      return {
+        dead: data.dead?.length || 0,
+        legacyUsed: data.legacyUsed?.length || 0,
+        replacedLeftovers: data.replacedLeftovers?.length || 0
+      };
+
+    case 'hotspots':
+      if (Array.isArray(data)) {
+        return {
+          topHotspots: data.length,
+          totalChurn: data.reduce((sum: number, h: any) => sum + (h.churnScore || h.dnaChurn || 0), 0)
+        };
+      }
+      return { topHotspots: 0, totalChurn: 0 };
+
+    case 'bundle_facts':
+      const hybridFactsCount = data.hybridFacts
+        ? Object.values(data.hybridFacts).reduce((sum: number, f: any) => sum + (Array.isArray(f) ? f.length : 0), 0)
+        : 0;
+      return {
+        incompleteness: data.findings?.incompleteness ? 
+          (data.findings.incompleteness.missing || 0) + 
+          (data.findings.incompleteness.zombies || 0) + 
+          (data.findings.incompleteness.divergent || 0) : 0,
+        patternDrift: data.findings?.patternDrift ? 
+          (data.findings.patternDrift.mixedTargets?.length || 0) +
+          (data.findings.patternDrift.oldNamespaces?.length || 0) +
+          (data.findings.patternDrift.conventionDrift ? 1 : 0) +
+          (data.findings.patternDrift.mixedConventionFiles || 0) : 0,
+        legacySummary: data.findings?.legacyAudit?.dead || 0,
+        intended: {
+          present: data.intended?.present || 0,
+          absent: data.intended?.absent || 0,
+          renamed: data.intended?.renamed || 0
+        },
+        hybridFactsCount,
+        hybridFilesCount: data.hybridFacts ? Object.keys(data.hybridFacts).length : 0
+      };
+
+    case 'llm_story':
+      // Metrics extracted from llmOutputs structure
+      if (data.llmAnalysis) {
+        return {
+          storyLength: 1, // Single analysis per run
+          totalHealthScore: data.llmAnalysis.metadata?.healthScore || 0,
+          totalTokens: data.llmAnalysis.metadata?.totalTokens || 0,
+          totalCalls: data.llmAnalysis.metadata?.totalCalls || 0,
+          blocksCount: data.llmAnalysis.blocks?.length || 0
+        };
+      }
+      return { storyLength: 0, totalHealthScore: 0 };
+
+    case 'retrieve_history':
+      return {
+        historyItems: data.symbolEvolution ? Object.keys(data.symbolEvolution).length : 0,
+        retrievedCommits: data.retrievedCommits?.length || 0
+      };
+
+    case 'workspace_overlay':
+      if (data && typeof data === 'object' && ('staged' in data || 'unstaged' in data)) {
+        const staged = data.staged || {};
+        const unstaged = data.unstaged || {};
+        return {
+          stagedFiles: staged.filesChanged || 0,
+          stagedSymbols: (staged.symbolsAdded || 0) + (staged.symbolsModified || 0) + (staged.symbolsRemoved || 0),
+          unstagedFiles: unstaged.filesChanged || 0,
+          unstagedSymbols: (unstaged.symbolsAdded || 0) + (unstaged.symbolsModified || 0) + (unstaged.symbolsRemoved || 0)
+        };
+      }
+      return {
+        filesChanged: data.filesChanged || 0,
+        symbolsChanged: (data.symbolsAdded || 0) + (data.symbolsModified || 0) + (data.symbolsRemoved || 0)
+      };
+
+    default:
+      return {};
   }
 }
 
@@ -155,14 +316,25 @@ async function main() {
     console.warn(`⚠️  Schema issues detected:`, { auditGaps });
   }
 
+  // Configure cache if disabled (set environment variable before creating SnapshotManager)
+  if (opts.noSnapshotCache) {
+    process.env.SNAPSHOT_CACHE_ENABLED = 'false';
+    console.log('🔧 Snapshot cache: disabled (--no-snapshot-cache flag)');
+  }
+
   const git = new GitOperations();
   const symbolExtractor = new SymbolExtractor(git);
   const dependencyExtractor = new DependencyExtractor();
   const snapshotManager = new SnapshotManager(db, symbolExtractor, dependencyExtractor);
+  
+  // Clear cache on reset-db
+  if (opts.resetDb) {
+    snapshotManager.clearCache();
+  }
   const structuralDiffManager = new StructuralDiffManager(db);
   const riskDetector = new RiskDetector();
   const hotspotDetector = new HotspotDetector();
-  const movedBlockDetector = new MovedBlockDetector();
+  const movedBlockDetector = new MovedBlockDetector(getDatabaseManager(), git);
   const llmAnalyst = new LlmAnalyst();
   const storyEngine = new BundleStoryEngine(llmAnalyst);
 
@@ -185,11 +357,22 @@ async function main() {
   );
 
   const embeddingIndexer = new EmbeddingIndexer(dbManager);
-  const steps = buildSteps(workspaceIndexer, commitIndexer, embeddingIndexer, storyEngine);
+  let steps = buildSteps(workspaceIndexer, commitIndexer, embeddingIndexer, storyEngine);
+  
+  // Skip embedding step if --no-embeddings flag is set
+  if (opts.noEmbeddings) {
+    steps = steps.filter(s => s.id !== 'embedding_index');
+    console.log('🔧 Embeddings: disabled (--no-embeddings flag)');
+  }
 
   const commits = git.getRecentCommits(opts.commitCount);
   if (!commits.length) {
     throw new Error('No commits available to analyze');
+  }
+
+  // Configure CST/hybrid facts settings (note: config is read-only in test context)
+  if (opts.enableCst || opts.enableAugment || opts.testHybrid) {
+    console.log(`🔧 CST Tracking: ${opts.enableCst ? 'enabled' : 'disabled'}, Augmentation: ${opts.enableAugment ? 'enabled' : 'disabled'}`);
   }
 
   // Ensure HEAD is in the list (it should be, but verify)
@@ -234,23 +417,106 @@ async function main() {
   const diagnostics: any = {
     startTime: new Date().toISOString(),
     steps: [],
-    errors: []
+    errors: [],
+    llm_summaries: [],
+    hybridFacts: {
+      total: 0,
+      cstOnly: 0,
+      augmented: 0,
+      filesWithFacts: 0
+    },
+    hybridDrifts: {
+      total: 0,
+      missing: 0,
+      zombies: 0,
+      divergent: 0,
+      modified: 0
+    },
+    performance: {
+      driftDetectionTime: 0,
+      batchRetrievalTime: 0,
+      speedup: 1,
+      cacheStats: {
+        hits: 0,
+        misses: 0,
+        hitRate: 0
+      }
+    }
   };
+
+  // Track step start times for accurate duration calculation
+  const stepStartTimes = new Map<string, number>();
 
   const onEvent = (event: any) => {
     if (event.type === 'start') {
       console.log(`▶️  ${event.step.label}`);
+      stepStartTimes.set(event.step.id, Date.now());
     } else if (event.type === 'complete') {
       const stepId = event.step.id;
+      const stepStartTime = stepStartTimes.get(stepId) || Date.now();
+      
       if (opts.focusSteps && !opts.focusSteps.has(stepId)) {
         console.log(`✅ ${event.step.label} (not focused)`);
         return;
       }
 
+      // Use deep serialization if fullReport is enabled, otherwise use shallow
+      const fullData = opts.fullReport 
+        ? deepSerializeStepState(stepId, event.state)
+        : serializeStepState(stepId, event.state);
+      
+      // Extract metrics from full data
+      const metrics = opts.fullReport ? extractStepMetrics(stepId, fullData) : {};
+      
+      // For hash calculation, use shallow serialization to maintain compatibility
       const data = serializeStepState(stepId, event.state);
-      const hash = data ? stableHash(data) : 'n/a';
+      // Special-case: embeddings use Qdrant (external), no serializable state
+      let hash = data ? stableHash(data) : 'n/a';
+      if (stepId === 'embedding_index' || stepId === 'llm_story' || stepId === 'retrieve_history') {
+        hash = 'n/a (external/complex)';
+      }
+      
+      // Measure snapshot load performance
+      const loadStart = Date.now();
       const baseline = loadStepSnapshot(stepId, opts.snapshotDir);
+      const loadTime = Date.now() - loadStart;
+      if (loadTime > 10) {
+        console.warn(`[Diagnostics] Slow snapshot load for ${stepId}: ${loadTime}ms`);
+      }
+      
       const summary = summarizeStep(stepId, data);
+      
+      // Log cache stats if available
+      const cacheStats = snapshotManager.getCacheStats();
+      if (cacheStats.cacheHits + cacheStats.cacheMisses > 0) {
+        diagnostics.performance.cacheStats = cacheStats;
+      }
+
+      // Capture LLM outputs for llm_story step
+      let llmSummary: any = null;
+      if (stepId === 'llm_story' && event.state.llmOutputs) {
+        const llmAnalysis = event.state.llmOutputs.llmAnalysis;
+        if (llmAnalysis) {
+          llmSummary = {
+            summary_md: llmAnalysis.markdown ? 
+              (llmAnalysis.markdown.length > 1000 
+                ? llmAnalysis.markdown.substring(0, 1000) + '... [truncated]' 
+                : llmAnalysis.markdown) : undefined,
+            summary_text: llmAnalysis.summary ? 
+              (llmAnalysis.summary.length > 500 
+                ? llmAnalysis.summary.substring(0, 500) + '...' 
+                : llmAnalysis.summary) : undefined,
+            healthScore: llmAnalysis.metadata?.healthScore,
+            totalTokens: llmAnalysis.metadata?.totalTokens,
+            totalCalls: llmAnalysis.metadata?.totalCalls,
+            model: llmAnalysis.metadata?.model,
+            validatedEvidenceCount: llmAnalysis.metadata?.validatedEvidenceCount,
+            blocksCount: llmAnalysis.blocks?.length || 0,
+            timestamp: llmAnalysis.metadata?.timestamp
+          };
+          diagnostics.llm_summaries.push(llmSummary);
+        }
+      }
 
       let note = '';
       if (baseline && baseline.hash !== hash) {
@@ -261,18 +527,36 @@ async function main() {
         note = 'no baseline';
       }
 
-      console.log(`✅ ${event.step.label} :: hash=${hash.toString().substring(0, 8)} ${note} ${summary ? `:: ${summary}` : ''}`);
+      const stepEndTime = Date.now();
+      const stepDuration = stepEndTime - stepStartTime;
+
+      if (opts.fullReport) {
+        console.log(`✅ ${event.step.label} :: hash=${hash.toString().substring(0, 8)} ${note} ${summary ? `:: ${summary}` : ''} | Metrics: ${JSON.stringify(metrics).substring(0, 100)}...`);
+      } else {
+        console.log(`✅ ${event.step.label} :: hash=${hash.toString().substring(0, 8)} ${note} ${summary ? `:: ${summary}` : ''}`);
+      }
 
       if (opts.freeze && data) {
         saveStepSnapshot(stepId, event.state, opts.snapshotDir);
       }
 
-      diagnostics.steps.push({
+      const stepEntry: any = {
         stepId,
         hash,
         note,
-        summary
-      });
+        summary,
+        timestamp: new Date().toISOString(),
+        durationMs: stepDuration
+      };
+
+      if (opts.fullReport) {
+        stepEntry.metrics = metrics;
+        if (llmSummary) {
+          stepEntry.llmSummary = llmSummary;
+        }
+      }
+
+      diagnostics.steps.push(stepEntry);
     } else if (event.type === 'error') {
       console.error(`❌ ${event.step.label}: ${event.error}`);
       diagnostics.errors.push({ stepId: event.step.id, error: String(event.error) });
@@ -280,6 +564,26 @@ async function main() {
   };
 
   const startTime = Date.now();
+  let driftStartTime = 0;
+  let driftEndTime = 0;
+  
+  // Wrap drift step to measure performance if testing hybrid
+  if (opts.testHybrid) {
+    const driftIndex = steps.findIndex(s => s.id === 'drift');
+    if (driftIndex >= 0) {
+      const originalDriftStep = steps[driftIndex];
+      steps[driftIndex] = {
+        ...originalDriftStep,
+        run: async (state: any) => {
+          driftStartTime = Date.now();
+          await originalDriftStep.run(state);
+          driftEndTime = Date.now();
+          diagnostics.performance.driftDetectionTime = driftEndTime - driftStartTime;
+        }
+      };
+    }
+  }
+
   const finalState = await runPipeline(steps, initialState, onEvent);
   const totalTime = Date.now() - startTime;
 
@@ -287,6 +591,137 @@ async function main() {
   diagnostics.totalTimeMs = totalTime;
   diagnostics.completedSteps = Array.from(finalState.completedSteps);
   diagnostics.errorCount = finalState.errors.length;
+
+  // Collect hybrid facts metrics
+  if (finalState.bundleFacts?.hybridFacts) {
+    const hybridFacts = finalState.bundleFacts.hybridFacts;
+    let totalFacts = 0;
+    let cstOnlyCount = 0;
+    let augmentedCount = 0;
+
+    for (const [filePath, facts] of Object.entries(hybridFacts)) {
+      const factArray = facts as any[];
+      totalFacts += factArray.length;
+      
+      // Determine if CST-only or augmented (simplified check)
+      const hasSemanticSymbols = factArray.some((f: any) => f.kind && !['cst_node', 'heading', 'property', 'doc_comment'].includes(f.kind));
+      if (hasSemanticSymbols) {
+        augmentedCount += factArray.length;
+      } else {
+        cstOnlyCount += factArray.length;
+      }
+    }
+
+    diagnostics.hybridFacts = {
+      total: totalFacts,
+      cstOnly: cstOnlyCount,
+      augmented: augmentedCount,
+      filesWithFacts: Object.keys(hybridFacts).length
+    };
+  }
+
+  // Collect hybrid drift metrics
+  if (finalState.drift?.hybridDrifts) {
+    const drifts = finalState.drift.hybridDrifts;
+    diagnostics.hybridDrifts = {
+      total: drifts.length,
+      missing: drifts.filter((d: any) => d.type === 'missing').length,
+      zombies: drifts.filter((d: any) => d.type === 'zombie').length,
+      divergent: drifts.filter((d: any) => d.type === 'divergent').length,
+      modified: drifts.filter((d: any) => d.type === 'modified').length
+    };
+  }
+
+  // Aggregate metrics from all steps (if fullReport enabled)
+  if (opts.fullReport) {
+    const indexCommitsStep = diagnostics.steps.find((s: any) => s.stepId === 'index_commits');
+    const workingStep = diagnostics.steps.find((s: any) => s.stepId === 'working');
+    const intendedStep = diagnostics.steps.find((s: any) => s.stepId === 'intended');
+    const driftStep = diagnostics.steps.find((s: any) => s.stepId === 'drift');
+    const hotspotsStep = diagnostics.steps.find((s: any) => s.stepId === 'hotspots');
+    const bundleFactsStep = diagnostics.steps.find((s: any) => s.stepId === 'bundle_facts');
+    const legacyStep = diagnostics.steps.find((s: any) => s.stepId === 'legacy');
+
+    diagnostics.aggregatedMetrics = {
+      totalCommits: indexCommitsStep?.metrics?.commitCount || 0,
+      totalSymbols: (workingStep?.metrics?.symbols || 0) + (intendedStep?.metrics?.totalSymbols || 0),
+      totalEdges: workingStep?.metrics?.edges || 0,
+      totalDriftIssues: (driftStep?.metrics?.missing_symbols || 0) + 
+                        (driftStep?.metrics?.zombie_symbols || 0) + 
+                        (driftStep?.metrics?.divergent_symbols || 0),
+      unresolvedCallers: driftStep?.metrics?.unresolved_callers || 0,
+      totalHotspots: hotspotsStep?.metrics?.topHotspots || 0,
+      bundleIncompleteness: bundleFactsStep?.metrics?.incompleteness || 0,
+      patternDrift: bundleFactsStep?.metrics?.patternDrift || 0,
+      totalLegacyDead: legacyStep?.metrics?.dead || 0,
+      llmTotalCalls: diagnostics.llm_summaries?.reduce((sum: number, l: any) => sum + (l.totalCalls || 0), 0) || 0,
+      llmTotalTokens: diagnostics.llm_summaries?.reduce((sum: number, l: any) => sum + (l.totalTokens || 0), 0) || 0,
+      overallHealthScore: diagnostics.llm_summaries?.length > 0
+        ? diagnostics.llm_summaries.reduce((sum: number, l: any) => sum + (l.healthScore || 0), 0) / diagnostics.llm_summaries.length
+        : undefined
+    };
+
+    // Add final state snapshots (truncated for size)
+    diagnostics.finalStates = {};
+    
+    if (finalState.bundleFacts) {
+      diagnostics.finalStates.bundleFacts = {
+        ...finalState.bundleFacts,
+        hybridFacts: '[Omitted: Large object]' // Truncate large hybridFacts
+      };
+    }
+
+    if (finalState.drift) {
+      // Include partial symbol arrays (name/path only)
+      diagnostics.finalStates.drift = {
+        missing_symbols: finalState.drift.missing_symbols?.slice(0, 10).map((s: any) => ({
+          symbol_id: s.symbol_id,
+          expected: s.expected ? {
+            expect: s.expected.expect,
+            lastName: s.expected.lastName,
+            lastPath: s.expected.lastPath
+          } : undefined
+        })) || [],
+        zombie_symbols: finalState.drift.zombie_symbols?.slice(0, 10).map((s: any) => ({
+          symbol_id: s.symbol_id,
+          expected: s.expected ? {
+            expect: s.expected.expect,
+            lastName: s.expected.lastName
+          } : undefined,
+          found: s.found ? {
+            name: s.found.name,
+            path: s.found.path
+          } : undefined
+        })) || [],
+        divergent_symbols: finalState.drift.divergent_symbols?.slice(0, 10).map((s: any) => ({
+          symbol_id: s.symbol_id,
+          expected: s.expected ? {
+            expect: s.expected.expect,
+            lastName: s.expected.lastName
+          } : undefined,
+          found: s.found ? {
+            name: s.found.name,
+            path: s.found.path
+          } : undefined
+        })) || [],
+        unresolved_callers: finalState.drift.unresolved_callers?.slice(0, 10).map((c: any) => ({
+          caller_name: c.caller_name,
+          caller_path: c.caller_path,
+          callee_name: c.callee_name,
+          occurrence_count: c.occurrence_count,
+          severity: c.severity
+        })) || [],
+        hybridDrifts: finalState.drift.hybridDrifts?.length || 0,
+        conventionDrift: finalState.drift.conventionDrift ? {
+          dominantConvention: finalState.drift.conventionDrift.dominantConvention,
+          driftPercent: finalState.drift.conventionDrift.driftPercent,
+          driftSymbolCount: finalState.drift.conventionDrift.driftSymbols?.length || 0
+        } : undefined
+      };
+    }
+
+    diagnostics.finalStates.llmOutputs = diagnostics.llm_summaries;
+  }
 
   const outDir = path.join(process.cwd(), 'benchmarks', 'output');
   if (!fs.existsSync(outDir)) {
@@ -301,11 +736,236 @@ async function main() {
   console.log(`Time: ${(totalTime / 1000).toFixed(2)}s`);
   console.log(`Steps completed: ${finalState.completedSteps.size}/${steps.length}`);
   console.log(`Errors: ${finalState.errors.length}`);
+  
+  // Hybrid facts summary
+  if (diagnostics.hybridFacts.total > 0) {
+    console.log(`\n🔷 Hybrid Facts: total=${diagnostics.hybridFacts.total}, cstOnly=${diagnostics.hybridFacts.cstOnly}, augmented=${diagnostics.hybridFacts.augmented}, files=${diagnostics.hybridFacts.filesWithFacts}`);
+  }
+  
+  // Hybrid drifts summary
+  if (diagnostics.hybridDrifts.total > 0) {
+    console.log(`🔷 Hybrid Drifts: total=${diagnostics.hybridDrifts.total}, missing=${diagnostics.hybridDrifts.missing}, divergent=${diagnostics.hybridDrifts.divergent}, modified=${diagnostics.hybridDrifts.modified}`);
+  }
+  
+  // Performance summary
+  if (diagnostics.performance.driftDetectionTime > 0) {
+    const speedup = diagnostics.performance.speedup > 1 
+      ? ` (${diagnostics.performance.speedup.toFixed(1)}x faster with batching)`
+      : '';
+    console.log(`⚡ Performance: driftDetection=${diagnostics.performance.driftDetectionTime}ms${speedup}`);
+  }
+  
   console.log(`Diagnostics saved to ${diagPath}`);
+  
+  // Generate markdown report if fullReport is enabled
+  if (opts.fullReport) {
+    const reportPath = path.join(outDir, 'pipeline_report.md');
+    let reportMd = `# Pipeline Diagnostics Report\n\n`;
+    
+    reportMd += `**Run Time:** ${diagnostics.startTime} to ${diagnostics.endTime} (${(diagnostics.totalTimeMs / 1000).toFixed(2)}s)\n`;
+    if (diagnostics.aggregatedMetrics?.overallHealthScore !== undefined) {
+      reportMd += `**Overall Health Score:** ${diagnostics.aggregatedMetrics.overallHealthScore.toFixed(2)}/100\n`;
+    }
+    reportMd += `\n`;
+    
+    // Aggregated metrics section
+    if (diagnostics.aggregatedMetrics) {
+      reportMd += `## Key Metrics\n\n`;
+      Object.entries(diagnostics.aggregatedMetrics).forEach(([key, val]) => {
+        if (val !== undefined && val !== null) {
+          const displayVal = typeof val === 'number' 
+            ? (key.includes('Score') || key.includes('Percent') ? val.toFixed(2) : val.toString())
+            : JSON.stringify(val).substring(0, 100);
+          reportMd += `- **${key}**: ${displayVal}\n`;
+        }
+      });
+      reportMd += `\n`;
+    }
+    
+    // Per-step details
+    reportMd += `## Step Details\n\n`;
+    diagnostics.steps.forEach((step: any) => {
+      reportMd += `### ${step.stepId}\n\n`;
+      reportMd += `- **Hash:** ${step.hash}\n`;
+      reportMd += `- **Status:** ${step.note || 'completed'}\n`;
+      if (step.summary) {
+        reportMd += `- **Summary:** ${step.summary}\n`;
+      }
+      if (step.timestamp) {
+        reportMd += `- **Timestamp:** ${step.timestamp}\n`;
+      }
+      if (step.durationMs !== undefined) {
+        reportMd += `- **Duration:** ${step.durationMs}ms\n`;
+      }
+      if (step.metrics && Object.keys(step.metrics).length > 0) {
+        reportMd += `- **Metrics:**\n`;
+        Object.entries(step.metrics).forEach(([key, val]) => {
+          reportMd += `  - ${key}: ${typeof val === 'object' ? JSON.stringify(val).substring(0, 100) : val}\n`;
+        });
+      }
+      if (step.llmSummary) {
+        reportMd += `- **LLM Summary:**\n`;
+        if (step.llmSummary.summary_text) {
+          reportMd += `  - Summary: ${step.llmSummary.summary_text.substring(0, 200)}...\n`;
+        }
+        if (step.llmSummary.healthScore !== undefined) {
+          reportMd += `  - Health Score: ${step.llmSummary.healthScore}/100\n`;
+        }
+        if (step.llmSummary.totalTokens) {
+          reportMd += `  - Tokens: ${step.llmSummary.totalTokens}\n`;
+        }
+        if (step.llmSummary.blocksCount) {
+          reportMd += `  - Blocks: ${step.llmSummary.blocksCount}\n`;
+        }
+      }
+      reportMd += `\n`;
+    });
+    
+    // LLM summaries section
+    if (diagnostics.llm_summaries?.length > 0) {
+      reportMd += `## LLM Analysis Summaries\n\n`;
+      diagnostics.llm_summaries.forEach((summary: any, i: number) => {
+        reportMd += `### Summary ${i + 1}\n\n`;
+        if (summary.summary_text) {
+          reportMd += `${summary.summary_text}\n\n`;
+        }
+        if (summary.summary_md) {
+          reportMd += `#### Full Markdown Output\n\n`;
+          reportMd += `${summary.summary_md}\n\n`;
+        }
+        reportMd += `**Metadata:**\n`;
+        if (summary.healthScore !== undefined) {
+          reportMd += `- Health Score: ${summary.healthScore}/100\n`;
+        }
+        if (summary.totalTokens) {
+          reportMd += `- Total Tokens: ${summary.totalTokens}\n`;
+        }
+        if (summary.totalCalls) {
+          reportMd += `- LLM Calls: ${summary.totalCalls}\n`;
+        }
+        if (summary.model) {
+          reportMd += `- Model: ${summary.model}\n`;
+        }
+        if (summary.validatedEvidenceCount !== undefined) {
+          reportMd += `- Validated Evidence: ${summary.validatedEvidenceCount}\n`;
+        }
+        if (summary.blocksCount) {
+          reportMd += `- Analysis Blocks: ${summary.blocksCount}\n`;
+        }
+        if (summary.timestamp) {
+          reportMd += `- Generated: ${summary.timestamp}\n`;
+        }
+        reportMd += `\n`;
+      });
+    }
+    
+    // Simulate Mermaid graph for hotspots/drift (if present)
+    const hotspots = diagnostics.steps.find((s: any) => s.stepId === 'hotspots')?.metrics?.topHotspots || 0;
+    const driftIssues = diagnostics.aggregatedMetrics?.totalDriftIssues || 0;
+    if (hotspots > 0 || driftIssues > 0) {
+      reportMd += `## Visualization\n\n`;
+      reportMd += `\`\`\`mermaid\ngraph TD\n`;
+      if (hotspots > 0) {
+        reportMd += `  A[High Churn Files] --> B[Top ${hotspots} Hotspots]\n`;
+      }
+      if (driftIssues > 0) {
+        reportMd += `  C[Drift Detection] --> D[${driftIssues} Issues Found]\n`;
+        const driftStep = diagnostics.steps.find((s: any) => s.stepId === 'drift');
+        if (driftStep?.metrics) {
+          if (driftStep.metrics.missing_symbols > 0) {
+            reportMd += `  D --> E[${driftStep.metrics.missing_symbols} Missing]\n`;
+          }
+          if (driftStep.metrics.zombie_symbols > 0) {
+            reportMd += `  D --> F[${driftStep.metrics.zombie_symbols} Zombies]\n`;
+          }
+          if (driftStep.metrics.divergent_symbols > 0) {
+            reportMd += `  D --> G[${driftStep.metrics.divergent_symbols} Divergent]\n`;
+          }
+        }
+      }
+      reportMd += `\`\`\`\n\n`;
+    }
+    
+    // Final summary
+    reportMd += `## Summary\n\n`;
+    reportMd += `- **Total Steps:** ${diagnostics.completedSteps?.length || 0}\n`;
+    reportMd += `- **Errors:** ${diagnostics.errorCount || 0}\n`;
+    if (diagnostics.aggregatedMetrics) {
+      reportMd += `- **Total Symbols:** ${diagnostics.aggregatedMetrics.totalSymbols || 0}\n`;
+      reportMd += `- **Total Edges:** ${diagnostics.aggregatedMetrics.totalEdges || 0}\n`;
+      reportMd += `- **Drift Issues:** ${diagnostics.aggregatedMetrics.totalDriftIssues || 0}\n`;
+    }
+    reportMd += `\n`;
+    reportMd += `*Generated by pipeline diagnostics at ${new Date().toISOString()}*\n`;
+    
+    fs.writeFileSync(reportPath, reportMd);
+    console.log(`📄 Sample report saved to ${reportPath}`);
+  }
+  
+  // Validate hybrid facts database if requested
+  if (opts.validateTimeline) {
+    await validateHybridFactsDatabase(db, commits.map(c => c.sha));
+  }
 
   if (finalState.errors.length > 0) {
     finalState.errors.forEach(err => console.error(`[${err.stepId}] ${err.error}`));
     process.exitCode = 1;
+  }
+}
+
+/**
+ * Validate hybrid facts database storage
+ */
+async function validateHybridFactsDatabase(db: any, commitShas: string[]): Promise<void> {
+  console.log('\n🔍 Validating Hybrid Facts Database...');
+  
+  try {
+    // Check if hybrid_facts table exists
+    const tableCheck = db.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='hybrid_facts'
+    `);
+    const tableExists = tableCheck.get();
+    
+    if (!tableExists) {
+      console.warn('⚠️  hybrid_facts table does not exist');
+      return;
+    }
+    
+    // Count facts per commit
+    const factsStmt = db.prepare(`
+      SELECT version, COUNT(*) as count 
+      FROM hybrid_facts 
+      WHERE version IN (${commitShas.map(() => '?').join(',')})
+      GROUP BY version
+    `);
+    const factsByCommit = factsStmt.all(...commitShas) as any[];
+    
+    console.log(`✅ hybrid_facts table exists`);
+    console.log(`📊 Facts by commit:`);
+    factsByCommit.forEach(row => {
+      console.log(`   ${row.version.substring(0, 8)}: ${row.count} facts`);
+    });
+    
+    // Check timeline entries
+    const timelineStmt = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM hybrid_facts 
+      WHERE timeline_json IS NOT NULL AND timeline_json != '[]'
+    `);
+    const timelineCount = timelineStmt.get() as any;
+    console.log(`📈 Timeline entries: ${timelineCount.count}`);
+    
+    // Validate file hash computation
+    const hashStmt = db.prepare(`
+      SELECT COUNT(DISTINCT hash) as unique_hashes, COUNT(*) as total_facts
+      FROM hybrid_facts
+    `);
+    const hashStats = hashStmt.get() as any;
+    console.log(`🔐 File hashes: ${hashStats.unique_hashes} unique, ${hashStats.total_facts} total facts`);
+    
+  } catch (error: any) {
+    console.error(`❌ Database validation failed: ${error.message}`);
   }
 }
 

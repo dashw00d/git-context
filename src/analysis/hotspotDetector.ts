@@ -1,6 +1,7 @@
 import { getDatabaseManager } from '../storage/database';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
+import * as crypto from 'crypto';
 
 export interface HotspotMetrics {
   commitFrequency: number;      // How often the entity changes (0-1)
@@ -125,6 +126,137 @@ export class HotspotDetector {
     );
 
     logDebug(`[HotspotDetector] Updated file hotspot: ${filePath} (score: ${metrics.hotspotScore.toFixed(1)})`);
+  }
+
+  /**
+   * Batch update hotspot metrics for multiple symbols (optimized)
+   */
+  async batchUpdateSymbols(
+    symbols: SymbolInfo[],
+    sha: string
+  ): Promise<void> {
+    if (symbols.length === 0) return;
+
+    const db = this.dbManager.getDatabase();
+    const now = new Date().toISOString();
+
+    // Generate cache key from symbols + SHA
+    const cacheKey = this.generateCacheKey(symbols, sha);
+    const cacheHash = crypto.createHash('sha256').update(cacheKey).digest('hex');
+
+    // Check cache (TTL 3600s)
+    const cached = this.getCachedResult(cacheHash);
+    if (cached) {
+      logDebug(`[HotspotDetector] Cache hit for batch update (${symbols.length} symbols)`);
+      return;
+    }
+
+    // Get existing hotspots for deduplication
+    const dnaIds = symbols.filter(s => s.dnaId).map(s => s.dnaId!);
+    if (dnaIds.length === 0) return;
+
+    const placeholders = dnaIds.map(() => '?').join(',');
+    const existingStmt = db.prepare(`
+      SELECT symbol_id, hotspot_score FROM symbol_hotspots
+      WHERE symbol_id IN (${placeholders})
+    `);
+    const existing = new Map<string, number>();
+    const existingRows = existingStmt.all(...dnaIds) as any[];
+    for (const row of existingRows) {
+      existing.set(row.symbol_id, row.hotspot_score);
+    }
+
+    // Prepare batch insert statement
+    const insertStmt = db.prepare(`
+      INSERT OR REPLACE INTO symbol_hotspots
+      (symbol_id, file_path, symbol_type, symbol_name,
+       total_modifications, total_commits, last_change_type,
+       last_changed_sha, last_changed_date, hotspot_score, risk_level)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    // Calculate metrics for all symbols first (before transaction)
+    const symbolMetrics = new Map<string, { hotspotScore: number; riskLevel: string }>();
+    for (const symbol of symbols) {
+      if (!symbol.dnaId) continue;
+      try {
+        const metrics = await this.calculateSymbolMetrics(symbol.dnaId, sha);
+        symbolMetrics.set(symbol.dnaId, metrics);
+      } catch (error: any) {
+        logDebug(`[HotspotDetector] Failed to calculate metrics for ${symbol.name}: ${error.message}`);
+      }
+    }
+
+    // Process symbols in batch transaction
+    const batch = db.transaction((symbols: SymbolInfo[]) => {
+      let skipped = 0;
+      let updated = 0;
+
+      for (const symbol of symbols) {
+        if (!symbol.id || !symbol.dnaId) {
+          skipped++;
+          continue;
+        }
+
+        const filePath = symbol.id.includes(':') ? symbol.id.split(':')[0] : '';
+        if (!filePath || filePath.trim() === '') {
+          skipped++;
+          continue;
+        }
+
+        const metrics = symbolMetrics.get(symbol.dnaId);
+        if (!metrics) {
+          skipped++;
+          continue;
+        }
+
+        try {
+          // Get existing hotspot
+          const existingHotspot = this.getSymbolHotspot(symbol.dnaId);
+          
+          // Deduplication: skip if score delta < 5%
+          const existingScore = existing.get(symbol.dnaId);
+          if (existingScore !== undefined) {
+            const scoreDelta = Math.abs(metrics.hotspotScore - existingScore);
+            const scoreDeltaPercent = existingScore > 0 ? (scoreDelta / existingScore) * 100 : 0;
+            if (scoreDeltaPercent < 5) {
+              skipped++;
+              continue;
+            }
+          }
+
+          const totalModifications = (existingHotspot?.totalModifications || 0) + 1;
+          const totalCommits = (existingHotspot?.totalCommits || 0) + 1;
+
+          insertStmt.run([
+            symbol.dnaId,
+            filePath,
+            symbol.kind,
+            symbol.name,
+            totalModifications,
+            totalCommits,
+            'modified',
+            sha,
+            now,
+            metrics.hotspotScore,
+            metrics.riskLevel
+          ]);
+
+          updated++;
+        } catch (error: any) {
+          logDebug(`[HotspotDetector] Failed to update symbol hotspot ${symbol.name}: ${error.message}`);
+          skipped++;
+        }
+      }
+
+      return { updated, skipped };
+    });
+
+    const result = batch(symbols);
+    logDebug(`[HotspotDetector] Batch updated ${result.updated} symbols, skipped ${result.skipped} (dedup/cache)`);
+
+    // Cache the result (pass original cacheKey for cache_key, hash for cache_hash)
+    this.setCachedResult(cacheKey, cacheHash, now);
   }
 
   /**
@@ -531,5 +663,82 @@ export class HotspotDetector {
     // In a real system, we'd maintain an author count per file
     const current = this.getFileHotspot(filePath);
     return (current?.uniqueAuthors || 0) + (author !== 'unknown' ? 1 : 0);
+  }
+
+  /**
+   * Generate cache key from symbols and SHA
+   */
+  private generateCacheKey(symbols: SymbolInfo[], sha: string): string {
+    const symbolKeys = symbols
+      .filter(s => s.dnaId)
+      .map(s => `${s.dnaId}:${s.name}`)
+      .sort()
+      .join(',');
+    return `${sha}:${symbolKeys}`;
+  }
+
+  /**
+   * Get cached result if valid
+   */
+  private getCachedResult(cacheHash: string): boolean {
+    const db = this.dbManager.getDatabase();
+    const stmt = db.prepare(`
+      SELECT expires_at FROM hotspot_cache
+      WHERE cache_hash = ?
+    `);
+    // Use array syntax for consistency with sql.js
+    const row = stmt.get([cacheHash]) as any;
+    
+    if (!row) return false;
+    
+    const expiresAt = new Date(row.expires_at);
+    if (expiresAt < new Date()) {
+      // Expired, clean up
+      const deleteStmt = db.prepare(`DELETE FROM hotspot_cache WHERE cache_hash = ?`);
+      deleteStmt.run([cacheHash]);
+      return false;
+    }
+    
+    return true;
+  }
+
+  /**
+   * Set cached result with TTL
+   */
+  private setCachedResult(cacheKey: string, cacheHash: string, cachedAt: string): void {
+    if (!cacheKey || !cacheHash || !cachedAt) {
+      logDebug(`[HotspotDetector] Skipping cache: invalid params`);
+      return;
+    }
+
+    const db = this.dbManager.getDatabase();
+    const expiresAt = new Date(new Date(cachedAt).getTime() + 3600 * 1000); // TTL 3600s
+    
+    try {
+      const stmt = db.prepare(`
+        INSERT OR REPLACE INTO hotspot_cache
+        (cache_key, cache_hash, cached_at, expires_at)
+        VALUES (?, ?, ?, ?)
+      `);
+      
+      // Use array syntax for sql.js (consistent with other batch operations)
+      stmt.run([cacheKey, cacheHash, cachedAt, expiresAt.toISOString()]);
+    } catch (error: any) {
+      logDebug(`[HotspotDetector] Cache insert failed: ${error.message}`);
+      // Don't throw - caching is non-critical
+    }
+  }
+
+  /**
+   * Clean expired cache entries (call periodically)
+   */
+  async cleanExpiredCache(): Promise<void> {
+    const db = this.dbManager.getDatabase();
+    const now = new Date().toISOString();
+    const stmt = db.prepare(`DELETE FROM hotspot_cache WHERE expires_at < ?`);
+    const result = stmt.run(now);
+    if (result.changes > 0) {
+      logDebug(`[HotspotDetector] Cleaned ${result.changes} expired cache entries`);
+    }
   }
 }

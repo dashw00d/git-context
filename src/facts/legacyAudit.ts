@@ -17,6 +17,40 @@ export async function auditLegacy(
   working: WorkingSnapshot,
   scope: ScopeSet
 ): Promise<LegacyAuditResult> {
+  // Fallback: if intended is empty, use hotspots to infer legacy symbols
+  if (intended.size === 0) {
+    const { getDatabaseManager } = await import('../storage/database');
+    const db = getDatabaseManager().getDatabase();
+    const hotspotStmt = db.prepare(`
+      SELECT DISTINCT sh.symbol_id, sh.file_path, sh.symbol_name, sh.hotspot_score
+      FROM symbol_hotspots sh
+      WHERE sh.hotspot_score >= 40
+      AND sh.symbol_id NOT IN (
+        SELECT symbol_id FROM symbol_versions WHERE sha IN (
+          SELECT sha FROM commits_metadata ORDER BY date DESC LIMIT 10
+        )
+      )
+      ORDER BY sh.hotspot_score DESC
+      LIMIT 50
+    `);
+    const hotspotSymbols = hotspotStmt.all() as any[];
+    
+    // Add hotspot symbols as "absent" (legacy) if they're not in working
+    for (const hotspot of hotspotSymbols) {
+      const symbolId = hotspot.symbol_id;
+      if (!working.symbolsById.has(symbolId)) {
+        intended.set(symbolId, {
+          expect: 'absent',
+          lastSha: 'unknown',
+          lastName: hotspot.symbol_name
+        });
+      }
+    }
+    
+    if (intended.size > 0) {
+      console.log(`[LegacyAudit] Using fallback: inferred ${intended.size} legacy symbols from hotspots`);
+    }
+  }
   // Build inbound graph: Map<symbol_id, Set<caller_symbol_ids>>
   const inboundGraph = new Map<string, Set<string>>();
   for (const edge of working.edges) {
@@ -291,7 +325,7 @@ function findReplacedLeftovers(
       if (workingId === absentId) continue;
 
       const similarity = calculateSimilarity(absentSymbol, workingSymbol, expected);
-      if (similarity > 0.7) { // Lower threshold to catch more potential replacements
+      if (similarity > 0.6) { // Lower threshold to 0.6 to catch more potential replacements
         candidates.push({ symbol: workingSymbol, similarity });
       }
     }
@@ -461,13 +495,37 @@ function normalizeSignature(signature: string): string {
 
 /**
  * Extract parameters from signature
+ * Handles edge cases: arrow functions, destructuring, default values
  */
 function extractParameters(signature: string): string[] {
-  const paramMatch = signature.match(/\(([^)]*)\)/);
-  if (!paramMatch) return [];
+  // Try to match function parameters: (param1: type, param2: type)
+  let paramMatch = signature.match(/\(([^)]*)\)/);
+  
+  // If no parentheses match, try arrow function: param => or (param) =>
+  if (!paramMatch) {
+    paramMatch = signature.match(/^([^=]+)=>/);
+    if (paramMatch) {
+      const arrowParams = paramMatch[1].trim();
+      // Remove outer parentheses if present
+      const cleaned = arrowParams.startsWith('(') && arrowParams.endsWith(')')
+        ? arrowParams.slice(1, -1)
+        : arrowParams;
+      return cleaned.split(',').map(p => p.trim()).filter(p => p.length > 0);
+    }
+    return [];
+  }
 
   return paramMatch[1]
     .split(',')
-    .map(param => param.trim().split(':')[1]?.trim() || param.trim())
+    .map(param => {
+      // Handle destructuring: { a, b } or [a, b]
+      const trimmed = param.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        return trimmed; // Keep destructuring as-is
+      }
+      // Extract type if present: param: type or param = defaultValue
+      const typeMatch = trimmed.match(/^([^:=\s]+)/);
+      return typeMatch ? typeMatch[1] : trimmed;
+    })
     .filter(param => param.length > 0);
 }

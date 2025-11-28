@@ -1,6 +1,8 @@
 import { Database } from 'sql.js';
 import { getDifftasticIntegration } from './difftastic';
+import { getCstDiffManager } from './cstDiff';
 import { logDebug } from '../utils/logger';
+import type { CstDiffResult } from './cstDiff';
 
 export interface StructuralDiffMetrics {
   structuralChangeScore: number; // 0-1
@@ -14,6 +16,7 @@ export interface StructuralDiffMetrics {
 
 export class StructuralDiffManager {
   private difftastic = getDifftasticIntegration();
+  private cstDiff = getCstDiffManager();
 
   constructor(private db: Database) {}
 
@@ -173,5 +176,16 @@ export class StructuralDiffManager {
       linesRemoved,
       rawData: difftasticOutput
     };
+  }
+
+  /**
+   * Compute CST delta for hybrid facts (CST-only or hybrid augmentation)
+   */
+  async computeCstDelta(
+    oldSerialized: string,
+    newSerialized: string,
+    filePath: string
+  ): Promise<CstDiffResult> {
+    return this.cstDiff.computeCstDelta(oldSerialized, newSerialized, filePath);
   }
 }

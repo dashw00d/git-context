@@ -222,6 +222,16 @@ export interface ExtensionConfig {
   allowedExtensions?: string[];
   maxFileSize?: number;
   perProjectQdrantCollections?: boolean;
+  
+  // CST tracking config
+  enableCstTracking?: boolean;
+  enableCstAugmentation?: boolean;
+  cstLanguages?: string[];
+  
+  // Snapshot cache config
+  snapshotCacheEnabled?: boolean;
+  snapshotCacheSize?: number;
+  snapshotCacheTTL?: number;
 }
 
 // Context values for tree items (used in package.json menus and tree item identification)
@@ -278,3 +288,12 @@ export const ContextValues = {
 } as const;
 
 export type ContextValue = typeof ContextValues[keyof typeof ContextValues];
+
+// Re-export CST fact types
+export type {
+  CstFact,
+  CstFactKind,
+  DeltaChange,
+  HybridFact
+} from './cstFacts';
+export { isCstFact, isSymbolInfo } from './cstFacts';

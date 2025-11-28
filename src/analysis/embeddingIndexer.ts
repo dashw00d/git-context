@@ -48,7 +48,7 @@ export class EmbeddingIndexer {
     // Ensure collection exists (handles both base and project-specific collections)
     await qdrant.ensureCollection('commits', projectId);
 
-    await runWithConcurrency(commitFacts, 5, async (facts) => {
+    await runWithConcurrency(commitFacts, 10, async (facts) => {
       const shard = await this.buildCommitShard(facts, projectId);
       const embedding = await generateEmbedding(shard.text);
 

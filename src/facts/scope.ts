@@ -1,6 +1,6 @@
 import { GitOperations } from '../analysis/git';
 import { getDatabaseManager } from '../storage/database';
-import { getExtensionConfig } from '../utils/config';
+import { getExtensionConfig, getSupportedExtensions } from '../utils/config';
 
 export interface ScopeSet {
   commitFiles: Set<string>;        // Files touched by selected commits
@@ -185,8 +185,10 @@ export async function computeScope(
     ...scope.blastRadius
   ]);
 
-  // Filter out build artifacts and ignored directories
+  // Filter out build artifacts, ignored directories, and unsupported extensions
   const filteredPaths = new Set<string>();
+  const supportedExtensions = new Set(getSupportedExtensions());
+  
   for (const p of allPaths) {
     const normalized = p.replace(/\\/g, '/');
     if (normalized.startsWith('out/') ||
@@ -197,6 +199,12 @@ export async function computeScope(
     }
 
     if (git.isIgnored(p)) {
+      continue;
+    }
+
+    // Check extension (filter by supported extensions)
+    const ext = p.split('.').pop()?.toLowerCase();
+    if (!ext || !supportedExtensions.has(ext)) {
       continue;
     }
 

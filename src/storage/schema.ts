@@ -769,15 +769,48 @@ CREATE TABLE IF NOT EXISTS workspace_analysis (
   analyzed_at TEXT NOT NULL,
   UNIQUE(head_sha, workspace_hash)
 );
+CREATE TABLE IF NOT EXISTS hybrid_facts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_path TEXT NOT NULL,
+  version TEXT NOT NULL,
+  fact_id TEXT NOT NULL,
+  dna_id TEXT NOT NULL,
+  serialized_fact TEXT NOT NULL,
+  timeline_json TEXT NOT NULL,
+  hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(file_path, version, fact_id)
+);
 CREATE INDEX IF NOT EXISTS idx_snapshots_blob ON file_snapshots(blob_sha);
 CREATE INDEX IF NOT EXISTS idx_structural_diffs_pair ON structural_diffs(parent_blob_sha, current_blob_sha);
-CREATE INDEX IF NOT EXISTS idx_workspace_head ON workspace_analysis(head_sha);`,
+CREATE INDEX IF NOT EXISTS idx_workspace_head ON workspace_analysis(head_sha);
+CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version ON hybrid_facts(file_path, version);
+CREATE INDEX IF NOT EXISTS idx_hybrid_facts_dna ON hybrid_facts(dna_id);
+CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash);`,
     migrations: [{
       name: 'add_body_hash_edges',
       sql: `ALTER TABLE file_snapshots ADD COLUMN body_hash TEXT; ALTER TABLE workspace_analysis ADD COLUMN edges_added INTEGER DEFAULT 0; ALTER TABLE workspace_analysis ADD COLUMN edges_removed INTEGER DEFAULT 0;`,
       safe: true
+    }, {
+      name: 'add_hybrid_facts_table',
+      sql: `CREATE TABLE IF NOT EXISTS hybrid_facts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_path TEXT NOT NULL,
+  version TEXT NOT NULL,
+  fact_id TEXT NOT NULL,
+  dna_id TEXT NOT NULL,
+  serialized_fact TEXT NOT NULL,
+  timeline_json TEXT NOT NULL,
+  hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(file_path, version, fact_id)
+);
+CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version ON hybrid_facts(file_path, version);
+CREATE INDEX IF NOT EXISTS idx_hybrid_facts_dna ON hybrid_facts(dna_id);
+CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash);`,
+      safe: true
     }],
-    currentVersion: 2
+    currentVersion: 3
   },
 
   // Hotspots Module: file_hotspots, symbol_hotspots, hotspot_snapshots
@@ -816,10 +849,17 @@ CREATE TABLE IF NOT EXISTS hotspot_snapshots (
   total_changes INTEGER NOT NULL,
   FOREIGN KEY (snapshot_sha) REFERENCES commits_metadata(sha)
 );
+CREATE TABLE IF NOT EXISTS hotspot_cache (
+  cache_key TEXT PRIMARY KEY,
+  cache_hash TEXT NOT NULL,
+  cached_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_file_hotspots_score ON file_hotspots(hotspot_score DESC);
 CREATE INDEX IF NOT EXISTS idx_symbol_hotspots_score ON symbol_hotspots(hotspot_score DESC);
 CREATE INDEX IF NOT EXISTS idx_hotspot_snapshots_entity ON hotspot_snapshots(entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS idx_hotspot_snapshots_date ON hotspot_snapshots(snapshot_date);`,
+CREATE INDEX IF NOT EXISTS idx_hotspot_snapshots_date ON hotspot_snapshots(snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_hotspot_cache_expires ON hotspot_cache(expires_at);`,
     migrations: [],
     currentVersion: 1
   },

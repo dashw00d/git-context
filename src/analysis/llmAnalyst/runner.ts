@@ -10,6 +10,7 @@ import { getExtensionConfig } from '../../utils/config';
 export class LlmAnalyst {
   private client = getLLMClient();
   private llmCallTracker?: (purpose: string, model?: string, tokens?: number, duration?: number) => void;
+  private maxInputChars: number = 1000000; // Default 1M chars
 
   setLLMCallTracker(tracker: (purpose: string, model?: string, tokens?: number, duration?: number) => void) {
     this.llmCallTracker = tracker;
@@ -23,24 +24,40 @@ export class LlmAnalyst {
     let totalTokens = 0;
     let totalCalls = 0;
 
+    // Get config for maxInputChars
+    const config = getExtensionConfig();
+    this.maxInputChars = (config as any).maxInputChars || 1000000;
+
+    // Summarize facts if too large (top 20 symbols by impact, aggregate edges)
+    const factsJson = JSON.stringify(facts);
+    const factsSize = factsJson.length;
+    let processedFacts = facts;
+    
+    if (factsSize > this.maxInputChars) {
+      console.log(`LLM Analyst: Facts size (${factsSize} chars) exceeds max (${this.maxInputChars}), summarizing...`);
+      processedFacts = this.summarizeFacts(facts);
+      const summarizedSize = JSON.stringify(processedFacts).length;
+      console.log(`LLM Analyst: Summarized to ${summarizedSize} chars (${((1 - summarizedSize / factsSize) * 100).toFixed(1)}% reduction)`);
+    }
+
     try {
-      // Pass 1: Intent & Story Analysis
+      // Pass 1: Intent & Story Analysis (use summarized facts)
       console.log('LLM Analyst: Running intent analysis...');
-      const intentBlock = await this.analyzeIntent(facts);
+      const intentBlock = await this.analyzeIntent(processedFacts);
       totalCalls++;
-      totalTokens += this.estimateTokens(JSON.stringify(facts) + PROMPT_INTENT_AND_STORY);
+      totalTokens += this.estimateTokens(JSON.stringify(processedFacts) + PROMPT_INTENT_AND_STORY);
 
-      // Pass 2: Drift Verification
+      // Pass 2: Drift Verification (use summarized facts)
       console.log('LLM Analyst: Running drift verification...');
-      const driftBlock = await this.analyzeDrift(facts);
+      const driftBlock = await this.analyzeDrift(processedFacts);
       totalCalls++;
-      totalTokens += this.estimateTokens(JSON.stringify(facts) + PROMPT_DRIFT_VERIFICATION);
+      totalTokens += this.estimateTokens(JSON.stringify(processedFacts) + PROMPT_DRIFT_VERIFICATION);
 
-      // Pass 3: Cleanup Plan
+      // Pass 3: Cleanup Plan (use summarized facts)
       console.log('LLM Analyst: Generating cleanup plan...');
-      const cleanupBlock = await this.analyzeCleanup(facts);
+      const cleanupBlock = await this.analyzeCleanup(processedFacts);
       totalCalls++;
-      totalTokens += this.estimateTokens(JSON.stringify(facts) + PROMPT_CLEANUP_PLAN);
+      totalTokens += this.estimateTokens(JSON.stringify(processedFacts) + PROMPT_CLEANUP_PLAN);
 
       // Pass 4: Pattern Discovery (if raw feed provided)
       let discoveryBlock: AnalysisBlock | undefined;
@@ -790,10 +807,53 @@ export class LlmAnalyst {
   }
 
   /**
-   * Rough token estimation for tracking
+   * Summarize facts: top 20 symbols by impact, aggregate edges
+   */
+  private summarizeFacts(facts: RefactorBundleFacts): RefactorBundleFacts {
+    const summarized = { ...facts };
+    
+    // Summarize evidence: top 20 symbols by impact
+    if (summarized.evidence && Array.isArray(summarized.evidence['working.symbols'])) {
+      const symbols = summarized.evidence['working.symbols'] as string[];
+      // Take top 20 (or all if less than 20)
+      summarized.evidence['working.symbols'] = symbols.slice(0, 20);
+    }
+    
+    // Aggregate edges: count by type instead of listing all
+    if (summarized.evidence && Array.isArray(summarized.evidence['working.edges'])) {
+      const edges = summarized.evidence['working.edges'] as string[];
+      const edgeCounts = new Map<string, number>();
+      for (const edge of edges) {
+        const match = edge.match(/\((\w+)\)/);
+        const type = match ? match[1] : 'unknown';
+        edgeCounts.set(type, (edgeCounts.get(type) || 0) + 1);
+      }
+      summarized.evidence['working.edges'] = Array.from(edgeCounts.entries()).map(([type, count]) => `${type}: ${count}`);
+    }
+    
+    // Truncate large evidence arrays
+    const maxEvidenceItems = 50;
+    for (const key in summarized.evidence) {
+      if (Array.isArray(summarized.evidence[key]) && summarized.evidence[key].length > maxEvidenceItems) {
+        summarized.evidence[key] = summarized.evidence[key].slice(0, maxEvidenceItems);
+      }
+    }
+    
+    return summarized;
+  }
+
+  /**
+   * Improved token estimation
+   * Uses better approximation: ~3.5 chars per token for code, ~4 for text
    */
   private estimateTokens(text: string): number {
-    // Very rough approximation: ~4 characters per token
-    return Math.ceil(text.length / 4);
+    // Count code-like patterns (more tokens per char)
+    const codePattern = /[{}();=<>[\]]/g;
+    const codeMatches = (text.match(codePattern) || []).length;
+    const codeRatio = codeMatches / Math.max(text.length, 1);
+    
+    // Adjust chars per token based on code density
+    const charsPerToken = codeRatio > 0.1 ? 3.5 : 4.0;
+    return Math.ceil(text.length / charsPerToken);
   }
 }

@@ -2,12 +2,10 @@ import { Database } from 'sql.js';
 import { SymbolInfo, EdgeInfo } from '../types';
 import { SymbolExtractor } from './symbols';
 import { DependencyExtractor } from './dependencies';
-import { assignDNAIds, computeBodyHash } from './symbolDna';
+import { assignDNAIds } from './symbolDna';
 import { logDebug } from '../utils/logger';
-import { detectLanguage } from '../utils/config';
-// node-cache is CommonJS; use require style to avoid default import issues
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-import NodeCache = require('node-cache');
+import { detectLanguage, getExtensionConfig } from '../utils/config';
+import { LRUCache } from 'lru-cache';
 
 export interface FileSnapshot {
   blobSha: string;
@@ -20,7 +18,7 @@ export interface FileSnapshot {
 }
 
 export class SnapshotManager {
-  private snapshotCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, useClones: false }); // 1 hour TTL, check every 10 minutes
+  private snapshotCache: LRUCache<string, FileSnapshot> | null = null;
   private cacheHits = 0;
   private cacheMisses = 0;
 
@@ -28,7 +26,42 @@ export class SnapshotManager {
     private db: Database,
     private symbolExtractor: SymbolExtractor,
     private dependencyExtractor: DependencyExtractor
-  ) {}
+  ) {
+    const config = getExtensionConfig();
+    if (config.snapshotCacheEnabled !== false) {
+      this.initCache();
+    }
+  }
+
+  private initCache(): void {
+    if (!this.snapshotCache) {
+      const config = getExtensionConfig();
+      if (config.snapshotCacheEnabled === false) {
+        return; // Cache is disabled, don't create it
+      }
+      this.snapshotCache = new LRUCache<string, FileSnapshot>({
+        max: config.snapshotCacheSize || 50,
+        ttl: (config.snapshotCacheTTL || 3600) * 1000, // Convert seconds to milliseconds
+        updateAgeOnGet: true, // Promote on access (LRU behavior)
+        sizeCalculation: (value: FileSnapshot, key: string) => {
+          // Rough estimate: key length + JSON size
+          return key.length + JSON.stringify(value).length;
+        },
+        maxSize: 10 * 1024 * 1024, // 10MB total
+        dispose: (value: FileSnapshot, key: string) => {
+          logDebug(`[Snapshot] Evicted ${key.substring(0, 20)}... (size: ${JSON.stringify(value).length}B)`);
+        }
+      });
+    }
+  }
+
+  /**
+   * Clear the cache (useful for error recovery or reset)
+   */
+  clearCache(): void {
+    this.snapshotCache?.clear();
+    this.snapshotCache = null;
+  }
 
   /**
    * Get cache statistics for observability
@@ -53,7 +86,8 @@ export class SnapshotManager {
   ): Promise<FileSnapshot> {
     // Check LRU cache first
     const cacheKey = `${blobSha}:${filePath}`;
-    const lruCached = this.snapshotCache.get<FileSnapshot>(cacheKey);
+    this.initCache();
+    const lruCached = this.snapshotCache?.get(cacheKey);
     if (lruCached) {
       logDebug(`[Snapshot] LRU cache hit for ${filePath}@${blobSha.substring(0, 8)}`);
       this.cacheHits++;
@@ -66,7 +100,7 @@ export class SnapshotManager {
       logDebug(`[Snapshot] DB cache hit for ${filePath}@${blobSha.substring(0, 8)}`);
       this.cacheHits++;
       // Also cache in LRU for faster access
-      this.snapshotCache.set(cacheKey, cached);
+      this.snapshotCache?.set(cacheKey, cached);
       return cached;
     }
 
@@ -110,7 +144,7 @@ export class SnapshotManager {
 
     // Also cache in LRU cache for faster access
     const lruCacheKey = `${blobSha}:${filePath}`;
-    this.snapshotCache.set(lruCacheKey, snapshot);
+    this.snapshotCache?.set(lruCacheKey, snapshot);
 
     return snapshot;
   }

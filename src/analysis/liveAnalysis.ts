@@ -7,6 +7,9 @@ import { auditLegacy } from '../facts/legacyAudit';
 import { ScopeSet } from '../facts/scope';
 import { IntendedState, buildIntendedMap } from '../facts/intendedMap';
 import { logInfo, logDebug, logError } from '../utils/logger';
+import { detectHybridDrift } from './hybridDriftDetector';
+import { getCstTimelineManager } from './cstTimeline';
+import { getExtensionConfig, isCstOnlyLanguage, detectLanguage } from '../utils/config';
 
 export class LiveAnalysisEngine {
     private tracker: LiveDiffTracker;
@@ -74,6 +77,48 @@ export class LiveAnalysisEngine {
             // 5. Run Detectors
             const drift = detectDrift(intended, working);
 
+            // Detect hybrid drifts (CST facts)
+            const config = getExtensionConfig();
+            const enableCst = config.enableCstTracking ?? true;
+            const enableAugment = config.enableCstAugmentation ?? false;
+
+            if (enableCst || enableAugment) {
+                const timelineManager = getCstTimelineManager();
+                const hybridDrifts: any[] = [];
+                const priorVersion = state.bundleFacts.bundle.shas?.[0] || 'workspace';
+
+                // Get hybrid facts for files in scope and detect drifts
+                for (const filePath of scopePaths) {
+                    const language = detectLanguage(filePath);
+                    if (!language) continue;
+
+                    const isCstOnly = isCstOnlyLanguage(language);
+                    if (!isCstOnly && !enableAugment) continue;
+
+                    try {
+                        // Get current hybrid facts (from workspace or staged)
+                        const currentFacts = await timelineManager.getPriorFacts(filePath, 'workspace') || 
+                                            await timelineManager.getPriorFacts(filePath, 'workspace-staged') || [];
+
+                        if (currentFacts.length > 0) {
+                            const fileDrifts = await detectHybridDrift(
+                                filePath,
+                                currentFacts,
+                                intended,
+                                'workspace',
+                                priorVersion
+                            );
+                            hybridDrifts.push(...fileDrifts);
+                        }
+                    } catch (error) {
+                        logDebug(`[LiveAnalysis] Error detecting hybrid drift for ${filePath}: ${error}`);
+                    }
+                }
+
+                // Add hybrid drifts to findings
+                drift.hybridDrifts = hybridDrifts;
+            }
+
             // We need a ScopeSet for auditLegacy. Reconstructing it minimally.
             const scope: ScopeSet = {
                 commitFiles: scopePaths,
@@ -91,7 +136,8 @@ export class LiveAnalysisEngine {
                     missing: drift.missing_symbols.length,
                     zombies: drift.zombie_symbols.length,
                     drift: drift.divergent_symbols.length,
-                    dead: legacy.dead.length
+                    dead: legacy.dead.length,
+                    hybridDrifts: drift.hybridDrifts?.length || 0
                 },
                 facts: {
                     drift,

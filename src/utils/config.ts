@@ -11,7 +11,10 @@ import {
   LANGUAGES,
   isJSLanguage,
   isPHPLanguage,
-  getJSLanguages
+  getJSLanguages,
+  getAugmentableLanguages,
+  isCstOnlyLanguage,
+  type Language
 } from './supportedLanguages';
 
 let vscode: any;
@@ -108,7 +111,15 @@ export function getExtensionConfig(): ExtensionConfig {
       allowedExtensions: fileConfig?.allowedExtensions || config.get('allowedExtensions'),
       maxFileSize: fileConfig?.maxFileSize || config.get('maxFileSize'),
       // Qdrant isolation config
-      perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || config.get('perProjectQdrantCollections')
+      perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || config.get('perProjectQdrantCollections'),
+      // CST tracking config
+      enableCstTracking: fileConfig?.enableCstTracking ?? config.get('enableCstTracking') ?? true,
+      enableCstAugmentation: fileConfig?.enableCstAugmentation ?? config.get('enableCstAugmentation') ?? false,
+      cstLanguages: fileConfig?.cstLanguages || config.get('cstLanguages') || ['markdown', 'json', 'yaml', 'css'],
+      // Snapshot cache config
+      snapshotCacheEnabled: fileConfig?.snapshotCacheEnabled ?? config.get('snapshotCacheEnabled') ?? true,
+      snapshotCacheSize: fileConfig?.snapshotCacheSize || config.get('snapshotCacheSize') || 50,
+      snapshotCacheTTL: fileConfig?.snapshotCacheTTL || config.get('snapshotCacheTTL') || 3600
     };
   } else {
     // CLI/Test fallback: config file > environment variables > package.json defaults
@@ -133,7 +144,15 @@ export function getExtensionConfig(): ExtensionConfig {
       allowedExtensions: fileConfig?.allowedExtensions || (process.env.ALLOWED_EXTENSIONS ? process.env.ALLOWED_EXTENSIONS.split(',') : getPackageJsonDefault('allowedExtensions')),
       maxFileSize: fileConfig?.maxFileSize || (process.env.MAX_FILE_SIZE ? parseInt(process.env.MAX_FILE_SIZE) : getPackageJsonDefault('maxFileSize')),
       // Qdrant isolation config
-      perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || (process.env.PER_PROJECT_QDRANT_COLLECTIONS === 'true' || getPackageJsonDefault('perProjectQdrantCollections'))
+      perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || (process.env.PER_PROJECT_QDRANT_COLLECTIONS === 'true' || getPackageJsonDefault('perProjectQdrantCollections')),
+      // CST tracking config
+      enableCstTracking: fileConfig?.enableCstTracking ?? (process.env.ENABLE_CST_TRACKING === 'false' ? false : (process.env.ENABLE_CST_TRACKING === 'true' ? true : getPackageJsonDefault('enableCstTracking') ?? true)),
+      enableCstAugmentation: fileConfig?.enableCstAugmentation ?? (process.env.ENABLE_CST_AUGMENTATION === 'true' ? true : (process.env.ENABLE_CST_AUGMENTATION === 'false' ? false : getPackageJsonDefault('enableCstAugmentation') ?? false)),
+      cstLanguages: fileConfig?.cstLanguages || (process.env.CST_LANGUAGES ? process.env.CST_LANGUAGES.split(',') : getPackageJsonDefault('cstLanguages') || ['markdown', 'json', 'yaml', 'css']),
+      // Snapshot cache config
+      snapshotCacheEnabled: fileConfig?.snapshotCacheEnabled ?? (process.env.SNAPSHOT_CACHE_ENABLED === 'false' ? false : (process.env.SNAPSHOT_CACHE_ENABLED === 'true' ? true : getPackageJsonDefault('snapshotCacheEnabled') ?? true)),
+      snapshotCacheSize: fileConfig?.snapshotCacheSize || (process.env.SNAPSHOT_CACHE_SIZE ? parseInt(process.env.SNAPSHOT_CACHE_SIZE) : getPackageJsonDefault('snapshotCacheSize') || 50),
+      snapshotCacheTTL: fileConfig?.snapshotCacheTTL || (process.env.SNAPSHOT_CACHE_TTL ? parseInt(process.env.SNAPSHOT_CACHE_TTL) : getPackageJsonDefault('snapshotCacheTTL') || 3600)
     };
   }
 }
@@ -141,13 +160,51 @@ export function getExtensionConfig(): ExtensionConfig {
 // Setup config change listener (VS Code only)
 if (vscode) {
   vscode.workspace.onDidChangeConfiguration((e: any) => {
-    if (e.affectsConfiguration('git-context.allowedExtensions')) {
+    if (e.affectsConfiguration('git-context.allowedExtensions') ||
+        e.affectsConfiguration('git-context.enableCstTracking') ||
+        e.affectsConfiguration('git-context.enableCstAugmentation') ||
+        e.affectsConfiguration('git-context.cstLanguages')) {
       invalidateSupportedLanguagesCache();
+      
+      // Check if WASM files are missing for new extensions (async check)
+      (async () => {
+        try {
+          const { getSupportedExtensions, getRequiredLanguagesForExtensions } = await import('./supportedLanguages');
+          const fs = require('fs');
+          const path = require('path');
+          
+          const extensions = getSupportedExtensions();
+          const requiredLangs = getRequiredLanguagesForExtensions(extensions);
+          const wasmDir = path.join(__dirname, '..', '..', 'out', 'wasm');
+          
+          const missingLangs = requiredLangs.filter((lang: string) => {
+            const wasmPath = path.join(wasmDir, `tree-sitter-${lang}.wasm`);
+            // Also check old location for migration
+            const oldWasmPath = path.join(__dirname, '..', '..', 'out', `tree-sitter-${lang}.wasm`);
+            return !fs.existsSync(wasmPath) && !fs.existsSync(oldWasmPath);
+          });
+          
+          if (missingLangs.length > 0) {
+            const action = await vscode.window.showInformationMessage(
+              `Missing WASM files for languages: ${missingLangs.join(', ')}. Would you like to download them?`,
+              'Download',
+              'Later'
+            );
+            
+            if (action === 'Download') {
+              vscode.commands.executeCommand('git-context.downloadWasmFiles');
+            }
+          }
+        } catch (error) {
+          // Silently fail - this is a convenience feature
+          console.warn('[Config] Failed to check for missing WASM files:', error);
+        }
+      })();
     }
   });
 }
 
-// Re-export supportedLanguages functions for convenience
+// Re-export supportedLanguages functions and types for convenience
 export {
   getSupportedExtensions,
   getSupportedLanguages,
@@ -156,7 +213,10 @@ export {
   LANGUAGES,
   isJSLanguage,
   isPHPLanguage,
-  getJSLanguages
+  getJSLanguages,
+  getAugmentableLanguages,
+  isCstOnlyLanguage,
+  type Language
 };
 
 export function getWorkspaceRoot(): string | undefined {

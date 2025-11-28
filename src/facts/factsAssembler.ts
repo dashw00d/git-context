@@ -13,6 +13,9 @@ export type { RefactorBundleFacts } from './types';
 
 import { CommitFacts } from '../analysis/commitIndexer';
 import { WorkspaceFacts } from '../analysis/workspaceIndexer';
+import { getCstTimelineManager } from '../analysis/cstTimeline';
+import { getExtensionConfig, isCstOnlyLanguage, detectLanguage } from '../utils/config';
+import type { HybridFact } from '../types/cstFacts';
 
 /**
  * Build RefactorBundleFacts from pipeline state (CommitFacts + WorkspaceFacts)
@@ -30,6 +33,15 @@ export async function buildRefactorBundleFacts(
     legacy?: LegacyAuditResult;
   }
 ): Promise<RefactorBundleFacts> {
+  // Log inputs for diagnostics
+  const intendedSize = options?.intended?.size || 0;
+  const hybridFactsCount = options?.scope ? await getHybridFactsCount(options.scope, options.commitShas?.[options.commitShas.length - 1] || 'workspace') : 0;
+  console.log(`[BundleFacts] Inputs: intended=${intendedSize}, hybridFacts=${hybridFactsCount} files, working.symbols=${options?.working?.symbolsById.size || 0}`);
+  
+  // Validation warning
+  if (intendedSize === 0) {
+    console.warn(`[BundleFacts] WARNING: intended.present === 0. Consider using --enable-cst to populate intended state.`);
+  }
   // If full pipeline data is provided, use the comprehensive assembleFacts logic
   if (options?.commitShas && options.scope && options.intended && options.working && options.drift && options.legacy) {
     return assembleFacts(
@@ -100,7 +112,18 @@ export async function buildRefactorBundleFacts(
       blastRadius: maxStructuralChange * 10 // Rough approximation
     },
     intended: options?.intended
-      ? calculateIntendedCounts(options.intended)
+      ? (() => {
+          const counts = calculateIntendedCounts(options.intended);
+          // Heuristics: use hotspots for renamed detection (stable DNA, name change)
+          if (counts.renamed === 0 && options.working && options.intended.size > 0) {
+            const renamedFromHotspots = detectRenamedFromHotspots(options.intended, options.working);
+            if (renamedFromHotspots > 0) {
+              console.log(`[BundleFacts] Detected ${renamedFromHotspots} renamed symbols from hotspots (stable DNA, name change)`);
+              counts.renamed = renamedFromHotspots;
+            }
+          }
+          return counts;
+        })()
       : {
           present: totalSymbols,
           absent: 0,
@@ -198,8 +221,36 @@ export async function assembleFacts(
   const intendedLists = getIntendedLists(intended);
   const workingLists = getWorkingLists(working);
   const oldestSha = commitShas.length > 0 ? commitShas[0] : 'unknown';
-
   const newestSha = commitShas.length > 0 ? commitShas[commitShas.length - 1] : 'unknown';
+
+  // Collect hybrid facts for bundle
+  const hybridFactsMap: Record<string, HybridFact[]> = {};
+  const config = getExtensionConfig();
+  const enableCst = config.enableCstTracking ?? true;
+  const enableAugment = config.enableCstAugmentation ?? false;
+
+  if (enableCst || enableAugment) {
+    const timelineManager = getCstTimelineManager();
+    const versionForFacts = newestSha !== 'unknown' ? newestSha : 'workspace';
+
+    for (const filePath of scope.allPaths) {
+      const language = detectLanguage(filePath);
+      if (!language) continue;
+
+      const isCstOnly = isCstOnlyLanguage(language);
+      if (!isCstOnly && !enableAugment) continue;
+
+      try {
+        // Use fallback to query workspace version if commit version has no facts
+        const facts = await timelineManager.getPriorFactsWithFallback(filePath, versionForFacts);
+        if (facts.length > 0) {
+          hybridFactsMap[filePath] = facts;
+        }
+      } catch (error) {
+        // Silently skip files that fail
+      }
+    }
+  }
 
   const facts: RefactorBundleFacts = {
     version: "2.0",
@@ -308,7 +359,9 @@ export async function assembleFacts(
         new: r.new.symbol_id,
         confidence: r.confidence
       }))
-    }
+    },
+    // Include hybrid facts if available
+    hybridFacts: Object.keys(hybridFactsMap).length > 0 ? hybridFactsMap : undefined
   };
 
   return facts;
@@ -528,4 +581,91 @@ function computeBasicDeadSymbols(working: WorkingSnapshot, intended: Map<string,
   }
 
   return deadCount;
+}
+
+/**
+ * Detect renamed symbols from hotspots (stable DNA, name change)
+ */
+function detectRenamedFromHotspots(
+  intended: Map<string, IntendedState>,
+  working: WorkingSnapshot
+): number {
+  const { getDatabaseManager } = require('../storage/database');
+  const db = getDatabaseManager().getDatabase();
+  
+  let renamedCount = 0;
+  
+  // Check DNA continuity - symbols with same DNA but different names (indicates rename)
+  // Query symbol_versions for DNA matches with different names
+  const dnaStmt = db.prepare(`
+    SELECT DISTINCT sv1.symbol_id as id1, sv1.name as name1,
+           sv2.symbol_id as id2, sv2.name as name2
+    FROM symbol_versions sv1
+    JOIN symbol_versions sv2 ON sv1.dna_id = sv2.dna_id
+    WHERE sv1.name != sv2.name
+    AND sv1.symbol_id != sv2.symbol_id
+    AND sv1.dna_id IS NOT NULL
+    AND sv2.dna_id IS NOT NULL
+    LIMIT 50
+  `);
+  
+  try {
+    const dnaMatches = dnaStmt.all() as any[];
+    const renamedSet = new Set<string>();
+    
+    for (const match of dnaMatches) {
+      // Check if both symbols are in intended map
+      const id1InIntended = intended.has(match.id1);
+      const id2InIntended = intended.has(match.id2);
+      
+      if (id1InIntended && id2InIntended) {
+        // Both are in intended - likely a rename
+        renamedSet.add(match.id1);
+        renamedSet.add(match.id2);
+      }
+    }
+    
+    renamedCount = renamedSet.size;
+  } catch (error) {
+    // Silently fail if query doesn't work
+    console.debug(`[BundleFacts] Could not detect renamed from hotspots: ${error}`);
+  }
+  
+  return renamedCount;
+}
+
+/**
+ * Get hybrid facts count for logging
+ */
+async function getHybridFactsCount(scope: ScopeSet, version: string): Promise<number> {
+  const config = getExtensionConfig();
+  const enableCst = config.enableCstTracking ?? true;
+  const enableAugment = config.enableCstAugmentation ?? false;
+  
+  if (!enableCst && !enableAugment) {
+    return 0;
+  }
+  
+  const timelineManager = getCstTimelineManager();
+  let count = 0;
+  
+  for (const filePath of scope.allPaths) {
+    const language = detectLanguage(filePath);
+    if (!language) continue;
+    
+    const isCstOnly = isCstOnlyLanguage(language);
+    if (!isCstOnly && !enableAugment) continue;
+    
+    try {
+      // Use fallback to query workspace version if commit version has no facts
+      const facts = await timelineManager.getPriorFactsWithFallback(filePath, version);
+      if (facts.length > 0) {
+        count++;
+      }
+    } catch (error) {
+      // Silently skip
+    }
+  }
+  
+  return count;
 }

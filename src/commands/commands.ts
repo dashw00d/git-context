@@ -612,6 +612,59 @@ export async function registerCommands(
       }
     );
 
+    // Register downloadWasmFiles command
+    const downloadWasmFilesCmd = vscode.commands.registerCommand(
+      'git-context.downloadWasmFiles',
+      async () => {
+        try {
+          const { spawn } = require('child_process');
+          const path = require('path');
+          
+          await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Downloading required WASM files...',
+            cancellable: false
+          }, async (progress) => {
+            return new Promise<void>((resolve, reject) => {
+              const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'download-wasm.js');
+              const nodeProcess = spawn('node', [scriptPath], {
+                cwd: path.join(__dirname, '..', '..'),
+                stdio: 'pipe'
+              });
+              
+              let output = '';
+              nodeProcess.stdout.on('data', (data: Buffer) => {
+                output += data.toString();
+                const lines = data.toString().split('\n').filter((l: string) => l.trim());
+                lines.forEach((line: string) => {
+                  if (line.includes('Downloading') || line.includes('Downloaded') || line.includes('%')) {
+                    progress.report({ message: line });
+                  }
+                });
+              });
+              
+              nodeProcess.stderr.on('data', (data: Buffer) => {
+                output += data.toString();
+              });
+              
+              nodeProcess.on('close', (code: number) => {
+                if (code === 0) {
+                  vscode.window.showInformationMessage('WASM files downloaded successfully!');
+                  resolve();
+                } else {
+                  vscode.window.showErrorMessage(`Failed to download WASM files: ${output}`);
+                  reject(new Error(`Process exited with code ${code}`));
+                }
+              });
+            });
+          });
+        } catch (error) {
+          logError('Failed to download WASM files:', error);
+          vscode.window.showErrorMessage(`Failed to download WASM files: ${error}`);
+        }
+      }
+    );
+
     // Register generateLiveReport command
     const generateLiveReportCmd = vscode.commands.registerCommand(
       'git-context.generateLiveReport',
@@ -663,7 +716,8 @@ export async function registerCommands(
       bundleExportCmd,
       scrollToReportSectionCmd,
       openSymbolHistoryCmd,
-      generateLiveReportCmd
+      generateLiveReportCmd,
+      downloadWasmFilesCmd
     );
 
     logInfo('Git Context commands registered successfully');

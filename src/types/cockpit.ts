@@ -168,6 +168,7 @@ export interface LiveAnalysisSummary {
   zombies: number;
   drift: number;
   dead: number;
+  hybridDrifts?: number; // Hybrid facts (CST) drift count
 }
 
 /* ---------- Cockpit → Host messages ---------- */

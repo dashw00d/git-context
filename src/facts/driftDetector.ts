@@ -3,6 +3,7 @@ import { IntendedState } from './intendedMap';
 import { WorkingSnapshot } from './workingSnapshot';
 import { getDatabaseManager } from '../storage/database';
 import { NamingConvention, analyzeConventionDrift, suggestConventionName } from '../analysis/namingConventions';
+import type { HybridFact, CstFact } from '../types/cstFacts';
 
 export interface DriftFindings {
   missing_symbols: Array<{symbol_id: string, expected: IntendedState}>;
@@ -31,6 +32,16 @@ export interface DriftFindings {
   divergentClusters?: Array<Set<SymbolContext>>;
   suggestedConsolidations?: Array<{symbols: string[], similarity: number}>;
   unresolved_callers?: Array<UnresolvedCallerFact>;
+  /**
+   * Hybrid drifts: CST facts that have changed or are missing
+   * For CST-only languages and hybrid augmentation
+   */
+  hybridDrifts?: Array<{
+    fact: HybridFact;
+    type: 'missing' | 'zombie' | 'divergent' | 'modified';
+    expected?: IntendedState;
+    timelineDelta?: Array<{ version: string; delta: any }>;
+  }>;
 }
 
 export interface UnresolvedCallerFact {

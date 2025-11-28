@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const src = path.join(__dirname, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
-const dest = path.join(__dirname, 'out', 'sql-wasm.wasm');
+// sql.js is in root node_modules, not scripts/node_modules
+const src = path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+const dest = path.join(__dirname, '..', 'out', 'wasm', 'sql-wasm.wasm');
 
 console.log(`Copying ${src} to ${dest}...`);
 

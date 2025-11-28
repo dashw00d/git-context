@@ -6,7 +6,9 @@ import { logDebug } from '../utils/logger';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getExtensionConfig, getSupportedExtensions } from '../utils/config';
+import { getExtensionConfig, getSupportedExtensions, detectLanguage, isCstOnlyLanguage } from '../utils/config';
+import { getCstTimelineManager } from './cstTimeline';
+import { getTreeSitterParser } from './tree-sitter';
 
 export interface WorkspaceFacts {
   workspaceHash: string;
@@ -23,6 +25,9 @@ export interface WorkspaceFacts {
 }
 
 export class WorkspaceIndexer {
+  private cstTimelineManager = getCstTimelineManager();
+  private parser = getTreeSitterParser();
+
   constructor(
     private db: Database,
     private git: GitOperations,
@@ -150,6 +155,9 @@ export class WorkspaceIndexer {
         workingContent
       );
 
+      // Extract and save hybrid facts for workspace
+      await this.extractAndSaveHybridFacts(filePath, 'workspace', workingContent, workspaceSnapshot.symbols);
+
       // Collect edges for blast radius
       allEdges.push(...workspaceSnapshot.edges);
 
@@ -196,6 +204,10 @@ export class WorkspaceIndexer {
         );
 
         maxStructuralChange = Math.max(maxStructuralChange, structDiff.structuralChangeScore);
+
+        // Extract and save hybrid facts for modified workspace files
+        const headFileHash = await this.computeFileHashForFacts(filePath, 'HEAD', headContent, headSnapshot.symbols);
+        await this.extractAndSaveHybridFacts(filePath, 'workspace', workingContent, workspaceSnapshot.symbols, headFileHash);
 
         // Risk detection
         if (structDiff.interfaceChanged) allRisks.push('breaking-api');
@@ -344,5 +356,75 @@ export class WorkspaceIndexer {
       facts.blastRadius,
       new Date().toISOString()
     ]);
+  }
+
+  /**
+   * Extract and save hybrid facts for workspace file
+   */
+  private async extractAndSaveHybridFacts(
+    filePath: string,
+    version: string,
+    content: string,
+    existingSymbols: any[],
+    prevHash?: string
+  ): Promise<void> {
+    const config = getExtensionConfig();
+    const enableCst = config.enableCstTracking ?? true;
+    const enableAugment = config.enableCstAugmentation ?? false;
+
+    if (!enableCst && !enableAugment) {
+      return;
+    }
+
+    const language = detectLanguage(filePath);
+    if (!language) return;
+
+    const isCstOnly = isCstOnlyLanguage(language);
+    if (!isCstOnly && !enableAugment) {
+      return;
+    }
+
+    try {
+      const tree = await this.parser.parse(content, language);
+      if (!tree) return;
+
+      const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
+      await this.cstTimelineManager.saveFacts(filePath, version, hybridFacts, prevHash);
+    } catch (error) {
+      logDebug(`[WorkspaceIndexer] Error extracting hybrid facts for ${filePath}: ${error}`);
+    }
+  }
+
+  /**
+   * Compute file hash for facts
+   */
+  private async computeFileHashForFacts(
+    filePath: string,
+    version: string,
+    content: string,
+    existingSymbols: any[]
+  ): Promise<string | undefined> {
+    const language = detectLanguage(filePath);
+    if (!language) return undefined;
+
+    try {
+      const tree = await this.parser.parse(content, language);
+      if (!tree) return undefined;
+
+      const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
+      const serialized = JSON.stringify(hybridFacts.map(f => ({
+        id: f.id,
+        dnaId: f.dnaId,
+        name: f.name,
+        kind: f.kind
+      })));
+      return crypto.createHash('sha256')
+        .update(serialized)
+        .digest('hex')
+        .substring(0, 16);
+    } catch (error) {
+      logDebug(`[WorkspaceIndexer] Error computing file hash for ${filePath}: ${error}`);
+      return undefined;
+    }
   }
 }

@@ -231,10 +231,18 @@ export class DatabaseManager {
       console.log('[DB-INIT] Loading SQL.js WASM...');
       const wasmStartTime = Date.now();
       // In production (out/storage/database.js), __dirname is .../out/storage
-      // We want .../out/sql-wasm.wasm
-      const wasmPath = path.join(__dirname, '..', 'sql-wasm.wasm');
+      // We want .../out/wasm/sql-wasm.wasm
+      const wasmPath = path.join(__dirname, '..', 'wasm', 'sql-wasm.wasm');
+      // Fallback to old location for migration
+      const oldWasmPath = path.join(__dirname, '..', 'sql-wasm.wasm');
       const SQL = await initSqlJs({
-        locateFile: () => wasmPath
+        locateFile: () => {
+          // Check new location first, then fallback to old
+          if (fs.existsSync(wasmPath)) {
+            return wasmPath;
+          }
+          return oldWasmPath;
+        }
       });
       console.log(`[DB-INIT] WASM loaded in ${Date.now() - wasmStartTime}ms`);
 

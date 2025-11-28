@@ -1,7 +1,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { SymbolInfo } from '../types';
-import { detectLanguage, getSupportedLanguages, LANGUAGES } from '../utils/config';
+import { SymbolInfo, HybridFact } from '../types';
+import { detectLanguage, getSupportedLanguages, LANGUAGES, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
+import { CstExtractor } from './cstExtractor';
 
 // Use require to avoid type issues with web-tree-sitter
 const { Parser, Language } = require('web-tree-sitter');
@@ -9,6 +10,7 @@ const { Parser, Language } = require('web-tree-sitter');
 export class TreeSitterParser {
   private parsers: Map<string, any> = new Map();
   private initialized = false;
+  private cstExtractor = new CstExtractor();
 
   async initializeParsers(): Promise<void> {
     if (this.initialized) return;
@@ -22,8 +24,8 @@ export class TreeSitterParser {
 
       for (const lang of languages) {
         try {
-          // Look for WASM in the out directory (where it's copied/downloaded to)
-          const wasmPath = path.join(__dirname, '..', '..', 'out', `tree-sitter-${lang}.wasm`);
+          // Look for WASM in the out/wasm directory (where it's copied/downloaded to)
+          const wasmPath = path.join(__dirname, '..', '..', 'out', 'wasm', `tree-sitter-${lang}.wasm`);
           if (fs.existsSync(wasmPath)) {
             const language = await Language.load(wasmPath);
             const parser = new Parser();
@@ -31,14 +33,14 @@ export class TreeSitterParser {
             this.parsers.set(lang, parser);
             console.log(`✓ Loaded tree-sitter parser for ${lang}`);
           } else {
-            // Fallback to checking root if not in out yet (dev mode)
-            const rootWasmPath = path.join(__dirname, '..', '..', `tree-sitter-${lang}.wasm`);
-            if (fs.existsSync(rootWasmPath)) {
-              const language = await Language.load(rootWasmPath);
+            // Fallback to checking old location for migration
+            const oldWasmPath = path.join(__dirname, '..', '..', 'out', `tree-sitter-${lang}.wasm`);
+            if (fs.existsSync(oldWasmPath)) {
+              const language = await Language.load(oldWasmPath);
               const parser = new Parser();
               parser.setLanguage(language);
               this.parsers.set(lang, parser);
-              console.log(`✓ Loaded tree-sitter parser for ${lang} (dev mode)`);
+              console.log(`✓ Loaded tree-sitter parser for ${lang} (from old location)`);
             } else {
               failed.push(lang);
               console.warn(`✗ Language WASM not found for ${lang}, skipping`);
@@ -119,6 +121,27 @@ export class TreeSitterParser {
         }
       }
     }
+  }
+
+  /**
+   * Extract hybrid facts (symbols + CST facts) for CST-only or hybrid augmentation
+   */
+  extractHybridFacts(tree: any, filePath: string, language: string): HybridFact[] {
+    const config = getExtensionConfig();
+    const isCstOnly = isCstOnlyLanguage(language);
+    const enableAugment = config.enableCstAugmentation ?? false;
+    const enableCst = config.enableCstTracking ?? true;
+
+    // Extract semantic symbols first (if not CST-only)
+    const symbols: SymbolInfo[] = isCstOnly ? [] : this.extractSymbols(tree, filePath, language);
+
+    // Extract CST facts if enabled
+    const cstFacts = (enableCst || enableAugment) 
+      ? this.cstExtractor.extractCstFacts(tree, filePath, language, symbols)
+      : [];
+
+    // Merge: for CST-only, return only CST facts; for hybrid, return both
+    return [...symbols, ...cstFacts] as HybridFact[];
   }
 
   private extractSymbolFromNode(node: any, filePath: string, language: string): SymbolInfo | null {

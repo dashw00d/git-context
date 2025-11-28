@@ -4,8 +4,10 @@ import { debounce } from 'lodash';
 import { GitOperations } from './analysis/git';
 import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
 import { logDebug, logInfo, logError } from './utils/logger';
-import { getSupportedExtensions } from './utils/config';
+import { getSupportedExtensions, getExtensionConfig, detectLanguage, isCstOnlyLanguage } from './utils/config';
 import { SymbolExtractor } from './analysis/symbols';
+import { getCstTimelineManager } from './analysis/cstTimeline';
+import { getTreeSitterParser } from './analysis/tree-sitter';
 import type { SymbolInfo } from './types';
 
 interface ThresholdConfig {
@@ -24,6 +26,8 @@ export class LiveDiffTracker extends EventEmitter {
     private symbolCache = new Map<string, SymbolInfo[]>();
     private autoRunAfterEdits: number = 50;
     private editCounts = new Map<string, number>();
+    private cstTimelineManager = getCstTimelineManager();
+    private parser = getTreeSitterParser();
 
     constructor() {
         super();
@@ -208,6 +212,9 @@ export class LiveDiffTracker extends EventEmitter {
             thresholdReached: true
         });
 
+        // Extract and save hybrid facts for CST-only or augmented files
+        await this.extractAndSaveHybridFacts(doc, isStaged);
+
         if (this.autoRunAfterEdits > 0) {
             logInfo(`Live threshold reached for ${mode} changes, triggering analysis`);
             await this.triggerAnalysis(isStaged);
@@ -227,6 +234,51 @@ export class LiveDiffTracker extends EventEmitter {
 
     private resetBuffer(doc: vscode.TextDocument) {
         this.clearBuffer(doc.uri);
+    }
+
+    /**
+     * Extract and save hybrid facts for a changed file
+     */
+    private async extractAndSaveHybridFacts(
+        doc: vscode.TextDocument,
+        isStaged: boolean
+    ): Promise<void> {
+        const config = getExtensionConfig();
+        const enableCst = config.enableCstTracking ?? true;
+        const enableAugment = config.enableCstAugmentation ?? false;
+
+        if (!enableCst && !enableAugment) {
+            return; // CST tracking disabled
+        }
+
+        const filePath = doc.uri.fsPath;
+        const language = detectLanguage(filePath);
+        if (!language) return;
+
+        const isCstOnly = isCstOnlyLanguage(language);
+        if (!isCstOnly && !enableAugment) {
+            return; // Not CST-only and augmentation disabled
+        }
+
+        try {
+            const content = doc.getText();
+            const tree = await this.parser.parse(content, language);
+            if (!tree) return;
+
+            // Get existing symbols for hybrid augmentation
+            const existingSymbols = this.symbolCache.get(doc.uri.toString()) || [];
+
+            // Extract hybrid facts
+            const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
+
+            // Save to timeline manager (version = 'workspace' for live tracking)
+            const version = isStaged ? 'workspace-staged' : 'workspace';
+            await this.cstTimelineManager.saveFacts(filePath, version, hybridFacts);
+
+            logDebug(`[LiveTracker] Saved ${hybridFacts.length} hybrid facts for ${filePath}`);
+        } catch (error) {
+            logDebug(`[LiveTracker] Error extracting hybrid facts for ${filePath}: ${error}`);
+        }
     }
 
     private clearBuffer(uri: vscode.Uri) {
