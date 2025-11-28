@@ -1,5 +1,5 @@
 import { PipelineStep, PipelineState } from '../pipelineTypes';
-import { auditLegacy } from '../../../facts/legacyAudit';
+import { LegacyDetector } from '../../../facts/legacyAudit';
 import { getCstTimelineManager } from '../../cstTimeline';
 import { getExtensionConfig, isCstOnlyLanguage, detectLanguage } from '../../../utils/config';
 import { isCstFact } from '../../../types/cstFacts';
@@ -16,7 +16,13 @@ export function createLegacyStep(): PipelineStep {
         throw new Error('Intended, working, and scope required');
       }
 
-      const legacy = await auditLegacy(state.intended, state.working, state.scope);
+      // Use V2 detector with BaseDetector enhancements
+      const detector = new LegacyDetector();
+      const legacy = await detector.detect({
+        intended: state.intended,
+        working: state.working,
+        scope: state.scope
+      });
 
       // Enhance legacy audit results with timeline context from drift data
       if (state.drift && state.explicitTimeline && legacy.dead.length > 0) {

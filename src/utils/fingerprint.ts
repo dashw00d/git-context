@@ -56,3 +56,65 @@ export function makeWorkspaceSymbolVersionId(
     const input = `workspace:${path}:${name}:${contentHash}`;
     return crypto.createHash('sha256').update(input).digest('hex');
 }
+
+/**
+ * Compute stable fingerprint for any object/value
+ * Handles circular references and sorts object keys for stable hashing
+ * 
+ * @param obj - Object or value to fingerprint
+ * @param algorithm - Hash algorithm to use ('md5' or 'sha256')
+ * @returns Stable hash string
+ */
+export function computeFingerprint(obj: any, algorithm: 'md5' | 'sha256' = 'sha256'): string {
+  if (obj === null) return 'null';
+  if (obj === undefined) return 'undefined';
+  
+  // Handle primitives
+  if (typeof obj !== 'object') {
+    return String(obj);
+  }
+
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    const sorted = obj.map(item => computeFingerprint(item, algorithm)).sort();
+    const input = JSON.stringify(sorted);
+    return crypto.createHash(algorithm).update(input).digest('hex');
+  }
+
+  // Handle objects - use a replacer to handle circular references and sort keys
+  const seen = new WeakSet();
+  
+  function stableStringify(value: any): string {
+    if (value === null) return 'null';
+    if (value === undefined) return 'undefined';
+    
+    if (typeof value !== 'object') {
+      return JSON.stringify(value);
+    }
+    
+    if (Array.isArray(value)) {
+      return '[' + value.map(item => stableStringify(item)).join(',') + ']';
+    }
+    
+    // Check for circular reference
+    if (seen.has(value)) {
+      return '[Circular]';
+    }
+    
+    seen.add(value);
+    
+    try {
+      // Sort keys for stable output
+      const keys = Object.keys(value).sort();
+      const pairs = keys.map(key => {
+        return JSON.stringify(key) + ':' + stableStringify(value[key]);
+      });
+      return '{' + pairs.join(',') + '}';
+    } finally {
+      seen.delete(value);
+    }
+  }
+
+  const serialized = stableStringify(obj);
+  return crypto.createHash(algorithm).update(serialized).digest('hex');
+}

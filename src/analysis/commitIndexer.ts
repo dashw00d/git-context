@@ -4,8 +4,8 @@ import { SnapshotManager, FileSnapshot } from './snapshotManager';
 import { StructuralDiffManager, StructuralDiffMetrics } from './structuralDiffManager';
 import { RiskDetector } from './heuristics';
 import { DependencyExtractor } from './dependencies';
-import { HotspotDetector } from './hotspotDetector';
-import { MovedBlockDetector } from './movedBlockDetector';
+import { HotspotDetectorV2 } from './hotspotDetector';
+import { MovedBlockDetectorV2 } from './movedBlockDetector';
 import { Database } from 'sql.js';
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { logDebug, logInfo } from '../utils/logger';
@@ -48,8 +48,8 @@ export class CommitIndexer {
     private structuralDiffManager: StructuralDiffManager,
     private riskDetector: RiskDetector,
     private dependencyExtractor: DependencyExtractor,
-    private hotspotDetector: HotspotDetector,
-    private movedBlockDetector: MovedBlockDetector
+    private hotspotDetector: HotspotDetectorV2,
+    private movedBlockDetector: MovedBlockDetectorV2
   ) { }
 
   /**

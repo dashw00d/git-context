@@ -1,5 +1,5 @@
 import { PipelineStep, PipelineState } from '../pipelineTypes';
-import { detectDrift } from '../../../facts/driftDetector';
+import { DriftDetector } from '../../../facts/driftDetector';
 import { detectHybridDrift } from '../../hybridDriftDetector';
 import { getCstTimelineManager } from '../../cstTimeline';
 import { getExtensionConfig, isCstOnlyLanguage, detectLanguage } from '../../../utils/config';
@@ -20,7 +20,13 @@ export function createDriftStep(): PipelineStep {
         throw new Error('Intended and working states required');
       }
 
-      const drift = detectDrift(state.intended, state.working, state.selectedCommitShas);
+      // Use V2 detector with BaseDetector enhancements
+      const detector = new DriftDetector();
+      const drift = await detector.detect({
+        intended: state.intended,
+        working: state.working,
+        commitShas: state.selectedCommitShas
+      });
 
       // Detect hybrid drifts (CST facts)
       const config = getExtensionConfig();

@@ -2,7 +2,9 @@ import { Database } from 'sql.js';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
 import { getDatabaseManager } from '../storage/database';
+import { getDatabaseService, DatabaseService } from '../services/databaseService';
 import { GitOperations } from './git';
+import { BaseDetector, DetectorConfig } from './detectors/BaseDetector';
 
 export interface CodeBlock {
   file: string;
@@ -74,6 +76,7 @@ export class MovedBlockDetector {
 
   constructor(
     private dbManager = getDatabaseManager(),
+    private commitService: DatabaseService = getDatabaseService(),
     private git?: GitOperations
   ) {
     if (!this.git) {
@@ -498,14 +501,8 @@ export class MovedBlockDetector {
    * Get parent SHA for a given commit
    */
   private async getParentSha(commitSha: string): Promise<string> {
-    // This is a simplified implementation
-    // In production, this would query the database for commit parent
-    const db = this.dbManager.getDatabase();
-    const stmt = db.prepare(`
-      SELECT parent FROM commits_metadata WHERE sha = ?
-    `);
-    const row = stmt.get(commitSha) as any;
-    return row?.parent || commitSha;
+    const metadata = await this.commitService.getCommitMetadata(commitSha);
+    return metadata?.parent || commitSha;
   }
 
   /**
@@ -661,5 +658,80 @@ export class MovedBlockDetector {
       moveReason: row.move_reason,
       lineCount: row.line_count
     }));
+  }
+}
+
+/**
+ * Input type for moved block detection
+ */
+export interface MovedBlockDetectorInput {
+  commitSha: string;
+  deletedSymbols: SymbolInfo[];
+  addedSymbols: SymbolInfo[];
+}
+
+/**
+ * Moved block detector that extends BaseDetector for unified analysis patterns
+ * Delegates operational methods to legacy detector for backward compatibility
+ */
+export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, MovedBlock[]> {
+  private legacyDetector: MovedBlockDetector;
+
+  constructor(config: Partial<DetectorConfig> = {}) {
+    super({
+      enableCaching: false, // Move detection should always be fresh
+      ...config
+    });
+    this.legacyDetector = new MovedBlockDetector();
+  }
+
+  /**
+   * Detect moved blocks from input (BaseDetector interface)
+   */
+  async detect(input: MovedBlockDetectorInput): Promise<MovedBlock[]> {
+    return this.getCachedResult(
+      this.generateCacheKey(input.commitSha, input.deletedSymbols, input.addedSymbols),
+      async () => {
+        // Call detectMovedBlocks and return just the moved blocks
+        const result = await this.legacyDetector.detectMovedBlocks(
+          input.commitSha,
+          input.deletedSymbols,
+          input.addedSymbols
+        );
+        return result.movedBlocks;
+      }
+    );
+  }
+
+  /**
+   * Main entry point: detect moved blocks between file changes
+   * Delegates to legacy detector
+   */
+  async detectMovedBlocks(
+    commitSha: string,
+    deletedSymbols: SymbolInfo[],
+    addedSymbols: SymbolInfo[]
+  ): Promise<MovedBlockResult> {
+    return this.legacyDetector.detectMovedBlocks(commitSha, deletedSymbols, addedSymbols);
+  }
+
+  /**
+   * Match symbols by DNA ID across versions (for cross-version move detection)
+   * Delegates to legacy detector
+   */
+  matchByDna(removedSymbols: SymbolInfo[], addedSymbols: SymbolInfo[]): Array<{
+    removed: SymbolInfo;
+    added: SymbolInfo;
+    similarity: number;
+  }> {
+    return this.legacyDetector.matchByDna(removedSymbols, addedSymbols);
+  }
+
+  /**
+   * Set similarity threshold for move detection
+   * Delegates to legacy detector
+   */
+  setSimilarityThreshold(threshold: number): void {
+    this.legacyDetector.setSimilarityThreshold(threshold);
   }
 }

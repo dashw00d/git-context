@@ -1,5 +1,5 @@
 import { PipelineStep, PipelineState } from '../pipelineTypes';
-import { HotspotDetector } from '../../hotspotDetector';
+import { HotspotDetectorV2 } from '../../hotspotDetector';
 import { getDatabaseManager } from '../../../storage/database';
 import { SymbolInfo } from '../../../types';
 import { getCstTimelineManager } from '../../cstTimeline';
@@ -20,7 +20,7 @@ export function createHotspotStep(): PipelineStep {
     deps: ['index_commits'],
 
     async run(state: PipelineState) {
-      const detector = new HotspotDetector(); // Self-sufficient
+      const detector = new HotspotDetectorV2(); // V2 detector with BaseDetector enhancements
       const db = getDatabaseManager().getDatabase();
 
       if (state.selectedCommitShas.length === 0) {

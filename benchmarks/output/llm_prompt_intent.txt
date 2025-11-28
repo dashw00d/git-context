@@ -13,74 +13,81 @@ Guidelines:
 FACTS JSON:
 {
   "version": "2.0",
-  "generated_at": "2025-11-28T11:20:30.460Z",
+  "generated_at": "2025-11-28T13:16:47.751Z",
   "confidence": 1,
   "bundle": {
-    "oldestSha": "66b4ad726dccaf0f8f002c95be2ed9a900897395",
-    "newestSha": "c5e686bff558c76bb0d5812dac8be3f07680f059",
+    "oldestSha": "7bbd0eb5079eb664f4548e4d349ba30d93272e01",
+    "newestSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
     "shas": [
+      "7bbd0eb5079eb664f4548e4d349ba30d93272e01",
       "66b4ad726dccaf0f8f002c95be2ed9a900897395",
-      "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
-      "c5e686bff558c76bb0d5812dac8be3f07680f059"
+      "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
     ],
     "timeline": [
       "workspace-unstaged",
       "workspace-staged",
       "HEAD",
+      "7bbd0eb5079eb664f4548e4d349ba30d93272e01",
       "66b4ad726dccaf0f8f002c95be2ed9a900897395",
-      "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
-      "c5e686bff558c76bb0d5812dac8be3f07680f059"
+      "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
     ],
     "movedLineage": []
   },
   "scope": {
-    "files": 168,
+    "files": 172,
     "blastRadius": 0
   },
   "intended": {
-    "present": 0,
+    "present": 100,
     "absent": 0,
     "renamed": 0
   },
   "working": {
-    "symbols": 0,
-    "edges": 0
+    "symbols": 2174,
+    "edges": 14630
   },
   "findings": {
     "incompleteness": {
-      "missing": 0,
+      "missing": 100,
       "zombies": 0,
       "divergent": 0
     },
     "patternDrift": {
-      "mixedTargets": 0,
-      "oldNamespaces": 0
+      "mixedTargets": 7,
+      "oldNamespaces": 32,
+      "conventionDrift": {
+        "dominantConvention": "camelCase",
+        "driftPercent": 1.1959521619135236,
+        "driftSymbolCount": 26
+      },
+      "mixedConventionFiles": 7
     },
     "legacyAudit": {
-      "dead": 0,
+      "dead": 20,
       "legacyUsed": 0,
       "replacedLeftovers": []
     },
     "unresolvedCallers": {
-      "total": 0
+      "total": 9786
     }
   },
   "evidence": {
     "bundle.shas": [
+      "7bbd0eb5079eb664f4548e4d349ba30d93272e01",
       "66b4ad726dccaf0f8f002c95be2ed9a900897395",
-      "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
-      "c5e686bff558c76bb0d5812dac8be3f07680f059"
+      "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
     ],
     "scope.files": [
-      "README.md",
-      "benchmarks/fixtures/sample.css",
-      "benchmarks/fixtures/sample.js",
-      "benchmarks/fixtures/sample.json",
-      "benchmarks/fixtures/sample.md",
-      "benchmarks/fixtures/sample.php",
-      "benchmarks/fixtures/sample.yaml",
-      "benchmarks/mocks/framework/benchmarks/mocks/framework/snapshot.js",
-      "benchmarks/mocks/framework/snapshot.js",
+      "backlog/IMPORTANCE-SCORE.md",
+      "benchmarks/fixtures/pipeline_frozen/bundle_facts.json",
+      "benchmarks/fixtures/pipeline_frozen/drift.json",
+      "benchmarks/fixtures/pipeline_frozen/hotspots.json",
+      "benchmarks/fixtures/pipeline_frozen/index_commits.json",
+      "benchmarks/fixtures/pipeline_frozen/intended.json",
+      "benchmarks/fixtures/pipeline_frozen/legacy.json",
+      "benchmarks/fixtures/pipeline_frozen/scope.json",
+      "benchmarks/fixtures/pipeline_frozen/working.json",
+      "benchmarks/fixtures/pipeline_frozen/workspace_overlay.json",
       "benchmarks/mocks/framework/snapshot.ts",
       "benchmarks/mocks/framework/src/analysis/astSerializer.js",
       "benchmarks/mocks/framework/src/analysis/cstDiff.js",
@@ -114,137 +121,18 @@ FACTS JSON:
       "benchmarks/mocks/framework/src/utils/edgeThresholds.js",
       "benchmarks/mocks/framework/src/utils/logger.js",
       "benchmarks/mocks/framework/src/utils/supportedLanguages.js",
-      "benchmarks/output/pipeline_diagnostics.json",
-      "benchmarks/output/pipeline_report.md",
-      "benchmarks/pipeline_diagnostics.ts",
-      "binaries/tree-sitter-svelte.wasm",
-      "cst-only-tracking.md",
-      "docs/cst-extractors.md",
-      "docs/hybrid-drift-optimization-plan.md",
-      "docs/pipeline-diagnostics-cst-integration-plan.md",
-      "modular-summarizer.md",
-      "package-lock.json",
-      "package.json",
-      "scripts/copy-wasm.js",
-      "scripts/download-wasm.js",
-      "scripts/remove-source-compiled.js",
-      "src/analysis/commitIndexer.ts",
-      "src/analysis/cstDiff.ts",
-      "src/analysis/cstExtractor.ts",
-      "src/analysis/cstTimeline.ts",
-      "src/analysis/embeddingIndexer.ts",
-      "src/analysis/hotspotDetector.ts",
-      "src/analysis/hybridDriftDetector.ts",
-      "src/analysis/liveAnalysis.ts",
-      "src/analysis/llmAnalyst/runner.ts",
-      "src/analysis/movedBlockDetector.ts",
-      "src/analysis/runner/steps/driftStep.ts",
-      "src/analysis/runner/steps/hotspotStep.ts",
-      "src/analysis/runner/steps/intendedStep.ts",
-      "src/analysis/runner/steps/legacyStep.ts",
-      "src/analysis/snapshotManager.ts",
-      "src/analysis/structuralDiffManager.ts",
-      "src/analysis/symbolDna.ts",
-      "src/analysis/tree-sitter.ts",
-      "src/analysis/workspaceIndexer.ts",
-      "src/commands/commands.ts",
-      "src/facts/driftDetector.ts",
-      "src/facts/factsAssembler.ts",
-      "src/facts/intendedMap.ts",
-      "src/facts/legacyAudit.ts",
-      "src/facts/scope.ts",
-      "src/facts/types.ts",
-      "src/liveTracker.ts",
-      "src/storage/database.ts",
-      "src/storage/schema.ts",
-      "src/types/cockpit.ts",
-      "src/types/cstFacts.ts",
-      "src/types/index.ts",
-      "src/utils/config.ts",
-      "src/utils/supportedLanguages-constants.js",
-      "src/utils/supportedLanguages.ts",
-      ".claude/CLAUDE.md",
-      ".git-context.config.json",
-      ".gitignore",
-      "AGENTS.md",
-      "CHANGELOG.md",
-      "CLAUDE.md",
-      "COMPREHENSIVE_CLEANUP_PLAN.md",
-      "CONFIG.md",
-      "PROJECT.md",
-      "benchmarks/liveAnalysis.test.ts",
-      "benchmarks/mocks/reporter.ts",
-      "benchmarks/output/test-results.json",
-      "benchmarks/qdrant_integration_test.ts",
-      "check_symbols.js",
-      "copy-wasm.js",
-      "current-flow.md",
-      "download-wasm.js",
-      "final_summary.md",
-      "live-tracker-completion-plan.md",
-      "metric_test_report_2025-11-27T10-47-07.md",
-      "metric_test_report_2025-11-27T11-25-49.md",
-      "metric_test_report_2025-11-27T12-11-31.md",
-      "metric_test_report_2025-11-27T12-11-52.md",
-      "pipeline-refactor-plan.md",
-      "pipeline_diagnostics.json",
-      "scripts/check_symbols.js",
-      "scripts/vscode-mock.js",
-      "src/analysis/bundleStoryEngine.ts",
-      "src/analysis/contextExporter.ts",
-      "src/analysis/runner/pipelineTypes.ts",
-      "src/analysis/runner/steps/bundleFactsStep.ts",
-      "src/analysis/runner/steps/historyStep.ts",
-      "src/analysis/runner/steps/workspaceStep.ts",
-      "src/cli/index.ts",
-      "src/extension.ts",
-      "src/metrics/bundleFactsAdapter.ts",
-      "src/providers/activeBundleProvider.ts.backup",
-      "src/storage/index.ts",
-      "src/storage/qdrantClient.ts",
-      "src/storage/schema.ts.backup",
-      "temp_benchmark.db",
-      "test_debug.ts",
-      "test_output_ui_data.json",
-      "test_output_ui_data1.json",
-      "test_pipeline_integration.ts",
-      "test_pipeline_integration.ts.depricated",
-      "test_pipeline_log.txt",
-      "todo.md",
-      "vitest.config.ts",
-      "vscode-mock.js",
-      ".git-context.config.example.json",
-      ".kilocode/providers.json",
-      "backlog/DEPRECATED_CODE_CLEANUP.md",
-      "backlog/ESLINT_WARNINGS_CATEGORIZED.md",
-      "backlog/deep-think-plan.md",
-      "backlog/diff-as-you-go-plan.md",
-      "benchmarks/PIPELINE_DIAGNOSTICS.md",
-      "benchmarks/fixtures/pipeline_frozen/bundle_facts.json",
-      "benchmarks/fixtures/pipeline_frozen/drift.json",
-      "benchmarks/fixtures/pipeline_frozen/hotspots.json",
-      "benchmarks/fixtures/pipeline_frozen/index_commits.json",
-      "benchmarks/fixtures/pipeline_frozen/intended.json",
-      "benchmarks/fixtures/pipeline_frozen/legacy.json",
-      "benchmarks/fixtures/pipeline_frozen/scope.json",
-      "benchmarks/fixtures/pipeline_frozen/working.json",
-      "benchmarks/fixtures/pipeline_frozen/workspace_overlay.json",
-      "benchmarks/liveTracker.test.ts",
-      "benchmarks/pipeline_metric_test.ts",
-      "git-context.config.schema.json",
-      "src/analysis/astSerializer.ts",
-      "src/analysis/conventionEnhancements.ts",
-      "src/analysis/dependencies.ts",
-      "src/analysis/runner/pipelineRunner.ts",
-      "src/analysis/semanticChanges.ts",
-      "src/analysis/symbols.ts",
-      "src/cli/analyze.ts",
-      "src/storage/embeddings.ts"
+      "benchmarks/output/llm_prompt_cleanup.txt",
+      "benchmarks/output/llm_prompt_discover.txt",
+      "benchmarks/output/llm_prompt_drift.txt",
+      "benchmarks/output/llm_prompt_intent.txt",
+      "benchmarks/output/llm_prompt_plan.txt",
+      "benchmarks/output/llm_prompt_quantify.txt",
+      "benchmarks/output/llm_summarized_facts.json"
     ],
     "scope.blastRadius": [],
     "timeline.chain": {
-      "unstaged": 79,
-      "staged": 16,
+      "unstaged": 42,
+      "staged": 0,
       "head": "HEAD",
       "commits": 3
     },
@@ -256,27 +144,2862 @@ FACTS JSON:
       "total": 0,
       "files": []
     },
-    "intended.present": [],
+    "intended.present": [
+      "86b5382ccb92c983",
+      "b9dd82808696531a",
+      "4b5d7ec4bcfc24f3",
+      "93f038d0eb69528b",
+      "8896d84ab9a6c5ab",
+      "399650ab3f6902fa",
+      "1c2e11d65aaa0d3e",
+      "8efcaa8222729e9e",
+      "e2262022043bf46b",
+      "dcb19cf1809fbd20",
+      "27ddf4d65b75940b",
+      "1d0857b5fb6ce555",
+      "62614a2b0601c51f",
+      "47eb6d215ca49905",
+      "042240f92b65d102",
+      "34684e944fa7ce9d",
+      "ab31fe1e0e3f9d01",
+      "2b421f4fb69b2042",
+      "65d8adec7660b8d3",
+      "159a96dbdef8f90a",
+      "8cacf166082214be",
+      "43018e7deeb3c8ab",
+      "06db86706f63e28b",
+      "aac074d8fa25e7b6",
+      "1ad425e398d14718",
+      "8d54c3181adf95de",
+      "dbb2730f7a3cdb25",
+      "0b5984a196570be3",
+      "50b3f334d62ca6c7",
+      "3e447d7f60209a0a",
+      "cf45fdb57630ab9d",
+      "addc75e8eb24168f",
+      "b33291a99e4d6f6d",
+      "74a62e847bdd8b25",
+      "44306b3ba3c5638a",
+      "6b657692880c888c",
+      "ab9475289d750a1f",
+      "b37753fd205b9110",
+      "6518fe2c2b128a76",
+      "647bd5585515d647",
+      "b2aff7b239f07b44",
+      "e918a6e044593725",
+      "94b14d440ca0dcb7",
+      "1f96897895c5a0b9",
+      "6775e8d85dbae689",
+      "f74ed9882eaa0404",
+      "eb96ea1942ef908b",
+      "4870b6328ce5615e",
+      "91401ea91e562af5",
+      "e9d43dfac286fc59"
+    ],
     "intended.absent": [],
     "intended.renamed": [],
-    "working.symbols": [],
-    "working.edges": [],
+    "working.symbols": [
+      "src/analysis/commitIndexer.ts:method_constructor",
+      "src/analysis/commitIndexer.ts:method_getCacheStats",
+      "src/analysis/commitIndexer.ts:const_total",
+      "src/analysis/commitIndexer.ts:const_hitRate",
+      "src/analysis/commitIndexer.ts:method_retryWithBackoff",
+      "src/analysis/commitIndexer.ts:const_exponentialDelay",
+      "src/analysis/commitIndexer.ts:const_jitter",
+      "src/analysis/commitIndexer.ts:const_delay",
+      "src/analysis/commitIndexer.ts:method_ensureCommitIndexed",
+      "src/analysis/commitIndexer.ts:const_facts",
+      "src/analysis/commitIndexer.ts:method_ensureCommitsIndexed",
+      "src/analysis/commitIndexer.ts:const_limit",
+      "src/analysis/commitIndexer.ts:const_promises",
+      "src/analysis/commitIndexer.ts:const_results",
+      "src/analysis/commitIndexer.ts:const_stats",
+      "src/analysis/commitIndexer.ts:method_indexCommit",
+      "src/analysis/commitIndexer.ts:const_commitInfo",
+      "src/analysis/commitIndexer.ts:const_files",
+      "src/analysis/commitIndexer.ts:const_parentSha",
+      "src/analysis/commitIndexer.ts:const_allRisks"
+    ],
+    "working.edges": [
+      "imports: 416",
+      "calls: 14214"
+    ],
     "findings.incompleteness": {
-      "missing": [],
+      "missing": [
+        {
+          "symbol_id": "86b5382ccb92c983",
+          "expected": {
+            "expect": "present",
+            "lastName": "config",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "b9dd82808696531a",
+          "expected": {
+            "expect": "present",
+            "lastName": "DEFAULT_EXCLUDED_PREFIXES",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "4b5d7ec4bcfc24f3",
+          "expected": {
+            "expect": "present",
+            "lastName": "filterCache",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "93f038d0eb69528b",
+          "expected": {
+            "expect": "present",
+            "lastName": "shouldProcessPath",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "8896d84ab9a6c5ab",
+          "expected": {
+            "expect": "present",
+            "lastName": "normalized",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "399650ab3f6902fa",
+          "expected": {
+            "expect": "present",
+            "lastName": "excludedPrefixes",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "1c2e11d65aaa0d3e",
+          "expected": {
+            "expect": "present",
+            "lastName": "ext",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "8efcaa8222729e9e",
+          "expected": {
+            "expect": "present",
+            "lastName": "allowedExtensions",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "e2262022043bf46b",
+          "expected": {
+            "expect": "present",
+            "lastName": "cacheKey",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "dcb19cf1809fbd20",
+          "expected": {
+            "expect": "present",
+            "lastName": "cached",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "27ddf4d65b75940b",
+          "expected": {
+            "expect": "present",
+            "lastName": "ignoreMatcher",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "1d0857b5fb6ce555",
+          "expected": {
+            "expect": "present",
+            "lastName": "maxFileSize",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "62614a2b0601c51f",
+          "expected": {
+            "expect": "present",
+            "lastName": "cachedSize",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "47eb6d215ca49905",
+          "expected": {
+            "expect": "present",
+            "lastName": "fullPath",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "042240f92b65d102",
+          "expected": {
+            "expect": "present",
+            "lastName": "stats",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "34684e944fa7ce9d",
+          "expected": {
+            "expect": "present",
+            "lastName": "filterPath",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "ab31fe1e0e3f9d01",
+          "expected": {
+            "expect": "present",
+            "lastName": "shouldProcessPathWithLog",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "2b421f4fb69b2042",
+          "expected": {
+            "expect": "present",
+            "lastName": "result",
+            "lastPath": "src/utils/pathFilter.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "65d8adec7660b8d3",
+          "expected": {
+            "expect": "present",
+            "lastName": "describeVersionPosition",
+            "lastPath": "src/utils/timeline.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "159a96dbdef8f90a",
+          "expected": {
+            "expect": "present",
+            "lastName": "index",
+            "lastPath": "src/utils/timeline.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "8cacf166082214be",
+          "expected": {
+            "expect": "present",
+            "lastName": "distance",
+            "lastPath": "src/utils/timeline.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "43018e7deeb3c8ab",
+          "expected": {
+            "expect": "present",
+            "lastName": "timelineManager",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "06db86706f63e28b",
+          "expected": {
+            "expect": "present",
+            "lastName": "found",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "aac074d8fa25e7b6",
+          "expected": {
+            "expect": "present",
+            "lastName": "priorSha",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "1ad425e398d14718",
+          "expected": {
+            "expect": "present",
+            "lastName": "priorFactsForFile",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "8d54c3181adf95de",
+          "expected": {
+            "expect": "present",
+            "lastName": "missingFact",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "dbb2730f7a3cdb25",
+          "expected": {
+            "expect": "present",
+            "lastName": "factKey",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "0b5984a196570be3",
+          "expected": {
+            "expect": "present",
+            "lastName": "expected",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "50b3f334d62ca6c7",
+          "expected": {
+            "expect": "present",
+            "lastName": "recentDeltas",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "3e447d7f60209a0a",
+          "expected": {
+            "expect": "present",
+            "lastName": "hasModifications",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "cf45fdb57630ab9d",
+          "expected": {
+            "expect": "present",
+            "lastName": "priorFact",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "addc75e8eb24168f",
+          "expected": {
+            "expect": "present",
+            "lastName": "getHybridFactsForFile",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "b33291a99e4d6f6d",
+          "expected": {
+            "expect": "present",
+            "lastName": "isCstFact",
+            "lastPath": "src/types/cstFacts.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "74a62e847bdd8b25",
+          "expected": {
+            "expect": "present",
+            "lastName": "isSymbolInfo",
+            "lastPath": "src/types/cstFacts.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "44306b3ba3c5638a",
+          "expected": {
+            "expect": "present",
+            "lastName": "diffCst",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "6b657692880c888c",
+          "expected": {
+            "expect": "present",
+            "lastName": "language",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "ab9475289d750a1f",
+          "expected": {
+            "expect": "present",
+            "lastName": "oldTree",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "b37753fd205b9110",
+          "expected": {
+            "expect": "present",
+            "lastName": "newTree",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "6518fe2c2b128a76",
+          "expected": {
+            "expect": "present",
+            "lastName": "difftasticResult",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "647bd5585515d647",
+          "expected": {
+            "expect": "present",
+            "lastName": "mapDifftasticToFacts",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "b2aff7b239f07b44",
+          "expected": {
+            "expect": "present",
+            "lastName": "changedFacts",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "e918a6e044593725",
+          "expected": {
+            "expect": "present",
+            "lastName": "addedFacts",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "94b14d440ca0dcb7",
+          "expected": {
+            "expect": "present",
+            "lastName": "removedFacts",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "1f96897895c5a0b9",
+          "expected": {
+            "expect": "present",
+            "lastName": "oldFactMap",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "6775e8d85dbae689",
+          "expected": {
+            "expect": "present",
+            "lastName": "newFactMap",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "f74ed9882eaa0404",
+          "expected": {
+            "expect": "present",
+            "lastName": "oldFact",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "eb96ea1942ef908b",
+          "expected": {
+            "expect": "present",
+            "lastName": "oldByDna",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "4870b6328ce5615e",
+          "expected": {
+            "expect": "present",
+            "lastName": "delta",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "91401ea91e562af5",
+          "expected": {
+            "expect": "present",
+            "lastName": "isModified",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "e9d43dfac286fc59",
+          "expected": {
+            "expect": "present",
+            "lastName": "newByDna",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "09158ad9b5c2ea13",
+          "expected": {
+            "expect": "present",
+            "lastName": "isFactModified",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "fe7aa77ca3f91835",
+          "expected": {
+            "expect": "present",
+            "lastName": "factLine",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "26ab1d9345ad52cf",
+          "expected": {
+            "expect": "present",
+            "lastName": "isHighlighted",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "1ebab7a0002a760a",
+          "expected": {
+            "expect": "present",
+            "lastName": "match",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "b70187fb413e4733",
+          "expected": {
+            "expect": "present",
+            "lastName": "treeSitterDiff",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "534dc433275b7dbc",
+          "expected": {
+            "expect": "present",
+            "lastName": "simpleFactDiff",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "149c4c0fce7f2d25",
+          "expected": {
+            "expect": "present",
+            "lastName": "computeCstDelta",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "1b149961da183d10",
+          "expected": {
+            "expect": "present",
+            "lastName": "oldFacts",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "a353b44f1dbae175",
+          "expected": {
+            "expect": "present",
+            "lastName": "newFacts",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "83aab2d8da4b1eb6",
+          "expected": {
+            "expect": "present",
+            "lastName": "extractFactsFromTree",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "2f2ecf6259eeb993",
+          "expected": {
+            "expect": "present",
+            "lastName": "getCstDiffManager",
+            "lastPath": "src/analysis/cstDiff.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "3f489896957f1ef2",
+          "expected": {
+            "expect": "present",
+            "lastName": "extractCstFacts",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "0a5fdca39027abce",
+          "expected": {
+            "expect": "present",
+            "lastName": "isCstOnly",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "d82e37bf9377a443",
+          "expected": {
+            "expect": "present",
+            "lastName": "enableAugment",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "4277a80679ac27ed",
+          "expected": {
+            "expect": "present",
+            "lastName": "facts",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "94c7520bbba42d7c",
+          "expected": {
+            "expect": "present",
+            "lastName": "depthLimit",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "62bdd40ad889c282",
+          "expected": {
+            "expect": "present",
+            "lastName": "traverse",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "8c0d9c07d4cdb0fb",
+          "expected": {
+            "expect": "present",
+            "lastName": "fact",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "90032ec459d847f0",
+          "expected": {
+            "expect": "present",
+            "lastName": "extractCstOnlyFact",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "a350433607885934",
+          "expected": {
+            "expect": "present",
+            "lastName": "extractMarkdownFact",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "d874d207118bb33e",
+          "expected": {
+            "expect": "present",
+            "lastName": "headingMarker",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "172735902bedcd41",
+          "expected": {
+            "expect": "present",
+            "lastName": "markerText",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "bd4c24245d71ccc4",
+          "expected": {
+            "expect": "present",
+            "lastName": "contentNode",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "8450673762464d68",
+          "expected": {
+            "expect": "present",
+            "lastName": "name",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "44622ca6ae9784ba",
+          "expected": {
+            "expect": "present",
+            "lastName": "bodyShape",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "42b5167144cfe776",
+          "expected": {
+            "expect": "present",
+            "lastName": "id",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "d2c2ce8dd302034e",
+          "expected": {
+            "expect": "present",
+            "lastName": "dnaId",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "394c657f2248b6c1",
+          "expected": {
+            "expect": "present",
+            "lastName": "extractJsonFact",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "ee316d18decc3a46",
+          "expected": {
+            "expect": "present",
+            "lastName": "keyNode",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "44fc0cf86cc0a00b",
+          "expected": {
+            "expect": "present",
+            "lastName": "key",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "103e3284e1e53b4b",
+          "expected": {
+            "expect": "present",
+            "lastName": "extractYamlFact",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "a4e6df859a2fec09",
+          "expected": {
+            "expect": "present",
+            "lastName": "extractCssFact",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "1bd7ada195c48327",
+          "expected": {
+            "expect": "present",
+            "lastName": "selectorNode",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "76d73cdc03a670f0",
+          "expected": {
+            "expect": "present",
+            "lastName": "selector",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "5a201102b0650c51",
+          "expected": {
+            "expect": "present",
+            "lastName": "extractHybridAuxiliaryFact",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "ef2ebf873835f33d",
+          "expected": {
+            "expect": "present",
+            "lastName": "text",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "b8d53b406cb08bde",
+          "expected": {
+            "expect": "present",
+            "lastName": "overlaps",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "17be0459b32eec60",
+          "expected": {
+            "expect": "present",
+            "lastName": "hashCstSubset",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "9b14480f95f09bae",
+          "expected": {
+            "expect": "present",
+            "lastName": "serialized",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "c9cedfe64ab37f54",
+          "expected": {
+            "expect": "present",
+            "lastName": "serializeNodeForHash",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "e61ef5b75f3f9d30",
+          "expected": {
+            "expect": "present",
+            "lastName": "parts",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "7ca1909a7fb9cd39",
+          "expected": {
+            "expect": "present",
+            "lastName": "computeCstDna",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "b2b418a028476396",
+          "expected": {
+            "expect": "present",
+            "lastName": "locationsOverlap",
+            "lastPath": "src/analysis/cstExtractor.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "8e5b4ef269571842",
+          "expected": {
+            "expect": "present",
+            "lastName": "saveFacts",
+            "lastPath": "src/analysis/cstTimeline.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "40c0cd721773ba3a",
+          "expected": {
+            "expect": "present",
+            "lastName": "db",
+            "lastPath": "src/analysis/cstTimeline.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "93cd0016edeadf0e",
+          "expected": {
+            "expect": "present",
+            "lastName": "fileHash",
+            "lastPath": "src/analysis/cstTimeline.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "fc1658eaac2001d2",
+          "expected": {
+            "expect": "present",
+            "lastName": "priorFacts",
+            "lastPath": "src/analysis/hybridDriftDetector.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "78a5613c13340784",
+          "expected": {
+            "expect": "present",
+            "lastName": "factsWithDeltas",
+            "lastPath": "src/analysis/cstTimeline.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "51c762b80fd07494",
+          "expected": {
+            "expect": "present",
+            "lastName": "delta",
+            "lastPath": "src/analysis/cstTimeline.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        },
+        {
+          "symbol_id": "a8df00f7f86d1e54",
+          "expected": {
+            "expect": "present",
+            "lastName": "getPriorFacts",
+            "lastPath": "src/analysis/cstTimeline.ts",
+            "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+          }
+        }
+      ],
       "zombies": [],
       "divergent": []
     },
-    "findings.incompleteness.missing": [],
+    "findings.incompleteness.missing": [
+      {
+        "symbol_id": "86b5382ccb92c983",
+        "expected": {
+          "expect": "present",
+          "lastName": "config",
+          "lastPath": "src/analysis/cstExtractor.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "b9dd82808696531a",
+        "expected": {
+          "expect": "present",
+          "lastName": "DEFAULT_EXCLUDED_PREFIXES",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "4b5d7ec4bcfc24f3",
+        "expected": {
+          "expect": "present",
+          "lastName": "filterCache",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "93f038d0eb69528b",
+        "expected": {
+          "expect": "present",
+          "lastName": "shouldProcessPath",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "8896d84ab9a6c5ab",
+        "expected": {
+          "expect": "present",
+          "lastName": "normalized",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "399650ab3f6902fa",
+        "expected": {
+          "expect": "present",
+          "lastName": "excludedPrefixes",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "1c2e11d65aaa0d3e",
+        "expected": {
+          "expect": "present",
+          "lastName": "ext",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "8efcaa8222729e9e",
+        "expected": {
+          "expect": "present",
+          "lastName": "allowedExtensions",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "e2262022043bf46b",
+        "expected": {
+          "expect": "present",
+          "lastName": "cacheKey",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "dcb19cf1809fbd20",
+        "expected": {
+          "expect": "present",
+          "lastName": "cached",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "27ddf4d65b75940b",
+        "expected": {
+          "expect": "present",
+          "lastName": "ignoreMatcher",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "1d0857b5fb6ce555",
+        "expected": {
+          "expect": "present",
+          "lastName": "maxFileSize",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "62614a2b0601c51f",
+        "expected": {
+          "expect": "present",
+          "lastName": "cachedSize",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "47eb6d215ca49905",
+        "expected": {
+          "expect": "present",
+          "lastName": "fullPath",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "042240f92b65d102",
+        "expected": {
+          "expect": "present",
+          "lastName": "stats",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "34684e944fa7ce9d",
+        "expected": {
+          "expect": "present",
+          "lastName": "filterPath",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "ab31fe1e0e3f9d01",
+        "expected": {
+          "expect": "present",
+          "lastName": "shouldProcessPathWithLog",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "2b421f4fb69b2042",
+        "expected": {
+          "expect": "present",
+          "lastName": "result",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "65d8adec7660b8d3",
+        "expected": {
+          "expect": "present",
+          "lastName": "describeVersionPosition",
+          "lastPath": "src/utils/timeline.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "159a96dbdef8f90a",
+        "expected": {
+          "expect": "present",
+          "lastName": "index",
+          "lastPath": "src/utils/timeline.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "8cacf166082214be",
+        "expected": {
+          "expect": "present",
+          "lastName": "distance",
+          "lastPath": "src/utils/timeline.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "43018e7deeb3c8ab",
+        "expected": {
+          "expect": "present",
+          "lastName": "timelineManager",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "06db86706f63e28b",
+        "expected": {
+          "expect": "present",
+          "lastName": "found",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "aac074d8fa25e7b6",
+        "expected": {
+          "expect": "present",
+          "lastName": "priorSha",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "1ad425e398d14718",
+        "expected": {
+          "expect": "present",
+          "lastName": "priorFactsForFile",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "8d54c3181adf95de",
+        "expected": {
+          "expect": "present",
+          "lastName": "missingFact",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "dbb2730f7a3cdb25",
+        "expected": {
+          "expect": "present",
+          "lastName": "factKey",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "0b5984a196570be3",
+        "expected": {
+          "expect": "present",
+          "lastName": "expected",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "50b3f334d62ca6c7",
+        "expected": {
+          "expect": "present",
+          "lastName": "recentDeltas",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "3e447d7f60209a0a",
+        "expected": {
+          "expect": "present",
+          "lastName": "hasModifications",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "cf45fdb57630ab9d",
+        "expected": {
+          "expect": "present",
+          "lastName": "priorFact",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "addc75e8eb24168f",
+        "expected": {
+          "expect": "present",
+          "lastName": "getHybridFactsForFile",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "b33291a99e4d6f6d",
+        "expected": {
+          "expect": "present",
+          "lastName": "isCstFact",
+          "lastPath": "src/types/cstFacts.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "74a62e847bdd8b25",
+        "expected": {
+          "expect": "present",
+          "lastName": "isSymbolInfo",
+          "lastPath": "src/types/cstFacts.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "44306b3ba3c5638a",
+        "expected": {
+          "expect": "present",
+          "lastName": "diffCst",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "6b657692880c888c",
+        "expected": {
+          "expect": "present",
+          "lastName": "language",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "ab9475289d750a1f",
+        "expected": {
+          "expect": "present",
+          "lastName": "oldTree",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "b37753fd205b9110",
+        "expected": {
+          "expect": "present",
+          "lastName": "newTree",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "6518fe2c2b128a76",
+        "expected": {
+          "expect": "present",
+          "lastName": "difftasticResult",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "647bd5585515d647",
+        "expected": {
+          "expect": "present",
+          "lastName": "mapDifftasticToFacts",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "b2aff7b239f07b44",
+        "expected": {
+          "expect": "present",
+          "lastName": "changedFacts",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "e918a6e044593725",
+        "expected": {
+          "expect": "present",
+          "lastName": "addedFacts",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "94b14d440ca0dcb7",
+        "expected": {
+          "expect": "present",
+          "lastName": "removedFacts",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "1f96897895c5a0b9",
+        "expected": {
+          "expect": "present",
+          "lastName": "oldFactMap",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "6775e8d85dbae689",
+        "expected": {
+          "expect": "present",
+          "lastName": "newFactMap",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "f74ed9882eaa0404",
+        "expected": {
+          "expect": "present",
+          "lastName": "oldFact",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "eb96ea1942ef908b",
+        "expected": {
+          "expect": "present",
+          "lastName": "oldByDna",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "4870b6328ce5615e",
+        "expected": {
+          "expect": "present",
+          "lastName": "delta",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "91401ea91e562af5",
+        "expected": {
+          "expect": "present",
+          "lastName": "isModified",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "e9d43dfac286fc59",
+        "expected": {
+          "expect": "present",
+          "lastName": "newByDna",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      }
+    ],
     "findings.incompleteness.zombies": [],
     "findings.legacyAudit": {
-      "dead": [],
+      "dead": [
+        {
+          "symbol_id": "src/analysis/cstTimeline.ts:function_getCstTimelineManager",
+          "name": "getCstTimelineManager",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/analysis/cstTimeline.ts:function_getPriorVersionInChain",
+          "name": "getPriorVersionInChain",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/analysis/hybridDriftDetector.ts:function_getHybridFactsForFile",
+          "name": "getHybridFactsForFile",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/analysis/runner/steps/movedBlockStep.ts:function_getSymbolsForVersion",
+          "name": "getSymbolsForVersion",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/facts/factsAssembler.ts:function_getIntendedLists",
+          "name": "getIntendedLists",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/facts/factsAssembler.ts:function_getWorkingLists",
+          "name": "getWorkingLists",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/facts/factsAssembler.ts:function_getHybridFactsCount",
+          "name": "getHybridFactsCount",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/facts/legacyAudit.ts:function_isInScope",
+          "name": "isInScope",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/facts/legacyAudit.ts:function_isLikelyUtilityFunction",
+          "name": "isLikelyUtilityFunction",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/facts/legacyAudit.ts:function_isEntryPointLike",
+          "name": "isEntryPointLike",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/facts/legacyAudit.ts:function_hasSomeComplexity",
+          "name": "hasSomeComplexity",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/types/cstFacts.ts:function_isCstFact",
+          "name": "isCstFact",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/types/cstFacts.ts:function_isSymbolInfo",
+          "name": "isSymbolInfo",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/utils/supportedLanguages.ts:function_getRequiredLanguagesForExtensions",
+          "name": "getRequiredLanguagesForExtensions",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/utils/supportedLanguages.ts:function_getMissingWasmFiles",
+          "name": "getMissingWasmFiles",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/utils/supportedLanguages.ts:function_isCstOnlyLanguage",
+          "name": "isCstOnlyLanguage",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/extension.ts:function_getRepoContext",
+          "name": "getRepoContext",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/extension.ts:function_getCockpitProvider",
+          "name": "getCockpitProvider",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/extension.ts:function_getRefactorPipeline",
+          "name": "getRefactorPipeline",
+          "kind": "function"
+        },
+        {
+          "symbol_id": "src/metrics/movedBlockAdapter.ts:function_isFileRename",
+          "name": "isFileRename",
+          "kind": "function"
+        }
+      ],
       "legacyUsed": [],
       "replacedLeftovers": []
     },
-    "findings.unresolvedCallers": [],
-    "missing": [],
+    "findings.patternDrift.conventionDrift": {
+      "dominantConvention": "camelCase",
+      "driftPercent": 1.1959521619135236,
+      "driftSymbols": [
+        {
+          "symbolId": "src/llm/prompts.ts:const_STAGE_1_COMPRESSION_PROMPT",
+          "name": "STAGE_1_COMPRESSION_PROMPT",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "stage1CompressionPrompt",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/llm/prompts.ts:const_STAGE_2_SUMMARY_PROMPT",
+          "name": "STAGE_2_SUMMARY_PROMPT",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "stage2SummaryPrompt",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/llm/prompts.ts:const_SYMBOL_EXPLANATION_PROMPT",
+          "name": "SYMBOL_EXPLANATION_PROMPT",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "symbolExplanationPrompt",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/llm/prompts.ts:const_FILE_COMPARISON_PROMPT",
+          "name": "FILE_COMPARISON_PROMPT",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "fileComparisonPrompt",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/llm/prompts.ts:const_PROMPT_INTENT_AND_STORY",
+          "name": "PROMPT_INTENT_AND_STORY",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "promptIntentAndStory",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/llm/prompts.ts:const_PROMPT_DRIFT_VERIFICATION",
+          "name": "PROMPT_DRIFT_VERIFICATION",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "promptDriftVerification",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/llm/prompts.ts:const_PROMPT_CLEANUP_PLAN",
+          "name": "PROMPT_CLEANUP_PLAN",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "promptCleanupPlan",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/llm/prompts.ts:const_SYSTEM_PROMPT",
+          "name": "SYSTEM_PROMPT",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "systemPrompt",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/llm/prompts.ts:const_PROMPT_DISCOVER",
+          "name": "PROMPT_DISCOVER",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "promptDiscover",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/llm/prompts.ts:const_PROMPT_QUANTIFY",
+          "name": "PROMPT_QUANTIFY",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "promptQuantify",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/llm/prompts.ts:const_PROMPT_PLAN",
+          "name": "PROMPT_PLAN",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "promptPlan",
+          "path": "src/llm/prompts.ts"
+        },
+        {
+          "symbolId": "src/storage/database.ts:const_SQL",
+          "name": "SQL",
+          "convention": "PascalCase",
+          "suggestedName": "sQL",
+          "path": "src/storage/database.ts"
+        },
+        {
+          "symbolId": "src/storage/database.ts:const_DatabaseHelpers",
+          "name": "DatabaseHelpers",
+          "convention": "PascalCase",
+          "suggestedName": "databaseHelpers",
+          "path": "src/storage/database.ts"
+        },
+        {
+          "symbolId": "src/storage/schema.ts:const_MODULE_SCHEMAS",
+          "name": "MODULE_SCHEMAS",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "moduleSchemas",
+          "path": "src/storage/schema.ts"
+        },
+        {
+          "symbolId": "src/storage/schema.ts:const_ANALYSIS_VERSION",
+          "name": "ANALYSIS_VERSION",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "analysisVersion",
+          "path": "src/storage/schema.ts"
+        },
+        {
+          "symbolId": "src/types/index.ts:const_ContextValues",
+          "name": "ContextValues",
+          "convention": "PascalCase",
+          "suggestedName": "contextValues",
+          "path": "src/types/index.ts"
+        },
+        {
+          "symbolId": "src/utils/pathFilter.ts:const_DEFAULT_EXCLUDED_PREFIXES",
+          "name": "DEFAULT_EXCLUDED_PREFIXES",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "defaultExcludedPrefixes",
+          "path": "src/utils/pathFilter.ts"
+        },
+        {
+          "symbolId": "src/utils/supportedLanguages.ts:const_LANGUAGE_CONFIG",
+          "name": "LANGUAGE_CONFIG",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "languageConfig",
+          "path": "src/utils/supportedLanguages.ts"
+        },
+        {
+          "symbolId": "src/utils/supportedLanguages.ts:const_WASM_URLS",
+          "name": "WASM_URLS",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "wasmUrls",
+          "path": "src/utils/supportedLanguages.ts"
+        },
+        {
+          "symbolId": "src/utils/supportedLanguages.ts:const_LANGUAGES",
+          "name": "LANGUAGES",
+          "convention": "PascalCase",
+          "suggestedName": "lANGUAGES",
+          "path": "src/utils/supportedLanguages.ts"
+        },
+        {
+          "symbolId": "src/utils/supportedLanguages.ts:const_SUPPORTED_LANGUAGES",
+          "name": "SUPPORTED_LANGUAGES",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "supportedLanguages",
+          "path": "src/utils/supportedLanguages.ts"
+        },
+        {
+          "symbolId": "src/utils/supportedLanguages.ts:const_EXT_TO_LANG_MAP",
+          "name": "EXT_TO_LANG_MAP",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "extToLangMap",
+          "path": "src/utils/supportedLanguages.ts"
+        },
+        {
+          "symbolId": "src/utils/supportedLanguages.ts:const_JSLANGUAGES",
+          "name": "JSLANGUAGES",
+          "convention": "PascalCase",
+          "suggestedName": "jSLANGUAGES",
+          "path": "src/utils/supportedLanguages.ts"
+        },
+        {
+          "symbolId": "src/utils/fingerprint.ts:const_PIPELINE_VERSION",
+          "name": "PIPELINE_VERSION",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "pipelineVersion",
+          "path": "src/utils/fingerprint.ts"
+        },
+        {
+          "symbolId": "src/utils/fingerprint.ts:const_PROMPT_VERSION",
+          "name": "PROMPT_VERSION",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "promptVersion",
+          "path": "src/utils/fingerprint.ts"
+        },
+        {
+          "symbolId": "src/analysis/detectors/BaseDetector.ts:const_DEFAULT_THRESHOLDS",
+          "name": "DEFAULT_THRESHOLDS",
+          "convention": "SCREAMING_SNAKE",
+          "suggestedName": "defaultThresholds",
+          "path": "src/analysis/detectors/BaseDetector.ts"
+        }
+      ]
+    },
+    "findings.patternDrift.mixedConventionFiles": [
+      {
+        "path": "src/llm/prompts.ts",
+        "conventions": [
+          "SCREAMING_SNAKE",
+          "camelCase"
+        ],
+        "symbolCount": 14,
+        "driftPercent": 21.428571428571427
+      },
+      {
+        "path": "src/storage/database.ts",
+        "conventions": [
+          "camelCase",
+          "PascalCase"
+        ],
+        "symbolCount": 49,
+        "driftPercent": 4.081632653061225
+      },
+      {
+        "path": "src/storage/schema.ts",
+        "conventions": [
+          "camelCase",
+          "SCREAMING_SNAKE"
+        ],
+        "symbolCount": 22,
+        "driftPercent": 9.090909090909092
+      },
+      {
+        "path": "src/utils/pathFilter.ts",
+        "conventions": [
+          "SCREAMING_SNAKE",
+          "camelCase"
+        ],
+        "symbolCount": 18,
+        "driftPercent": 5.555555555555555
+      },
+      {
+        "path": "src/utils/supportedLanguages.ts",
+        "conventions": [
+          "camelCase",
+          "SCREAMING_SNAKE",
+          "PascalCase"
+        ],
+        "symbolCount": 34,
+        "driftPercent": 17.647058823529413
+      },
+      {
+        "path": "src/utils/fingerprint.ts",
+        "conventions": [
+          "SCREAMING_SNAKE",
+          "camelCase"
+        ],
+        "symbolCount": 13,
+        "driftPercent": 15.384615384615385
+      },
+      {
+        "path": "src/analysis/detectors/BaseDetector.ts",
+        "conventions": [
+          "SCREAMING_SNAKE",
+          "camelCase"
+        ],
+        "symbolCount": 36,
+        "driftPercent": 2.7777777777777777
+      }
+    ],
+    "findings.unresolvedCallers": [
+      {
+        "caller_symbol_id": "src/analysis/commitIndexer.ts:method_indexCommit",
+        "caller_name": "indexCommit",
+        "caller_path": "src/analysis/commitIndexer.ts",
+        "callee_name": "function_set",
+        "guessed_target_dna_id": null,
+        "caller_line": 160,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/commitIndexer.ts:method_indexCommit",
+        "caller_name": "indexCommit",
+        "caller_path": "src/analysis/commitIndexer.ts",
+        "callee_name": "function_push",
+        "guessed_target_dna_id": null,
+        "caller_line": 160,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/commitIndexer.ts:method_indexCommit",
+        "caller_name": "indexCommit",
+        "caller_path": "src/analysis/commitIndexer.ts",
+        "callee_name": "function_map",
+        "guessed_target_dna_id": null,
+        "caller_line": 160,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/commitIndexer.ts:method_indexCommit",
+        "caller_name": "indexCommit",
+        "caller_path": "src/analysis/commitIndexer.ts",
+        "callee_name": "function_filter",
+        "guessed_target_dna_id": null,
+        "caller_line": 160,
+        "occurrence_count": 7,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/commitIndexer.ts:method_indexCommit",
+        "caller_name": "indexCommit",
+        "caller_path": "src/analysis/commitIndexer.ts",
+        "callee_name": "method_set",
+        "guessed_target_dna_id": null,
+        "caller_line": 160,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/commitIndexer.ts:method_indexCommit",
+        "caller_name": "indexCommit",
+        "caller_path": "src/analysis/commitIndexer.ts",
+        "callee_name": "method_push",
+        "guessed_target_dna_id": null,
+        "caller_line": 160,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/commitIndexer.ts:const_stmt",
+        "caller_name": "stmt",
+        "caller_path": "src/analysis/commitIndexer.ts",
+        "callee_name": "function_prepare",
+        "guessed_target_dna_id": null,
+        "caller_line": 804,
+        "occurrence_count": 8,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/commitIndexer.ts:const_stmt",
+        "caller_name": "stmt",
+        "caller_path": "src/analysis/commitIndexer.ts",
+        "callee_name": "method_prepare",
+        "guessed_target_dna_id": null,
+        "caller_line": 804,
+        "occurrence_count": 8,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/commitIndexer.ts:const_stmt",
+        "caller_name": "stmt",
+        "caller_path": "src/analysis/commitIndexer.ts",
+        "callee_name": "function_VALUES",
+        "guessed_target_dna_id": null,
+        "caller_line": 804,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/cstTimeline.ts:const_db",
+        "caller_name": "db",
+        "caller_path": "src/analysis/cstTimeline.ts",
+        "callee_name": "function_getDatabase",
+        "guessed_target_dna_id": null,
+        "caller_line": 227,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/cstTimeline.ts:method_ensureTableExists",
+        "caller_name": "ensureTableExists",
+        "caller_path": "src/analysis/cstTimeline.ts",
+        "callee_name": "function_prepare",
+        "guessed_target_dna_id": null,
+        "caller_line": 356,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/cstTimeline.ts:method_ensureTableExists",
+        "caller_name": "ensureTableExists",
+        "caller_path": "src/analysis/cstTimeline.ts",
+        "callee_name": "method_prepare",
+        "guessed_target_dna_id": null,
+        "caller_line": 356,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:const_output",
+        "caller_name": "output",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "function_execGit",
+        "guessed_target_dna_id": null,
+        "caller_line": 610,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:const_output",
+        "caller_name": "output",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "method_execGit",
+        "guessed_target_dna_id": null,
+        "caller_line": 610,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:const_lines",
+        "caller_name": "lines",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "function_split",
+        "guessed_target_dna_id": null,
+        "caller_line": 548,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:const_lines",
+        "caller_name": "lines",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "function_filter",
+        "guessed_target_dna_id": null,
+        "caller_line": 548,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:const_lines",
+        "caller_name": "lines",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "function_trim",
+        "guessed_target_dna_id": null,
+        "caller_line": 548,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:const_lines",
+        "caller_name": "lines",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "method_split",
+        "guessed_target_dna_id": null,
+        "caller_line": 548,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:const_lines",
+        "caller_name": "lines",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "method_trim",
+        "guessed_target_dna_id": null,
+        "caller_line": 548,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:method_getWorkingDirectoryChanges",
+        "caller_name": "getWorkingDirectoryChanges",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "function_includes",
+        "guessed_target_dna_id": null,
+        "caller_line": 374,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:method_getWorkingDirectoryChanges",
+        "caller_name": "getWorkingDirectoryChanges",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "method_includes",
+        "guessed_target_dna_id": null,
+        "caller_line": 374,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:method_getStagedFiles",
+        "caller_name": "getStagedFiles",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "function_charAt",
+        "guessed_target_dna_id": null,
+        "caller_line": 500,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:method_getStagedFiles",
+        "caller_name": "getStagedFiles",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "method_charAt",
+        "guessed_target_dna_id": null,
+        "caller_line": 500,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:method_getUnstagedFiles",
+        "caller_name": "getUnstagedFiles",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "function_charAt",
+        "guessed_target_dna_id": null,
+        "caller_line": 543,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/git.ts:method_getUnstagedFiles",
+        "caller_name": "getUnstagedFiles",
+        "caller_path": "src/analysis/git.ts",
+        "callee_name": "method_charAt",
+        "guessed_target_dna_id": null,
+        "caller_line": 543,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/hotspotDetector.ts:const_now",
+        "caller_name": "now",
+        "caller_path": "src/analysis/hotspotDetector.ts",
+        "callee_name": "function_Date",
+        "guessed_target_dna_id": null,
+        "caller_line": 743,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/hotspotDetector.ts:const_now",
+        "caller_name": "now",
+        "caller_path": "src/analysis/hotspotDetector.ts",
+        "callee_name": "function_toISOString",
+        "guessed_target_dna_id": null,
+        "caller_line": 743,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/hotspotDetector.ts:const_stmt",
+        "caller_name": "stmt",
+        "caller_path": "src/analysis/hotspotDetector.ts",
+        "callee_name": "function_getDatabase",
+        "guessed_target_dna_id": null,
+        "caller_line": 744,
+        "occurrence_count": 11,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/hotspotDetector.ts:const_stmt",
+        "caller_name": "stmt",
+        "caller_path": "src/analysis/hotspotDetector.ts",
+        "callee_name": "function_prepare",
+        "guessed_target_dna_id": null,
+        "caller_line": 744,
+        "occurrence_count": 14,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/hotspotDetector.ts:const_stmt",
+        "caller_name": "stmt",
+        "caller_path": "src/analysis/hotspotDetector.ts",
+        "callee_name": "function_VALUES",
+        "guessed_target_dna_id": null,
+        "caller_line": 744,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/hotspotDetector.ts:const_stmt",
+        "caller_name": "stmt",
+        "caller_path": "src/analysis/hotspotDetector.ts",
+        "callee_name": "method_getDatabase",
+        "guessed_target_dna_id": null,
+        "caller_line": 744,
+        "occurrence_count": 11,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/hotspotDetector.ts:const_rows",
+        "caller_name": "rows",
+        "caller_path": "src/analysis/hotspotDetector.ts",
+        "callee_name": "function_all",
+        "guessed_target_dna_id": null,
+        "caller_line": 653,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/hotspotDetector.ts:const_rows",
+        "caller_name": "rows",
+        "caller_path": "src/analysis/hotspotDetector.ts",
+        "callee_name": "method_all",
+        "guessed_target_dna_id": null,
+        "caller_line": 653,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/liveAnalysis.ts:method_analyze",
+        "caller_name": "analyze",
+        "caller_path": "src/analysis/liveAnalysis.ts",
+        "callee_name": "function_logDebug",
+        "guessed_target_dna_id": null,
+        "caller_line": 28,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_analyze",
+        "caller_name": "analyze",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "function_stringify",
+        "guessed_target_dna_id": null,
+        "caller_line": 22,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_analyze",
+        "caller_name": "analyze",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "function_log",
+        "guessed_target_dna_id": null,
+        "caller_line": 22,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_analyze",
+        "caller_name": "analyze",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "method_stringify",
+        "guessed_target_dna_id": null,
+        "caller_line": 22,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_analyze",
+        "caller_name": "analyze",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "method_log",
+        "guessed_target_dna_id": null,
+        "caller_line": 22,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:const_promptWithTimeline",
+        "caller_name": "promptWithTimeline",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "function_replace",
+        "guessed_target_dna_id": null,
+        "caller_line": 258,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_parseDriftResponse",
+        "caller_name": "parseDriftResponse",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "function_push",
+        "guessed_target_dna_id": null,
+        "caller_line": 462,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_parseDriftResponse",
+        "caller_name": "parseDriftResponse",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "function_includes",
+        "guessed_target_dna_id": null,
+        "caller_line": 462,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_parseDriftResponse",
+        "caller_name": "parseDriftResponse",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "method_push",
+        "guessed_target_dna_id": null,
+        "caller_line": 462,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_parseDriftResponse",
+        "caller_name": "parseDriftResponse",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "method_includes",
+        "guessed_target_dna_id": null,
+        "caller_line": 462,
+        "occurrence_count": 5,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_inferPriority",
+        "caller_name": "inferPriority",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "function_includes",
+        "guessed_target_dna_id": null,
+        "caller_line": 773,
+        "occurrence_count": 8,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_inferPriority",
+        "caller_name": "inferPriority",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "method_includes",
+        "guessed_target_dna_id": null,
+        "caller_line": 773,
+        "occurrence_count": 8,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_inferEffort",
+        "caller_name": "inferEffort",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "function_includes",
+        "guessed_target_dna_id": null,
+        "caller_line": 790,
+        "occurrence_count": 9,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_inferEffort",
+        "caller_name": "inferEffort",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "method_includes",
+        "guessed_target_dna_id": null,
+        "caller_line": 790,
+        "occurrence_count": 9,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_inferRisk",
+        "caller_name": "inferRisk",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "function_includes",
+        "guessed_target_dna_id": null,
+        "caller_line": 810,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/llmAnalyst/runner.ts:method_inferRisk",
+        "caller_name": "inferRisk",
+        "caller_path": "src/analysis/llmAnalyst/runner.ts",
+        "callee_name": "method_includes",
+        "guessed_target_dna_id": null,
+        "caller_line": 810,
+        "occurrence_count": 6,
+        "severity": 1
+      },
+      {
+        "caller_symbol_id": "src/analysis/movedBlockDetector.ts:const_db",
+        "caller_name": "db",
+        "caller_path": "src/analysis/movedBlockDetector.ts",
+        "callee_name": "function_getDatabase",
+        "guessed_target_dna_id": null,
+        "caller_line": 636,
+        "occurrence_count": 5,
+        "severity": 1
+      }
+    ],
+    "missing": [
+      {
+        "symbol_id": "86b5382ccb92c983",
+        "expected": {
+          "expect": "present",
+          "lastName": "config",
+          "lastPath": "src/analysis/cstExtractor.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "b9dd82808696531a",
+        "expected": {
+          "expect": "present",
+          "lastName": "DEFAULT_EXCLUDED_PREFIXES",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "4b5d7ec4bcfc24f3",
+        "expected": {
+          "expect": "present",
+          "lastName": "filterCache",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "93f038d0eb69528b",
+        "expected": {
+          "expect": "present",
+          "lastName": "shouldProcessPath",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "8896d84ab9a6c5ab",
+        "expected": {
+          "expect": "present",
+          "lastName": "normalized",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "399650ab3f6902fa",
+        "expected": {
+          "expect": "present",
+          "lastName": "excludedPrefixes",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "1c2e11d65aaa0d3e",
+        "expected": {
+          "expect": "present",
+          "lastName": "ext",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "8efcaa8222729e9e",
+        "expected": {
+          "expect": "present",
+          "lastName": "allowedExtensions",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "e2262022043bf46b",
+        "expected": {
+          "expect": "present",
+          "lastName": "cacheKey",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "dcb19cf1809fbd20",
+        "expected": {
+          "expect": "present",
+          "lastName": "cached",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "27ddf4d65b75940b",
+        "expected": {
+          "expect": "present",
+          "lastName": "ignoreMatcher",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "1d0857b5fb6ce555",
+        "expected": {
+          "expect": "present",
+          "lastName": "maxFileSize",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "62614a2b0601c51f",
+        "expected": {
+          "expect": "present",
+          "lastName": "cachedSize",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "47eb6d215ca49905",
+        "expected": {
+          "expect": "present",
+          "lastName": "fullPath",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "042240f92b65d102",
+        "expected": {
+          "expect": "present",
+          "lastName": "stats",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "34684e944fa7ce9d",
+        "expected": {
+          "expect": "present",
+          "lastName": "filterPath",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "ab31fe1e0e3f9d01",
+        "expected": {
+          "expect": "present",
+          "lastName": "shouldProcessPathWithLog",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "2b421f4fb69b2042",
+        "expected": {
+          "expect": "present",
+          "lastName": "result",
+          "lastPath": "src/utils/pathFilter.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "65d8adec7660b8d3",
+        "expected": {
+          "expect": "present",
+          "lastName": "describeVersionPosition",
+          "lastPath": "src/utils/timeline.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "159a96dbdef8f90a",
+        "expected": {
+          "expect": "present",
+          "lastName": "index",
+          "lastPath": "src/utils/timeline.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "8cacf166082214be",
+        "expected": {
+          "expect": "present",
+          "lastName": "distance",
+          "lastPath": "src/utils/timeline.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "43018e7deeb3c8ab",
+        "expected": {
+          "expect": "present",
+          "lastName": "timelineManager",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "06db86706f63e28b",
+        "expected": {
+          "expect": "present",
+          "lastName": "found",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "aac074d8fa25e7b6",
+        "expected": {
+          "expect": "present",
+          "lastName": "priorSha",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "1ad425e398d14718",
+        "expected": {
+          "expect": "present",
+          "lastName": "priorFactsForFile",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "8d54c3181adf95de",
+        "expected": {
+          "expect": "present",
+          "lastName": "missingFact",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "dbb2730f7a3cdb25",
+        "expected": {
+          "expect": "present",
+          "lastName": "factKey",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "0b5984a196570be3",
+        "expected": {
+          "expect": "present",
+          "lastName": "expected",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "50b3f334d62ca6c7",
+        "expected": {
+          "expect": "present",
+          "lastName": "recentDeltas",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "3e447d7f60209a0a",
+        "expected": {
+          "expect": "present",
+          "lastName": "hasModifications",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "cf45fdb57630ab9d",
+        "expected": {
+          "expect": "present",
+          "lastName": "priorFact",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "addc75e8eb24168f",
+        "expected": {
+          "expect": "present",
+          "lastName": "getHybridFactsForFile",
+          "lastPath": "src/analysis/hybridDriftDetector.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "b33291a99e4d6f6d",
+        "expected": {
+          "expect": "present",
+          "lastName": "isCstFact",
+          "lastPath": "src/types/cstFacts.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "74a62e847bdd8b25",
+        "expected": {
+          "expect": "present",
+          "lastName": "isSymbolInfo",
+          "lastPath": "src/types/cstFacts.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "44306b3ba3c5638a",
+        "expected": {
+          "expect": "present",
+          "lastName": "diffCst",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "6b657692880c888c",
+        "expected": {
+          "expect": "present",
+          "lastName": "language",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "ab9475289d750a1f",
+        "expected": {
+          "expect": "present",
+          "lastName": "oldTree",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "b37753fd205b9110",
+        "expected": {
+          "expect": "present",
+          "lastName": "newTree",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "6518fe2c2b128a76",
+        "expected": {
+          "expect": "present",
+          "lastName": "difftasticResult",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "647bd5585515d647",
+        "expected": {
+          "expect": "present",
+          "lastName": "mapDifftasticToFacts",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "b2aff7b239f07b44",
+        "expected": {
+          "expect": "present",
+          "lastName": "changedFacts",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "e918a6e044593725",
+        "expected": {
+          "expect": "present",
+          "lastName": "addedFacts",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "94b14d440ca0dcb7",
+        "expected": {
+          "expect": "present",
+          "lastName": "removedFacts",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "1f96897895c5a0b9",
+        "expected": {
+          "expect": "present",
+          "lastName": "oldFactMap",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "6775e8d85dbae689",
+        "expected": {
+          "expect": "present",
+          "lastName": "newFactMap",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "f74ed9882eaa0404",
+        "expected": {
+          "expect": "present",
+          "lastName": "oldFact",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "eb96ea1942ef908b",
+        "expected": {
+          "expect": "present",
+          "lastName": "oldByDna",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "4870b6328ce5615e",
+        "expected": {
+          "expect": "present",
+          "lastName": "delta",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "91401ea91e562af5",
+        "expected": {
+          "expect": "present",
+          "lastName": "isModified",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      },
+      {
+        "symbol_id": "e9d43dfac286fc59",
+        "expected": {
+          "expect": "present",
+          "lastName": "newByDna",
+          "lastPath": "src/analysis/cstDiff.ts",
+          "lastSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00"
+        }
+      }
+    ],
     "zombies": [],
-    "dead": [],
+    "dead": [
+      {
+        "symbol_id": "src/analysis/cstTimeline.ts:function_getCstTimelineManager",
+        "name": "getCstTimelineManager",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/analysis/cstTimeline.ts:function_getPriorVersionInChain",
+        "name": "getPriorVersionInChain",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/analysis/hybridDriftDetector.ts:function_getHybridFactsForFile",
+        "name": "getHybridFactsForFile",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/analysis/runner/steps/movedBlockStep.ts:function_getSymbolsForVersion",
+        "name": "getSymbolsForVersion",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/facts/factsAssembler.ts:function_getIntendedLists",
+        "name": "getIntendedLists",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/facts/factsAssembler.ts:function_getWorkingLists",
+        "name": "getWorkingLists",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/facts/factsAssembler.ts:function_getHybridFactsCount",
+        "name": "getHybridFactsCount",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/facts/legacyAudit.ts:function_isInScope",
+        "name": "isInScope",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/facts/legacyAudit.ts:function_isLikelyUtilityFunction",
+        "name": "isLikelyUtilityFunction",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/facts/legacyAudit.ts:function_isEntryPointLike",
+        "name": "isEntryPointLike",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/facts/legacyAudit.ts:function_hasSomeComplexity",
+        "name": "hasSomeComplexity",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/types/cstFacts.ts:function_isCstFact",
+        "name": "isCstFact",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/types/cstFacts.ts:function_isSymbolInfo",
+        "name": "isSymbolInfo",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/utils/supportedLanguages.ts:function_getRequiredLanguagesForExtensions",
+        "name": "getRequiredLanguagesForExtensions",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/utils/supportedLanguages.ts:function_getMissingWasmFiles",
+        "name": "getMissingWasmFiles",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/utils/supportedLanguages.ts:function_isCstOnlyLanguage",
+        "name": "isCstOnlyLanguage",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/extension.ts:function_getRepoContext",
+        "name": "getRepoContext",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/extension.ts:function_getCockpitProvider",
+        "name": "getCockpitProvider",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/extension.ts:function_getRefactorPipeline",
+        "name": "getRefactorPipeline",
+        "kind": "function"
+      },
+      {
+        "symbol_id": "src/metrics/movedBlockAdapter.ts:function_isFileRename",
+        "name": "isFileRename",
+        "kind": "function"
+      }
+    ],
     "legacyUsed": [],
     "replacedLeftovers": []
   }
@@ -285,7 +3008,7 @@ FACTS JSON:
 
 You are a senior engineer reviewing a refactor bundle. Using only the attached facts JSON:
 
-Timeline context: Timeline: unstaged → staged → HEAD → 66b4ad726dcc → ce81cf0e3c4e → c5e686bff558 (6 versions) (6 versions)
+Timeline context: Timeline: unstaged → staged → HEAD → 7bbd0eb5079e → 66b4ad726dcc → ce81cf0e3c4e (6 versions) (6 versions)
 Trace changes sequentially through the timeline to understand evolution.
 
 **PRIMARY TASK:** Identify the SINGLE most important insight about this refactor.

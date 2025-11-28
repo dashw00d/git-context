@@ -149,8 +149,8 @@ program
       const { StructuralDiffManager } = await import('../analysis/structuralDiffManager');
       const { RiskDetector } = await import('../analysis/heuristics');
       const { DependencyExtractor } = await import('../analysis/dependencies');
-      const { HotspotDetector } = await import('../analysis/hotspotDetector');
-      const { MovedBlockDetector } = await import('../analysis/movedBlockDetector');
+      const { HotspotDetectorV2 } = await import('../analysis/hotspotDetector');
+      const { MovedBlockDetectorV2 } = await import('../analysis/movedBlockDetector');
       const { getDatabaseManager } = await import('../storage/database');
 
       const db = getDatabaseManager().getDatabase();
@@ -161,8 +161,8 @@ program
       const snapshotManager = new SnapshotManager(db, symbolExtractor, dependencyExtractor);
       const structuralDiffManager = new StructuralDiffManager(db);
       const riskDetector = new RiskDetector();
-      const hotspotDetector = new HotspotDetector();
-      const movedBlockDetector = new MovedBlockDetector();
+      const hotspotDetector = new HotspotDetectorV2();
+      const movedBlockDetector = new MovedBlockDetectorV2();
 
       const commitIndexer = new CommitIndexer(
         db,

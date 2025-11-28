@@ -1,7 +1,10 @@
 import { getDatabaseManager } from '../storage/database';
+import { getDatabaseService, DatabaseService } from '../services/databaseService';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
 import * as crypto from 'crypto';
+import { BaseDetector, DetectorConfig } from './detectors/BaseDetector';
+import type { CommitFacts } from '../analysis/commitIndexer';
 
 export interface HotspotMetrics {
   commitFrequency: number;      // How often the entity changes (0-1)
@@ -49,7 +52,10 @@ export interface HotspotSnapshot {
 }
 
 export class HotspotDetector {
-  constructor(private dbManager = getDatabaseManager()) { }
+  constructor(
+    private dbManager = getDatabaseManager(),
+    private commitService: DatabaseService = getDatabaseService()
+  ) { }
 
   /**
    * Calculate hotspot score from metrics (0-100)
@@ -649,9 +655,7 @@ export class HotspotDetector {
   }
 
   private async getTotalCommitCount(): Promise<number> {
-    const stmt = this.dbManager.getDatabase().prepare(`SELECT count(*) as count FROM commits_metadata`);
-    const row = stmt.get() as any;
-    return row.count || 0;
+    return await this.commitService.countCommits();
   }
 
   private async getFileAuthorCount(filePath: string): Promise<number> {
@@ -742,5 +746,104 @@ export class HotspotDetector {
     if (result.changes > 0) {
       logDebug(`[HotspotDetector] Cleaned ${result.changes} expired cache entries`);
     }
+  }
+}
+
+/**
+ * Hotspot detector that extends BaseDetector for unified analysis patterns
+ * Delegates operational methods to legacy detector for backward compatibility
+ */
+export class HotspotDetectorV2 extends BaseDetector<CommitFacts[], Array<FileHotspot | SymbolHotspot>> {
+  private legacyDetector: HotspotDetector;
+
+  constructor(config: Partial<DetectorConfig> = {}) {
+    super({
+      enableCaching: true, // Enable caching for hotspot calculations
+      ...config
+    });
+    this.legacyDetector = new HotspotDetector();
+  }
+
+  /**
+   * Detect hotspots from commit facts (BaseDetector interface)
+   */
+  async detect(commitFacts: CommitFacts[]): Promise<Array<FileHotspot | SymbolHotspot>> {
+    return this.getCachedResult(this.generateCacheKey(commitFacts), async () => {
+      // For now, this is a wrapper that calls the existing detector methods
+      // In a full migration, this would compute hotspots from commit facts directly
+
+      // Get hotspots from the legacy detector
+      const fileHotspots = await this.legacyDetector.getTopFileHotspots(25);
+      const symbolHotspots = await this.legacyDetector.getTopSymbolHotspots(25);
+
+      return [...fileHotspots, ...symbolHotspots];
+    });
+  }
+
+  /**
+   * Update hotspot metrics for a file
+   * Delegates to legacy detector
+   */
+  async updateFileHotspot(
+    filePath: string,
+    sha: string,
+    symbolChanges: SymbolInfo[],
+    author?: string
+  ): Promise<void> {
+    return this.legacyDetector.updateFileHotspot(filePath, sha, symbolChanges, author);
+  }
+
+  /**
+   * Batch update hotspot metrics for multiple symbols
+   * Delegates to legacy detector
+   */
+  async batchUpdateSymbols(
+    symbols: SymbolInfo[],
+    sha: string
+  ): Promise<void> {
+    return this.legacyDetector.batchUpdateSymbols(symbols, sha);
+  }
+
+  /**
+   * Get top N hotspot files
+   * Delegates to legacy detector
+   */
+  async getTopFileHotspots(limit: number = 20): Promise<FileHotspot[]> {
+    return this.legacyDetector.getTopFileHotspots(limit);
+  }
+
+  /**
+   * Get top N hotspot symbols
+   * Delegates to legacy detector
+   */
+  async getTopSymbolHotspots(
+    limit: number = 20,
+    filterByFile?: string
+  ): Promise<SymbolHotspot[]> {
+    return this.legacyDetector.getTopSymbolHotspots(limit, filterByFile);
+  }
+
+  /**
+   * Calculate hotspot score from metrics
+   * Delegates to legacy detector
+   */
+  calculateHotspotScore(metrics: HotspotMetrics): number {
+    return this.legacyDetector.calculateHotspotScore(metrics);
+  }
+
+  /**
+   * Classify risk level based on hotspot score
+   * Delegates to legacy detector
+   */
+  classifyRiskLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
+    return this.legacyDetector.classifyRiskLevel(score);
+  }
+
+  /**
+   * Create periodic snapshot for trend analysis
+   * Delegates to legacy detector
+   */
+  async createSnapshot(sha: string): Promise<void> {
+    return this.legacyDetector.createSnapshot(sha);
   }
 }

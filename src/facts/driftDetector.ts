@@ -4,6 +4,8 @@ import { WorkingSnapshot } from './workingSnapshot';
 import { getDatabaseManager } from '../storage/database';
 import { NamingConvention, analyzeConventionDrift, suggestConventionName } from '../analysis/namingConventions';
 import type { HybridFact, CstFact } from '../types/cstFacts';
+import { BaseDetector, DetectorConfig } from '../analysis/detectors/BaseDetector';
+import type { ScopeSet } from './scope';
 
 export interface DriftFindings {
   missing_symbols: Array<{symbol_id: string, expected: IntendedState, introducedAtVersion?: string, resolvedAtVersion?: string, versionDescription?: string}>;
@@ -645,5 +647,36 @@ function detectConventionDrift(
   } catch (error) {
     console.warn('Failed to detect convention drift:', error);
     return null;
+  }
+}
+
+/**
+ * Input type for drift detection
+ */
+export interface DriftDetectorInput {
+  intended: Map<string, IntendedState>;
+  working: WorkingSnapshot;
+  commitShas?: string[];
+}
+
+/**
+ * Drift detector that extends BaseDetector for unified analysis patterns
+ */
+export class DriftDetector extends BaseDetector<DriftDetectorInput, DriftFindings> {
+  constructor(config: Partial<DetectorConfig> = {}) {
+    super({
+      enableCaching: false, // Drift detection should always be fresh
+      ...config
+    });
+  }
+
+  async detect(input: DriftDetectorInput): Promise<DriftFindings> {
+    return this.getCachedResult(
+      this.generateCacheKey(input.intended, input.working, input.commitShas),
+      async () => {
+        // Call the existing detectDrift function with proper inputs
+        return detectDrift(input.intended, input.working, input.commitShas);
+      }
+    );
   }
 }

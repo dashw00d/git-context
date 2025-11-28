@@ -238,6 +238,15 @@ export interface ExtensionConfig {
   
   // Path filtering config
   excludedPrefixes?: string[];  // Hardcoded path prefixes to exclude (defaults: out/, dist/, node_modules/, .git/, build/, coverage/)
+  
+  // Detector thresholds config
+  detectorThresholds?: {
+    similarityMin?: number;      // Minimum similarity score (0.0-1.0)
+    confidenceMin?: number;      // Minimum confidence score (0.0-1.0)
+    changeThreshold?: number;    // Minimum change count for significance
+    maxGroupSize?: number;       // Maximum size of groups to process
+    scoreWeight?: number;        // Weight multiplier for scoring
+  };
 }
 
 // Context values for tree items (used in package.json menus and tree item identification)

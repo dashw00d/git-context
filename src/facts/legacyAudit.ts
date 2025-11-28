@@ -2,6 +2,7 @@ import { SymbolContext, EdgeContext } from '../contracts/llmContext';
 import { IntendedState } from './intendedMap';
 import { WorkingSnapshot } from './workingSnapshot';
 import { ScopeSet } from './scope';
+import { BaseDetector, DetectorConfig } from '../analysis/detectors/BaseDetector';
 
 export interface LegacyAuditResult {
   dead: SymbolContext[];
@@ -528,4 +529,35 @@ function extractParameters(signature: string): string[] {
       return typeMatch ? typeMatch[1] : trimmed;
     })
     .filter(param => param.length > 0);
+}
+
+/**
+ * Input type for legacy audit detection
+ */
+export interface LegacyDetectorInput {
+  intended: Map<string, IntendedState>;
+  working: WorkingSnapshot;
+  scope: ScopeSet;
+}
+
+/**
+ * Legacy audit detector that extends BaseDetector for unified analysis patterns
+ */
+export class LegacyDetector extends BaseDetector<LegacyDetectorInput, LegacyAuditResult> {
+  constructor(config: Partial<DetectorConfig> = {}) {
+    super({
+      enableCaching: false, // Legacy detection should always be fresh
+      ...config
+    });
+  }
+
+  async detect(input: LegacyDetectorInput): Promise<LegacyAuditResult> {
+    return this.getCachedResult(
+      this.generateCacheKey(input.intended, input.working, input.scope),
+      async () => {
+        // Call the existing auditLegacy function with proper inputs
+        return await auditLegacy(input.intended, input.working, input.scope);
+      }
+    );
+  }
 }

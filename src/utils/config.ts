@@ -83,17 +83,17 @@ function loadConfigFile(): Partial<ExtensionConfig> | null {
 }
 
 /**
- * Create a matcher function for custom ignore paths with gitignore-like pattern support
- * Supports:
+ * Create a matcher function for custom ignore paths using gitignore syntax
+ * Uses the 'ignore' package which implements the .gitignore spec
+ * 
+ * Supports all standard gitignore patterns:
  * - Negation: !pattern (un-ignore, overrides earlier matches)
- * - Recursive directory: path/** or /path/** (matches everything inside recursively)
- * - Directory patterns: /path/* or path/* (matches files directly in directory, one level)
- * - Absolute patterns: /path (matches from root only)
- * - Simple patterns: path (matches if path contains this)
+ * - Recursive directory: path/** (matches everything inside recursively)
+ * - Wildcards: *.js, test?.js
+ * - Directory patterns: /path/ or path/
+ * - And more...
  * 
- * Patterns are processed in order, so negations can override earlier matches.
- * 
- * @param ignorePaths - Array of ignore patterns (may include spaces that need trimming)
+ * @param ignorePaths - Array of gitignore patterns
  * @returns Function that returns true if filePath should be ignored
  */
 export function createCustomIgnoreMatcher(ignorePaths: string[] | null | undefined): (filePath: string) => boolean {
@@ -101,116 +101,25 @@ export function createCustomIgnoreMatcher(ignorePaths: string[] | null | undefin
     return () => false;
   }
 
-  // Parse patterns: trim, filter empty, and extract metadata
-  const patterns = ignorePaths
-    .map(pattern => pattern.trim())
-    .filter(Boolean)
-    .map(pattern => {
-      const isNegation = pattern.startsWith('!');
-      const cleanPattern = isNegation ? pattern.slice(1).trim() : pattern;
-      const isRecursive = cleanPattern.endsWith('/**') || cleanPattern.endsWith('/**/');
-      const isDirectory = cleanPattern.endsWith('/*') || cleanPattern.endsWith('/') || isRecursive;
-      let normalizedPattern = cleanPattern.replace(/\/+$/, ''); // Remove trailing slashes
-      
-      // Check if absolute BEFORE removing /** suffix (for /** pattern)
-      const wasAbsolute = normalizedPattern.startsWith('/');
-      
-      // Remove /** suffix for recursive patterns
-      if (normalizedPattern.endsWith('/**')) {
-        normalizedPattern = normalizedPattern.slice(0, -3);
-      }
-      const isAbsolute = normalizedPattern.startsWith('/') || (normalizedPattern === '' && wasAbsolute);
+  // Use the 'ignore' package for proper gitignore pattern matching
+  const ignore = require('ignore');
+  const ig = ignore();
 
-      return {
-        pattern: normalizedPattern,
-        isNegation,
-        isDirectory,
-        isAbsolute,
-        isRecursive
-      };
-    });
+  // Add patterns (trim and filter empty)
+  const cleanedPatterns = ignorePaths
+    .map(pattern => pattern.trim())
+    .filter(Boolean);
+
+  if (cleanedPatterns.length === 0) {
+    return () => false;
+  }
+
+  ig.add(cleanedPatterns);
 
   return (filePath: string): boolean => {
-    // Normalize path (use forward slashes)
-    const normalizedPath = filePath.replace(/\\/g, '/');
-    let shouldIgnore = false;
-
-    // Process patterns in order (negations can override earlier matches)
-    for (const { pattern, isNegation, isDirectory, isAbsolute, isRecursive } of patterns) {
-      let matches = false;
-
-      if (isDirectory) {
-        if (isRecursive) {
-          // Recursive pattern: path/** or /path/** matches everything inside recursively
-          if (pattern === '' && isAbsolute) {
-            // Special case: /** matches everything
-            matches = true;
-          } else if (isAbsolute) {
-            // Absolute from root: /path/** matches "path/file.ts", "path/sub/file.ts", etc.
-            // but NOT "src/path/file.ts"
-            matches = normalizedPath.startsWith(pattern + '/') || normalizedPath === pattern;
-          } else {
-            // Relative: path/** matches "path/file.ts", "path/sub/file.ts", "src/path/sub/file.ts", etc.
-            matches = normalizedPath.startsWith(pattern + '/') ||
-                      normalizedPath.includes('/' + pattern + '/') ||
-                      normalizedPath === pattern;
-          }
-        } else {
-          // Non-recursive directory pattern: /path/* or path/* matches files directly in that directory (one level)
-          const dirPattern = pattern;
-          
-          if (isAbsolute) {
-            // Absolute from root: /path/* matches "path/file.ts" but not "path/sub/file.ts" or "src/path/file.ts"
-            // Check that path starts with pattern/ and has exactly one more segment
-            if (normalizedPath.startsWith(dirPattern + '/')) {
-              const remaining = normalizedPath.slice(dirPattern.length + 1);
-              matches = !remaining.includes('/'); // No more slashes = direct child
-            } else {
-              matches = false;
-            }
-          } else {
-            // Relative: path/* matches "path/file.ts" or "src/path/file.ts" (one level deep)
-            // Find where pattern appears and check it's followed by exactly one segment
-            const patternIndex = normalizedPath.indexOf(dirPattern);
-            if (patternIndex >= 0) {
-              const afterPattern = normalizedPath.slice(patternIndex + dirPattern.length);
-              if (afterPattern.startsWith('/')) {
-                const remaining = afterPattern.slice(1);
-                matches = !remaining.includes('/'); // No more slashes = direct child
-              } else {
-                matches = false;
-              }
-            } else {
-              matches = false;
-            }
-          }
-        }
-      } else {
-        // Simple pattern matching
-        if (isAbsolute) {
-          // Absolute: /path matches "path/file.ts" but not "src/path/file.ts"
-          matches = normalizedPath.startsWith(pattern + '/') || normalizedPath === pattern;
-        } else {
-          // Relative: path matches if path contains this segment
-          matches = normalizedPath.includes('/' + pattern + '/') ||
-                    normalizedPath.startsWith(pattern + '/') ||
-                    normalizedPath.endsWith('/' + pattern) ||
-                    normalizedPath === pattern;
-        }
-      }
-
-      if (matches) {
-        if (isNegation) {
-          // Negation pattern: un-ignore this path (override earlier matches)
-          shouldIgnore = false;
-        } else {
-          // Regular pattern: ignore this path
-          shouldIgnore = true;
-        }
-      }
-    }
-
-    return shouldIgnore;
+    // Normalize path (use forward slashes, remove leading slash if present)
+    const normalizedPath = filePath.replace(/\\/g, '/').replace(/^\/+/, '');
+    return ig.ignores(normalizedPath);
   };
 }
 
@@ -253,7 +162,9 @@ export function getExtensionConfig(): ExtensionConfig {
       snapshotCacheSize: fileConfig?.snapshotCacheSize || config.get('snapshotCacheSize') || 50,
       snapshotCacheTTL: fileConfig?.snapshotCacheTTL || config.get('snapshotCacheTTL') || 3600,
       // Path filtering config
-      excludedPrefixes: fileConfig?.excludedPrefixes || config.get('excludedPrefixes')
+      excludedPrefixes: fileConfig?.excludedPrefixes || config.get('excludedPrefixes'),
+      // Detector thresholds config
+      detectorThresholds: fileConfig?.detectorThresholds || config.get('detectorThresholds')
     };
   } else {
     // CLI/Test fallback: config file > environment variables > package.json defaults
@@ -288,7 +199,9 @@ export function getExtensionConfig(): ExtensionConfig {
       snapshotCacheSize: fileConfig?.snapshotCacheSize || (process.env.SNAPSHOT_CACHE_SIZE ? parseInt(process.env.SNAPSHOT_CACHE_SIZE) : getPackageJsonDefault('snapshotCacheSize') || 50),
       snapshotCacheTTL: fileConfig?.snapshotCacheTTL || (process.env.SNAPSHOT_CACHE_TTL ? parseInt(process.env.SNAPSHOT_CACHE_TTL) : getPackageJsonDefault('snapshotCacheTTL') || 3600),
       // Path filtering config
-      excludedPrefixes: fileConfig?.excludedPrefixes || (process.env.EXCLUDED_PREFIXES ? process.env.EXCLUDED_PREFIXES.split(',').map(s => s.trim()).filter(Boolean) : getPackageJsonDefault('excludedPrefixes'))
+      excludedPrefixes: fileConfig?.excludedPrefixes || (process.env.EXCLUDED_PREFIXES ? process.env.EXCLUDED_PREFIXES.split(',').map(s => s.trim()).filter(Boolean) : getPackageJsonDefault('excludedPrefixes')),
+      // Detector thresholds config
+      detectorThresholds: fileConfig?.detectorThresholds || (process.env.DETECTOR_THRESHOLDS ? JSON.parse(process.env.DETECTOR_THRESHOLDS) : getPackageJsonDefault('detectorThresholds'))
     };
   }
 }
@@ -297,36 +210,36 @@ export function getExtensionConfig(): ExtensionConfig {
 if (vscode) {
   vscode.workspace.onDidChangeConfiguration((e: any) => {
     if (e.affectsConfiguration('git-context.allowedExtensions') ||
-        e.affectsConfiguration('git-context.enableCstTracking') ||
-        e.affectsConfiguration('git-context.enableCstAugmentation') ||
-        e.affectsConfiguration('git-context.cstLanguages')) {
+      e.affectsConfiguration('git-context.enableCstTracking') ||
+      e.affectsConfiguration('git-context.enableCstAugmentation') ||
+      e.affectsConfiguration('git-context.cstLanguages')) {
       invalidateSupportedLanguagesCache();
-      
+
       // Check if WASM files are missing for new extensions (async check)
       (async () => {
         try {
           const { getSupportedExtensions, getRequiredLanguagesForExtensions } = await import('./supportedLanguages');
           const fs = require('fs');
           const path = require('path');
-          
+
           const extensions = getSupportedExtensions();
           const requiredLangs = getRequiredLanguagesForExtensions(extensions);
           const wasmDir = path.join(__dirname, '..', '..', 'out', 'wasm');
-          
+
           const missingLangs = requiredLangs.filter((lang: string) => {
             const wasmPath = path.join(wasmDir, `tree-sitter-${lang}.wasm`);
             // Also check old location for migration
             const oldWasmPath = path.join(__dirname, '..', '..', 'out', `tree-sitter-${lang}.wasm`);
             return !fs.existsSync(wasmPath) && !fs.existsSync(oldWasmPath);
           });
-          
+
           if (missingLangs.length > 0) {
             const action = await vscode.window.showInformationMessage(
               `Missing WASM files for languages: ${missingLangs.join(', ')}. Would you like to download them?`,
               'Download',
               'Later'
             );
-            
+
             if (action === 'Download') {
               vscode.commands.executeCommand('git-context.downloadWasmFiles');
             }

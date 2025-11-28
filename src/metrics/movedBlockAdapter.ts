@@ -5,7 +5,7 @@
  * Provides moved block detection metrics for tests
  */
 
-import { MovedBlockDetector, MovedBlockResult } from '../analysis/movedBlockDetector';
+import { MovedBlockDetectorV2, MovedBlockResult } from '../analysis/movedBlockDetector';
 import { SymbolInfo } from '../types';
 
 export interface MovedBlockMetrics {
@@ -62,7 +62,7 @@ export async function detectMovedBlocksFromFacts(
     }));
 
     // Create detector and run detection
-    const detector = new MovedBlockDetector();
+    const detector = new MovedBlockDetectorV2();
     const result: MovedBlockResult = await detector.detectMovedBlocks(
       'test-commit-sha',
       deletedSymbolInfos,

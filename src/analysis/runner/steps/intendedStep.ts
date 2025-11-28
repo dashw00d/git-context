@@ -1,6 +1,6 @@
 import { PipelineStep, PipelineState } from '../pipelineTypes';
 import { buildIntendedMap } from '../../../facts/intendedMap';
-import { HotspotDetector } from '../../hotspotDetector';
+import { HotspotDetectorV2 } from '../../hotspotDetector';
 
 export function createIntendedStep(): PipelineStep {
   return {
@@ -19,7 +19,7 @@ export function createIntendedStep(): PipelineStep {
         
         // Fallback: seed from hotspots if empty
         try {
-          const hotspotDetector = new HotspotDetector();
+          const hotspotDetector = new HotspotDetectorV2();
           const hotspots = await hotspotDetector.getTopSymbolHotspots(50);
           
           for (const hotspot of hotspots) {

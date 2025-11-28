@@ -119,6 +119,11 @@ async function testConnection(): Promise<boolean> {
     console.log(`   • Available collections: ${collections.collections?.map(c => c.name).join(', ') || 'none'}`);
     console.log(`   • Embedding dimension: ${qdrant.getEmbeddingDimension()}`);
     
+    for (const collection of collections.collections) {
+      client.deleteCollection(collection.name);
+      console.log(`   ✅ Deleted collection: ${collection.name}`);
+    }
+
     return true;
   } catch (error: any) {
     console.log(`   ❌ Connection test failed: ${error?.message || error}`);

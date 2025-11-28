@@ -9,8 +9,8 @@ import { SnapshotManager } from '../src/analysis/snapshotManager';
 import { StructuralDiffManager } from '../src/analysis/structuralDiffManager';
 import { WorkspaceIndexer } from '../src/analysis/workspaceIndexer';
 import { RiskDetector } from '../src/analysis/heuristics';
-import { HotspotDetector } from '../src/analysis/hotspotDetector';
-import { MovedBlockDetector } from '../src/analysis/movedBlockDetector';
+import { HotspotDetectorV2 } from '../src/analysis/hotspotDetector';
+import { MovedBlockDetectorV2 } from '../src/analysis/movedBlockDetector';
 import { CommitIndexer } from '../src/analysis/commitIndexer';
 import { EmbeddingIndexer } from '../src/analysis/embeddingIndexer';
 import { LlmAnalyst } from '../src/analysis/llmAnalyst/runner';
@@ -319,7 +319,7 @@ function deleteDatabaseIfRequested(reset: boolean) {
     const gitRoot = config.getGitRoot?.();
     if (!gitRoot) return;
     const dbPath = path.join(gitRoot, '.git', 'commit-tracker', 'commit_tracker.db');
-    
+
     // Close and clear the database manager's reference first
     const { getDatabaseManager } = require('../src/storage/database');
     const dbManager = getDatabaseManager();
@@ -332,13 +332,13 @@ function deleteDatabaseIfRequested(reset: boolean) {
         console.log(`🧹 Database connection already closed or not initialized`);
       }
     }
-    
+
     // Then delete the file
     if (fs.existsSync(dbPath)) {
       fs.unlinkSync(dbPath);
       console.log(`🧹 Deleted existing database file at ${dbPath}`);
     }
-    
+
     // Also delete any journal/wal files that might exist
     const journalPath = `${dbPath}-journal`;
     const walPath = `${dbPath}-wal`;
@@ -398,7 +398,7 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
     const { PROMPT_INTENT_AND_STORY, PROMPT_DRIFT_VERIFICATION, PROMPT_CLEANUP_PLAN, PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT, buildTimelineSummary } = await import('../src/llm/prompts');
     const { AnalysisBlockUtils } = await import('../src/analysis/llmAnalyst/blocks');
     const { getExtensionConfig } = await import('../src/utils/config');
-    
+
     const startTime = Date.now();
     let totalTokens = 0;
     let totalCalls = 0;
@@ -411,14 +411,14 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
     const factsJson = JSON.stringify(facts);
     const factsSize = factsJson.length;
     let processedFacts = facts;
-    
+
     if (factsSize > maxInputChars) {
       console.log(`LLM Analyst: Facts size (${factsSize} chars) exceeds max (${maxInputChars}), summarizing...`);
       processedFacts = this.summarizeFactsHelper(facts);
       const summarizedSize = JSON.stringify(processedFacts).length;
       console.log(`LLM Analyst: Summarized to ${summarizedSize} chars (${((1 - summarizedSize / factsSize) * 100).toFixed(1)}% reduction)`);
     }
-    
+
     // Capture summarized facts (always capture, even if not summarized)
     this.capturedData.summarizedFacts = processedFacts;
 
@@ -432,7 +432,7 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
         .replace('{versionCount}', String(timelineInfo.count));
       const intentPrompt = this.buildPromptHelper(promptWithTimeline, processedFacts);
       this.capturedData.prompts.intent = intentPrompt;
-      
+
       const intentBlock = AnalysisBlockUtils.createBlock('intent', 'Refactor Intent & Story', 'intent');
       intentBlock.claims = []; // Mock empty claims
       totalCalls++;
@@ -446,7 +446,7 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
         .replace('{versionCount}', String(driftTimelineInfo.count));
       const driftPrompt = this.buildPromptHelper(driftPromptWithTimeline, processedFacts);
       this.capturedData.prompts.drift = driftPrompt;
-      
+
       const driftBlock = AnalysisBlockUtils.createBlock('drift', 'Drift Verification', 'drift');
       driftBlock.claims = [];
       driftBlock.actions = [];
@@ -461,7 +461,7 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
         .replace('{versionCount}', String(cleanupTimelineInfo.count));
       const cleanupPrompt = this.buildPromptHelper(cleanupPromptWithTimeline, processedFacts);
       this.capturedData.prompts.cleanup = cleanupPrompt;
-      
+
       const cleanupBlock = AnalysisBlockUtils.createBlock('cleanup', 'Cleanup Plan', 'cleanup');
       cleanupBlock.claims = [];
       cleanupBlock.actions = [];
@@ -535,7 +535,7 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
   async discoverPatterns(rawFeed: any, facts: RefactorBundleFacts): Promise<any> {
     const { PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT } = await import('../src/llm/prompts');
     const knownFiles = (facts.evidence['scope.files'] as string[]) || [];
-    const knownFilesList = knownFiles.length > 0 
+    const knownFilesList = knownFiles.length > 0
       ? `\n\nKNOWN FILES (ONLY use these in examples):\n${JSON.stringify(knownFiles)}\n\n`
       : '\n\n';
 
@@ -593,12 +593,12 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
    */
   private summarizeFactsHelper(facts: RefactorBundleFacts): RefactorBundleFacts {
     const summarized = { ...facts };
-    
+
     if (summarized.evidence && Array.isArray(summarized.evidence['working.symbols'])) {
       const symbols = summarized.evidence['working.symbols'] as string[];
       summarized.evidence['working.symbols'] = symbols.slice(0, 20);
     }
-    
+
     if (summarized.evidence && Array.isArray(summarized.evidence['working.edges'])) {
       const edges = summarized.evidence['working.edges'] as string[];
       const edgeCounts = new Map<string, number>();
@@ -609,14 +609,14 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
       }
       summarized.evidence['working.edges'] = Array.from(edgeCounts.entries()).map(([type, count]) => `${type}: ${count}`);
     }
-    
+
     const maxEvidenceItems = 50;
     for (const key in summarized.evidence) {
       if (Array.isArray(summarized.evidence[key]) && summarized.evidence[key].length > maxEvidenceItems) {
         summarized.evidence[key] = summarized.evidence[key].slice(0, maxEvidenceItems);
       }
     }
-    
+
     return summarized;
   }
 
@@ -693,11 +693,10 @@ async function main() {
     console.log('🔧 Snapshot cache: size increased to 500 for diagnostics');
   }
 
-  // Ignore everything except /src/** to isolate analysis to source code only
-  // Use recursive patterns (**) and negation (!) to isolate to /src
-  process.env.CUSTOM_IGNORE_PATHS = 'benchmarks/**, scripts/**, resources/**, media/**, docs/**, binaries/**, archive/**, .claude/**, .kilocode/**, .cursor/**, .git/**, .vscode/**, /**';
-  process.env.CUSTOM_IGNORE_PATHS += ', !/src/**';
-  console.log('🔧 Ignore paths: isolating to /src/** (all other paths ignored recursively)');
+  // Ignore everything except /src/** using gitignore syntax that works with 'ignore' package
+  // Pattern: /* matches top-level dirs, then !/src un-ignores src
+  process.env.CUSTOM_IGNORE_PATHS = '/*, !/src';
+  console.log('🔧 Ignore paths: isolating to src/** (all other top-level paths ignored)');
 
   const git = new GitOperations();
   const symbolExtractor = new SymbolExtractor(git);
@@ -710,8 +709,8 @@ async function main() {
   }
   const structuralDiffManager = new StructuralDiffManager(db);
   const riskDetector = new RiskDetector();
-  const hotspotDetector = new HotspotDetector();
-  const movedBlockDetector = new MovedBlockDetector(getDatabaseManager(), git);
+  const hotspotDetector = new HotspotDetectorV2();
+  const movedBlockDetector = new MovedBlockDetectorV2();
   const llmAnalyst = new PromptCaptureLlmAnalyst();
   const storyEngine = new BundleStoryEngine(llmAnalyst);
 
@@ -889,7 +888,7 @@ async function main() {
       if (stepId === 'llm_story') {
         // Get captured data from the wrapper
         const capturedData = (llmAnalyst as PromptCaptureLlmAnalyst).getCapturedData();
-        
+
         // Save summarized facts to file
         if (capturedData.summarizedFacts) {
           const outDir = path.join(process.cwd(), 'benchmarks', 'output');
@@ -908,7 +907,7 @@ async function main() {
         }
 
         const promptFiles: Array<{ phase: string; path: string; size: number }> = [];
-        
+
         if (capturedData.prompts.intent) {
           const intentPath = path.join(outDir, 'llm_prompt_intent.txt');
           fs.writeFileSync(intentPath, capturedData.prompts.intent);
@@ -1481,7 +1480,7 @@ async function validateHybridFactsDatabase(db: any, commitShas: string[], explic
     if (explicitTimeline.length > 0) {
       console.log(`\n🔬 Testing Timeline Manager Retrieval...`);
       const timelineManager = getCstTimelineManager();
-      
+
       // Get sample files with facts
       const filesStmt = db.prepare(`
         SELECT DISTINCT file_path 
@@ -1489,13 +1488,13 @@ async function validateHybridFactsDatabase(db: any, commitShas: string[], explic
         LIMIT 10
       `);
       const sampleFiles = filesStmt.all() as Array<{ file_path: string }>;
-      
+
       if (sampleFiles.length > 0) {
         console.log(`   Testing ${sampleFiles.length} sample files across ${explicitTimeline.length} versions`);
-        
+
         let successCount = 0;
         let failureCount = 0;
-        
+
         for (const { file_path } of sampleFiles) {
           for (const version of explicitTimeline) {
             try {
@@ -1509,18 +1508,18 @@ async function validateHybridFactsDatabase(db: any, commitShas: string[], explic
             }
           }
         }
-        
+
         console.log(`   ✅ Successful retrievals: ${successCount}`);
         if (failureCount > 0) {
           console.log(`   ⚠️  Failed retrievals: ${failureCount}`);
         }
-        
+
         // Test batch retrieval
         if (sampleFiles.length > 0 && explicitTimeline.length > 0) {
           console.log(`\n🔬 Testing Batch Retrieval...`);
           const testVersion = explicitTimeline[0];
           const testFiles = sampleFiles.slice(0, 5).map(f => f.file_path);
-          
+
           try {
             const batchFacts = await timelineManager.getPriorFactsBatch(testFiles, testVersion);
             console.log(`   ✅ Batch retrieval: ${batchFacts.size} files, ${Array.from(batchFacts.values()).reduce((sum, facts) => sum + facts.length, 0)} total facts`);

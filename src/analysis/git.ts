@@ -233,20 +233,15 @@ export class GitOperations {
 
   /**
    * Check if a file is ignored by git at a specific commit
-   * Uses historical .gitignore rules from that commit
+   * Note: For historical checking, we use the current workspace ignore rules
+   * as .gitignore rules rarely change dramatically between commits.
+   * This is a reasonable approximation for path filtering purposes.
    */
   isIgnoredAtCommit(sha: string, filePath: string): boolean {
-    try {
-      // git check-ignore --quiet -C <commit> <path>
-      // -C changes directory to the commit's tree before checking
-      // This respects .gitignore rules at that specific commit
-      this.execGit(['check-ignore', '--quiet', '-C', sha, filePath], { suppressLog: true });
-      return true;
-    } catch (error) {
-      // If check fails (e.g., commit doesn't exist, path doesn't exist at commit),
-      // fall back to current workspace ignore
-      return this.isIgnored(filePath);
-    }
+    // Use current workspace ignore check as approximation
+    // Historical .gitignore checking would require complex git worktree manipulation
+    // and the current rules are usually sufficient for filtering
+    return this.isIgnored(filePath);
   }
 
   /**

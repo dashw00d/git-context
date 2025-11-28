@@ -86,63 +86,57 @@ export class ContextExporter {
    * Build context for a single commit
    */
   private async buildCommitContext(sha: string): Promise<CommitContext> {
-    const db = getDatabaseManager().getDatabase();
+    const { getDatabaseService } = await import('../services/databaseService');
+    const dbService = getDatabaseService();
 
-    // Get commit info
-    const commitStmt = db.prepare(`
-      SELECT * FROM commits_metadata WHERE sha = ?
-    `);
-    const commitRow = commitStmt.get(sha) as any;
+    // Get commit info using service
+    const commitMetadata = await dbService.getCommitMetadata(sha);
 
-    if (!commitRow) {
+    if (!commitMetadata) {
       throw new Error(`Commit ${sha} not found in database`);
     }
 
-    // Get files
-    const filesStmt = db.prepare(`
-      SELECT * FROM files WHERE sha = ?
-    `);
-    const fileRows = filesStmt.all(sha) as any[];
+    // Get analysis data using service
+    const analysisRow = await dbService.getCommitAnalysis(sha);
+
+    // Get files using service
+    const fileRows = await dbService.getFilesByCommit(sha);
 
     const files: FileContext[] = [];
     for (const fileRow of fileRows) {
       files.push(await this.buildFileContext(sha, fileRow));
     }
 
-    // Get edges
-    const edgesStmt = db.prepare(`
-      SELECT * FROM edges WHERE sha = ?
-    `);
-    const edgeRows = edgesStmt.all(sha) as any[];
-
-    const edges: EdgeContext[] = edgeRows.map(edge => ({
-      from_symbol_id: edge.from_symbol_id,
-      to_symbol_id: edge.to_symbol_id,
-      edge_type: (edge.edge_type || 'unknown') as any,
-      change_type: edge.change_type as any,
+    // Get edges using service
+    const edgeInfos = await dbService.queryEdgesByCommit(sha);
+    const edges: EdgeContext[] = edgeInfos.map(edge => ({
+      from_symbol_id: edge.from,
+      to_symbol_id: edge.to,
+      edge_type: edge.type || 'unknown' as any,
+      change_type: 'added' as any, // TODO: Add change_type to EdgeInfo interface
       confidence: edge.confidence || 1.0,
-      is_resolved: Boolean(edge.is_resolved ?? 1)
+      is_resolved: Boolean(edge.isResolved ?? true)
     }));
 
     // Parse risks
-    const risks = JSON.parse(commitRow.risks || '[]');
+    const risks = JSON.parse(analysisRow?.risks || '[]');
 
     return {
       sha,
-      parent_sha: commitRow.parent_sha,
-      message: commitRow.message,
-      author: commitRow.author,
-      date: commitRow.date,
+      parent_sha: commitMetadata.parent || undefined,
+      message: commitMetadata.message,
+      author: commitMetadata.author,
+      date: commitMetadata.date.toISOString(),
       stats: {
-        files: commitRow.files_changed,
-        added: commitRow.symbols_added,
-        modified: commitRow.symbols_modified,
-        removed: commitRow.symbols_removed
+        files: commitMetadata.filesChanged,
+        added: analysisRow?.symbols_added || 0,
+        modified: analysisRow?.symbols_modified || 0,
+        removed: analysisRow?.symbols_removed || 0
       },
       files,
       risks,
       edges,
-      llm_summary: commitRow.summary_md
+      llm_summary: analysisRow?.summary_md
     };
   }
 

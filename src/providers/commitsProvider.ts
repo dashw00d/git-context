@@ -222,10 +222,8 @@ export class CommitsProvider {
     filterScopes?: { staged?: boolean; unstaged?: boolean; history?: boolean }
   ): Promise<Array<{ sha: string; message: string; author?: string; date?: string; changes?: number; files?: Array<{ path: string; status: any }> }>> {
     try {
-      // Ensure database is initialized before accessing it
-      await this.initializeDatabase();
-      const { getDatabaseManager } = await import('../storage/database');
-      const db = getDatabaseManager().getDatabase();
+      const { getDatabaseService } = await import('../services/databaseService');
+      const commitService = getDatabaseService();
       const limitValue = Math.max(1, Number(limit) || 20);
 
       const { GitOperations } = require('../analysis/git');
@@ -291,33 +289,16 @@ export class CommitsProvider {
         }
       }
 
-      // 4. Fetch History Commits
+      // 4. Fetch History Commits using CommitService
+      const searchOptions = {
+        limit: this.loadMoreOffset + limitValue,
+        offset: 0,
+        filterText: filterText?.trim()
+      };
 
-      let query = `
-        SELECT m.sha, m.author, m.date, m.message, m.files_changed
-        FROM commits_metadata m
-      `;
-      const conditions: string[] = [];
-      const params: any[] = [];
+      const commits = await commitService.searchCommits(searchOptions);
 
-      // Apply text filter if provided
-      if (filterText && filterText.trim()) {
-        conditions.push(`(m.message LIKE ? OR m.sha LIKE ?)`);
-        const searchTerm = `%${filterText.trim()}%`;
-        params.push(searchTerm, searchTerm);
-      }
-
-      if (conditions.length > 0) {
-        query += ` WHERE ${conditions.join(' AND ')}`;
-      }
-
-      query += ` ORDER BY m.date DESC LIMIT ${this.loadMoreOffset + limitValue}`;
-
-      const commitsStmt = db.prepare(query);
-      const commits = commitsStmt.all(...params) as any[];
-      commitsStmt.free?.();
-
-      // 3. Map History Commits (exclude HEAD since we added it explicitly)
+      // 5. Map History Commits (exclude HEAD since we added it explicitly)
       const historyCommits = commits
         .filter((commit) => commit.sha && !isWorkspaceSha(commit.sha) && commit.sha !== headSha)
         .map((commit) => {
@@ -332,7 +313,7 @@ export class CommitsProvider {
           }
         } catch (e) {
           console.warn(`Failed to fetch files for commit ${commit.sha}:`, e);
-          // If we failed to load files, but DB says there are changes, 
+          // If we failed to load files, but DB says there are changes,
           // we shouldn't return empty array if possible.
           // However, we can't invent files. The UI will show 0 files but maybe 'changes' count from DB.
         }
@@ -341,8 +322,8 @@ export class CommitsProvider {
           sha: commit.sha,
           message: commit.message,
           author: commit.author,
-          date: commit.date,
-          changes: commit.files_changed ?? 0,
+          date: commit.date.toISOString(),
+          changes: commit.changes,
           files: files
         };
       });

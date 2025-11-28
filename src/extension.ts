@@ -420,12 +420,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
       const { BranchManager } = await import('./storage/branchManager');
       const { getExtensionConfig } = await import('./utils/config');
+      const { getDatabaseService } = await import('./services/databaseService');
       const config = getExtensionConfig();
 
       // Check if database has any commits
-      const result = db.prepare('SELECT COUNT(*) as count FROM commits_metadata').get() as { count: number };
+      const commitService = getDatabaseService();
+      const commitCount = await commitService.countCommits();
 
-      if (result.count === 0) {
+      if (commitCount === 0) {
         logInfo(`[Cockpit] Database is empty, loading initial ${config.defaultCommitCount} commits...`);
 
         // Load recent commits directly
@@ -450,7 +452,7 @@ export async function activate(context: vscode.ExtensionContext) {
         commitsProvider.refresh(); // This will trigger orchestrator updates
         logInfo('[Cockpit] Initial commits loaded successfully');
       } else {
-        logInfo(`[Cockpit] Database already has ${result.count} commits, skipping initial load`);
+        logInfo(`[Cockpit] Database already has ${commitCount} commits, skipping initial load`);
       }
     } catch (error) {
       logError('[Cockpit] Failed to auto-load initial commits', error);
@@ -664,8 +666,8 @@ import { StructuralDiffManager } from './analysis/structuralDiffManager';
 import { SymbolExtractor } from './analysis/symbols';
 import { DependencyExtractor } from './analysis/dependencies';
 import { RiskDetector } from './analysis/heuristics';
-import { HotspotDetector } from './analysis/hotspotDetector';
-import { MovedBlockDetector } from './analysis/movedBlockDetector';
+import { HotspotDetectorV2 } from './analysis/hotspotDetector';
+import { MovedBlockDetectorV2 } from './analysis/movedBlockDetector';
 import { LlmAnalyst } from './analysis/llmAnalyst/runner';
 import { GitOperations } from './analysis/git';
 import { getDatabaseManager } from './storage/database';
@@ -683,8 +685,8 @@ export async function getRefactorPipeline(): Promise<RefactorPipeline> {
     const snapshotManager = new SnapshotManager(db, symbolExtractor, dependencyExtractor);
     const structuralDiffManager = new StructuralDiffManager(db);
     const riskDetector = new RiskDetector();
-    const hotspotDetector = new HotspotDetector();
-    const movedBlockDetector = new MovedBlockDetector();
+    const hotspotDetector = new HotspotDetectorV2();
+    const movedBlockDetector = new MovedBlockDetectorV2();
 
     const commitIndexer = new CommitIndexer(
       db,

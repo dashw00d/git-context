@@ -4,10 +4,14 @@ import { generateEmbedding, stringToPointId } from '../storage/embeddings';
 import { logDebug, logInfo } from '../utils/logger';
 import { runWithConcurrency } from './runner/concurrency';
 import { getDatabaseManager } from '../storage/database';
+import { getDatabaseService, DatabaseService } from '../services/databaseService';
 import { getProjectId } from '../utils/config';
 
 export class EmbeddingIndexer {
-  constructor(private dbManager = getDatabaseManager()) { }
+  constructor(
+    private dbManager = getDatabaseManager(),
+    private commitService: DatabaseService = getDatabaseService()
+  ) { }
 
   /**
    * Index both commit and symbol shards into Qdrant
@@ -83,7 +87,7 @@ export class EmbeddingIndexer {
       const symbols = this.loadSymbolHistory(facts.sha);
 
       for (const symbol of symbols) {
-        const shard = this.buildSymbolShard(symbol, facts, projectId);
+        const shard = await this.buildSymbolShard(symbol, facts, projectId);
         symbolShards.push({ shard, symbol });
       }
     }
@@ -124,7 +128,7 @@ export class EmbeddingIndexer {
     ].filter(Boolean);
 
     // Get commit metadata from DB
-    const commitInfo = this.getCommitMetadata(facts.sha);
+    const commitInfo = await this.getCommitMetadata(facts.sha);
 
     const text = `${tags.join(' ')} Commit ${facts.sha.substring(0, 8)} (${commitInfo?.date || 'unknown'}): ` +
       `"${commitInfo?.message || 'No message'}". ` +
@@ -162,11 +166,11 @@ export class EmbeddingIndexer {
   /**
    * Build symbol story shard
    */
-  private buildSymbolShard(
+  private async buildSymbolShard(
     symbolHistory: any,
     commitFacts: CommitFacts,
     projectId: string
-  ): { text: string; metadata: any } {
+  ): Promise<{ text: string; metadata: any }> {
     const tags = [
       `[${symbolHistory.change_type}]`,
       `[${symbolHistory.kind}]`,
@@ -177,7 +181,7 @@ export class EmbeddingIndexer {
       commitFacts.structuralChangeScore > 0.7 ? '[high-structural-change]' : ''
     ].filter(Boolean);
 
-    const commitInfo = this.getCommitMetadata(commitFacts.sha);
+    const commitInfo = await this.getCommitMetadata(commitFacts.sha);
 
     const text = `${tags.join(' ')} Symbol ${symbolHistory.name} (${symbolHistory.kind}) ` +
       `in ${symbolHistory.file_path}. ` +
@@ -215,12 +219,15 @@ export class EmbeddingIndexer {
     return stmt.all(sha);
   }
 
-  private getCommitMetadata(sha: string): any {
-    const stmt = this.dbManager.getDatabase().prepare(`
-      SELECT author, date, message FROM commits_metadata
-      WHERE sha = ?
-    `);
-    return stmt.get([sha]);
+  private async getCommitMetadata(sha: string): Promise<any> {
+    const metadata = await this.commitService.getCommitMetadata(sha);
+    if (!metadata) return null;
+
+    return {
+      author: metadata.author,
+      date: metadata.date.toISOString(),
+      message: metadata.message
+    };
   }
 
   /**

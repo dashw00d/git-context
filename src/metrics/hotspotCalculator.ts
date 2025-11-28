@@ -5,7 +5,7 @@
  * Provides hotspot metrics for tests
  */
 
-import { HotspotDetector, HotspotMetrics } from '../analysis/hotspotDetector';
+import { HotspotDetectorV2, HotspotMetrics } from '../analysis/hotspotDetector';
 
 export interface HotspotCalculationMetrics {
   hotspotScore: number; // 0-100
@@ -67,8 +67,8 @@ export function calculateHotspotMetrics(
  * Calls the real HotspotDetector.calculateHotspotScore method
  */
 function calculateHotspotScore(metrics: HotspotMetrics): number {
-  // Use the real HotspotDetector calculation
-  const detector = new HotspotDetector();
+  // Use the real HotspotDetectorV2 calculation
+  const detector = new HotspotDetectorV2();
   return detector.calculateHotspotScore(metrics);
 }
 
@@ -77,7 +77,7 @@ function calculateHotspotScore(metrics: HotspotMetrics): number {
  * Uses HotspotDetector.classifyRiskLevel method
  */
 function classifyRiskLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
-  const detector = new HotspotDetector();
+  const detector = new HotspotDetectorV2();
   return detector.classifyRiskLevel(score);
 }
 

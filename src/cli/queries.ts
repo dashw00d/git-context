@@ -1,17 +1,12 @@
 import chalk from 'chalk';
-import { getDatabaseManager, ensureDatabaseInitialized } from '../storage/database';
 import { getSearchIndex } from '../storage/index';
+import { getDatabaseService } from '../services/databaseService';
+import { getSymbolService } from '../services/symbolService';
 
 export async function showCommit(sha: string): Promise<void> {
-  await ensureDatabaseInitialized();
-  const db = getDatabaseManager().getDatabase();
+  const dbService = getDatabaseService();
 
-  // Get commit data
-  const commitStmt = db.prepare(`
-    SELECT * FROM commits_metadata WHERE sha = ?
-  `);
-
-  const commit = commitStmt.get(sha) as any;
+  const commit = await dbService.getCommitMetadata(sha);
 
   if (!commit) {
     console.log(chalk.red(`Commit ${sha} not found in database. Run 'ct analyze' first.`));
@@ -20,26 +15,31 @@ export async function showCommit(sha: string): Promise<void> {
 
   console.log(chalk.blue(`Commit: ${commit.sha}`));
   console.log(chalk.gray(`Author: ${commit.author}`));
-  console.log(chalk.gray(`Date: ${commit.date}`));
+  console.log(chalk.gray(`Date: ${commit.date.toISOString()}`));
   console.log(chalk.yellow(`Message: ${commit.message}`));
   console.log('');
 
+  // Get additional commit data using service
+  const analysis = await dbService.getCommitAnalysis(sha);
+
   // Display summary
-  if (commit.summary_md) {
+  if (analysis?.summary_md) {
     console.log(chalk.green('Summary:'));
-    console.log(commit.summary_md);
+    console.log(analysis.summary_md);
     console.log('');
   }
 
   // Display stats
-  console.log(chalk.cyan('Statistics:'));
-  console.log(`Files changed: ${commit.files_changed}`);
-  console.log(`Symbols: +${commit.symbols_added} -${commit.symbols_removed} ~${commit.symbols_modified}`);
-  console.log(`Edges: +${commit.edges_added} -${commit.edges_removed}`);
+  if (analysis) {
+    console.log(chalk.cyan('Statistics:'));
+    console.log(`Files changed: ${commit.filesChanged}`);
+    console.log(`Symbols: +${analysis.symbols_added} -${analysis.symbols_removed} ~${analysis.symbols_modified}`);
+    console.log(`Edges: +${analysis.edges_added} -${analysis.edges_removed}`);
+  }
 
   // Display risks
-  if (commit.risks) {
-    const risks = JSON.parse(commit.risks);
+  if (analysis?.risks) {
+    const risks = JSON.parse(analysis.risks);
     if (risks.length > 0) {
       console.log('');
       console.log(chalk.red('Risk flags:'));
@@ -47,20 +47,27 @@ export async function showCommit(sha: string): Promise<void> {
     }
   }
 
-  // Display symbol changes
-  const symbolsStmt = db.prepare(`
-    SELECT name, kind, change_type FROM symbols
-    WHERE sha = ? ORDER BY kind, name
-  `);
-
-  const symbols = symbolsStmt.all(sha) as any[];
+  // Display symbol changes using service
+  const symbolService = getSymbolService();
+  const symbols = await symbolService.getSymbolsByCommit(sha);
   if (symbols.length > 0) {
     console.log('');
     console.log(chalk.cyan('Symbol changes:'));
 
-    const added = symbols.filter(s => s.change_type === 'added');
-    const removed = symbols.filter(s => s.change_type === 'removed');
-    const modified = symbols.filter(s => s.change_type !== 'added' && s.change_type !== 'removed');
+    // Note: SymbolService returns SymbolInfo, but we need change_type
+    // For now, we'll need to query change_type separately or enhance the service
+    // This is a temporary solution - the service should be enhanced to include change_type
+    const { getDatabaseManager } = await import('../storage/database');
+    await import('../storage/database').then(m => m.ensureDatabaseInitialized());
+    const db = getDatabaseManager().getDatabase();
+    const symbolsWithChange = db.prepare(`
+      SELECT name, kind, change_type FROM symbols
+      WHERE sha = ? ORDER BY kind, name
+    `).all(sha) as any[];
+
+    const added = symbolsWithChange.filter(s => s.change_type === 'added');
+    const removed = symbolsWithChange.filter(s => s.change_type === 'removed');
+    const modified = symbolsWithChange.filter(s => s.change_type !== 'added' && s.change_type !== 'removed');
 
     if (added.length > 0) {
       console.log(chalk.green('Added:'));
@@ -106,21 +113,8 @@ export async function searchSymbol(name: string): Promise<void> {
 }
 
 export async function showLastCommits(count: number): Promise<void> {
-  await ensureDatabaseInitialized();
-  const db = getDatabaseManager().getDatabase();
-
-  const commitsStmt = db.prepare(`
-    SELECT m.sha, m.author, m.date, m.message, m.files_changed,
-           COALESCE(a.symbols_added, 0) as symbols_added,
-           COALESCE(a.symbols_modified, 0) as symbols_modified,
-           COALESCE(a.symbols_removed, 0) as symbols_removed
-    FROM commits_metadata m
-    LEFT JOIN commits_analysis a ON m.sha = a.sha
-    ORDER BY m.date DESC
-    LIMIT ?
-  `);
-
-  const commits = commitsStmt.all(count) as any[];
+  const dbService = getDatabaseService();
+  const commits = await dbService.getRecentCommits(count);
 
   if (commits.length === 0) {
     console.log(chalk.yellow('No analyzed commits found. Run "ct analyze" first.'));
@@ -133,8 +127,8 @@ export async function showLastCommits(count: number): Promise<void> {
   for (const commit of commits) {
     console.log(chalk.green(commit.sha.substring(0, 8)));
     console.log(`  ${commit.message.split('\n')[0]}`);
-    console.log(chalk.gray(`  ${commit.author} on ${commit.date}`));
-    console.log(`  ${commit.files_changed} files, +${commit.symbols_added} -${commit.symbols_removed} ~${commit.symbols_modified} symbols`);
+    console.log(chalk.gray(`  ${commit.author} on ${commit.date.toISOString()}`));
+    console.log(`  ${commit.changes} files`);
     console.log('');
   }
 }

@@ -1,5 +1,5 @@
 import { PipelineStep, PipelineState } from '../pipelineTypes';
-import { MovedBlockDetector, CrossVersionSymbolLineage } from '../../movedBlockDetector';
+import { MovedBlockDetectorV2, CrossVersionSymbolLineage } from '../../movedBlockDetector';
 import { getDatabaseManager } from '../../../storage/database';
 import { SymbolInfo } from '../../../types';
 import { GitOperations } from '../../git';
@@ -95,7 +95,7 @@ export function createMovedBlockStep(): PipelineStep {
     deps: ['index_commits'],
 
     async run(state: PipelineState) {
-      const detector = new MovedBlockDetector(); // Self-sufficient
+      const detector = new MovedBlockDetectorV2(); // V2 detector with BaseDetector enhancements
       const db = getDatabaseManager().getDatabase();
       const git = new GitOperations();
       const allMoved: any[] = [];
