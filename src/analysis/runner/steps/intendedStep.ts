@@ -6,7 +6,7 @@ export function createIntendedStep(): PipelineStep {
   return {
     id: 'intended',
     label: 'Build intended state map',
-    deps: [],
+    deps: ['index_commits'],
 
     async run(state: PipelineState) {
       const intended = await buildIntendedMap(state.selectedCommitShas);

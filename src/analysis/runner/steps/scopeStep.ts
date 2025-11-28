@@ -12,7 +12,7 @@ export function createScopeStep(): PipelineStep {
         ? new Set<'staged' | 'unstaged'>(['staged', 'unstaged'])
         : undefined;
 
-      const scope = await computeScope(state.selectedCommitShas, workspaceParts);
+      const scope = await computeScope(state.selectedCommitShas, workspaceParts, state.explicitTimeline);
       state.scope = scope;
     }
   };

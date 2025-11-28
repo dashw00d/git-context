@@ -9,10 +9,12 @@ import { MovedBlockDetector } from './movedBlockDetector';
 import { Database } from 'sql.js';
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { logDebug, logInfo } from '../utils/logger';
+import { getDatabaseManager } from '../storage/database';
 // p-limit is CommonJS; use require style to avoid default-import issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 import pLimit = require('p-limit');
-import { getExtensionConfig, getSupportedExtensions, detectLanguage, isCstOnlyLanguage } from '../utils/config';
+import { getExtensionConfig, getSupportedExtensions, detectLanguage, isCstOnlyLanguage, createCustomIgnoreMatcher } from '../utils/config';
+import { shouldProcessPathWithLog } from '../utils/pathFilter';
 import * as pathModule from 'path';
 import { getCstTimelineManager } from './cstTimeline';
 import { getTreeSitterParser } from './tree-sitter';
@@ -144,6 +146,10 @@ export class CommitIndexer {
 
     const results = await Promise.all(promises);
 
+    // Flush any pending snapshot and diff writes
+    this.snapshotManager.flushSnapshotQueue();
+    this.structuralDiffManager.flushDiffQueue();
+
     // Log cache performance metrics
     const stats = this.getCacheStats();
     logInfo(`[CommitIndexer] Cache performance: ${stats.cacheHits} hits, ${stats.cacheMisses} misses (${(stats.hitRate * 100).toFixed(1)}% hit rate)`);
@@ -172,38 +178,24 @@ export class CommitIndexer {
     const symbolChanges = new Map<string, { type: string; symbol: any; filePath: string }>();
 
     // Process each changed file
-    const config = getExtensionConfig();
-    const allowedExtensions = new Set(config.allowedExtensions || getSupportedExtensions());
-    // maxFileSize should always have a default from package.json via getExtensionConfig
-    const maxFileSize = config.maxFileSize ?? 102400;
-
     for (const file of files) {
       const { path, status } = file;
 
-      // 1. Check extension
-      const ext = pathModule.extname(path).slice(1).toLowerCase(); // remove dot
-      if (!allowedExtensions.has(ext)) {
-        logDebug(`[CommitIndexer] Skipping ${path}: extension .${ext} not allowed`);
-        continue;
-      }
+      // Use centralized path filter
+      const filterResult = shouldProcessPathWithLog(path, {
+        git: this.git,
+        status,
+        commitSha: sha,
+        skipSizeCheck: status === 'D'
+      }, 'CommitIndexer');
 
-      // 2. Check if ignored
-      if (this.git.isIgnored(path)) {
-        logDebug(`[CommitIndexer] Skipping ${path}: ignored by git`);
+      if (!filterResult.shouldProcess) {
         continue;
-      }
-
-      // 3. Check file size (if not deleted)
-      if (status !== 'D') {
-        const size = this.git.getBlobSize(sha, path);
-        if (size > maxFileSize) {
-          logInfo(`[CommitIndexer] Skipping ${path}: size ${size} > ${maxFileSize}`);
-          continue;
-        }
       }
 
       if (status === 'D') {
         // File deleted - get parent snapshot only
+        
         if (parentSha) {
           const parentBlobSha = this.git.getBlobSha(parentSha, path);
           const parentContent = this.git.safeGetFileContent(parentSha, path);
@@ -248,6 +240,16 @@ export class CommitIndexer {
       } else if (status === 'M' && parentSha) {
         // File modified - compare snapshots
         const parentBlobSha = this.git.getBlobSha(parentSha, path);
+        
+        // Quick check: if blob SHAs are identical, skip expensive operations
+        if (parentBlobSha === currentBlobSha) {
+          logDebug(`[CommitIndexer] Skipping diff for ${path} - identical blob SHA`);
+          // File content is identical, no changes to track
+          // Still need to extract hybrid facts though (they might have changed even if content is same)
+          await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
+          continue;
+        }
+        
         const parentContent = this.git.safeGetFileContent(parentSha, path);
         const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
           path,
@@ -417,6 +419,9 @@ export class CommitIndexer {
 
       // Save via timeline manager
       await this.cstTimelineManager.saveFacts(filePath, commitSha, hybridFacts, prevHash);
+      if (hybridFacts.length > 0) {
+        logDebug(`[CommitIndexer] Saved ${hybridFacts.length} hybrid facts for ${filePath}@${commitSha.substring(0, 8)}`);
+      }
     } catch (error) {
       logDebug(`[CommitIndexer] Error extracting hybrid facts for ${filePath}: ${error}`);
     }
@@ -527,29 +532,34 @@ export class CommitIndexer {
     symbolChanges: Map<string, { type: string; symbol: any; filePath: string }>,
     impactScores: Map<string, number>
   ): Promise<void> {
-    const stmt = this.db.prepare(`
+    // Get wrapped database with transaction support
+    const db = getDatabaseManager().getDatabase();
+    const stmt = db.prepare(`
       INSERT INTO symbol_history
       (symbol_dna_id, sha, file_path, name, kind, signature, body_hash,
        change_type, impact_score, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
-      const impactScore = impactScores.get(dnaId) || 0;
+    // Wrap batch inserts in transaction
+    db.transaction(() => {
+      for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
+        const impactScore = impactScores.get(dnaId) || 0;
 
-      stmt.run([
-        dnaId,
-        sha,
-        filePath,
-        symbol.name,
-        symbol.kind,
-        symbol.signature,
-        symbol.bodyHash || null,
-        type,
-        impactScore,
-        new Date().toISOString()
-      ]);
-    }
+        stmt.run([
+          dnaId,
+          sha,
+          filePath,
+          symbol.name,
+          symbol.kind,
+          symbol.signature,
+          symbol.bodyHash || null,
+          type,
+          impactScore,
+          new Date().toISOString()
+        ]);
+      }
+    })();
   }
 
   /**
@@ -560,14 +570,39 @@ export class CommitIndexer {
     files: Array<{ path: string; status: string }>,
     parentSha: string | null
   ): Promise<void> {
-    const stmt = this.db.prepare(`
+    // Get wrapped database with transaction support
+    const db = getDatabaseManager().getDatabase();
+    const stmt = db.prepare(`
       INSERT OR REPLACE INTO edges
       (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
+    // Collect all edge data first (outside transaction, can use await)
+    const edgesToInsert: Array<{
+      sha: string;
+      from: string;
+      to: string;
+      changeType: string;
+      edgeType: string;
+      confidence: number;
+      isResolved: number;
+    }> = [];
+
     for (const file of files) {
       const { path, status } = file;
+
+      // Use centralized path filter
+      const filterResult = shouldProcessPathWithLog(path, {
+        git: this.git,
+        status: status as 'A' | 'M' | 'D' | 'R' | 'C' | 'U',
+        commitSha: sha,
+        skipSizeCheck: status === 'D'
+      }, 'CommitIndexer.storeEdges');
+
+      if (!filterResult.shouldProcess) {
+        continue;
+      }
 
       if (status === 'D') {
         // File deleted - get parent snapshot edges as removed
@@ -581,15 +616,15 @@ export class CommitIndexer {
           );
 
           for (const edge of parentSnapshot.edges) {
-            stmt.run([
+            edgesToInsert.push({
               sha,
-              edge.from,
-              edge.to,
-              'removed',
-              (edge as any).type || 'unknown',
-              (edge as any).confidence || 1.0,
-              (edge as any).isResolved !== false ? 1 : 0
-            ]);
+              from: edge.from,
+              to: edge.to,
+              changeType: 'removed',
+              edgeType: (edge as any).type || 'unknown',
+              confidence: (edge as any).confidence || 1.0,
+              isResolved: (edge as any).isResolved !== false ? 1 : 0
+            });
           }
         }
         continue;
@@ -607,15 +642,15 @@ export class CommitIndexer {
       if (status === 'A') {
         // File added - all edges are added
         for (const edge of currentSnapshot.edges) {
-          stmt.run([
+          edgesToInsert.push({
             sha,
-            edge.from,
-            edge.to,
-            'added',
-            (edge as any).type || 'unknown',
-            (edge as any).confidence || 1.0,
-            (edge as any).isResolved !== false ? 1 : 0
-          ]);
+            from: edge.from,
+            to: edge.to,
+            changeType: 'added',
+            edgeType: (edge as any).type || 'unknown',
+            confidence: (edge as any).confidence || 1.0,
+            isResolved: (edge as any).isResolved !== false ? 1 : 0
+          });
         }
       } else if (status === 'M' && parentSha) {
         // File modified - compare edges
@@ -634,15 +669,15 @@ export class CommitIndexer {
         for (const edge of currentSnapshot.edges) {
           const edgeKey = `${edge.from}-${edge.to}-${(edge as any).type || 'unknown'}`;
           if (!parentEdgeIds.has(edgeKey)) {
-            stmt.run([
+            edgesToInsert.push({
               sha,
-              edge.from,
-              edge.to,
-              'added',
-              (edge as any).type || 'unknown',
-              (edge as any).confidence || 1.0,
-              (edge as any).isResolved !== false ? 1 : 0
-            ]);
+              from: edge.from,
+              to: edge.to,
+              changeType: 'added',
+              edgeType: (edge as any).type || 'unknown',
+              confidence: (edge as any).confidence || 1.0,
+              isResolved: (edge as any).isResolved !== false ? 1 : 0
+            });
           }
         }
 
@@ -650,18 +685,35 @@ export class CommitIndexer {
         for (const edge of parentSnapshot.edges) {
           const edgeKey = `${edge.from}-${edge.to}-${(edge as any).type || 'unknown'}`;
           if (!currentEdgeIds.has(edgeKey)) {
-            stmt.run([
+            edgesToInsert.push({
               sha,
-              edge.from,
-              edge.to,
-              'removed',
-              (edge as any).type || 'unknown',
-              (edge as any).confidence || 1.0,
-              (edge as any).isResolved !== false ? 1 : 0
-            ]);
+              from: edge.from,
+              to: edge.to,
+              changeType: 'removed',
+              edgeType: (edge as any).type || 'unknown',
+              confidence: (edge as any).confidence || 1.0,
+              isResolved: (edge as any).isResolved !== false ? 1 : 0
+            });
           }
         }
       }
+    }
+
+    // Now insert all edges in a single transaction
+    if (edgesToInsert.length > 0) {
+      db.transaction(() => {
+        for (const edge of edgesToInsert) {
+          stmt.run([
+            edge.sha,
+            edge.from,
+            edge.to,
+            edge.changeType,
+            edge.edgeType,
+            edge.confidence,
+            edge.isResolved
+          ]);
+        }
+      })();
     }
   }
 

@@ -226,6 +226,9 @@ export function serializeStepState(stepId: string, state: PipelineState): Serial
     case 'hotspots':
       return state.hotspots || null;
 
+    case 'moved_blocks':
+      return state.movedLineage || null;
+
     case 'workspace_overlay':
       return state.workspaceFacts || null;
 
@@ -286,6 +289,8 @@ export function applySnapshotToState(state: PipelineState, snapshot: StepSnapsho
       state.scope = data ? {
         commitFiles: new Set(data.commitFiles || []),
         workingChanged: new Set(data.workingChanged || []),
+        stagedFiles: new Set(data.stagedFiles || []),
+        unstagedFiles: new Set(data.unstagedFiles || []),
         blastRadius: new Set(data.blastRadius || []),
         allPaths: new Set(data.allPaths || [])
       } : undefined;

@@ -210,7 +210,22 @@ export class DatabaseManager {
   }
 
   async initialize(): Promise<void> {
-    if (this.db) return;
+    // If database exists but file was deleted, clear the reference
+    if (this.db) {
+      // Check if the file still exists - if not, the database was deleted
+      if (!fs.existsSync(this.dbPath)) {
+        console.log('[DB-INIT] Database file was deleted, clearing reference and reinitializing...');
+        try {
+          this.db.close();
+        } catch (error) {
+          // Ignore errors when closing deleted database
+        }
+        this.db = null;
+      } else {
+        // Database and file both exist, we're good
+        return;
+      }
+    }
 
     const startTime = Date.now();
     console.log('[DB-INIT] Starting database initialization...');

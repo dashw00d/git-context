@@ -1,7 +1,8 @@
 import { HybridFact, CstFact, isCstFact } from '../types/cstFacts';
 import { IntendedState } from '../facts/intendedMap';
-import { getCstTimelineManager } from './cstTimeline';
+import { getCstTimelineManager, getPriorVersionInChain } from './cstTimeline';
 import { logDebug } from '../utils/logger';
+import type { ScopeSet } from '../facts/scope';
 
 export interface HybridDrift {
   fact: HybridFact;
@@ -13,19 +14,37 @@ export interface HybridDrift {
 /**
  * Detect hybrid drifts (CST facts + semantic symbols)
  * For CST-only languages and hybrid augmentation
+ * Validates version is in expected timeline chain (fail-fast behavior)
  */
 export async function detectHybridDrift(
   filePath: string,
   currentFacts: HybridFact[],
   intended: Map<string, IntendedState>,
-  commitSha?: string,
-  priorVersionSha?: string
+  currentVersion: string,
+  scope: ScopeSet,
+  commitShas: string[]
 ): Promise<HybridDrift[]> {
   const drifts: HybridDrift[] = [];
   const timelineManager = getCstTimelineManager();
 
-  // Get prior facts if commit SHA provided (use fallback for workspace compatibility)
-  const priorFacts = commitSha ? await timelineManager.getPriorFactsWithFallback(filePath, commitSha) : null;
+  // Validate version is in expected timeline chain
+  const validVersions = new Set([
+    'workspace-unstaged',
+    'workspace-staged',
+    'HEAD',
+    ...commitShas
+  ]);
+
+  if (!validVersions.has(currentVersion)) {
+    throw new Error(
+      `[HybridDrift] Invalid version '${currentVersion}' for timeline chain. ` +
+      `File: ${filePath}, Expected one of: [${Array.from(validVersions).map(v => v.substring(0, 12)).join(', ')}]`
+    );
+  }
+
+  // Determine prior version in timeline chain
+  const priorVersion = getPriorVersionInChain(currentVersion, scope, filePath, commitShas);
+  const priorFacts = priorVersion ? await timelineManager.getPriorFacts(filePath, priorVersion) : null;
 
   // Check for missing facts (in intended but not in current)
   // Use priorVersionSha (from IntendedState.lastSha) to retrieve the missing fact
@@ -36,12 +55,11 @@ export async function detectHybridDrift(
     if (expected.expect === 'present') {
       const found = currentFacts.find(f => f.id === factKey);
       if (!found) {
-        // Fact is missing - retrieve from prior version (use fallback for workspace compatibility)
-        const priorSha = priorVersionSha || expected.lastSha;
+        // Fact is missing - retrieve from prior version in chain
+        const priorSha = priorVersion || expected.lastSha;
         if (priorSha) {
           try {
-            // Use fallback to handle workspace versions properly
-            const priorFactsForFile = await timelineManager.getPriorFactsWithFallback(filePath, priorSha);
+            const priorFactsForFile = await timelineManager.getPriorFacts(filePath, priorSha);
             if (priorFactsForFile && priorFactsForFile.length > 0) {
               const missingFact = priorFactsForFile.find(f => f.id === factKey);
               if (missingFact) {
@@ -137,13 +155,14 @@ export async function detectHybridDrift(
 }
 
 /**
- * Get hybrid facts for a file from timeline with workspace fallback
+ * Get hybrid facts for a file from timeline
+ * Note: Caller must determine correct version from scope (unstaged → 'workspace-unstaged', staged → 'workspace-staged', commit → SHA)
  */
 export async function getHybridFactsForFile(
   filePath: string,
-  version: string
+  version: string  // Caller must determine correct version from scope
 ): Promise<HybridFact[]> {
   const timelineManager = getCstTimelineManager();
-  return await timelineManager.getPriorFactsWithFallback(filePath, version);
+  return await timelineManager.getPriorFacts(filePath, version) || [];
 }
 

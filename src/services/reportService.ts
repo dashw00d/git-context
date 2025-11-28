@@ -89,10 +89,22 @@ export class ReportService {
             const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
             const workspaceShas = shas.filter(isWorkspaceSha);
 
+            // Determine workspaceParts based on scope
+            let workspaceParts: Set<'staged' | 'unstaged'> | undefined;
+            if (scope === 'staged') {
+                workspaceParts = new Set(['staged']);
+            } else if (scope === 'unstaged') {
+                workspaceParts = new Set(['unstaged']);
+            } else if (scope === 'full') {
+                workspaceParts = new Set(['staged', 'unstaged']);
+            }
+            // 'partial' or other scopes -> undefined (no workspace)
+
             // Use the new RefactorPipeline.analyzeBundle method
             const result = await pipeline.analyzeBundle(
                 commitShas,
                 includeWorkspace,
+                workspaceParts,
                 (event) => {
                     // Map pipeline events to orchestrator state
                     switch (event.type) {

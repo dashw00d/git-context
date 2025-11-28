@@ -3,6 +3,7 @@ import { getDifftasticIntegration } from './difftastic';
 import { getCstDiffManager } from './cstDiff';
 import { logDebug } from '../utils/logger';
 import type { CstDiffResult } from './cstDiff';
+import { getDatabaseManager } from '../storage/database';
 
 export interface StructuralDiffMetrics {
   structuralChangeScore: number; // 0-1
@@ -14,9 +15,18 @@ export interface StructuralDiffMetrics {
   rawData?: any; // Full difftastic output
 }
 
+interface QueuedDiff {
+  parentBlobSha: string;
+  currentBlobSha: string;
+  filePath: string;
+  metrics: StructuralDiffMetrics;
+}
+
 export class StructuralDiffManager {
   private difftastic = getDifftasticIntegration();
   private cstDiff = getCstDiffManager();
+  private writeQueue: QueuedDiff[] = [];
+  private readonly BATCH_SIZE = 50;
 
   constructor(private db: Database) {}
 
@@ -30,6 +40,22 @@ export class StructuralDiffManager {
     parentContent: string,
     currentContent: string
   ): Promise<StructuralDiffMetrics> {
+    // Quick check: if blob SHAs are identical, file content is unchanged
+    if (parentBlobSha === currentBlobSha) {
+      logDebug(`[StructDiff] Skipping diff for ${filePath} - identical blob SHA`);
+      const emptyDiff: StructuralDiffMetrics = {
+        structuralChangeScore: 0,
+        controlFlowChanged: false,
+        interfaceChanged: false,
+        movedBlocks: 0,
+        linesAdded: 0,
+        linesRemoved: 0
+      };
+      // Cache the empty diff to avoid future checks
+      this.storeDiff(parentBlobSha, currentBlobSha, filePath, emptyDiff);
+      return emptyDiff;
+    }
+
     // Check cache
     const cached = this.getCachedDiff(parentBlobSha, currentBlobSha, filePath);
     if (cached) {
@@ -48,10 +74,19 @@ export class StructuralDiffManager {
 
     const metrics = this.extractMetrics(difftasticResult);
 
-    // Store to cache
-    this.storeDiff(parentBlobSha, currentBlobSha, filePath, metrics);
+    // Queue for batch write
+    this.queueDiff(parentBlobSha, currentBlobSha, filePath, metrics);
 
     return metrics;
+  }
+
+  /**
+   * Flush any pending diff writes (call at end of processing)
+   */
+  flushDiffQueue(): void {
+    while (this.writeQueue.length > 0) {
+      this.flushDiffQueueInternal();
+    }
   }
 
   private getCachedDiff(
@@ -77,13 +112,25 @@ export class StructuralDiffManager {
     };
   }
 
-  private storeDiff(
+  private queueDiff(
     parentBlobSha: string,
     currentBlobSha: string,
     filePath: string,
     metrics: StructuralDiffMetrics
   ): void {
-    const stmt = this.db.prepare(`
+    this.writeQueue.push({ parentBlobSha, currentBlobSha, filePath, metrics });
+    if (this.writeQueue.length >= this.BATCH_SIZE) {
+      this.flushDiffQueueInternal();
+    }
+  }
+
+  private flushDiffQueueInternal(): void {
+    if (this.writeQueue.length === 0) return;
+    const batch = this.writeQueue.splice(0, this.BATCH_SIZE);
+    
+    // Get wrapped database with transaction support
+    const db = getDatabaseManager().getDatabase();
+    const stmt = db.prepare(`
       INSERT OR REPLACE INTO structural_diffs
       (parent_blob_sha, current_blob_sha, file_path, structural_change_score,
        control_flow_changed, interface_changed, moved_blocks, lines_added,
@@ -91,19 +138,38 @@ export class StructuralDiffManager {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run([
-      parentBlobSha,
-      currentBlobSha,
-      filePath,
-      metrics.structuralChangeScore,
-      metrics.controlFlowChanged ? 1 : 0,
-      metrics.interfaceChanged ? 1 : 0,
-      metrics.movedBlocks,
-      metrics.linesAdded,
-      metrics.linesRemoved,
-      metrics.rawData ? JSON.stringify(metrics.rawData) : null,
-      new Date().toISOString()
-    ]);
+    const now = new Date().toISOString();
+    
+    // Use transaction wrapper instead of manual BEGIN/COMMIT
+    db.transaction(() => {
+      for (const diff of batch) {
+        stmt.run([
+          diff.parentBlobSha,
+          diff.currentBlobSha,
+          diff.filePath,
+          diff.metrics.structuralChangeScore,
+          diff.metrics.controlFlowChanged ? 1 : 0,
+          diff.metrics.interfaceChanged ? 1 : 0,
+          diff.metrics.movedBlocks,
+          diff.metrics.linesAdded,
+          diff.metrics.linesRemoved,
+          diff.metrics.rawData ? JSON.stringify(diff.metrics.rawData) : null,
+          now
+        ]);
+      }
+    })();
+
+    logDebug(`[StructuralDiffManager] Batched ${batch.length} diff writes`);
+  }
+
+  private storeDiff(
+    parentBlobSha: string,
+    currentBlobSha: string,
+    filePath: string,
+    metrics: StructuralDiffMetrics
+  ): void {
+    // Legacy method - use queueDiff instead
+    this.queueDiff(parentBlobSha, currentBlobSha, filePath, metrics);
   }
 
   private extractMetrics(difftasticOutput: any): StructuralDiffMetrics {

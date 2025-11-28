@@ -1,105 +1,118 @@
 # Pipeline Diagnostics Report
 
-**Run Time:** 2025-11-28T06:21:19.484Z to 2025-11-28T06:27:52.854Z (393.37s)
-**Overall Health Score:** 99.41/100
+**Run Time:** 2025-11-28T11:20:17.982Z to 2025-11-28T11:20:32.913Z (14.93s)
+**Overall Health Score:** 100.00/100
 
 ## Key Metrics
 
 - **totalCommits**: 3
-- **totalSymbols**: 3714
-- **totalEdges**: 25565
+- **totalSymbols**: 0
+- **totalEdges**: 0
 - **totalDriftIssues**: 0
 - **unresolvedCallers**: 0
 - **totalHotspots**: 0
 - **bundleIncompleteness**: 0
-- **patternDrift**: 32
-- **totalLegacyDead**: 22
+- **patternDrift**: 0
+- **totalLegacyDead**: 0
 - **llmTotalCalls**: 6
-- **llmTotalTokens**: 42437
-- **overallHealthScore**: 99.41
+- **llmTotalTokens**: 0
+- **overallHealthScore**: 100.00
 
 ## Step Details
+
+### workspace_overlay
+
+- **Hash:** 65f031615e9b7bde0e2e5af9d8d24f0562f4f6db
+- **Status:** no baseline
+- **Summary:** staged: files=0, symbols=0 | unstaged: files=0, symbols=0
+- **Timestamp:** 2025-11-28T11:20:18.420Z
+- **Duration:** 436ms
+- **Metrics:**
+  - stagedFiles: 0
+  - stagedSymbols: 0
+  - unstagedFiles: 0
+  - unstagedSymbols: 0
+
+### scope
+
+- **Hash:** edb82ec2d55ee5ae59754a45f33510dfeaed7fc2
+- **Status:** no baseline
+- **Summary:** files=168, working=86, blast=0
+- **Timestamp:** 2025-11-28T11:20:19.229Z
+- **Duration:** 1238ms
+- **Metrics:**
+  - commitFiles: 168
+  - workingChanged: 86
+  - blastRadiusFiles: 0
+  - allPaths: 0
+
+### working
+
+- **Hash:** dd874a26c0cb97d303538978d8b38124cb9b0749
+- **Status:** no baseline
+- **Summary:** symbols=0, edges=0, paths=0
+- **Timestamp:** 2025-11-28T11:20:19.954Z
+- **Duration:** 725ms
+- **Metrics:**
+  - symbols: 0
+  - edges: 0
+  - analyzedPaths: 0
+
+### index_commits
+
+- **Hash:** fb98fb65e97d75c550c6504a4993a7c6b58023dd
+- **Status:** no baseline
+- **Summary:** commits=3
+- **Timestamp:** 2025-11-28T11:20:30.418Z
+- **Duration:** 11189ms
+- **Metrics:**
+  - commitCount: 3
+  - totalSymbols: 0
+  - totalEdges: 0
 
 ### hotspots
 
 - **Hash:** 97d170e1550eee4afc0af065b78cda302a97674c
-- **Status:** Δ baseline (expected d4e5f3e9)
-- **Timestamp:** 2025-11-28T06:21:19.597Z
-- **Duration:** 109ms
+- **Status:** no baseline
+- **Timestamp:** 2025-11-28T11:20:30.425Z
+- **Duration:** 4ms
 - **Metrics:**
   - topHotspots: 0
   - totalChurn: 0
+  - withVersionTracking: 0
+  - versionDescriptions: []
 
 ### intended
 
 - **Hash:** 97d170e1550eee4afc0af065b78cda302a97674c
-- **Status:** matches baseline
+- **Status:** no baseline
 - **Summary:** symbols=0, present=0, absent=0, renamed=0
-- **Timestamp:** 2025-11-28T06:21:19.597Z
-- **Duration:** 110ms
+- **Timestamp:** 2025-11-28T11:20:30.425Z
+- **Duration:** 6ms
 - **Metrics:**
   - totalSymbols: 0
   - present: 0
   - absent: 0
   - renamed: 0
 
-### scope
+### moved_blocks
 
-- **Hash:** 41f58153f3e5ab93fa4a68c9a76f8a201b8599ec
-- **Status:** Δ baseline (expected f56edd51)
-- **Summary:** files=152, working=91, blast=0
-- **Timestamp:** 2025-11-28T06:21:20.804Z
-- **Duration:** 1317ms
+- **Hash:** 97d170e1550eee4afc0af065b78cda302a97674c
+- **Status:** no baseline
+- **Timestamp:** 2025-11-28T11:20:30.426Z
+- **Duration:** 5ms
 - **Metrics:**
-  - commitFiles: 152
-  - workingChanged: 91
-  - blastRadiusFiles: 0
-  - allPaths: 200
-
-### index_commits
-
-- **Hash:** 0a2339b0c744a67d6fbef733d35892037d57f462
-- **Status:** Δ baseline (expected 4a1dc616)
-- **Summary:** commits=3
-- **Timestamp:** 2025-11-28T06:21:55.281Z
-- **Duration:** 35795ms
-- **Metrics:**
-  - commitCount: 3
-  - totalSymbols: 0
-  - totalEdges: 0
-
-### workspace_overlay
-
-- **Hash:** cccf1afd0c3123898fc368aa381b777a68308dea
-- **Status:** Δ baseline (expected 3bfb62b0)
-- **Summary:** staged: files=55, symbols=641 | unstaged: files=36, symbols=1466
-- **Timestamp:** 2025-11-28T06:22:16.092Z
-- **Duration:** 56603ms
-- **Metrics:**
-  - stagedFiles: 55
-  - stagedSymbols: 641
-  - unstagedFiles: 36
-  - unstagedSymbols: 1466
-
-### working
-
-- **Hash:** 9e262792e22fb73c94a41236624e3546f1bd7ed0
-- **Status:** Δ baseline (expected 58de5e62)
-- **Summary:** symbols=3714, edges=25565, paths=165
-- **Timestamp:** 2025-11-28T06:22:18.142Z
-- **Duration:** 2050ms
-- **Metrics:**
-  - symbols: 3714
-  - edges: 25565
-  - analyzedPaths: 165
+  - totalMoves: 0
+  - withVersionDescription: 0
+  - moveTypes: {"rename":0,"relocate":0,"refactor":0}
 
 ### drift
 
-- **Hash:** 6f6d82b13c7d10b500c7a78e22dec140ad421635
-- **Status:** Δ baseline (expected 632e9fc8)
+- **Hash:** 13f7acde44dafc4f2b1dfcb173515b1610953d0c
+- **Status:** no baseline
 - **Summary:** missing=0, zombies=0, divergent=0, hybrid=0
-- **Timestamp:** 2025-11-28T06:22:19.073Z
-- **Duration:** 931ms
+- **Timestamp:** 2025-11-28T11:20:30.458Z
+- **Duration:** 32ms
 - **Metrics:**
   - missing_symbols: 0
   - zombie_symbols: 0
@@ -108,33 +121,33 @@
   - zombie_edges: 0
   - unresolved_callers: 0
   - hybridDrifts: 0
-  - conventionDrift: 95
-  - mixedConventionFiles: 31
+  - conventionDrift: 0
+  - mixedConventionFiles: 0
 
 ### legacy
 
-- **Hash:** 160b4c4e62595fb3ebb79572bcf7f88dc5c6f4c8
-- **Status:** Δ baseline (expected c3f11aa2)
-- **Summary:** dead=22, legacyUsed=0, leftovers=0
-- **Timestamp:** 2025-11-28T06:22:19.077Z
-- **Duration:** 777ms
+- **Hash:** 6fda6f32fdfaa0f64de3e5277bc7b4311dbcdc54
+- **Status:** no baseline
+- **Summary:** dead=0, legacyUsed=0, leftovers=0
+- **Timestamp:** 2025-11-28T11:20:30.459Z
+- **Duration:** 1ms
 - **Metrics:**
-  - dead: 22
+  - dead: 0
   - legacyUsed: 0
   - replacedLeftovers: 0
 
 ### bundle_facts
 
-- **Hash:** 7149cca67dd0536ce241aa0280ab26a1afbb35e6
-- **Status:** Δ baseline (expected 837658ed)
-- **Summary:** intended.present=0, absent=50, renamed=0, hybridFacts=0 (0 files)
-- **Timestamp:** 2025-11-28T06:22:19.172Z
-- **Duration:** 95ms
+- **Hash:** 8909f1f14b01d598e6c4aa8202ff4c643898675c
+- **Status:** no baseline
+- **Summary:** intended.present=0, absent=0, renamed=0, hybridFacts=0 (0 files)
+- **Timestamp:** 2025-11-28T11:20:30.460Z
+- **Duration:** 1ms
 - **Metrics:**
   - incompleteness: 0
-  - patternDrift: 32
-  - legacySummary: 22
-  - intended: {"present":0,"absent":50,"renamed":0}
+  - patternDrift: 0
+  - legacySummary: 0
+  - intended: {"present":0,"absent":0,"renamed":0}
   - hybridFactsCount: 0
   - hybridFilesCount: 0
 
@@ -142,40 +155,39 @@
 
 - **Hash:** n/a (external/complex)
 - **Status:** no baseline
-- **Timestamp:** 2025-11-28T06:22:31.561Z
-- **Duration:** 12389ms
+- **Timestamp:** 2025-11-28T11:20:31.779Z
+- **Duration:** 1318ms
 
 ### retrieve_history
 
 - **Hash:** n/a (external/complex)
 - **Status:** no baseline
-- **Timestamp:** 2025-11-28T06:22:32.247Z
-- **Duration:** 685ms
+- **Timestamp:** 2025-11-28T11:20:32.517Z
+- **Duration:** 738ms
 - **Metrics:**
-  - historyItems: 9
+  - historyItems: 17
   - retrievedCommits: 0
 
 ### llm_story
 
 - **Hash:** n/a (external/complex)
 - **Status:** no baseline
-- **Timestamp:** 2025-11-28T06:27:52.854Z
-- **Duration:** 320607ms
+- **Timestamp:** 2025-11-28T11:20:32.913Z
+- **Duration:** 396ms
 - **Metrics:**
   - storyLength: 1
-  - totalHealthScore: 99.40764674205708
-  - totalTokens: 42437
+  - totalHealthScore: 100
+  - totalTokens: 0
   - totalCalls: 6
   - blocksCount: 4
 - **LLM Summary:**
   - Summary: ## Key Insights
 
-**Most Critical:** All 50 intended absent symbols were successfully removed with zero missing, zombies, or divergent symbols. (high severity, 100% confidence)
+**Refactor Health:** 100/100 ✅
 
-**Immediate Actions:**
+**Quick Stats:** 3 commits, 0 symbols analyzed, no issues found
 ...
-  - Health Score: 99.40764674205708/100
-  - Tokens: 42437
+  - Health Score: 100/100
   - Blocks: 4
 
 ## LLM Analysis Summaries
@@ -184,58 +196,43 @@
 
 ## Key Insights
 
-**Most Critical:** All 50 intended absent symbols were successfully removed with zero missing, zombies, or divergent symbols. (high severity, 100% confidence)
+**Refactor Health:** 100/100 ✅
 
-**Immediate Actions:**
-1. Remove all 22 dead symbols (e.g., src/extension.ts:function_getRepoContext, src/facts/factsAssembler.ts:function_getIntendedLists) as they have zero callers and blastRadius 0 ensures safety [high priority, low effort]
-2. Standardize constants in src/utils/supportedLanguages.ts to camelCase (e.g.,...
+**Quick Stats:** 3 commits, 0 symbols analyzed, no issues found
+
 
 #### Full Markdown Output
 
 # LLM Analysis Report
 
-**Generated:** 11/28/2025, 12:27:52 AM
+**Generated:** 11/28/2025, 5:20:32 AM
 
 **Bundle:** 3 commits
 
 ## Refactor Intent & Story
 
-### Findings
-
-- **HIGH:** All 50 intended absent symbols were successfully removed with zero missing, zombies, or divergent symbols. (confidence: 100%)
-  - Evidence: `intended.absent`
-  - Evidence: `findings.incompleteness`
-- **HIGH:** 22 dead functions confirmed unused and safe for deletion. (confidence: 100%)
-  - Evidence: `findings.legacyAudit.dead`
-- **MEDIUM:** No legacy code remains in use and no replaced leftovers. (confidence: 100%)
-  - Evidence: `findings.legacyAudit.legacyUsed`
-  - Evidence: `findings.legacyAudit.replacedLeftovers`
-- **MEDIUM:** Convention drift is low at 2.56% across 95 symbols with dominant camelCase. (confidence: 100%)
-  - Evidence: `findings.patternDrift.conventionDrift`
-- **HIGH:** Zero blast radius confirms minimal architectural disruption. (confidence: 100%)
-  - Evidence: `scope.blastRadius`
-
 ## Drift Verification
 
-### Findings
+## Cleanup Plan
 
-- **HIGH:**... [truncated]
+## LLM-Driven Pattern Discovery
+
+
 
 **Metadata:**
-- Health Score: 99.40764674205708/100
-- Total Tokens: 42437
+- Health Score: 100/100
 - LLM Calls: 6
 - Model: x-ai/grok-4.1-fast:free
-- Validated Evidence: 8
+- Validated Evidence: 0
 - Analysis Blocks: 4
-- Generated: 2025-11-28T06:27:52.853Z
+- Generated: 2025-11-28T11:20:32.911Z
 
 ## Summary
 
-- **Total Steps:** 12
+- **Total Steps:** 13
 - **Errors:** 0
-- **Total Symbols:** 3714
-- **Total Edges:** 25565
+- **Total Symbols:** 0
+- **Total Edges:** 0
 - **Drift Issues:** 0
 
-*Generated by pipeline diagnostics at 2025-11-28T06:27:52.857Z*
+*Generated by pipeline diagnostics at 2025-11-28T11:20:32.914Z*

@@ -60,6 +60,15 @@ export interface SymbolLineage {
   moveType: 'file_rename' | 'block_move' | 'symbol_rename';
 }
 
+export interface CrossVersionSymbolLineage {
+  symbolId: string;
+  previousSymbolId: string;
+  sourceVersion: string;
+  destVersion: string;
+  moveType: 'rename' | 'relocate' | 'refactor';
+  versionDescription?: string;  // Human-readable description (e.g., "3 versions ago → 1 version ago")
+}
+
 export class MovedBlockDetector {
   private similarityThreshold: number = 0.6; // Configurable threshold (default 0.6)
 
@@ -168,6 +177,45 @@ export class MovedBlockDetector {
     }
 
     return blocks;
+  }
+
+  /**
+   * Match symbols by DNA ID across versions (for cross-version move detection)
+   */
+  matchByDna(removedSymbols: SymbolInfo[], addedSymbols: SymbolInfo[]): Array<{
+    removed: SymbolInfo;
+    added: SymbolInfo;
+    similarity: number;
+  }> {
+    const matches: Array<{ removed: SymbolInfo; added: SymbolInfo; similarity: number }> = [];
+    const matchedAdded = new Set<string>();
+
+    for (const removed of removedSymbols) {
+      if (!removed.dnaId) continue;
+
+      // Find best match by DNA ID
+      let bestMatch: SymbolInfo | null = null;
+      let bestSimilarity = 0;
+
+      for (const added of addedSymbols) {
+        if (matchedAdded.has(added.id)) continue;
+        if (!added.dnaId) continue;
+
+        // Exact DNA match
+        if (removed.dnaId === added.dnaId) {
+          bestMatch = added;
+          bestSimilarity = 1.0;
+          break;
+        }
+      }
+
+      if (bestMatch) {
+        matches.push({ removed, added: bestMatch, similarity: bestSimilarity });
+        matchedAdded.add(bestMatch.id);
+      }
+    }
+
+    return matches;
   }
 
   /**

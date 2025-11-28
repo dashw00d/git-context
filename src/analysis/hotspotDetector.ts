@@ -21,6 +21,8 @@ export interface FileHotspot {
   hotspotScore: number;
   firstSeenSha: string;
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  touchedInVersions?: string[];  // Which timeline versions modified this file
+  touchedInVersionsDescription?: string;  // Human-readable summary (e.g., "3/5 versions")
 }
 
 export interface SymbolHotspot {

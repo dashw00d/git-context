@@ -3,6 +3,7 @@ import { SymbolInfo } from '../types';
 import { getDatabase } from '../storage/database';
 import { computeHybridDna } from './symbolDna';
 import { logDebug } from '../utils/logger';
+import type { ScopeSet } from '../facts/scope';
 
 /**
  * Manager for CST timeline tracking (hybrid facts evolution)
@@ -120,88 +121,68 @@ export class CstTimelineManager {
   }
 
   /**
+   * Batch retrieve prior facts with per-file version selection
+   * Accepts a map of filePath → version for efficient batch queries
+   */
+  async getPriorFactsBatchWithVersions(
+    versionMap: Map<string, string>  // filePath → version
+  ): Promise<Map<string, HybridFact[]>> {
+    if (!versionMap || versionMap.size === 0) {
+      return new Map();
+    }
+
+    // Group by version for efficient batch queries
+    const byVersion = new Map<string, string[]>();
+    for (const [path, version] of versionMap) {
+      if (!byVersion.has(version)) {
+        byVersion.set(version, []);
+      }
+      byVersion.get(version)!.push(path);
+    }
+    
+    // Batch query per version
+    const allFacts = new Map<string, HybridFact[]>();
+    for (const [version, paths] of byVersion) {
+      const facts = await this.getPriorFactsBatch(paths, version);
+      for (const [path, factsList] of facts) {
+        allFacts.set(path, factsList);
+      }
+    }
+    return allFacts;
+  }
+
+  /**
    * Get prior facts for a file with workspace fallback
-   * Tries the specified version first, then falls back to 'workspace' and 'workspace-staged'
-   * This handles cases where workspace files are stored with version='workspace' 
-   * but we're querying with a commit SHA
+   * @deprecated REMOVED - Use per-file version selection with getPriorFacts() or getPriorFactsBatchWithVersions() instead.
+   * Fallback logic masks version mismatches and prevents timeline chain analysis.
    */
   async getPriorFactsWithFallback(
     filePath: string,
     version: string
   ): Promise<HybridFact[]> {
-    // Try the requested version first
-    let facts = await this.getPriorFacts(filePath, version) || [];
-    
-    // If no facts found and version is not already 'workspace', try workspace fallback
-    if (facts.length === 0 && version !== 'workspace' && version !== 'workspace-staged') {
-      // Try workspace version
-      const workspaceFacts = await this.getPriorFacts(filePath, 'workspace') || [];
-      if (workspaceFacts.length > 0) {
-        facts = workspaceFacts;
-        logDebug(`[CstTimeline] Found ${facts.length} facts for ${filePath} in workspace (fallback from ${version.substring(0, 8)})`);
-      } else {
-        // Try workspace-staged as last resort
-        const stagedFacts = await this.getPriorFacts(filePath, 'workspace-staged') || [];
-        if (stagedFacts.length > 0) {
-          facts = stagedFacts;
-          logDebug(`[CstTimeline] Found ${facts.length} facts for ${filePath} in workspace-staged (fallback from ${version.substring(0, 8)})`);
-        }
-      }
-    }
-    
-    return facts;
+    throw new Error(
+      `[CstTimeline] getPriorFactsWithFallback() has been removed. ` +
+      `Fallback logic masked timeline chain breaks. ` +
+      `Use per-file version selection with getPriorFacts() or getPriorFactsBatchWithVersions(). ` +
+      `File: ${filePath}, Version: ${version}`
+    );
   }
 
   /**
    * Batch retrieve prior facts with workspace fallback
-   * For files with no facts at the requested version, automatically tries 'workspace' and 'workspace-staged'
+   * @deprecated REMOVED - Use getPriorFactsBatchWithVersions() with per-file version selection instead.
+   * Fallback logic masks version mismatches and prevents timeline chain analysis.
    */
   async getPriorFactsBatchWithFallback(
     filePaths: string[],
     version: string
   ): Promise<Map<string, HybridFact[]>> {
-    const db = getDatabase();
-    if (!db || filePaths.length === 0) return new Map();
-
-    this.ensureTableExists(db);
-
-    try {
-      // First, try the requested version
-      let factsByFile = await this.getPriorFactsBatch(filePaths, version);
-      
-      // If version is not already workspace, check for missing files and try fallback
-      if (version !== 'workspace' && version !== 'workspace-staged') {
-        const missingFiles = filePaths.filter(path => !factsByFile.has(path) || factsByFile.get(path)!.length === 0);
-        
-        if (missingFiles.length > 0) {
-          // Try workspace version for missing files
-          const workspaceFacts = await this.getPriorFactsBatch(missingFiles, 'workspace');
-          for (const [filePath, facts] of workspaceFacts) {
-            if (facts.length > 0) {
-              factsByFile.set(filePath, facts);
-              logDebug(`[CstTimeline] Found ${facts.length} facts for ${filePath} in workspace (batch fallback from ${version.substring(0, 8)})`);
-            }
-          }
-          
-          // Try workspace-staged for any still missing
-          const stillMissing = missingFiles.filter(path => !factsByFile.has(path) || factsByFile.get(path)!.length === 0);
-          if (stillMissing.length > 0) {
-            const stagedFacts = await this.getPriorFactsBatch(stillMissing, 'workspace-staged');
-            for (const [filePath, facts] of stagedFacts) {
-              if (facts.length > 0) {
-                factsByFile.set(filePath, facts);
-                logDebug(`[CstTimeline] Found ${facts.length} facts for ${filePath} in workspace-staged (batch fallback from ${version.substring(0, 8)})`);
-              }
-            }
-          }
-        }
-      }
-      
-      return factsByFile;
-    } catch (error) {
-      logDebug(`[CstTimeline] Error getting prior facts batch with fallback: ${error}`);
-      return new Map();
-    }
+    throw new Error(
+      `[CstTimeline] getPriorFactsBatchWithFallback() has been removed. ` +
+      `Fallback logic masked timeline chain breaks. ` +
+      `Use getPriorFactsBatchWithVersions() with per-file version selection. ` +
+      `Files: ${filePaths.length}, Version: ${version}`
+    );
   }
 
   /**
@@ -434,5 +415,58 @@ export function getCstTimelineManager(): CstTimelineManager {
     timelineManagerInstance = new CstTimelineManager();
   }
   return timelineManagerInstance;
+}
+
+/**
+ * Determine prior version in timeline chain: unstaged → staged → HEAD → commits
+ * Used for drift detection to compare current vs prior state
+ * Throws error if version is not in expected timeline chain (fail-fast behavior)
+ */
+export function getPriorVersionInChain(
+  currentVersion: string,
+  scope: ScopeSet,
+  filePath: string,
+  commitShas: string[]
+): string {
+  // Unstaged → check for staged, then HEAD/oldest commit
+  if (currentVersion === 'workspace-unstaged') {
+    if (scope.stagedFiles?.has(filePath)) return 'workspace-staged';
+    if (commitShas.length > 0) return commitShas[commitShas.length - 1]; // Most recent commit
+    return 'HEAD';
+  }
+
+  // Staged → HEAD or most recent commit
+  if (currentVersion === 'workspace-staged') {
+    if (commitShas.length > 0) return commitShas[commitShas.length - 1]; // Most recent commit
+    return 'HEAD';
+  }
+
+  // HEAD → most recent commit (if available)
+  if (currentVersion === 'HEAD') {
+    if (commitShas.length === 0) {
+      throw new Error(
+        `[CstTimeline] Cannot determine prior version for HEAD - no commits in timeline chain. ` +
+        `File: ${filePath}`
+      );
+    }
+    return commitShas[commitShas.length - 1];
+  }
+
+  // Commit SHA → previous commit in chain (older)
+  const index = commitShas.indexOf(currentVersion);
+  if (index === -1) {
+    throw new Error(
+      `[CstTimeline] Version ${currentVersion.substring(0, 8)} not found in timeline chain. ` +
+      `File: ${filePath}, Expected chain: [${commitShas.map(s => s.substring(0, 8)).join(', ')}]`
+    );
+  }
+  if (index === 0) {
+    // At oldest commit - no prior version available
+    throw new Error(
+      `[CstTimeline] No prior version for ${currentVersion.substring(0, 8)} - already at oldest commit. ` +
+      `File: ${filePath}`
+    );
+  }
+  return commitShas[index - 1]; // Previous (older) commit
 }
 

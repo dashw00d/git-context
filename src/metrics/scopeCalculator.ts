@@ -161,6 +161,8 @@ export function createScopeSet(metrics: ScopeMetrics): ScopeSet {
   return {
     commitFiles: new Set(dummyFiles),
     workingChanged: new Set(dummyWorking),
+    stagedFiles: new Set(),  // Empty for metrics-based scope
+    unstagedFiles: new Set(),  // Empty for metrics-based scope
     blastRadius: new Set(dummyBlast),
     allPaths: new Set([...dummyFiles, ...dummyWorking, ...dummyBlast])
   };

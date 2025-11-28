@@ -9,7 +9,7 @@ export function createLegacyStep(): PipelineStep {
   return {
     id: 'legacy',
     label: 'Audit legacy code',
-    deps: ['intended', 'working', 'scope'],
+    deps: ['intended', 'working', 'scope', 'drift', 'index_commits', 'workspace_overlay'],
 
     async run(state: PipelineState) {
       if (!state.intended || !state.working || !state.scope) {
@@ -17,6 +17,32 @@ export function createLegacyStep(): PipelineStep {
       }
 
       const legacy = await auditLegacy(state.intended, state.working, state.scope);
+
+      // Enhance legacy audit results with timeline context from drift data
+      if (state.drift && state.explicitTimeline && legacy.dead.length > 0) {
+        for (const deadSym of legacy.dead) {
+          // Find corresponding entry in drift.missing
+          const driftEntry = state.drift.missing_symbols.find(d => d.symbol_id === deadSym.symbol_id);
+          
+          if (driftEntry) {
+            // Check for timelineDelta in hybrid drifts (if present)
+            const hybridDrift = state.drift.hybridDrifts?.find(
+              hd => hd.fact.id === deadSym.symbol_id && hd.timelineDelta
+            );
+            
+            if (hybridDrift?.timelineDelta && hybridDrift.timelineDelta.length > 0) {
+              // Find last version where symbol appeared
+              const lastDelta = hybridDrift.timelineDelta[hybridDrift.timelineDelta.length - 1];
+              (deadSym as any).lastSeenVersion = lastDelta.version;
+            } else if (driftEntry.expected?.lastSha) {
+              // Use lastSha from intended state as fallback
+              (deadSym as any).lastSeenVersion = driftEntry.expected.lastSha;
+            }
+          }
+        }
+        
+        logDebug(`[LegacyStep] Enhanced ${legacy.dead.length} dead symbols with timeline context`);
+      }
 
       // Check for legacy CST facts (unchanged since v1 = low risk, but track)
       const config = getExtensionConfig();
@@ -27,6 +53,14 @@ export function createLegacyStep(): PipelineStep {
         const timelineManager = getCstTimelineManager();
         const scopeFiles = state.scope.allPaths;
 
+        // Verify that index_commits and workspace_overlay have completed (hybrid facts should be available)
+        if (!state.completedSteps.has('index_commits')) {
+          logDebug(`[LegacyStep] WARNING: index_commits not completed, hybrid facts may be missing`);
+        }
+        if (state.includeWorkspace && !state.completedSteps.has('workspace_overlay')) {
+          logDebug(`[LegacyStep] WARNING: workspace_overlay not completed, workspace hybrid facts may be missing`);
+        }
+
         for (const filePath of scopeFiles) {
           const language = detectLanguage(filePath);
           if (!language) continue;
@@ -35,9 +69,20 @@ export function createLegacyStep(): PipelineStep {
           if (!isCstOnly && !enableAugment) continue;
 
           try {
-            // Get facts for oldest commit in bundle, or workspace if no commits
-            const versionToCheck = state.selectedCommitShas?.[0] || 'workspace';
-            const facts = await timelineManager.getPriorFactsWithFallback(filePath, versionToCheck);
+            // Get facts using version-based querying based on scope membership
+            let versionToCheck: string;
+            if (state.scope.unstagedFiles?.has(filePath)) {
+              versionToCheck = 'workspace-unstaged';
+            } else if (state.scope.stagedFiles?.has(filePath)) {
+              versionToCheck = 'workspace-staged';
+            } else {
+              versionToCheck = state.selectedCommitShas?.[0] || 'HEAD';
+            }
+            const facts = await timelineManager.getPriorFacts(filePath, versionToCheck) || [];
+            
+            if (facts.length > 0) {
+              logDebug(`[LegacyStep] Retrieved ${facts.length} hybrid facts for ${filePath}@${versionToCheck}`);
+            }
             
             // Check for CST facts with long timelines (unchanged = legacy)
             for (const fact of facts) {

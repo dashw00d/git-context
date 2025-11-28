@@ -2,13 +2,17 @@ import { GitOperations } from './git';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
 import { Database } from 'sql.js';
-import { logDebug } from '../utils/logger';
+import { logDebug, logInfo } from '../utils/logger';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getExtensionConfig, getSupportedExtensions, detectLanguage, isCstOnlyLanguage } from '../utils/config';
+import { getExtensionConfig, getSupportedExtensions, detectLanguage, isCstOnlyLanguage, createCustomIgnoreMatcher } from '../utils/config';
+import { filterPath } from '../utils/pathFilter';
 import { getCstTimelineManager } from './cstTimeline';
 import { getTreeSitterParser } from './tree-sitter';
+// p-limit is CommonJS; use require style to avoid default-import issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+import pLimit = require('p-limit');
 
 export interface WorkspaceFacts {
   workspaceHash: string;
@@ -44,43 +48,17 @@ export class WorkspaceIndexer {
       ? await this.git.getStagedFiles()
       : await this.git.getUnstagedFiles();
 
-    // Filter files
-    const config = getExtensionConfig();
-    const allowedExtensions = new Set(config.allowedExtensions || getSupportedExtensions());
-    // maxFileSize should always have a default from package.json via getExtensionConfig
-    const maxFileSize = config.maxFileSize ?? 102400;
+    // Filter files using centralized path filter
     const gitRoot = this.git.getRoot();
 
-    const filteredFiles = changedFiles.filter(file => {
-      const { path: filePath, status } = file;
-
-      // 0. Validate file path
-      if (!filePath || typeof filePath !== 'string' || filePath.trim() === '') {
-        logDebug(`[WorkspaceIndexer] Skipping invalid file path: ${JSON.stringify(file)}`);
-        return false;
-      }
-
-      // 1. Check extension
-      const ext = path.extname(filePath).slice(1).toLowerCase();
-      if (!allowedExtensions.has(ext)) return false;
-
-      // 2. Check if ignored
-      if (this.git.isIgnored(filePath)) return false;
-
-      // 3. Check file size (if not deleted)
-      if (status !== 'D') {
-        try {
-          const fullPath = path.join(gitRoot, filePath);
-          if (fs.existsSync(fullPath)) {
-            const stats = fs.statSync(fullPath);
-            if (stats.size > maxFileSize) return false;
-          }
-        } catch (e) {
-          return false;
-        }
-      }
-      return true;
-    });
+    const filteredFiles = changedFiles.filter(file => 
+      filterPath(file.path, {
+        git: this.git,
+        gitRoot,
+        status: file.status,
+        skipSizeCheck: file.status === 'D'
+      })
+    );
 
     if (filteredFiles.length === 0) {
       return null;
@@ -109,115 +87,167 @@ export class WorkspaceIndexer {
     const changedSymbols: any[] = [];
     const allEdges: any[] = [];
 
-    for (const file of filteredFiles) {
-      const { path: filePath, status } = file;
+    // Parallelize file processing with concurrency limit
+    const limit = pLimit(8);
+    const startTime = Date.now();
+    const version = mode === 'staged' ? 'workspace-staged' : 'workspace-unstaged';
 
-      if (status === 'D') {
-        // FILE DELETED
-        const headBlobSha = this.git.getBlobSha('HEAD', filePath);
-        const headContent = this.git.safeGetFileContent('HEAD', filePath);
-        const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
-          filePath,
-          headBlobSha,
-          headContent
-        );
+    const filePromises = filteredFiles.map(file =>
+      limit(async () => {
+        const { path: filePath, status } = file;
 
-        totalRemoved += headSnapshot.symbols.length;
-        totalEdgesRemoved += headSnapshot.edges.length;
+        try {
+          if (status === 'D') {
+            // FILE DELETED
+            const headBlobSha = this.git.getBlobSha('HEAD', filePath);
+            const headContent = this.git.safeGetFileContent('HEAD', filePath);
+            const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
+              filePath,
+              headBlobSha,
+              headContent
+            );
 
-        // Track removed symbols for blast radius
-        changedSymbols.push(...headSnapshot.symbols);
-        allEdges.push(...headSnapshot.edges);
+            return {
+              added: 0,
+              modified: 0,
+              removed: headSnapshot.symbols.length,
+              edgesAdded: 0,
+              edgesRemoved: headSnapshot.edges.length,
+              symbols: headSnapshot.symbols,
+              edges: headSnapshot.edges,
+              risks: ['deletion'],
+              structuralChange: 0
+            };
+          }
 
-        allRisks.push('deletion');
-        continue;
-      }
+          // Get workspace content
+          const fullPath = path.join(gitRoot, filePath);
+          let workingContent: string;
+          try {
+            workingContent = fs.readFileSync(fullPath, 'utf8');
+          } catch (error: any) {
+            // Provide detailed error with path information
+            throw new Error(
+              `Failed to read workspace file "${filePath}" (resolved to "${fullPath}"): ${error.message}\n` +
+              `This may indicate a git path parsing issue. File exists: ${fs.existsSync(fullPath)}`
+            );
+          }
+          const workspaceBlobSha = 'WORKSPACE:' + crypto.createHash('sha256')
+            .update(workingContent)
+            .digest('hex');
 
-      // Get workspace content
-      const fullPath = path.join(gitRoot, filePath);
-      let workingContent: string;
-      try {
-        workingContent = fs.readFileSync(fullPath, 'utf8');
-      } catch (error: any) {
-        // Provide detailed error with path information
-        throw new Error(
-          `Failed to read workspace file "${filePath}" (resolved to "${fullPath}"): ${error.message}\n` +
-          `This may indicate a git path parsing issue. File exists: ${fs.existsSync(fullPath)}`
-        );
-      }
-      const workspaceBlobSha = 'WORKSPACE:' + crypto.createHash('sha256')
-        .update(workingContent)
-        .digest('hex');
+          const workspaceSnapshot = await this.snapshotManager.getOrCreateSnapshot(
+            filePath,
+            workspaceBlobSha,
+            workingContent
+          );
 
-      const workspaceSnapshot = await this.snapshotManager.getOrCreateSnapshot(
-        filePath,
-        workspaceBlobSha,
-        workingContent
-      );
+          // Extract and save hybrid facts for workspace with mode-specific version
+          await this.extractAndSaveHybridFacts(filePath, version, workingContent, workspaceSnapshot.symbols);
 
-      // Extract and save hybrid facts for workspace
-      await this.extractAndSaveHybridFacts(filePath, 'workspace', workingContent, workspaceSnapshot.symbols);
+          if (status === 'A' || status === 'U') {
+            // FILE ADDED or UNTRACKED (both don't exist at HEAD)
+            return {
+              added: workspaceSnapshot.symbols.length,
+              modified: 0,
+              removed: 0,
+              edgesAdded: workspaceSnapshot.edges.length,
+              edgesRemoved: 0,
+              symbols: workspaceSnapshot.symbols,
+              edges: workspaceSnapshot.edges,
+              risks: [],
+              structuralChange: 0
+            };
+          } else {
+            // FILE MODIFIED (exists at HEAD)
+            const headBlobSha = this.git.getBlobSha('HEAD', filePath);
+            const headContent = this.git.safeGetFileContent('HEAD', filePath);
+            const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
+              filePath,
+              headBlobSha,
+              headContent
+            );
 
-      // Collect edges for blast radius
-      allEdges.push(...workspaceSnapshot.edges);
+            const diff = this.snapshotManager.compareSnapshots(headSnapshot, workspaceSnapshot);
 
-      if (status === 'A' || status === 'U') {
-        // FILE ADDED or UNTRACKED (both don't exist at HEAD)
-        totalAdded += workspaceSnapshot.symbols.length;
-        totalEdgesAdded += workspaceSnapshot.edges.length;
+            // Edge diff
+            const headEdgeIds = new Set(headSnapshot.edges.map(e => `${e.from}-${e.to}`));
+            const workspaceEdgeIds = new Set(workspaceSnapshot.edges.map(e => `${e.from}-${e.to}`));
+            const edgesAdded = workspaceSnapshot.edges.filter(e => !headEdgeIds.has(`${e.from}-${e.to}`)).length;
+            const edgesRemoved = headSnapshot.edges.filter(e => !workspaceEdgeIds.has(`${e.from}-${e.to}`)).length;
 
-        // Track added symbols
-        changedSymbols.push(...workspaceSnapshot.symbols);
-      } else {
-        // FILE MODIFIED (exists at HEAD)
-        const headBlobSha = this.git.getBlobSha('HEAD', filePath);
-        const headContent = this.git.safeGetFileContent('HEAD', filePath);
-        const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
-          filePath,
-          headBlobSha,
-          headContent
-        );
+            // Structural diff (optional - can be slow for workspace)
+            const structDiff = await this.structuralDiffManager.getOrCreateStructuralDiff(
+              headBlobSha,
+              workspaceBlobSha,
+              filePath,
+              headContent,
+              workingContent
+            );
 
-        const diff = this.snapshotManager.compareSnapshots(headSnapshot, workspaceSnapshot);
-        totalAdded += diff.added.length;
-        totalModified += diff.modified.length;
-        totalRemoved += diff.removed.length;
+            // Extract and save hybrid facts for modified workspace files with mode-specific version
+            const headFileHash = await this.computeFileHashForFacts(filePath, 'HEAD', headContent, headSnapshot.symbols);
+            await this.extractAndSaveHybridFacts(filePath, version, workingContent, workspaceSnapshot.symbols, headFileHash);
 
-        // Track all changed symbols
-        changedSymbols.push(...diff.added);
-        changedSymbols.push(...diff.modified.map(m => m.symbol));
-        changedSymbols.push(...diff.removed);
+            // Risk detection
+            const risks: string[] = [];
+            if (structDiff.interfaceChanged) risks.push('breaking-api');
+            if (structDiff.controlFlowChanged) risks.push('refactor');
 
-        // Edge diff
-        const headEdgeIds = new Set(headSnapshot.edges.map(e => `${e.from}-${e.to}`));
-        const workspaceEdgeIds = new Set(workspaceSnapshot.edges.map(e => `${e.from}-${e.to}`));
-        totalEdgesAdded += workspaceSnapshot.edges.filter(e => !headEdgeIds.has(`${e.from}-${e.to}`)).length;
-        totalEdgesRemoved += headSnapshot.edges.filter(e => !workspaceEdgeIds.has(`${e.from}-${e.to}`)).length;
+            return {
+              added: diff.added.length,
+              modified: diff.modified.length,
+              removed: diff.removed.length,
+              edgesAdded,
+              edgesRemoved,
+              symbols: [...diff.added, ...diff.modified.map(m => m.symbol), ...diff.removed],
+              edges: workspaceSnapshot.edges,
+              risks,
+              structuralChange: structDiff.structuralChangeScore
+            };
+          }
+        } catch (error: any) {
+          logDebug(`[WorkspaceIndexer] Error processing ${filePath}: ${error.message}`);
+          // Return empty result to allow other files to continue
+          return {
+            added: 0,
+            modified: 0,
+            removed: 0,
+            edgesAdded: 0,
+            edgesRemoved: 0,
+            symbols: [],
+            edges: [],
+            risks: [],
+            structuralChange: 0
+          };
+        }
+      })
+    );
 
-        // Structural diff (optional - can be slow for workspace)
-        const structDiff = await this.structuralDiffManager.getOrCreateStructuralDiff(
-          headBlobSha,
-          workspaceBlobSha,
-          filePath,
-          headContent,
-          workingContent
-        );
+    const fileResults = await Promise.all(filePromises);
+    const duration = Date.now() - startTime;
+    logInfo(`[WorkspaceIndexer] Processed ${filteredFiles.length} files in ${duration}ms (${(filteredFiles.length / (duration / 1000)).toFixed(1)} files/sec)`);
 
-        maxStructuralChange = Math.max(maxStructuralChange, structDiff.structuralChangeScore);
-
-        // Extract and save hybrid facts for modified workspace files
-        const headFileHash = await this.computeFileHashForFacts(filePath, 'HEAD', headContent, headSnapshot.symbols);
-        await this.extractAndSaveHybridFacts(filePath, 'workspace', workingContent, workspaceSnapshot.symbols, headFileHash);
-
-        // Risk detection
-        if (structDiff.interfaceChanged) allRisks.push('breaking-api');
-        if (structDiff.controlFlowChanged) allRisks.push('refactor');
-      }
+    // Aggregate results
+    for (const result of fileResults) {
+      totalAdded += result.added;
+      totalModified += result.modified;
+      totalRemoved += result.removed;
+      totalEdgesAdded += result.edgesAdded;
+      totalEdgesRemoved += result.edgesRemoved;
+      changedSymbols.push(...result.symbols);
+      allEdges.push(...result.edges);
+      allRisks.push(...result.risks);
+      maxStructuralChange = Math.max(maxStructuralChange, result.structuralChange);
     }
 
     // Calculate blast radius
     const blastRadiusResult = this.calculateBlastRadius(changedSymbols, allEdges);
     const totalImpact = Array.from(blastRadiusResult.impactScore.values()).reduce((a, b) => a + b, 0);
+
+    // Flush any pending snapshot and diff writes
+    this.snapshotManager.flushSnapshotQueue();
+    this.structuralDiffManager.flushDiffQueue();
 
     const facts: WorkspaceFacts = {
       workspaceHash,
@@ -390,6 +420,9 @@ export class WorkspaceIndexer {
 
       const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
       await this.cstTimelineManager.saveFacts(filePath, version, hybridFacts, prevHash);
+      if (hybridFacts.length > 0) {
+        logDebug(`[WorkspaceIndexer] Saved ${hybridFacts.length} hybrid facts for ${filePath}@${version}`);
+      }
     } catch (error) {
       logDebug(`[WorkspaceIndexer] Error extracting hybrid facts for ${filePath}: ${error}`);
     }

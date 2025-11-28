@@ -15,6 +15,8 @@ import { CommitIndexer } from '../src/analysis/commitIndexer';
 import { EmbeddingIndexer } from '../src/analysis/embeddingIndexer';
 import { LlmAnalyst } from '../src/analysis/llmAnalyst/runner';
 import { BundleStoryEngine } from '../src/analysis/bundleStoryEngine';
+import { RefactorBundleFacts } from '../src/facts/types';
+import { LlmAnalysis } from '../src/analysis/llmAnalyst/blocks';
 import { runPipeline } from '../src/analysis/runner/pipelineRunner';
 import { PipelineStep } from '../src/analysis/runner/pipelineTypes';
 
@@ -25,6 +27,7 @@ import { createWorkingStep } from '../src/analysis/runner/steps/workingStep';
 import { createDriftStep } from '../src/analysis/runner/steps/driftStep';
 import { createLegacyStep } from '../src/analysis/runner/steps/legacyStep';
 import { createHotspotStep } from '../src/analysis/runner/steps/hotspotStep';
+import { createMovedBlockStep } from '../src/analysis/runner/steps/movedBlockStep';
 import { createWorkspaceOverlayStep } from '../src/analysis/runner/steps/workspaceStep';
 import { createEmbeddingStep } from '../src/analysis/runner/steps/embeddingStep';
 import { createBundleFactsStep } from '../src/analysis/runner/steps/bundleFactsStep';
@@ -117,7 +120,7 @@ function summarizeStep(stepId: string, data: any): string {
       // Count would require DB query, so we just show commit count
       return `commits=${data.length || 0}`;
     case 'bundle_facts':
-      const hybridFactsCount = data.hybridFacts 
+      const hybridFactsCount = data.hybridFacts
         ? Object.keys(data.hybridFacts).reduce((sum, key) => sum + (data.hybridFacts[key]?.length || 0), 0)
         : 0;
       const hybridFilesCount = data.hybridFacts ? Object.keys(data.hybridFacts).length : 0;
@@ -194,21 +197,37 @@ function extractStepMetrics(stepId: string, data: any): Record<string, any> {
       if (Array.isArray(data)) {
         return {
           topHotspots: data.length,
-          totalChurn: data.reduce((sum: number, h: any) => sum + (h.churnScore || h.dnaChurn || 0), 0)
+          totalChurn: data.reduce((sum: number, h: any) => sum + (h.churnScore || h.dnaChurn || 0), 0),
+          withVersionTracking: data.filter((h: any) => h.touchedInVersions).length,
+          versionDescriptions: data.filter((h: any) => h.touchedInVersionsDescription).map((h: any) => h.touchedInVersionsDescription)
         };
       }
-      return { topHotspots: 0, totalChurn: 0 };
+      return { topHotspots: 0, totalChurn: 0, withVersionTracking: 0, versionDescriptions: [] };
+
+    case 'moved_blocks':
+      if (Array.isArray(data)) {
+        return {
+          totalMoves: data.length,
+          withVersionDescription: data.filter((m: any) => m.versionDescription).length,
+          moveTypes: {
+            rename: data.filter((m: any) => m.moveType === 'rename').length,
+            relocate: data.filter((m: any) => m.moveType === 'relocate').length,
+            refactor: data.filter((m: any) => m.moveType === 'refactor').length
+          }
+        };
+      }
+      return { totalMoves: 0, withVersionDescription: 0, moveTypes: { rename: 0, relocate: 0, refactor: 0 } };
 
     case 'bundle_facts':
       const hybridFactsCount = data.hybridFacts
         ? Object.values(data.hybridFacts).reduce((sum: number, f: any) => sum + (Array.isArray(f) ? f.length : 0), 0)
         : 0;
       return {
-        incompleteness: data.findings?.incompleteness ? 
-          (data.findings.incompleteness.missing || 0) + 
-          (data.findings.incompleteness.zombies || 0) + 
+        incompleteness: data.findings?.incompleteness ?
+          (data.findings.incompleteness.missing || 0) +
+          (data.findings.incompleteness.zombies || 0) +
           (data.findings.incompleteness.divergent || 0) : 0,
-        patternDrift: data.findings?.patternDrift ? 
+        patternDrift: data.findings?.patternDrift ?
           (data.findings.patternDrift.mixedTargets?.length || 0) +
           (data.findings.patternDrift.oldNamespaces?.length || 0) +
           (data.findings.patternDrift.conventionDrift ? 1 : 0) +
@@ -263,6 +282,36 @@ function extractStepMetrics(stepId: string, data: any): Record<string, any> {
   }
 }
 
+/**
+ * Build explicit timeline chain from UI selections
+ * Returns array sorted newest → oldest for optimal cache warming
+ */
+function buildExplicitTimeline(options: {
+  includeUnstaged: boolean;
+  includeStaged: boolean;
+  selectedCommitShas: string[];  // Already sorted newest → oldest by caller
+}): string[] {
+  const timeline: string[] = [];
+
+  // Add workspace versions (newest first)
+  if (options.includeUnstaged) {
+    timeline.push('workspace-unstaged');
+  }
+  if (options.includeStaged) {
+    timeline.push('workspace-staged');
+  }
+
+  // Add HEAD if we have commits (bridge between workspace and commits)
+  if (options.selectedCommitShas.length > 0) {
+    timeline.push('HEAD');
+  }
+
+  // Add selected commits (already sorted newest → oldest)
+  timeline.push(...options.selectedCommitShas);
+
+  return timeline;
+}
+
 function deleteDatabaseIfRequested(reset: boolean) {
   if (!reset) return;
   try {
@@ -270,27 +319,345 @@ function deleteDatabaseIfRequested(reset: boolean) {
     const gitRoot = config.getGitRoot?.();
     if (!gitRoot) return;
     const dbPath = path.join(gitRoot, '.git', 'commit-tracker', 'commit_tracker.db');
+    
+    // Close and clear the database manager's reference first
+    const { getDatabaseManager } = require('../src/storage/database');
+    const dbManager = getDatabaseManager();
+    if (dbManager) {
+      try {
+        dbManager.close();
+        console.log(`🧹 Closed existing database connection`);
+      } catch (error: any) {
+        // Ignore errors when closing (might already be closed)
+        console.log(`🧹 Database connection already closed or not initialized`);
+      }
+    }
+    
+    // Then delete the file
     if (fs.existsSync(dbPath)) {
       fs.unlinkSync(dbPath);
-      console.log(`🧹 Deleted existing database at ${dbPath}`);
+      console.log(`🧹 Deleted existing database file at ${dbPath}`);
+    }
+    
+    // Also delete any journal/wal files that might exist
+    const journalPath = `${dbPath}-journal`;
+    const walPath = `${dbPath}-wal`;
+    if (fs.existsSync(journalPath)) {
+      fs.unlinkSync(journalPath);
+      console.log(`🧹 Deleted journal file`);
+    }
+    if (fs.existsSync(walPath)) {
+      fs.unlinkSync(walPath);
+      console.log(`🧹 Deleted WAL file`);
     }
   } catch (error: any) {
     console.warn(`⚠ Could not delete database: ${error?.message || error}`);
   }
 }
 
+/**
+ * Captured LLM data structure
+ */
+interface CapturedLlmData {
+  summarizedFacts: RefactorBundleFacts | null;
+  prompts: {
+    intent: string | null;
+    drift: string | null;
+    cleanup: string | null;
+    discover: string | null;
+    quantify: string | null;
+    plan: string | null;
+  };
+}
+
+/**
+ * Wrapper class to capture LLM prompts and summarized facts without making actual API calls
+ * This extends LlmAnalyst and completely reimplements analyze() to capture prompts
+ */
+class PromptCaptureLlmAnalyst extends LlmAnalyst {
+  private capturedData: CapturedLlmData = {
+    summarizedFacts: null,
+    prompts: {
+      intent: null,
+      drift: null,
+      cleanup: null,
+      discover: null,
+      quantify: null,
+      plan: null
+    }
+  };
+
+  getCapturedData(): CapturedLlmData {
+    return this.capturedData;
+  }
+
+  /**
+   * Completely override analyze to capture summarized facts and all prompts
+   */
+  async analyze(facts: RefactorBundleFacts, rawFeed?: any): Promise<LlmAnalysis> {
+    const { PROMPT_INTENT_AND_STORY, PROMPT_DRIFT_VERIFICATION, PROMPT_CLEANUP_PLAN, PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT, buildTimelineSummary } = await import('../src/llm/prompts');
+    const { AnalysisBlockUtils } = await import('../src/analysis/llmAnalyst/blocks');
+    const { getExtensionConfig } = await import('../src/utils/config');
+    
+    const startTime = Date.now();
+    let totalTokens = 0;
+    let totalCalls = 0;
+
+    // Get config for maxInputChars
+    const config = getExtensionConfig();
+    const maxInputChars = (config as any).maxInputChars || 1000000;
+
+    // Summarize facts if too large
+    const factsJson = JSON.stringify(facts);
+    const factsSize = factsJson.length;
+    let processedFacts = facts;
+    
+    if (factsSize > maxInputChars) {
+      console.log(`LLM Analyst: Facts size (${factsSize} chars) exceeds max (${maxInputChars}), summarizing...`);
+      processedFacts = this.summarizeFactsHelper(facts);
+      const summarizedSize = JSON.stringify(processedFacts).length;
+      console.log(`LLM Analyst: Summarized to ${summarizedSize} chars (${((1 - summarizedSize / factsSize) * 100).toFixed(1)}% reduction)`);
+    }
+    
+    // Capture summarized facts (always capture, even if not summarized)
+    this.capturedData.summarizedFacts = processedFacts;
+
+    try {
+      // Pass 1: Intent & Story Analysis - capture prompt
+      console.log('LLM Analyst: Running intent analysis...');
+      const promptTemplate = this.getPromptHelper('intent', PROMPT_INTENT_AND_STORY);
+      const timelineInfo = buildTimelineSummary(processedFacts.bundle?.timeline);
+      const promptWithTimeline = promptTemplate
+        .replace('{timelineSummary}', timelineInfo.summary)
+        .replace('{versionCount}', String(timelineInfo.count));
+      const intentPrompt = this.buildPromptHelper(promptWithTimeline, processedFacts);
+      this.capturedData.prompts.intent = intentPrompt;
+      
+      const intentBlock = AnalysisBlockUtils.createBlock('intent', 'Refactor Intent & Story', 'intent');
+      intentBlock.claims = []; // Mock empty claims
+      totalCalls++;
+
+      // Pass 2: Drift Verification - capture prompt
+      console.log('LLM Analyst: Running drift verification...');
+      const driftPromptTemplate = this.getPromptHelper('drift', PROMPT_DRIFT_VERIFICATION);
+      const driftTimelineInfo = buildTimelineSummary(processedFacts.bundle?.timeline);
+      const driftPromptWithTimeline = driftPromptTemplate
+        .replace('{timelineSummary}', driftTimelineInfo.summary)
+        .replace('{versionCount}', String(driftTimelineInfo.count));
+      const driftPrompt = this.buildPromptHelper(driftPromptWithTimeline, processedFacts);
+      this.capturedData.prompts.drift = driftPrompt;
+      
+      const driftBlock = AnalysisBlockUtils.createBlock('drift', 'Drift Verification', 'drift');
+      driftBlock.claims = [];
+      driftBlock.actions = [];
+      totalCalls++;
+
+      // Pass 3: Cleanup Plan - capture prompt
+      console.log('LLM Analyst: Generating cleanup plan...');
+      const cleanupPromptTemplate = this.getPromptHelper('cleanup', PROMPT_CLEANUP_PLAN);
+      const cleanupTimelineInfo = buildTimelineSummary(processedFacts.bundle?.timeline);
+      const cleanupPromptWithTimeline = cleanupPromptTemplate
+        .replace('{timelineSummary}', cleanupTimelineInfo.summary)
+        .replace('{versionCount}', String(cleanupTimelineInfo.count));
+      const cleanupPrompt = this.buildPromptHelper(cleanupPromptWithTimeline, processedFacts);
+      this.capturedData.prompts.cleanup = cleanupPrompt;
+      
+      const cleanupBlock = AnalysisBlockUtils.createBlock('cleanup', 'Cleanup Plan', 'cleanup');
+      cleanupBlock.claims = [];
+      cleanupBlock.actions = [];
+      totalCalls++;
+
+      // Pass 4: Pattern Discovery (if raw feed provided) - capture prompts
+      let discoveryBlock: any = undefined;
+      if (rawFeed) {
+        console.log('LLM Analyst: Running pattern discovery...');
+        const discoveryResult = await this.discoverPatterns(rawFeed, facts);
+        discoveryBlock = this.callParentMethod('createDiscoveryBlock', discoveryResult, facts);
+        totalCalls += 3;
+      }
+
+      // Combine results
+      const blocks = [intentBlock, driftBlock, cleanupBlock];
+      if (discoveryBlock) {
+        blocks.push(discoveryBlock);
+      }
+      const summary = this.callParentMethod('generateSummary', blocks, facts);
+      const markdown = this.callParentMethod('generateMarkdown', blocks, facts);
+
+      // Calculate health score
+      const healthScore = this.callParentMethod('calculateHealthScore', facts);
+
+      // Calculate validated evidence count
+      const knownFiles = new Set((facts.evidence['scope.files'] as string[]) || []);
+      const validatedEvidenceCount = blocks.reduce((acc, block) => {
+        return acc + block.claims.reduce((claimAcc: number, claim: any) => {
+          return claimAcc + claim.evidence.filter((e: any) => e.filePath && knownFiles.has(e.filePath)).length;
+        }, 0) + block.actions.reduce((actionAcc: number, action: any) => {
+          return actionAcc + action.evidence.filter((e: any) => e.filePath && knownFiles.has(e.filePath)).length;
+        }, 0);
+      }, 0);
+
+      return {
+        summary,
+        blocks,
+        markdown,
+        metadata: {
+          totalCalls,
+          totalTokens,
+          model: getExtensionConfig().openRouterModel,
+          timestamp: new Date().toISOString(),
+          healthScore,
+          validatedEvidenceCount
+        }
+      };
+
+    } catch (error) {
+      console.error('LLM Analyst failed:', error);
+      const healthScore = this.callParentMethod('calculateHealthScore', facts);
+      return {
+        summary: `Analysis failed: ${error}`,
+        blocks: [],
+        markdown: `# Analysis Error\n\n${error}`,
+        metadata: {
+          totalCalls: 1,
+          totalTokens: 0,
+          model: 'unknown',
+          timestamp: new Date().toISOString(),
+          healthScore
+        }
+      };
+    }
+  }
+
+  /**
+   * Override discoverPatterns to capture all three prompts
+   */
+  async discoverPatterns(rawFeed: any, facts: RefactorBundleFacts): Promise<any> {
+    const { PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT } = await import('../src/llm/prompts');
+    const knownFiles = (facts.evidence['scope.files'] as string[]) || [];
+    const knownFilesList = knownFiles.length > 0 
+      ? `\n\nKNOWN FILES (ONLY use these in examples):\n${JSON.stringify(knownFiles)}\n\n`
+      : '\n\n';
+
+    // Discover prompt
+    const discoverPromptTemplate = this.getPromptHelper('discover', PROMPT_DISCOVER);
+    const discoverPrompt = `${SYSTEM_PROMPT}\n\nRAW FEED JSON:\n${JSON.stringify(rawFeed)}${knownFilesList}${discoverPromptTemplate}`;
+    this.capturedData.prompts.discover = discoverPrompt;
+
+    // Quantify prompt (mock discovery result)
+    const quantifyPromptTemplate = this.getPromptHelper('quantify', PROMPT_QUANTIFY);
+    const quantifyPrompt = `${SYSTEM_PROMPT}\n\nDISCOVERED PATTERNS:\n${JSON.stringify({ patterns: [] })}\n\n${quantifyPromptTemplate}`;
+    this.capturedData.prompts.quantify = quantifyPrompt;
+
+    // Plan prompt (mock quantified result)
+    const planPromptTemplate = this.getPromptHelper('plan', PROMPT_PLAN);
+    const planPrompt = `${SYSTEM_PROMPT}\n\nQUANTIFIED PATTERNS:\n${JSON.stringify({ quantified: [] })}\n\n${planPromptTemplate}`;
+    this.capturedData.prompts.plan = planPrompt;
+
+    // Return mock response
+    return {
+      discovery: {},
+      quantified: {},
+      plan: {},
+      metadata: {
+        totalTokens: 0,
+        duration: 0,
+        model: 'mock'
+      }
+    };
+  }
+
+  /**
+   * Helper to get prompt (duplicated from base class, using different name to avoid conflict)
+   */
+  private getPromptHelper(key: string, defaultPrompt: string): string {
+    const { getExtensionConfig } = require('../src/utils/config');
+    const config = getExtensionConfig();
+    if (config.customPrompts && config.customPrompts[key]) {
+      return config.customPrompts[key];
+    }
+    return defaultPrompt;
+  }
+
+  /**
+   * Helper to build prompt (duplicated from base class, using different name to avoid conflict)
+   */
+  private buildPromptHelper(userPrompt: string, facts: RefactorBundleFacts): string {
+    const { SYSTEM_PROMPT } = require('../src/llm/prompts');
+    const factsJson = JSON.stringify(facts, null, 2);
+    return `${SYSTEM_PROMPT}\n\nFACTS JSON:\n${factsJson}\n\n${userPrompt}`;
+  }
+
+  /**
+   * Helper to summarize facts (duplicated from base class, using different name to avoid conflict)
+   */
+  private summarizeFactsHelper(facts: RefactorBundleFacts): RefactorBundleFacts {
+    const summarized = { ...facts };
+    
+    if (summarized.evidence && Array.isArray(summarized.evidence['working.symbols'])) {
+      const symbols = summarized.evidence['working.symbols'] as string[];
+      summarized.evidence['working.symbols'] = symbols.slice(0, 20);
+    }
+    
+    if (summarized.evidence && Array.isArray(summarized.evidence['working.edges'])) {
+      const edges = summarized.evidence['working.edges'] as string[];
+      const edgeCounts = new Map<string, number>();
+      for (const edge of edges) {
+        const match = edge.match(/\((\w+)\)/);
+        const type = match ? match[1] : 'unknown';
+        edgeCounts.set(type, (edgeCounts.get(type) || 0) + 1);
+      }
+      summarized.evidence['working.edges'] = Array.from(edgeCounts.entries()).map(([type, count]) => `${type}: ${count}`);
+    }
+    
+    const maxEvidenceItems = 50;
+    for (const key in summarized.evidence) {
+      if (Array.isArray(summarized.evidence[key]) && summarized.evidence[key].length > maxEvidenceItems) {
+        summarized.evidence[key] = summarized.evidence[key].slice(0, maxEvidenceItems);
+      }
+    }
+    
+    return summarized;
+  }
+
+  /**
+   * Access parent methods via any cast (these are private in base class)
+   */
+  private callParentMethod(methodName: string, ...args: any[]): any {
+    return (this as any)[methodName](...args);
+  }
+}
+
 function buildSteps(workspaceIndexer: WorkspaceIndexer, commitIndexer: CommitIndexer, embeddingIndexer: EmbeddingIndexer, storyEngine: BundleStoryEngine): PipelineStep[] {
   return [
-    createIndexCommitsStep(commitIndexer, 2),
-    createScopeStep(),
-    createIntendedStep(),
-    createWorkingStep(),
-    createDriftStep(),
-    createLegacyStep(),
-    createHotspotStep(),
-    createWorkspaceOverlayStep(workspaceIndexer),
+    // LEVEL 0: Workspace FIRST + independent queries
+    // workspace_overlay runs first to warm cache from newest → oldest
+    createWorkspaceOverlayStep(workspaceIndexer),  // ← MOVED TO FIRST
+    createScopeStep(),                                // Independent
+
+    // LEVEL 1: Parallel processing with scope & commits
+    // index_commits now benefits from workspace cache warming
+    (() => {
+      const step = createIndexCommitsStep(commitIndexer, 2);
+      if (!step.deps) step.deps = [];
+      step.deps.push('workspace_overlay'); // Force sequential order for cache warming
+      return step;
+    })(),
+    createWorkingStep(),                              // Depends on scope
+
+    // LEVEL 2: Dependent on Commits & Scope
+    // These steps require the DB to be populated by index_commits
+    createIntendedStep(),                             // Now has deps: ['index_commits']
+    createHotspotStep(),                              // Now has deps: ['index_commits']
+    createMovedBlockStep(),                           // Already has deps: ['index_commits']
+
+    // LEVEL 3: Drift detection (needs hybrid facts from index_commits/workspace_overlay)
+    createDriftStep(),                                // Now has deps: ['intended', 'working', 'scope', 'index_commits', 'workspace_overlay']
+    createLegacyStep(),                               // Now has deps: ['intended', 'working', 'scope', 'drift', 'index_commits', 'workspace_overlay']
+
+    // LEVEL 3: Bundle assembly + LLM
+    createBundleFactsStep(),                          // Reads all from state
     createEmbeddingStep(embeddingIndexer),
-    createBundleFactsStep(),
     createHistoryRetrievalStep(storyEngine),
     createStoryStep(storyEngine)
   ];
@@ -320,13 +687,23 @@ async function main() {
   if (opts.noSnapshotCache) {
     process.env.SNAPSHOT_CACHE_ENABLED = 'false';
     console.log('🔧 Snapshot cache: disabled (--no-snapshot-cache flag)');
+  } else {
+    // Increase cache size for diagnostics to avoid thrashing with large refactors
+    process.env.SNAPSHOT_CACHE_SIZE = '500';
+    console.log('🔧 Snapshot cache: size increased to 500 for diagnostics');
   }
+
+  // Ignore everything except /src/** to isolate analysis to source code only
+  // Use recursive patterns (**) and negation (!) to isolate to /src
+  process.env.CUSTOM_IGNORE_PATHS = 'benchmarks/**, scripts/**, resources/**, media/**, docs/**, binaries/**, archive/**, .claude/**, .kilocode/**, .cursor/**, .git/**, .vscode/**, /**';
+  process.env.CUSTOM_IGNORE_PATHS += ', !/src/**';
+  console.log('🔧 Ignore paths: isolating to /src/** (all other paths ignored recursively)');
 
   const git = new GitOperations();
   const symbolExtractor = new SymbolExtractor(git);
   const dependencyExtractor = new DependencyExtractor();
   const snapshotManager = new SnapshotManager(db, symbolExtractor, dependencyExtractor);
-  
+
   // Clear cache on reset-db
   if (opts.resetDb) {
     snapshotManager.clearCache();
@@ -335,7 +712,7 @@ async function main() {
   const riskDetector = new RiskDetector();
   const hotspotDetector = new HotspotDetector();
   const movedBlockDetector = new MovedBlockDetector(getDatabaseManager(), git);
-  const llmAnalyst = new LlmAnalyst();
+  const llmAnalyst = new PromptCaptureLlmAnalyst();
   const storyEngine = new BundleStoryEngine(llmAnalyst);
 
   const commitIndexer = new CommitIndexer(
@@ -358,7 +735,7 @@ async function main() {
 
   const embeddingIndexer = new EmbeddingIndexer(dbManager);
   let steps = buildSteps(workspaceIndexer, commitIndexer, embeddingIndexer, storyEngine);
-  
+
   // Skip embedding step if --no-embeddings flag is set
   if (opts.noEmbeddings) {
     steps = steps.filter(s => s.id !== 'embedding_index');
@@ -388,9 +765,24 @@ async function main() {
 
   console.log(`📋 Analyzing ${commits.length} commits (HEAD: ${headSha.substring(0, 8)})`);
 
+  // Build explicit timeline (like refactorPipeline.ts does)
+  const workspaceParts = opts.includeWorkspace
+    ? new Set<'staged' | 'unstaged'>(['staged', 'unstaged'])
+    : undefined;
+
+  const explicitTimeline = buildExplicitTimeline({
+    includeUnstaged: opts.includeWorkspace && (workspaceParts?.has('unstaged') ?? true),
+    includeStaged: opts.includeWorkspace && (workspaceParts?.has('staged') ?? true),
+    selectedCommitShas: commits.map(c => c.sha)
+  });
+
   const initialState: any = {
     selectedCommitShas: commits.map(c => c.sha),
-    includeWorkspace: opts.includeWorkspace
+    includeWorkspace: opts.includeWorkspace,
+    workspaceParts,
+    explicitTimeline,
+    completedSteps: new Set(),
+    errors: []
   };
 
   const replayAnchor = opts.replayFrom || opts.replayStep || '';
@@ -454,20 +846,20 @@ async function main() {
     } else if (event.type === 'complete') {
       const stepId = event.step.id;
       const stepStartTime = stepStartTimes.get(stepId) || Date.now();
-      
+
       if (opts.focusSteps && !opts.focusSteps.has(stepId)) {
         console.log(`✅ ${event.step.label} (not focused)`);
         return;
       }
 
       // Use deep serialization if fullReport is enabled, otherwise use shallow
-      const fullData = opts.fullReport 
+      const fullData = opts.fullReport
         ? deepSerializeStepState(stepId, event.state)
         : serializeStepState(stepId, event.state);
-      
+
       // Extract metrics from full data
       const metrics = opts.fullReport ? extractStepMetrics(stepId, fullData) : {};
-      
+
       // For hash calculation, use shallow serialization to maintain compatibility
       const data = serializeStepState(stepId, event.state);
       // Special-case: embeddings use Qdrant (external), no serializable state
@@ -475,7 +867,7 @@ async function main() {
       if (stepId === 'embedding_index' || stepId === 'llm_story' || stepId === 'retrieve_history') {
         hash = 'n/a (external/complex)';
       }
-      
+
       // Measure snapshot load performance
       const loadStart = Date.now();
       const baseline = loadStepSnapshot(stepId, opts.snapshotDir);
@@ -483,38 +875,111 @@ async function main() {
       if (loadTime > 10) {
         console.warn(`[Diagnostics] Slow snapshot load for ${stepId}: ${loadTime}ms`);
       }
-      
+
       const summary = summarizeStep(stepId, data);
-      
+
       // Log cache stats if available
       const cacheStats = snapshotManager.getCacheStats();
       if (cacheStats.cacheHits + cacheStats.cacheMisses > 0) {
         diagnostics.performance.cacheStats = cacheStats;
       }
 
-      // Capture LLM outputs for llm_story step
+      // Capture LLM outputs and prompts for llm_story step
       let llmSummary: any = null;
-      if (stepId === 'llm_story' && event.state.llmOutputs) {
-        const llmAnalysis = event.state.llmOutputs.llmAnalysis;
-        if (llmAnalysis) {
-          llmSummary = {
-            summary_md: llmAnalysis.markdown ? 
-              (llmAnalysis.markdown.length > 1000 
-                ? llmAnalysis.markdown.substring(0, 1000) + '... [truncated]' 
-                : llmAnalysis.markdown) : undefined,
-            summary_text: llmAnalysis.summary ? 
-              (llmAnalysis.summary.length > 500 
-                ? llmAnalysis.summary.substring(0, 500) + '...' 
-                : llmAnalysis.summary) : undefined,
-            healthScore: llmAnalysis.metadata?.healthScore,
-            totalTokens: llmAnalysis.metadata?.totalTokens,
-            totalCalls: llmAnalysis.metadata?.totalCalls,
-            model: llmAnalysis.metadata?.model,
-            validatedEvidenceCount: llmAnalysis.metadata?.validatedEvidenceCount,
-            blocksCount: llmAnalysis.blocks?.length || 0,
-            timestamp: llmAnalysis.metadata?.timestamp
-          };
-          diagnostics.llm_summaries.push(llmSummary);
+      if (stepId === 'llm_story') {
+        // Get captured data from the wrapper
+        const capturedData = (llmAnalyst as PromptCaptureLlmAnalyst).getCapturedData();
+        
+        // Save summarized facts to file
+        if (capturedData.summarizedFacts) {
+          const outDir = path.join(process.cwd(), 'benchmarks', 'output');
+          if (!fs.existsSync(outDir)) {
+            fs.mkdirSync(outDir, { recursive: true });
+          }
+          const factsPath = path.join(outDir, 'llm_summarized_facts.json');
+          fs.writeFileSync(factsPath, JSON.stringify(capturedData.summarizedFacts, null, 2));
+          console.log(`💾 Saved summarized facts (${JSON.stringify(capturedData.summarizedFacts).length} chars) to ${factsPath}`);
+        }
+
+        // Save each prompt to separate files
+        const outDir = path.join(process.cwd(), 'benchmarks', 'output');
+        if (!fs.existsSync(outDir)) {
+          fs.mkdirSync(outDir, { recursive: true });
+        }
+
+        const promptFiles: Array<{ phase: string; path: string; size: number }> = [];
+        
+        if (capturedData.prompts.intent) {
+          const intentPath = path.join(outDir, 'llm_prompt_intent.txt');
+          fs.writeFileSync(intentPath, capturedData.prompts.intent);
+          promptFiles.push({ phase: 'intent', path: intentPath, size: capturedData.prompts.intent.length });
+        }
+        if (capturedData.prompts.drift) {
+          const driftPath = path.join(outDir, 'llm_prompt_drift.txt');
+          fs.writeFileSync(driftPath, capturedData.prompts.drift);
+          promptFiles.push({ phase: 'drift', path: driftPath, size: capturedData.prompts.drift.length });
+        }
+        if (capturedData.prompts.cleanup) {
+          const cleanupPath = path.join(outDir, 'llm_prompt_cleanup.txt');
+          fs.writeFileSync(cleanupPath, capturedData.prompts.cleanup);
+          promptFiles.push({ phase: 'cleanup', path: cleanupPath, size: capturedData.prompts.cleanup.length });
+        }
+        if (capturedData.prompts.discover) {
+          const discoverPath = path.join(outDir, 'llm_prompt_discover.txt');
+          fs.writeFileSync(discoverPath, capturedData.prompts.discover);
+          promptFiles.push({ phase: 'discover', path: discoverPath, size: capturedData.prompts.discover.length });
+        }
+        if (capturedData.prompts.quantify) {
+          const quantifyPath = path.join(outDir, 'llm_prompt_quantify.txt');
+          fs.writeFileSync(quantifyPath, capturedData.prompts.quantify);
+          promptFiles.push({ phase: 'quantify', path: quantifyPath, size: capturedData.prompts.quantify.length });
+        }
+        if (capturedData.prompts.plan) {
+          const planPath = path.join(outDir, 'llm_prompt_plan.txt');
+          fs.writeFileSync(planPath, capturedData.prompts.plan);
+          promptFiles.push({ phase: 'plan', path: planPath, size: capturedData.prompts.plan.length });
+        }
+
+        // Log saved files
+        if (promptFiles.length > 0) {
+          console.log(`💾 Saved ${promptFiles.length} LLM prompts:`);
+          promptFiles.forEach(({ phase, path, size }) => {
+            console.log(`   ${phase}: ${(size / 1024).toFixed(1)}KB -> ${path}`);
+          });
+        }
+
+        // Add to diagnostics
+        if (event.state.llmOutputs) {
+          const llmAnalysis = event.state.llmOutputs.llmAnalysis;
+          if (llmAnalysis) {
+            llmSummary = {
+              summary_md: llmAnalysis.markdown ?
+                (llmAnalysis.markdown.length > 1000
+                  ? llmAnalysis.markdown.substring(0, 1000) + '... [truncated]'
+                  : llmAnalysis.markdown) : undefined,
+              summary_text: llmAnalysis.summary ?
+                (llmAnalysis.summary.length > 500
+                  ? llmAnalysis.summary.substring(0, 500) + '...'
+                  : llmAnalysis.summary) : undefined,
+              healthScore: llmAnalysis.metadata?.healthScore,
+              totalTokens: llmAnalysis.metadata?.totalTokens,
+              totalCalls: llmAnalysis.metadata?.totalCalls,
+              model: llmAnalysis.metadata?.model,
+              validatedEvidenceCount: llmAnalysis.metadata?.validatedEvidenceCount,
+              blocksCount: llmAnalysis.blocks?.length || 0,
+              timestamp: llmAnalysis.metadata?.timestamp,
+              prompts: {
+                intent: capturedData.prompts.intent ? { size: capturedData.prompts.intent.length } : null,
+                drift: capturedData.prompts.drift ? { size: capturedData.prompts.drift.length } : null,
+                cleanup: capturedData.prompts.cleanup ? { size: capturedData.prompts.cleanup.length } : null,
+                discover: capturedData.prompts.discover ? { size: capturedData.prompts.discover.length } : null,
+                quantify: capturedData.prompts.quantify ? { size: capturedData.prompts.quantify.length } : null,
+                plan: capturedData.prompts.plan ? { size: capturedData.prompts.plan.length } : null
+              },
+              summarizedFactsSize: capturedData.summarizedFacts ? JSON.stringify(capturedData.summarizedFacts).length : 0
+            };
+            diagnostics.llm_summaries.push(llmSummary);
+          }
         }
       }
 
@@ -566,7 +1031,7 @@ async function main() {
   const startTime = Date.now();
   let driftStartTime = 0;
   let driftEndTime = 0;
-  
+
   // Wrap drift step to measure performance if testing hybrid
   if (opts.testHybrid) {
     const driftIndex = steps.findIndex(s => s.id === 'drift');
@@ -602,7 +1067,7 @@ async function main() {
     for (const [filePath, facts] of Object.entries(hybridFacts)) {
       const factArray = facts as any[];
       totalFacts += factArray.length;
-      
+
       // Determine if CST-only or augmented (simplified check)
       const hasSemanticSymbols = factArray.some((f: any) => f.kind && !['cst_node', 'heading', 'property', 'doc_comment'].includes(f.kind));
       if (hasSemanticSymbols) {
@@ -646,9 +1111,9 @@ async function main() {
       totalCommits: indexCommitsStep?.metrics?.commitCount || 0,
       totalSymbols: (workingStep?.metrics?.symbols || 0) + (intendedStep?.metrics?.totalSymbols || 0),
       totalEdges: workingStep?.metrics?.edges || 0,
-      totalDriftIssues: (driftStep?.metrics?.missing_symbols || 0) + 
-                        (driftStep?.metrics?.zombie_symbols || 0) + 
-                        (driftStep?.metrics?.divergent_symbols || 0),
+      totalDriftIssues: (driftStep?.metrics?.missing_symbols || 0) +
+        (driftStep?.metrics?.zombie_symbols || 0) +
+        (driftStep?.metrics?.divergent_symbols || 0),
       unresolvedCallers: driftStep?.metrics?.unresolved_callers || 0,
       totalHotspots: hotspotsStep?.metrics?.topHotspots || 0,
       bundleIncompleteness: bundleFactsStep?.metrics?.incompleteness || 0,
@@ -663,7 +1128,7 @@ async function main() {
 
     // Add final state snapshots (truncated for size)
     diagnostics.finalStates = {};
-    
+
     if (finalState.bundleFacts) {
       diagnostics.finalStates.bundleFacts = {
         ...finalState.bundleFacts,
@@ -676,6 +1141,9 @@ async function main() {
       diagnostics.finalStates.drift = {
         missing_symbols: finalState.drift.missing_symbols?.slice(0, 10).map((s: any) => ({
           symbol_id: s.symbol_id,
+          introducedAtVersion: s.introducedAtVersion,
+          resolvedAtVersion: s.resolvedAtVersion,
+          versionDescription: s.versionDescription,
           expected: s.expected ? {
             expect: s.expected.expect,
             lastName: s.expected.lastName,
@@ -684,6 +1152,9 @@ async function main() {
         })) || [],
         zombie_symbols: finalState.drift.zombie_symbols?.slice(0, 10).map((s: any) => ({
           symbol_id: s.symbol_id,
+          introducedAtVersion: s.introducedAtVersion,
+          resolvedAtVersion: s.resolvedAtVersion,
+          versionDescription: s.versionDescription,
           expected: s.expected ? {
             expect: s.expected.expect,
             lastName: s.expected.lastName
@@ -695,6 +1166,9 @@ async function main() {
         })) || [],
         divergent_symbols: finalState.drift.divergent_symbols?.slice(0, 10).map((s: any) => ({
           symbol_id: s.symbol_id,
+          introducedAtVersion: s.introducedAtVersion,
+          resolvedAtVersion: s.resolvedAtVersion,
+          versionDescription: s.versionDescription,
           expected: s.expected ? {
             expect: s.expected.expect,
             lastName: s.expected.lastName
@@ -703,6 +1177,20 @@ async function main() {
             name: s.found.name,
             path: s.found.path
           } : undefined
+        })) || [],
+        missing_edges: finalState.drift.missing_edges?.slice(0, 10).map((e: any) => ({
+          from: e.from,
+          to: e.to,
+          type: e.type,
+          introducedAtVersion: e.introducedAtVersion,
+          versionDescription: e.versionDescription
+        })) || [],
+        zombie_edges: finalState.drift.zombie_edges?.slice(0, 10).map((e: any) => ({
+          from: e.from,
+          to: e.to,
+          type: e.type,
+          introducedAtVersion: e.introducedAtVersion,
+          versionDescription: e.versionDescription
         })) || [],
         unresolved_callers: finalState.drift.unresolved_callers?.slice(0, 10).map((c: any) => ({
           caller_name: c.caller_name,
@@ -736,44 +1224,44 @@ async function main() {
   console.log(`Time: ${(totalTime / 1000).toFixed(2)}s`);
   console.log(`Steps completed: ${finalState.completedSteps.size}/${steps.length}`);
   console.log(`Errors: ${finalState.errors.length}`);
-  
+
   // Hybrid facts summary
   if (diagnostics.hybridFacts.total > 0) {
     console.log(`\n🔷 Hybrid Facts: total=${diagnostics.hybridFacts.total}, cstOnly=${diagnostics.hybridFacts.cstOnly}, augmented=${diagnostics.hybridFacts.augmented}, files=${diagnostics.hybridFacts.filesWithFacts}`);
   }
-  
+
   // Hybrid drifts summary
   if (diagnostics.hybridDrifts.total > 0) {
     console.log(`🔷 Hybrid Drifts: total=${diagnostics.hybridDrifts.total}, missing=${diagnostics.hybridDrifts.missing}, divergent=${diagnostics.hybridDrifts.divergent}, modified=${diagnostics.hybridDrifts.modified}`);
   }
-  
+
   // Performance summary
   if (diagnostics.performance.driftDetectionTime > 0) {
-    const speedup = diagnostics.performance.speedup > 1 
+    const speedup = diagnostics.performance.speedup > 1
       ? ` (${diagnostics.performance.speedup.toFixed(1)}x faster with batching)`
       : '';
     console.log(`⚡ Performance: driftDetection=${diagnostics.performance.driftDetectionTime}ms${speedup}`);
   }
-  
+
   console.log(`Diagnostics saved to ${diagPath}`);
-  
+
   // Generate markdown report if fullReport is enabled
   if (opts.fullReport) {
     const reportPath = path.join(outDir, 'pipeline_report.md');
     let reportMd = `# Pipeline Diagnostics Report\n\n`;
-    
+
     reportMd += `**Run Time:** ${diagnostics.startTime} to ${diagnostics.endTime} (${(diagnostics.totalTimeMs / 1000).toFixed(2)}s)\n`;
     if (diagnostics.aggregatedMetrics?.overallHealthScore !== undefined) {
       reportMd += `**Overall Health Score:** ${diagnostics.aggregatedMetrics.overallHealthScore.toFixed(2)}/100\n`;
     }
     reportMd += `\n`;
-    
+
     // Aggregated metrics section
     if (diagnostics.aggregatedMetrics) {
       reportMd += `## Key Metrics\n\n`;
       Object.entries(diagnostics.aggregatedMetrics).forEach(([key, val]) => {
         if (val !== undefined && val !== null) {
-          const displayVal = typeof val === 'number' 
+          const displayVal = typeof val === 'number'
             ? (key.includes('Score') || key.includes('Percent') ? val.toFixed(2) : val.toString())
             : JSON.stringify(val).substring(0, 100);
           reportMd += `- **${key}**: ${displayVal}\n`;
@@ -781,7 +1269,7 @@ async function main() {
       });
       reportMd += `\n`;
     }
-    
+
     // Per-step details
     reportMd += `## Step Details\n\n`;
     diagnostics.steps.forEach((step: any) => {
@@ -820,7 +1308,7 @@ async function main() {
       }
       reportMd += `\n`;
     });
-    
+
     // LLM summaries section
     if (diagnostics.llm_summaries?.length > 0) {
       reportMd += `## LLM Analysis Summaries\n\n`;
@@ -858,7 +1346,7 @@ async function main() {
         reportMd += `\n`;
       });
     }
-    
+
     // Simulate Mermaid graph for hotspots/drift (if present)
     const hotspots = diagnostics.steps.find((s: any) => s.stepId === 'hotspots')?.metrics?.topHotspots || 0;
     const driftIssues = diagnostics.aggregatedMetrics?.totalDriftIssues || 0;
@@ -885,7 +1373,7 @@ async function main() {
       }
       reportMd += `\`\`\`\n\n`;
     }
-    
+
     // Final summary
     reportMd += `## Summary\n\n`;
     reportMd += `- **Total Steps:** ${diagnostics.completedSteps?.length || 0}\n`;
@@ -897,14 +1385,14 @@ async function main() {
     }
     reportMd += `\n`;
     reportMd += `*Generated by pipeline diagnostics at ${new Date().toISOString()}*\n`;
-    
+
     fs.writeFileSync(reportPath, reportMd);
     console.log(`📄 Sample report saved to ${reportPath}`);
   }
-  
+
   // Validate hybrid facts database if requested
   if (opts.validateTimeline) {
-    await validateHybridFactsDatabase(db, commits.map(c => c.sha));
+    await validateHybridFactsDatabase(db, commits.map(c => c.sha), finalState.explicitTimeline || []);
   }
 
   if (finalState.errors.length > 0) {
@@ -914,11 +1402,11 @@ async function main() {
 }
 
 /**
- * Validate hybrid facts database storage
+ * Validate hybrid facts database storage and timeline retrieval logic
  */
-async function validateHybridFactsDatabase(db: any, commitShas: string[]): Promise<void> {
+async function validateHybridFactsDatabase(db: any, commitShas: string[], explicitTimeline: string[]): Promise<void> {
   console.log('\n🔍 Validating Hybrid Facts Database...');
-  
+
   try {
     // Check if hybrid_facts table exists
     const tableCheck = db.prepare(`
@@ -926,12 +1414,12 @@ async function validateHybridFactsDatabase(db: any, commitShas: string[]): Promi
       WHERE type='table' AND name='hybrid_facts'
     `);
     const tableExists = tableCheck.get();
-    
+
     if (!tableExists) {
       console.warn('⚠️  hybrid_facts table does not exist');
       return;
     }
-    
+
     // Count facts per commit
     const factsStmt = db.prepare(`
       SELECT version, COUNT(*) as count 
@@ -940,13 +1428,38 @@ async function validateHybridFactsDatabase(db: any, commitShas: string[]): Promi
       GROUP BY version
     `);
     const factsByCommit = factsStmt.all(...commitShas) as any[];
-    
+
     console.log(`✅ hybrid_facts table exists`);
     console.log(`📊 Facts by commit:`);
     factsByCommit.forEach(row => {
       console.log(`   ${row.version.substring(0, 8)}: ${row.count} facts`);
     });
-    
+
+    // Check timeline versions (unstaged, staged, HEAD)
+    const unstagedCount = db.prepare('SELECT COUNT(*) as count FROM hybrid_facts WHERE version="workspace-unstaged"').get() as any;
+    const stagedCount = db.prepare('SELECT COUNT(*) as count FROM hybrid_facts WHERE version="workspace-staged"').get() as any;
+    const workspaceCount = db.prepare('SELECT COUNT(*) as count FROM hybrid_facts WHERE version="workspace"').get() as any;
+    const headCount = db.prepare('SELECT COUNT(*) as count FROM hybrid_facts WHERE version="HEAD"').get() as any;
+
+    console.log(`📊 Timeline versions:`);
+    console.log(`   workspace-unstaged: ${unstagedCount.count} facts`);
+    console.log(`   workspace-staged: ${stagedCount.count} facts`);
+    if (workspaceCount.count > 0) {
+      console.log(`   ⚠️  workspace (legacy): ${workspaceCount.count} facts - consider running migration`);
+    }
+    console.log(`   HEAD: ${headCount.count} facts`);
+
+    // Verify timeline chain coverage
+    if (commitShas.length > 0) {
+      console.log(`🔗 Timeline chain coverage:`);
+      const versions = ['workspace-unstaged', 'workspace-staged', 'HEAD', ...commitShas];
+      for (const version of versions) {
+        const count = db.prepare('SELECT COUNT(*) as count FROM hybrid_facts WHERE version=?').get(version) as any;
+        const versionLabel = version.length > 8 ? version.substring(0, 8) : version;
+        console.log(`   ${versionLabel}: ${count.count} facts`);
+      }
+    }
+
     // Check timeline entries
     const timelineStmt = db.prepare(`
       SELECT COUNT(*) as count 
@@ -955,7 +1468,7 @@ async function validateHybridFactsDatabase(db: any, commitShas: string[]): Promi
     `);
     const timelineCount = timelineStmt.get() as any;
     console.log(`📈 Timeline entries: ${timelineCount.count}`);
-    
+
     // Validate file hash computation
     const hashStmt = db.prepare(`
       SELECT COUNT(DISTINCT hash) as unique_hashes, COUNT(*) as total_facts
@@ -963,7 +1476,63 @@ async function validateHybridFactsDatabase(db: any, commitShas: string[]): Promi
     `);
     const hashStats = hashStmt.get() as any;
     console.log(`🔐 File hashes: ${hashStats.unique_hashes} unique, ${hashStats.total_facts} total facts`);
-    
+
+    // Validate timeline manager retrieval logic
+    if (explicitTimeline.length > 0) {
+      console.log(`\n🔬 Testing Timeline Manager Retrieval...`);
+      const timelineManager = getCstTimelineManager();
+      
+      // Get sample files with facts
+      const filesStmt = db.prepare(`
+        SELECT DISTINCT file_path 
+        FROM hybrid_facts 
+        LIMIT 10
+      `);
+      const sampleFiles = filesStmt.all() as Array<{ file_path: string }>;
+      
+      if (sampleFiles.length > 0) {
+        console.log(`   Testing ${sampleFiles.length} sample files across ${explicitTimeline.length} versions`);
+        
+        let successCount = 0;
+        let failureCount = 0;
+        
+        for (const { file_path } of sampleFiles) {
+          for (const version of explicitTimeline) {
+            try {
+              const facts = await timelineManager.getPriorFacts(file_path, version);
+              if (facts && facts.length > 0) {
+                successCount++;
+              }
+            } catch (error: any) {
+              failureCount++;
+              console.warn(`   ⚠️  Failed to retrieve facts for ${file_path}@${version.substring(0, 8)}: ${error.message}`);
+            }
+          }
+        }
+        
+        console.log(`   ✅ Successful retrievals: ${successCount}`);
+        if (failureCount > 0) {
+          console.log(`   ⚠️  Failed retrievals: ${failureCount}`);
+        }
+        
+        // Test batch retrieval
+        if (sampleFiles.length > 0 && explicitTimeline.length > 0) {
+          console.log(`\n🔬 Testing Batch Retrieval...`);
+          const testVersion = explicitTimeline[0];
+          const testFiles = sampleFiles.slice(0, 5).map(f => f.file_path);
+          
+          try {
+            const batchFacts = await timelineManager.getPriorFactsBatch(testFiles, testVersion);
+            console.log(`   ✅ Batch retrieval: ${batchFacts.size} files, ${Array.from(batchFacts.values()).reduce((sum, facts) => sum + facts.length, 0)} total facts`);
+          } catch (error: any) {
+            console.warn(`   ⚠️  Batch retrieval failed: ${error.message}`);
+          }
+        }
+      } else {
+        console.log(`   ℹ️  No files with hybrid facts found for testing`);
+      }
+    }
+
   } catch (error: any) {
     console.error(`❌ Database validation failed: ${error.message}`);
   }

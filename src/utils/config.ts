@@ -82,6 +82,138 @@ function loadConfigFile(): Partial<ExtensionConfig> | null {
   return null;
 }
 
+/**
+ * Create a matcher function for custom ignore paths with gitignore-like pattern support
+ * Supports:
+ * - Negation: !pattern (un-ignore, overrides earlier matches)
+ * - Recursive directory: path/** or /path/** (matches everything inside recursively)
+ * - Directory patterns: /path/* or path/* (matches files directly in directory, one level)
+ * - Absolute patterns: /path (matches from root only)
+ * - Simple patterns: path (matches if path contains this)
+ * 
+ * Patterns are processed in order, so negations can override earlier matches.
+ * 
+ * @param ignorePaths - Array of ignore patterns (may include spaces that need trimming)
+ * @returns Function that returns true if filePath should be ignored
+ */
+export function createCustomIgnoreMatcher(ignorePaths: string[] | null | undefined): (filePath: string) => boolean {
+  if (!ignorePaths || ignorePaths.length === 0) {
+    return () => false;
+  }
+
+  // Parse patterns: trim, filter empty, and extract metadata
+  const patterns = ignorePaths
+    .map(pattern => pattern.trim())
+    .filter(Boolean)
+    .map(pattern => {
+      const isNegation = pattern.startsWith('!');
+      const cleanPattern = isNegation ? pattern.slice(1).trim() : pattern;
+      const isRecursive = cleanPattern.endsWith('/**') || cleanPattern.endsWith('/**/');
+      const isDirectory = cleanPattern.endsWith('/*') || cleanPattern.endsWith('/') || isRecursive;
+      let normalizedPattern = cleanPattern.replace(/\/+$/, ''); // Remove trailing slashes
+      
+      // Check if absolute BEFORE removing /** suffix (for /** pattern)
+      const wasAbsolute = normalizedPattern.startsWith('/');
+      
+      // Remove /** suffix for recursive patterns
+      if (normalizedPattern.endsWith('/**')) {
+        normalizedPattern = normalizedPattern.slice(0, -3);
+      }
+      const isAbsolute = normalizedPattern.startsWith('/') || (normalizedPattern === '' && wasAbsolute);
+
+      return {
+        pattern: normalizedPattern,
+        isNegation,
+        isDirectory,
+        isAbsolute,
+        isRecursive
+      };
+    });
+
+  return (filePath: string): boolean => {
+    // Normalize path (use forward slashes)
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    let shouldIgnore = false;
+
+    // Process patterns in order (negations can override earlier matches)
+    for (const { pattern, isNegation, isDirectory, isAbsolute, isRecursive } of patterns) {
+      let matches = false;
+
+      if (isDirectory) {
+        if (isRecursive) {
+          // Recursive pattern: path/** or /path/** matches everything inside recursively
+          if (pattern === '' && isAbsolute) {
+            // Special case: /** matches everything
+            matches = true;
+          } else if (isAbsolute) {
+            // Absolute from root: /path/** matches "path/file.ts", "path/sub/file.ts", etc.
+            // but NOT "src/path/file.ts"
+            matches = normalizedPath.startsWith(pattern + '/') || normalizedPath === pattern;
+          } else {
+            // Relative: path/** matches "path/file.ts", "path/sub/file.ts", "src/path/sub/file.ts", etc.
+            matches = normalizedPath.startsWith(pattern + '/') ||
+                      normalizedPath.includes('/' + pattern + '/') ||
+                      normalizedPath === pattern;
+          }
+        } else {
+          // Non-recursive directory pattern: /path/* or path/* matches files directly in that directory (one level)
+          const dirPattern = pattern;
+          
+          if (isAbsolute) {
+            // Absolute from root: /path/* matches "path/file.ts" but not "path/sub/file.ts" or "src/path/file.ts"
+            // Check that path starts with pattern/ and has exactly one more segment
+            if (normalizedPath.startsWith(dirPattern + '/')) {
+              const remaining = normalizedPath.slice(dirPattern.length + 1);
+              matches = !remaining.includes('/'); // No more slashes = direct child
+            } else {
+              matches = false;
+            }
+          } else {
+            // Relative: path/* matches "path/file.ts" or "src/path/file.ts" (one level deep)
+            // Find where pattern appears and check it's followed by exactly one segment
+            const patternIndex = normalizedPath.indexOf(dirPattern);
+            if (patternIndex >= 0) {
+              const afterPattern = normalizedPath.slice(patternIndex + dirPattern.length);
+              if (afterPattern.startsWith('/')) {
+                const remaining = afterPattern.slice(1);
+                matches = !remaining.includes('/'); // No more slashes = direct child
+              } else {
+                matches = false;
+              }
+            } else {
+              matches = false;
+            }
+          }
+        }
+      } else {
+        // Simple pattern matching
+        if (isAbsolute) {
+          // Absolute: /path matches "path/file.ts" but not "src/path/file.ts"
+          matches = normalizedPath.startsWith(pattern + '/') || normalizedPath === pattern;
+        } else {
+          // Relative: path matches if path contains this segment
+          matches = normalizedPath.includes('/' + pattern + '/') ||
+                    normalizedPath.startsWith(pattern + '/') ||
+                    normalizedPath.endsWith('/' + pattern) ||
+                    normalizedPath === pattern;
+        }
+      }
+
+      if (matches) {
+        if (isNegation) {
+          // Negation pattern: un-ignore this path (override earlier matches)
+          shouldIgnore = false;
+        } else {
+          // Regular pattern: ignore this path
+          shouldIgnore = true;
+        }
+      }
+    }
+
+    return shouldIgnore;
+  };
+}
+
 export function getExtensionConfig(): ExtensionConfig {
   // Priority: 1. Local config file, 2. VS Code settings (with package.json defaults), 3. Environment variables
   const fileConfig = loadConfigFile();
@@ -119,7 +251,9 @@ export function getExtensionConfig(): ExtensionConfig {
       // Snapshot cache config
       snapshotCacheEnabled: fileConfig?.snapshotCacheEnabled ?? config.get('snapshotCacheEnabled') ?? true,
       snapshotCacheSize: fileConfig?.snapshotCacheSize || config.get('snapshotCacheSize') || 50,
-      snapshotCacheTTL: fileConfig?.snapshotCacheTTL || config.get('snapshotCacheTTL') || 3600
+      snapshotCacheTTL: fileConfig?.snapshotCacheTTL || config.get('snapshotCacheTTL') || 3600,
+      // Path filtering config
+      excludedPrefixes: fileConfig?.excludedPrefixes || config.get('excludedPrefixes')
     };
   } else {
     // CLI/Test fallback: config file > environment variables > package.json defaults
@@ -134,7 +268,7 @@ export function getExtensionConfig(): ExtensionConfig {
       defaultCommitCount: fileConfig?.defaultCommitCount || parseInt(process.env.DEFAULT_COMMIT_COUNT || String(getPackageJsonDefault('defaultCommitCount') || '5')),
       tokensPerStep: fileConfig?.tokensPerStep || (process.env.TOKENS_PER_STEP ? JSON.parse(process.env.TOKENS_PER_STEP) : getPackageJsonDefault('tokensPerStep')),
       customPrompts: fileConfig?.customPrompts || (process.env.CUSTOM_PROMPTS ? JSON.parse(process.env.CUSTOM_PROMPTS) : getPackageJsonDefault('customPrompts')),
-      customIgnorePaths: fileConfig?.customIgnorePaths || (process.env.CUSTOM_IGNORE_PATHS ? process.env.CUSTOM_IGNORE_PATHS.split(',') : getPackageJsonDefault('customIgnorePaths')),
+      customIgnorePaths: fileConfig?.customIgnorePaths || (process.env.CUSTOM_IGNORE_PATHS ? process.env.CUSTOM_IGNORE_PATHS.split(',').map(s => s.trim()).filter(Boolean) : getPackageJsonDefault('customIgnorePaths')),
       // Qdrant config
       qdrantUrl: fileConfig?.qdrantUrl || process.env.QDRANT_URL || getPackageJsonDefault('qdrantUrl'),
       qdrantApiKey: fileConfig?.qdrantApiKey || process.env.QDRANT_API_KEY || getPackageJsonDefault('qdrantApiKey'),
@@ -152,7 +286,9 @@ export function getExtensionConfig(): ExtensionConfig {
       // Snapshot cache config
       snapshotCacheEnabled: fileConfig?.snapshotCacheEnabled ?? (process.env.SNAPSHOT_CACHE_ENABLED === 'false' ? false : (process.env.SNAPSHOT_CACHE_ENABLED === 'true' ? true : getPackageJsonDefault('snapshotCacheEnabled') ?? true)),
       snapshotCacheSize: fileConfig?.snapshotCacheSize || (process.env.SNAPSHOT_CACHE_SIZE ? parseInt(process.env.SNAPSHOT_CACHE_SIZE) : getPackageJsonDefault('snapshotCacheSize') || 50),
-      snapshotCacheTTL: fileConfig?.snapshotCacheTTL || (process.env.SNAPSHOT_CACHE_TTL ? parseInt(process.env.SNAPSHOT_CACHE_TTL) : getPackageJsonDefault('snapshotCacheTTL') || 3600)
+      snapshotCacheTTL: fileConfig?.snapshotCacheTTL || (process.env.SNAPSHOT_CACHE_TTL ? parseInt(process.env.SNAPSHOT_CACHE_TTL) : getPackageJsonDefault('snapshotCacheTTL') || 3600),
+      // Path filtering config
+      excludedPrefixes: fileConfig?.excludedPrefixes || (process.env.EXCLUDED_PREFIXES ? process.env.EXCLUDED_PREFIXES.split(',').map(s => s.trim()).filter(Boolean) : getPackageJsonDefault('excludedPrefixes'))
     };
   }
 }

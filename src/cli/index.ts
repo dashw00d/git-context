@@ -47,7 +47,7 @@ program
       }
 
       // Then analyze
-      await refactorPipeline.analyzeBundle(shas);
+      await refactorPipeline.analyzeBundle(shas, false, undefined);
 
       logInfo(chalk.green('Analysis complete!'));
     } catch (error) {
@@ -66,8 +66,8 @@ program
       const { getRefactorPipeline } = await import('../extension');
       const refactorPipeline = await getRefactorPipeline();
 
-      // Analyze with workspace enabled to include staged changes
-      await refactorPipeline.analyzeBundle([], true);
+      // Analyze with workspace enabled to include staged and unstaged changes
+      await refactorPipeline.analyzeBundle([], true, new Set(['staged', 'unstaged']));
 
       logInfo(chalk.green('Staged analysis complete!'));
     } catch (error) {
@@ -88,7 +88,7 @@ program
 
       // Index and analyze the specific commit
       await refactorPipeline.indexCommits([sha]);
-      await refactorPipeline.analyzeBundle([sha]);
+      await refactorPipeline.analyzeBundle([sha], false, undefined);
 
       logInfo(chalk.green(`Commit ${sha} analysis complete!`));
     } catch (error) {

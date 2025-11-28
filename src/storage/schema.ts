@@ -809,8 +809,12 @@ CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version ON hybrid_facts(file_pa
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_dna ON hybrid_facts(dna_id);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash);`,
       safe: true
+    }, {
+      name: 'rename_workspace_to_unstaged',
+      sql: `UPDATE hybrid_facts SET version='workspace-unstaged' WHERE version='workspace'`,
+      safe: true  // UPDATE is safe
     }],
-    currentVersion: 3
+    currentVersion: 4
   },
 
   // Hotspots Module: file_hotspots, symbol_hotspots, hotspot_snapshots
@@ -1045,7 +1049,9 @@ export function migrateDatabase(db: any): string[] {
             // Log migration failure
             try {
               db.prepare('INSERT INTO migration_log (module, version, name, applied_at, success) VALUES (?, ?, ?, datetime("now"), 0)').run([modName, v, mig.name]);
-            } catch {}
+            } catch {
+              // Silently ignore logging failures
+            }
 
             // If error is about duplicate/already exists, that's okay
             if (e.message?.includes('already exists') || e.message?.includes('duplicate')) {

@@ -1,0 +1,334 @@
+
+You are an expert software engineering analyst specializing in code refactoring and technical debt assessment.
+
+Guidelines:
+- Base all analysis strictly on the provided facts JSON - no external assumptions
+- Be precise about evidence paths and symbol identifiers
+- Distinguish between technical debt that's acceptable vs. problematic
+- Consider the broader architectural impact of recommendations
+- Prioritize safety and minimal disruption in cleanup plans
+- Acknowledge uncertainty when facts are ambiguous
+
+
+FACTS JSON:
+{
+  "version": "2.0",
+  "generated_at": "2025-11-28T11:20:30.460Z",
+  "confidence": 1,
+  "bundle": {
+    "oldestSha": "66b4ad726dccaf0f8f002c95be2ed9a900897395",
+    "newestSha": "c5e686bff558c76bb0d5812dac8be3f07680f059",
+    "shas": [
+      "66b4ad726dccaf0f8f002c95be2ed9a900897395",
+      "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
+      "c5e686bff558c76bb0d5812dac8be3f07680f059"
+    ],
+    "timeline": [
+      "workspace-unstaged",
+      "workspace-staged",
+      "HEAD",
+      "66b4ad726dccaf0f8f002c95be2ed9a900897395",
+      "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
+      "c5e686bff558c76bb0d5812dac8be3f07680f059"
+    ],
+    "movedLineage": []
+  },
+  "scope": {
+    "files": 168,
+    "blastRadius": 0
+  },
+  "intended": {
+    "present": 0,
+    "absent": 0,
+    "renamed": 0
+  },
+  "working": {
+    "symbols": 0,
+    "edges": 0
+  },
+  "findings": {
+    "incompleteness": {
+      "missing": 0,
+      "zombies": 0,
+      "divergent": 0
+    },
+    "patternDrift": {
+      "mixedTargets": 0,
+      "oldNamespaces": 0
+    },
+    "legacyAudit": {
+      "dead": 0,
+      "legacyUsed": 0,
+      "replacedLeftovers": []
+    },
+    "unresolvedCallers": {
+      "total": 0
+    }
+  },
+  "evidence": {
+    "bundle.shas": [
+      "66b4ad726dccaf0f8f002c95be2ed9a900897395",
+      "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
+      "c5e686bff558c76bb0d5812dac8be3f07680f059"
+    ],
+    "scope.files": [
+      "README.md",
+      "benchmarks/fixtures/sample.css",
+      "benchmarks/fixtures/sample.js",
+      "benchmarks/fixtures/sample.json",
+      "benchmarks/fixtures/sample.md",
+      "benchmarks/fixtures/sample.php",
+      "benchmarks/fixtures/sample.yaml",
+      "benchmarks/mocks/framework/benchmarks/mocks/framework/snapshot.js",
+      "benchmarks/mocks/framework/snapshot.js",
+      "benchmarks/mocks/framework/snapshot.ts",
+      "benchmarks/mocks/framework/src/analysis/astSerializer.js",
+      "benchmarks/mocks/framework/src/analysis/cstDiff.js",
+      "benchmarks/mocks/framework/src/analysis/cstExtractor.js",
+      "benchmarks/mocks/framework/src/analysis/cstTimeline.js",
+      "benchmarks/mocks/framework/src/analysis/dependencies.js",
+      "benchmarks/mocks/framework/src/analysis/difftastic.js",
+      "benchmarks/mocks/framework/src/analysis/git.js",
+      "benchmarks/mocks/framework/src/analysis/hotspotDetector.js",
+      "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js",
+      "benchmarks/mocks/framework/src/analysis/namingConventions.js",
+      "benchmarks/mocks/framework/src/analysis/runner/pipelineTypes.js",
+      "benchmarks/mocks/framework/src/analysis/semanticChanges.js",
+      "benchmarks/mocks/framework/src/analysis/snapshotManager.js",
+      "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js",
+      "benchmarks/mocks/framework/src/analysis/symbolDna.js",
+      "benchmarks/mocks/framework/src/analysis/symbols.js",
+      "benchmarks/mocks/framework/src/analysis/tree-sitter.js",
+      "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js",
+      "benchmarks/mocks/framework/src/contracts/llmContext.js",
+      "benchmarks/mocks/framework/src/facts/driftDetector.js",
+      "benchmarks/mocks/framework/src/facts/intendedMap.js",
+      "benchmarks/mocks/framework/src/facts/legacyAudit.js",
+      "benchmarks/mocks/framework/src/facts/scope.js",
+      "benchmarks/mocks/framework/src/facts/workingSnapshot.js",
+      "benchmarks/mocks/framework/src/storage/database.js",
+      "benchmarks/mocks/framework/src/storage/schema.js",
+      "benchmarks/mocks/framework/src/types/cstFacts.js",
+      "benchmarks/mocks/framework/src/types/index.js",
+      "benchmarks/mocks/framework/src/utils/config.js",
+      "benchmarks/mocks/framework/src/utils/edgeThresholds.js",
+      "benchmarks/mocks/framework/src/utils/logger.js",
+      "benchmarks/mocks/framework/src/utils/supportedLanguages.js",
+      "benchmarks/output/pipeline_diagnostics.json",
+      "benchmarks/output/pipeline_report.md",
+      "benchmarks/pipeline_diagnostics.ts",
+      "binaries/tree-sitter-svelte.wasm",
+      "cst-only-tracking.md",
+      "docs/cst-extractors.md",
+      "docs/hybrid-drift-optimization-plan.md",
+      "docs/pipeline-diagnostics-cst-integration-plan.md",
+      "modular-summarizer.md",
+      "package-lock.json",
+      "package.json",
+      "scripts/copy-wasm.js",
+      "scripts/download-wasm.js",
+      "scripts/remove-source-compiled.js",
+      "src/analysis/commitIndexer.ts",
+      "src/analysis/cstDiff.ts",
+      "src/analysis/cstExtractor.ts",
+      "src/analysis/cstTimeline.ts",
+      "src/analysis/embeddingIndexer.ts",
+      "src/analysis/hotspotDetector.ts",
+      "src/analysis/hybridDriftDetector.ts",
+      "src/analysis/liveAnalysis.ts",
+      "src/analysis/llmAnalyst/runner.ts",
+      "src/analysis/movedBlockDetector.ts",
+      "src/analysis/runner/steps/driftStep.ts",
+      "src/analysis/runner/steps/hotspotStep.ts",
+      "src/analysis/runner/steps/intendedStep.ts",
+      "src/analysis/runner/steps/legacyStep.ts",
+      "src/analysis/snapshotManager.ts",
+      "src/analysis/structuralDiffManager.ts",
+      "src/analysis/symbolDna.ts",
+      "src/analysis/tree-sitter.ts",
+      "src/analysis/workspaceIndexer.ts",
+      "src/commands/commands.ts",
+      "src/facts/driftDetector.ts",
+      "src/facts/factsAssembler.ts",
+      "src/facts/intendedMap.ts",
+      "src/facts/legacyAudit.ts",
+      "src/facts/scope.ts",
+      "src/facts/types.ts",
+      "src/liveTracker.ts",
+      "src/storage/database.ts",
+      "src/storage/schema.ts",
+      "src/types/cockpit.ts",
+      "src/types/cstFacts.ts",
+      "src/types/index.ts",
+      "src/utils/config.ts",
+      "src/utils/supportedLanguages-constants.js",
+      "src/utils/supportedLanguages.ts",
+      ".claude/CLAUDE.md",
+      ".git-context.config.json",
+      ".gitignore",
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "CLAUDE.md",
+      "COMPREHENSIVE_CLEANUP_PLAN.md",
+      "CONFIG.md",
+      "PROJECT.md",
+      "benchmarks/liveAnalysis.test.ts",
+      "benchmarks/mocks/reporter.ts",
+      "benchmarks/output/test-results.json",
+      "benchmarks/qdrant_integration_test.ts",
+      "check_symbols.js",
+      "copy-wasm.js",
+      "current-flow.md",
+      "download-wasm.js",
+      "final_summary.md",
+      "live-tracker-completion-plan.md",
+      "metric_test_report_2025-11-27T10-47-07.md",
+      "metric_test_report_2025-11-27T11-25-49.md",
+      "metric_test_report_2025-11-27T12-11-31.md",
+      "metric_test_report_2025-11-27T12-11-52.md",
+      "pipeline-refactor-plan.md",
+      "pipeline_diagnostics.json",
+      "scripts/check_symbols.js",
+      "scripts/vscode-mock.js",
+      "src/analysis/bundleStoryEngine.ts",
+      "src/analysis/contextExporter.ts",
+      "src/analysis/runner/pipelineTypes.ts",
+      "src/analysis/runner/steps/bundleFactsStep.ts",
+      "src/analysis/runner/steps/historyStep.ts",
+      "src/analysis/runner/steps/workspaceStep.ts",
+      "src/cli/index.ts",
+      "src/extension.ts",
+      "src/metrics/bundleFactsAdapter.ts",
+      "src/providers/activeBundleProvider.ts.backup",
+      "src/storage/index.ts",
+      "src/storage/qdrantClient.ts",
+      "src/storage/schema.ts.backup",
+      "temp_benchmark.db",
+      "test_debug.ts",
+      "test_output_ui_data.json",
+      "test_output_ui_data1.json",
+      "test_pipeline_integration.ts",
+      "test_pipeline_integration.ts.depricated",
+      "test_pipeline_log.txt",
+      "todo.md",
+      "vitest.config.ts",
+      "vscode-mock.js",
+      ".git-context.config.example.json",
+      ".kilocode/providers.json",
+      "backlog/DEPRECATED_CODE_CLEANUP.md",
+      "backlog/ESLINT_WARNINGS_CATEGORIZED.md",
+      "backlog/deep-think-plan.md",
+      "backlog/diff-as-you-go-plan.md",
+      "benchmarks/PIPELINE_DIAGNOSTICS.md",
+      "benchmarks/fixtures/pipeline_frozen/bundle_facts.json",
+      "benchmarks/fixtures/pipeline_frozen/drift.json",
+      "benchmarks/fixtures/pipeline_frozen/hotspots.json",
+      "benchmarks/fixtures/pipeline_frozen/index_commits.json",
+      "benchmarks/fixtures/pipeline_frozen/intended.json",
+      "benchmarks/fixtures/pipeline_frozen/legacy.json",
+      "benchmarks/fixtures/pipeline_frozen/scope.json",
+      "benchmarks/fixtures/pipeline_frozen/working.json",
+      "benchmarks/fixtures/pipeline_frozen/workspace_overlay.json",
+      "benchmarks/liveTracker.test.ts",
+      "benchmarks/pipeline_metric_test.ts",
+      "git-context.config.schema.json",
+      "src/analysis/astSerializer.ts",
+      "src/analysis/conventionEnhancements.ts",
+      "src/analysis/dependencies.ts",
+      "src/analysis/runner/pipelineRunner.ts",
+      "src/analysis/semanticChanges.ts",
+      "src/analysis/symbols.ts",
+      "src/cli/analyze.ts",
+      "src/storage/embeddings.ts"
+    ],
+    "scope.blastRadius": [],
+    "timeline.chain": {
+      "unstaged": 79,
+      "staged": 16,
+      "head": "HEAD",
+      "commits": 3
+    },
+    "hybrid.unstaged": {
+      "total": 0,
+      "files": []
+    },
+    "hybrid.staged": {
+      "total": 0,
+      "files": []
+    },
+    "intended.present": [],
+    "intended.absent": [],
+    "intended.renamed": [],
+    "working.symbols": [],
+    "working.edges": [],
+    "findings.incompleteness": {
+      "missing": [],
+      "zombies": [],
+      "divergent": []
+    },
+    "findings.incompleteness.missing": [],
+    "findings.incompleteness.zombies": [],
+    "findings.legacyAudit": {
+      "dead": [],
+      "legacyUsed": [],
+      "replacedLeftovers": []
+    },
+    "findings.unresolvedCallers": [],
+    "missing": [],
+    "zombies": [],
+    "dead": [],
+    "legacyUsed": [],
+    "replacedLeftovers": []
+  }
+}
+
+
+You are a senior engineer validating refactor completeness. Review every incompleteness and drift flag in the attached facts JSON.
+
+Timeline context: Timeline: unstaged → staged → HEAD → 66b4ad726dcc → ce81cf0e3c4e → c5e686bff558 (6 versions) (6 versions)
+Trace sequential changes through timeline for evolution context.
+
+**CRITICAL:** Focus on REAL ISSUES vs false positives. Prioritize high-severity findings that require immediate action.
+
+For each finding, determine if it's a real issue or a false positive:
+
+**Incompleteness Analysis:**
+- Missing symbols: Are these truly missing or explained by scoping?
+- Zombie symbols: Should these be removed or are they still needed?
+- Divergent symbols: Are name changes intentional or accidental?
+
+**Pattern Drift Analysis:**
+- Mixed targets: Are inconsistent patterns problematic?
+- Old namespaces: Should these be updated?
+
+**Legacy Audit Analysis:**
+- Dead symbols: Are these truly unreachable or called indirectly?
+- Legacy used symbols: Are these acceptable technical debt?
+- Replaced leftovers: Are these old implementations that should be cleaned up?
+
+**Output Format:** Return ONLY valid JSON:
+{
+  "claims": [
+    {
+      "text": "Description of confirmed issue",
+      "confidence": 0.85,
+      "severity": "high",
+      "evidence": ["findings.incompleteness.missing[0]"]
+    }
+  ],
+  "actions": [
+    {
+      "description": "Specific action to fix issue",
+      "priority": "high",
+      "effort": "medium",
+      "risk": "low",
+      "evidence": ["findings.incompleteness.missing[0]"]
+    }
+  ]
+}
+
+**PRIORITIZATION:**
+- List HIGH-SEVERITY issues first (critical, high)
+- Focus on ACTIONABLE items (has specific evidence paths)
+- Skip or mark as low-severity any false positives or acceptable technical debt
+- Explain why each confirmed issue is a real problem that needs attention

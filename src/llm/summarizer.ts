@@ -67,6 +67,16 @@ export class LLMSummarizer {
     const edgesAdded = analysis.edges.added.map(e => `${e.from} -> ${e.to} (${e.type})`);
     const edgesRemoved = analysis.edges.removed.map(e => `${e.from} -> ${e.to} (${e.type})`);
 
+    // Fetch snippets for breaking changes only (limit to 3)
+    let snippetsJson = '(none)';
+    if (analysis.drift?.missing_symbols && analysis.drift.missing_symbols.length > 0) {
+      const topMissing = analysis.drift.missing_symbols.slice(0, 3);
+      const snippets = await this.fetchBreakingSnippets(topMissing);
+      if (snippets.length > 0) {
+        snippetsJson = JSON.stringify(snippets);
+      }
+    }
+
     const prompt = STAGE_1_COMPRESSION_PROMPT
       .replace('{file_count}', analysis.files.length.toString())
       .replace('{diff_stats}', `Files: ${analysis.files.length}, Symbols: ${analysis.symbols.added.length + analysis.symbols.modified.length + analysis.symbols.removed.length}`)
@@ -75,7 +85,8 @@ export class LLMSummarizer {
       .replace('{symbols_removed}', JSON.stringify(symbolsRemoved.slice(0, 10)))
       .replace('{edges_added}', JSON.stringify(edgesAdded.slice(0, 5)))
       .replace('{edges_removed}', JSON.stringify(edgesRemoved.slice(0, 5)))
-      .replace('{morph_highlights}', JSON.stringify(analysis.difftasticHighlights.slice(0, 5)));
+      .replace('{morph_highlights}', JSON.stringify(analysis.difftasticHighlights.slice(0, 5)))
+      .replace('{snippets_json}', snippetsJson);
 
     const response = await this.client.complete([{
       role: 'user',
@@ -150,6 +161,44 @@ export class LLMSummarizer {
     }
 
     return lines.join('\n');
+  }
+
+  /**
+   * Fetch code snippets for breaking changes
+   */
+  private async fetchBreakingSnippets(missingSymbols: any[]): Promise<any[]> {
+    const { GitOperations } = await import('../analysis/git');
+    const git = new GitOperations();
+    const snippets = [];
+
+    for (const missing of missingSymbols.slice(0, 3)) {
+      const lastSha = missing.expected?.lastSha;
+      // Extract file path from symbol_id (format: "path/to/file.ts:SymbolName") or use lastPath
+      const filePath = missing.expected?.lastPath || missing.symbol_id?.split(':')[0];
+      if (!lastSha || !filePath) continue;
+
+      try {
+        // Get diff context around missing symbol
+        // Use parent commit for "before" and the commit where it was last seen for "after"
+        const beforeContent = git.safeGetFileContent(`${lastSha}~1`, filePath) || '';
+        const afterContent = git.safeGetFileContent(lastSha, filePath) || '';
+
+        if (beforeContent || afterContent) {
+          snippets.push({
+            symbol: missing.symbol_id,
+            file: filePath,
+            before: beforeContent.substring(0, 500),  // Truncate
+            after: afterContent.substring(0, 500),
+            version: missing.introducedAtVersion || lastSha
+          });
+        }
+      } catch (error) {
+        // Skip if file doesn't exist in that commit
+        continue;
+      }
+    }
+
+    return snippets;
   }
 
   /**

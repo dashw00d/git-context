@@ -6,6 +6,7 @@ import { assignDNAIds } from './symbolDna';
 import { logDebug } from '../utils/logger';
 import { detectLanguage, getExtensionConfig } from '../utils/config';
 import { LRUCache } from 'lru-cache';
+import { getDatabaseManager } from '../storage/database';
 
 export interface FileSnapshot {
   blobSha: string;
@@ -15,12 +16,15 @@ export interface FileSnapshot {
   edges: EdgeInfo[];
   shapeHash?: string;
   bodyHash?: string;
+  _cacheSize?: number; // Internal: cached serialized size for LRU cache performance
 }
 
 export class SnapshotManager {
   private snapshotCache: LRUCache<string, FileSnapshot> | null = null;
   private cacheHits = 0;
   private cacheMisses = 0;
+  private writeQueue: FileSnapshot[] = [];
+  private readonly BATCH_SIZE = 50;
 
   constructor(
     private db: Database,
@@ -40,16 +44,19 @@ export class SnapshotManager {
         return; // Cache is disabled, don't create it
       }
       this.snapshotCache = new LRUCache<string, FileSnapshot>({
-        max: config.snapshotCacheSize || 50,
+        max: config.snapshotCacheSize || 1000, // Increased from 50 to 1000
         ttl: (config.snapshotCacheTTL || 3600) * 1000, // Convert seconds to milliseconds
         updateAgeOnGet: true, // Promote on access (LRU behavior)
         sizeCalculation: (value: FileSnapshot, key: string) => {
-          // Rough estimate: key length + JSON size
-          return key.length + JSON.stringify(value).length;
+          // Use cached size if available (calculated once on creation/load)
+          // Fallback to key length + 100KB estimate if missing (defensive)
+          return key.length + (value._cacheSize || 100000);
         },
-        maxSize: 10 * 1024 * 1024, // 10MB total
+        maxSize: 100 * 1024 * 1024, // 100MB total (increased from 10MB to allow 500+ snapshots)
         dispose: (value: FileSnapshot, key: string) => {
-          logDebug(`[Snapshot] Evicted ${key.substring(0, 20)}... (size: ${JSON.stringify(value).length}B)`);
+          // Use cached size instead of recalculating
+          const size = value._cacheSize || 0;
+          logDebug(`[Snapshot] Evicted ${key.substring(0, 20)}... (size: ${size}B)`);
         }
       });
     }
@@ -139,14 +146,26 @@ export class SnapshotManager {
       bodyHash
     };
 
-    // Store to cache
-    this.storeSnapshot(snapshot);
+    // Calculate and cache serialized size once (for LRU cache performance)
+    snapshot._cacheSize = JSON.stringify(snapshot).length;
+
+    // Queue for batch write
+    this.queueSnapshot(snapshot);
 
     // Also cache in LRU cache for faster access
     const lruCacheKey = `${blobSha}:${filePath}`;
     this.snapshotCache?.set(lruCacheKey, snapshot);
 
     return snapshot;
+  }
+
+  /**
+   * Flush any pending snapshot writes (call at end of processing)
+   */
+  flushSnapshotQueue(): void {
+    while (this.writeQueue.length > 0) {
+      this.flushSnapshotQueueInternal();
+    }
   }
 
   private getCachedSnapshot(blobSha: string, filePath: string): FileSnapshot | null {
@@ -157,7 +176,7 @@ export class SnapshotManager {
     const row = stmt.get([blobSha, filePath]) as any;
     if (!row) return null;
 
-    return {
+    const snapshot: FileSnapshot = {
       blobSha: row.blob_sha,
       filePath: row.file_path,
       language: row.language,
@@ -166,25 +185,56 @@ export class SnapshotManager {
       shapeHash: row.shape_hash,
       bodyHash: row.body_hash
     };
+
+    // Calculate and cache serialized size once (for LRU cache performance)
+    snapshot._cacheSize = JSON.stringify(snapshot).length;
+
+    return snapshot;
   }
 
-  private storeSnapshot(snapshot: FileSnapshot): void {
-    const stmt = this.db.prepare(`
+  private queueSnapshot(snapshot: FileSnapshot): void {
+    this.writeQueue.push(snapshot);
+    if (this.writeQueue.length >= this.BATCH_SIZE) {
+      this.flushSnapshotQueueInternal();
+    }
+  }
+
+  private flushSnapshotQueueInternal(): void {
+    if (this.writeQueue.length === 0) return;
+    const batch = this.writeQueue.splice(0, this.BATCH_SIZE);
+    
+    // Get wrapped database with transaction support
+    const db = getDatabaseManager().getDatabase();
+    const stmt = db.prepare(`
       INSERT OR REPLACE INTO file_snapshots
       (blob_sha, file_path, language, symbols_json, edges_json, shape_hash, body_hash, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run([
-      snapshot.blobSha,
-      snapshot.filePath,
-      snapshot.language,
-      JSON.stringify(snapshot.symbols),
-      JSON.stringify(snapshot.edges),
-      snapshot.shapeHash || '',
-      snapshot.bodyHash || '',
-      new Date().toISOString()
-    ]);
+    const now = new Date().toISOString();
+    
+    // Use transaction wrapper instead of manual BEGIN/COMMIT
+    db.transaction(() => {
+      for (const snapshot of batch) {
+        stmt.run([
+          snapshot.blobSha,
+          snapshot.filePath,
+          snapshot.language,
+          JSON.stringify(snapshot.symbols),
+          JSON.stringify(snapshot.edges),
+          snapshot.shapeHash || '',
+          snapshot.bodyHash || '',
+          now
+        ]);
+      }
+    })();
+
+    logDebug(`[SnapshotManager] Batched ${batch.length} snapshot writes`);
+  }
+
+  private storeSnapshot(snapshot: FileSnapshot): void {
+    // Legacy method - use queueSnapshot instead
+    this.queueSnapshot(snapshot);
   }
 
   private detectLanguage(filePath: string): string {

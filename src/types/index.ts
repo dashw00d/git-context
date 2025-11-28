@@ -1,3 +1,5 @@
+import type { DriftFindings } from '../facts/driftDetector';
+
 // Git commit information
 export interface CommitInfo {
   sha: string;
@@ -94,6 +96,7 @@ export interface AnalysisResult {
   risks: RiskFlag[];
   difftasticHighlights: string[];
   llmSummary?: LLMResponse;
+  drift?: DriftFindings;
 }
 
 // Database commit summary
@@ -232,6 +235,9 @@ export interface ExtensionConfig {
   snapshotCacheEnabled?: boolean;
   snapshotCacheSize?: number;
   snapshotCacheTTL?: number;
+  
+  // Path filtering config
+  excludedPrefixes?: string[];  // Hardcoded path prefixes to exclude (defaults: out/, dist/, node_modules/, .git/, build/, coverage/)
 }
 
 // Context values for tree items (used in package.json menus and tree item identification)

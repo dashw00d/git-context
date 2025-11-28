@@ -271,8 +271,8 @@ export class LiveDiffTracker extends EventEmitter {
             // Extract hybrid facts
             const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
 
-            // Save to timeline manager (version = 'workspace' for live tracking)
-            const version = isStaged ? 'workspace-staged' : 'workspace';
+            // Save to timeline manager with mode-specific version
+            const version = isStaged ? 'workspace-staged' : 'workspace-unstaged';
             await this.cstTimelineManager.saveFacts(filePath, version, hybridFacts);
 
             logDebug(`[LiveTracker] Saved ${hybridFacts.length} hybrid facts for ${filePath}`);

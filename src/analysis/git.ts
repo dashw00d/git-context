@@ -232,6 +232,24 @@ export class GitOperations {
   }
 
   /**
+   * Check if a file is ignored by git at a specific commit
+   * Uses historical .gitignore rules from that commit
+   */
+  isIgnoredAtCommit(sha: string, filePath: string): boolean {
+    try {
+      // git check-ignore --quiet -C <commit> <path>
+      // -C changes directory to the commit's tree before checking
+      // This respects .gitignore rules at that specific commit
+      this.execGit(['check-ignore', '--quiet', '-C', sha, filePath], { suppressLog: true });
+      return true;
+    } catch (error) {
+      // If check fails (e.g., commit doesn't exist, path doesn't exist at commit),
+      // fall back to current workspace ignore
+      return this.isIgnored(filePath);
+    }
+  }
+
+  /**
    * Get current HEAD SHA
    */
   getHeadSha(): string {

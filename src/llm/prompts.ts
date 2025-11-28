@@ -10,6 +10,7 @@ INPUT DATA:
 - Edges added: {edges_added}
 - Edges removed: {edges_removed}
 - Difftastic morph highlights: {morph_highlights}
+- Code evidence (breaking changes): {snippets_json}
 
 TASK: Create a compact JSON summary of the key semantic changes. Focus on:
 - What functionality was added, changed, or removed
@@ -107,12 +108,35 @@ Focus on the most important changes and their impact.`;
 // ============================================================================
 
 /**
+ * Build concise timeline summary for LLM prompts
+ */
+export function buildTimelineSummary(timeline?: string[]): { summary: string; count: number } {
+  if (!timeline || timeline.length === 0) {
+    return { summary: 'Single version analysis', count: 1 };
+  }
+
+  // Format: "abc123 → def456 → HEAD → staged → unstaged (5 versions)"
+  const shortVersions = timeline.map(v => {
+    if (v === 'workspace-unstaged') return 'unstaged';
+    if (v === 'workspace-staged') return 'staged';
+    if (v === 'HEAD') return 'HEAD';
+    return v.substring(0, 12); // Short SHA
+  });
+
+  const summary = `Timeline: ${shortVersions.join(' → ')} (${timeline.length} versions)`;
+  return { summary, count: timeline.length };
+}
+
+/**
  * Prompt 1: Intent & Story
  * Analyzes the refactor bundle to understand what was being attempted
  * Focuses on VALUE: what matters most, what should be done first
  */
 export const PROMPT_INTENT_AND_STORY = `
 You are a senior engineer reviewing a refactor bundle. Using only the attached facts JSON:
+
+Timeline context: {timelineSummary} ({versionCount} versions)
+Trace changes sequentially through the timeline to understand evolution.
 
 **PRIMARY TASK:** Identify the SINGLE most important insight about this refactor.
 
@@ -160,6 +184,9 @@ Then provide:
  */
 export const PROMPT_DRIFT_VERIFICATION = `
 You are a senior engineer validating refactor completeness. Review every incompleteness and drift flag in the attached facts JSON.
+
+Timeline context: {timelineSummary} ({versionCount} versions)
+Trace sequential changes through timeline for evolution context.
 
 **CRITICAL:** Focus on REAL ISSUES vs false positives. Prioritize high-severity findings that require immediate action.
 
@@ -214,6 +241,9 @@ For each finding, determine if it's a real issue or a false positive:
  */
 export const PROMPT_CLEANUP_PLAN = `
 You are a senior engineer creating a cleanup plan for an incomplete refactor. Using the attached facts JSON, produce an ordered checklist of exact deletions, migrations, and completions needed to reach zero legacy in the scoped area.
+
+Timeline context: {timelineSummary} ({versionCount} versions)
+Consider the evolution sequence when prioritizing cleanup actions.
 
 **VALUE PRIORITIZATION:**
 - Order by VALUE: priority/effort ratio (urgent + low effort = highest value)

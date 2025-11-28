@@ -10,6 +10,7 @@ import { logInfo, logDebug, logError } from '../utils/logger';
 import { detectHybridDrift } from './hybridDriftDetector';
 import { getCstTimelineManager } from './cstTimeline';
 import { getExtensionConfig, isCstOnlyLanguage, detectLanguage } from '../utils/config';
+import { GitOperations } from './git';
 
 export class LiveAnalysisEngine {
     private tracker: LiveDiffTracker;
@@ -66,10 +67,24 @@ export class LiveAnalysisEngine {
                 logDebug(`[LiveAnalysis] No SHAs available, reconstructed from evidence: ${intended.size} symbols`);
             }
 
-            // 3. Reconstruct Scope
+            // 3. Reconstruct Scope with staged/unstaged tracking
             const scopePaths = new Set<string>();
+            const git = new GitOperations();
             const scopeFiles = (state.bundleFacts?.evidence?.['scope.files'] as string[] | undefined) || [];
             scopeFiles.forEach(f => scopePaths.add(f));
+
+            // Build scope with staged/unstaged tracking for hybrid drift detection
+            const staged = await git.getStagedFiles();
+            const unstaged = await git.getUnstagedFiles();
+            
+            const scope: ScopeSet = {
+                commitFiles: scopePaths,
+                workingChanged: new Set(liveOverrides.keys()),
+                stagedFiles: new Set(staged.map(f => f.path)),
+                unstagedFiles: new Set(unstaged.map(f => f.path)),
+                blastRadius: new Set(),
+                allPaths: scopePaths
+            };
 
             // 4. Get Working Snapshot (with Live Overrides)
             const working = await getWorkingSnapshot(scopePaths, liveOverrides);
@@ -85,7 +100,6 @@ export class LiveAnalysisEngine {
             if (enableCst || enableAugment) {
                 const timelineManager = getCstTimelineManager();
                 const hybridDrifts: any[] = [];
-                const priorVersion = state.bundleFacts.bundle.shas?.[0] || 'workspace';
 
                 // Get hybrid facts for files in scope and detect drifts
                 for (const filePath of scopePaths) {
@@ -96,17 +110,20 @@ export class LiveAnalysisEngine {
                     if (!isCstOnly && !enableAugment) continue;
 
                     try {
-                        // Get current hybrid facts (from workspace or staged)
-                        const currentFacts = await timelineManager.getPriorFacts(filePath, 'workspace') || 
-                                            await timelineManager.getPriorFacts(filePath, 'workspace-staged') || [];
+                        // Determine version based on scope membership
+                        const version = scope.unstagedFiles?.has(filePath) ? 'workspace-unstaged' 
+                            : scope.stagedFiles?.has(filePath) ? 'workspace-staged' 
+                            : 'HEAD';
+                        const currentFacts = await timelineManager.getPriorFacts(filePath, version) || [];
 
                         if (currentFacts.length > 0) {
                             const fileDrifts = await detectHybridDrift(
                                 filePath,
                                 currentFacts,
                                 intended,
-                                'workspace',
-                                priorVersion
+                                version,
+                                scope,
+                                state.bundleFacts.bundle.shas || []
                             );
                             hybridDrifts.push(...fileDrifts);
                         }
@@ -118,14 +135,6 @@ export class LiveAnalysisEngine {
                 // Add hybrid drifts to findings
                 drift.hybridDrifts = hybridDrifts;
             }
-
-            // We need a ScopeSet for auditLegacy. Reconstructing it minimally.
-            const scope: ScopeSet = {
-                commitFiles: scopePaths,
-                workingChanged: new Set(liveOverrides.keys()), // Add workingChanged
-                blastRadius: new Set(), // We might miss blast radius files if not in facts
-                allPaths: scopePaths
-            };
 
             const legacy = await auditLegacy(intended, working, scope);
 

@@ -1,6 +1,6 @@
 import { RefactorBundleFacts } from '../../facts/types';
 import { LlmAnalysis, AnalysisBlock, AnalysisBlockUtils, Claim, Action } from './blocks';
-import { PROMPT_INTENT_AND_STORY, PROMPT_DRIFT_VERIFICATION, PROMPT_CLEANUP_PLAN, PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT } from '../../llm/prompts';
+import { PROMPT_INTENT_AND_STORY, PROMPT_DRIFT_VERIFICATION, PROMPT_CLEANUP_PLAN, PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT, buildTimelineSummary } from '../../llm/prompts';
 import { getLLMClient } from '../../llm/openrouter';
 import { getExtensionConfig } from '../../utils/config';
 
@@ -203,7 +203,11 @@ export class LlmAnalyst {
    */
   private async analyzeIntent(facts: RefactorBundleFacts): Promise<AnalysisBlock> {
     const promptTemplate = this.getPrompt('intent', PROMPT_INTENT_AND_STORY);
-    const prompt = this.buildPrompt(promptTemplate, facts);
+    const timelineInfo = buildTimelineSummary(facts.bundle.timeline);
+    const promptWithTimeline = promptTemplate
+      .replace('{timelineSummary}', timelineInfo.summary)
+      .replace('{versionCount}', String(timelineInfo.count));
+    const prompt = this.buildPrompt(promptWithTimeline, facts);
     const response = await this.callLLM(prompt, 'intent');
 
     const block = AnalysisBlockUtils.createBlock(
@@ -224,7 +228,11 @@ export class LlmAnalyst {
    */
   private async analyzeDrift(facts: RefactorBundleFacts): Promise<AnalysisBlock> {
     const promptTemplate = this.getPrompt('drift', PROMPT_DRIFT_VERIFICATION);
-    const prompt = this.buildPrompt(promptTemplate, facts);
+    const timelineInfo = buildTimelineSummary(facts.bundle.timeline);
+    const promptWithTimeline = promptTemplate
+      .replace('{timelineSummary}', timelineInfo.summary)
+      .replace('{versionCount}', String(timelineInfo.count));
+    const prompt = this.buildPrompt(promptWithTimeline, facts);
     const response = await this.callLLM(prompt, 'drift');
 
     const block = AnalysisBlockUtils.createBlock(
@@ -246,7 +254,11 @@ export class LlmAnalyst {
    */
   private async analyzeCleanup(facts: RefactorBundleFacts): Promise<AnalysisBlock> {
     const promptTemplate = this.getPrompt('cleanup', PROMPT_CLEANUP_PLAN);
-    const prompt = this.buildPrompt(promptTemplate, facts);
+    const timelineInfo = buildTimelineSummary(facts.bundle.timeline);
+    const promptWithTimeline = promptTemplate
+      .replace('{timelineSummary}', timelineInfo.summary)
+      .replace('{versionCount}', String(timelineInfo.count));
+    const prompt = this.buildPrompt(promptWithTimeline, facts);
     const response = await this.callLLM(prompt, 'cleanup');
 
     const block = AnalysisBlockUtils.createBlock(

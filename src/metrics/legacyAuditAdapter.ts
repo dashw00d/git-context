@@ -84,6 +84,8 @@ export async function auditLegacyFromFacts(
     const scope: ScopeSet = {
       commitFiles: new Set(allPaths),
       workingChanged: new Set(allPaths),
+      stagedFiles: new Set(),  // Empty for adapter-based scope
+      unstagedFiles: new Set(),  // Empty for adapter-based scope
       blastRadius: new Set([...allPaths, ...workingSymbols.map(s => s.id)]),
       allPaths: new Set([...allPaths, ...workingSymbols.map(s => s.id)])
     };

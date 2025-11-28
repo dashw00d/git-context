@@ -1,25 +1,81 @@
 {
-  "startTime": "2025-11-28T06:21:19.484Z",
+  "startTime": "2025-11-28T11:20:17.982Z",
   "steps": [
+    {
+      "stepId": "workspace_overlay",
+      "hash": "65f031615e9b7bde0e2e5af9d8d24f0562f4f6db",
+      "note": "no baseline",
+      "summary": "staged: files=0, symbols=0 | unstaged: files=0, symbols=0",
+      "timestamp": "2025-11-28T11:20:18.420Z",
+      "durationMs": 436,
+      "metrics": {
+        "stagedFiles": 0,
+        "stagedSymbols": 0,
+        "unstagedFiles": 0,
+        "unstagedSymbols": 0
+      }
+    },
+    {
+      "stepId": "scope",
+      "hash": "edb82ec2d55ee5ae59754a45f33510dfeaed7fc2",
+      "note": "no baseline",
+      "summary": "files=168, working=86, blast=0",
+      "timestamp": "2025-11-28T11:20:19.229Z",
+      "durationMs": 1238,
+      "metrics": {
+        "commitFiles": 168,
+        "workingChanged": 86,
+        "blastRadiusFiles": 0,
+        "allPaths": 0
+      }
+    },
+    {
+      "stepId": "working",
+      "hash": "dd874a26c0cb97d303538978d8b38124cb9b0749",
+      "note": "no baseline",
+      "summary": "symbols=0, edges=0, paths=0",
+      "timestamp": "2025-11-28T11:20:19.954Z",
+      "durationMs": 725,
+      "metrics": {
+        "symbols": 0,
+        "edges": 0,
+        "analyzedPaths": 0
+      }
+    },
+    {
+      "stepId": "index_commits",
+      "hash": "fb98fb65e97d75c550c6504a4993a7c6b58023dd",
+      "note": "no baseline",
+      "summary": "commits=3",
+      "timestamp": "2025-11-28T11:20:30.418Z",
+      "durationMs": 11189,
+      "metrics": {
+        "commitCount": 3,
+        "totalSymbols": 0,
+        "totalEdges": 0
+      }
+    },
     {
       "stepId": "hotspots",
       "hash": "97d170e1550eee4afc0af065b78cda302a97674c",
-      "note": "Δ baseline (expected d4e5f3e9)",
+      "note": "no baseline",
       "summary": "",
-      "timestamp": "2025-11-28T06:21:19.597Z",
-      "durationMs": 109,
+      "timestamp": "2025-11-28T11:20:30.425Z",
+      "durationMs": 4,
       "metrics": {
         "topHotspots": 0,
-        "totalChurn": 0
+        "totalChurn": 0,
+        "withVersionTracking": 0,
+        "versionDescriptions": []
       }
     },
     {
       "stepId": "intended",
       "hash": "97d170e1550eee4afc0af065b78cda302a97674c",
-      "note": "matches baseline",
+      "note": "no baseline",
       "summary": "symbols=0, present=0, absent=0, renamed=0",
-      "timestamp": "2025-11-28T06:21:19.597Z",
-      "durationMs": 110,
+      "timestamp": "2025-11-28T11:20:30.425Z",
+      "durationMs": 6,
       "metrics": {
         "totalSymbols": 0,
         "present": 0,
@@ -28,66 +84,29 @@
       }
     },
     {
-      "stepId": "scope",
-      "hash": "41f58153f3e5ab93fa4a68c9a76f8a201b8599ec",
-      "note": "Δ baseline (expected f56edd51)",
-      "summary": "files=152, working=91, blast=0",
-      "timestamp": "2025-11-28T06:21:20.804Z",
-      "durationMs": 1317,
+      "stepId": "moved_blocks",
+      "hash": "97d170e1550eee4afc0af065b78cda302a97674c",
+      "note": "no baseline",
+      "summary": "",
+      "timestamp": "2025-11-28T11:20:30.426Z",
+      "durationMs": 5,
       "metrics": {
-        "commitFiles": 152,
-        "workingChanged": 91,
-        "blastRadiusFiles": 0,
-        "allPaths": 200
-      }
-    },
-    {
-      "stepId": "index_commits",
-      "hash": "0a2339b0c744a67d6fbef733d35892037d57f462",
-      "note": "Δ baseline (expected 4a1dc616)",
-      "summary": "commits=3",
-      "timestamp": "2025-11-28T06:21:55.281Z",
-      "durationMs": 35795,
-      "metrics": {
-        "commitCount": 3,
-        "totalSymbols": 0,
-        "totalEdges": 0
-      }
-    },
-    {
-      "stepId": "workspace_overlay",
-      "hash": "cccf1afd0c3123898fc368aa381b777a68308dea",
-      "note": "Δ baseline (expected 3bfb62b0)",
-      "summary": "staged: files=55, symbols=641 | unstaged: files=36, symbols=1466",
-      "timestamp": "2025-11-28T06:22:16.092Z",
-      "durationMs": 56603,
-      "metrics": {
-        "stagedFiles": 55,
-        "stagedSymbols": 641,
-        "unstagedFiles": 36,
-        "unstagedSymbols": 1466
-      }
-    },
-    {
-      "stepId": "working",
-      "hash": "9e262792e22fb73c94a41236624e3546f1bd7ed0",
-      "note": "Δ baseline (expected 58de5e62)",
-      "summary": "symbols=3714, edges=25565, paths=165",
-      "timestamp": "2025-11-28T06:22:18.142Z",
-      "durationMs": 2050,
-      "metrics": {
-        "symbols": 3714,
-        "edges": 25565,
-        "analyzedPaths": 165
+        "totalMoves": 0,
+        "withVersionDescription": 0,
+        "moveTypes": {
+          "rename": 0,
+          "relocate": 0,
+          "refactor": 0
+        }
       }
     },
     {
       "stepId": "drift",
-      "hash": "6f6d82b13c7d10b500c7a78e22dec140ad421635",
-      "note": "Δ baseline (expected 632e9fc8)",
+      "hash": "13f7acde44dafc4f2b1dfcb173515b1610953d0c",
+      "note": "no baseline",
       "summary": "missing=0, zombies=0, divergent=0, hybrid=0",
-      "timestamp": "2025-11-28T06:22:19.073Z",
-      "durationMs": 931,
+      "timestamp": "2025-11-28T11:20:30.458Z",
+      "durationMs": 32,
       "metrics": {
         "missing_symbols": 0,
         "zombie_symbols": 0,
@@ -96,37 +115,37 @@
         "zombie_edges": 0,
         "unresolved_callers": 0,
         "hybridDrifts": 0,
-        "conventionDrift": 95,
-        "mixedConventionFiles": 31
+        "conventionDrift": 0,
+        "mixedConventionFiles": 0
       }
     },
     {
       "stepId": "legacy",
-      "hash": "160b4c4e62595fb3ebb79572bcf7f88dc5c6f4c8",
-      "note": "Δ baseline (expected c3f11aa2)",
-      "summary": "dead=22, legacyUsed=0, leftovers=0",
-      "timestamp": "2025-11-28T06:22:19.077Z",
-      "durationMs": 777,
+      "hash": "6fda6f32fdfaa0f64de3e5277bc7b4311dbcdc54",
+      "note": "no baseline",
+      "summary": "dead=0, legacyUsed=0, leftovers=0",
+      "timestamp": "2025-11-28T11:20:30.459Z",
+      "durationMs": 1,
       "metrics": {
-        "dead": 22,
+        "dead": 0,
         "legacyUsed": 0,
         "replacedLeftovers": 0
       }
     },
     {
       "stepId": "bundle_facts",
-      "hash": "7149cca67dd0536ce241aa0280ab26a1afbb35e6",
-      "note": "Δ baseline (expected 837658ed)",
-      "summary": "intended.present=0, absent=50, renamed=0, hybridFacts=0 (0 files)",
-      "timestamp": "2025-11-28T06:22:19.172Z",
-      "durationMs": 95,
+      "hash": "8909f1f14b01d598e6c4aa8202ff4c643898675c",
+      "note": "no baseline",
+      "summary": "intended.present=0, absent=0, renamed=0, hybridFacts=0 (0 files)",
+      "timestamp": "2025-11-28T11:20:30.460Z",
+      "durationMs": 1,
       "metrics": {
         "incompleteness": 0,
-        "patternDrift": 32,
-        "legacySummary": 22,
+        "patternDrift": 0,
+        "legacySummary": 0,
         "intended": {
           "present": 0,
-          "absent": 50,
+          "absent": 0,
           "renamed": 0
         },
         "hybridFactsCount": 0,
@@ -138,8 +157,8 @@
       "hash": "n/a (external/complex)",
       "note": "no baseline",
       "summary": "",
-      "timestamp": "2025-11-28T06:22:31.561Z",
-      "durationMs": 12389,
+      "timestamp": "2025-11-28T11:20:31.779Z",
+      "durationMs": 1318,
       "metrics": {}
     },
     {
@@ -147,10 +166,10 @@
       "hash": "n/a (external/complex)",
       "note": "no baseline",
       "summary": "",
-      "timestamp": "2025-11-28T06:22:32.247Z",
-      "durationMs": 685,
+      "timestamp": "2025-11-28T11:20:32.517Z",
+      "durationMs": 738,
       "metrics": {
-        "historyItems": 9,
+        "historyItems": 17,
         "retrievedCommits": 0
       }
     },
@@ -159,40 +178,82 @@
       "hash": "n/a (external/complex)",
       "note": "no baseline",
       "summary": "",
-      "timestamp": "2025-11-28T06:27:52.854Z",
-      "durationMs": 320607,
+      "timestamp": "2025-11-28T11:20:32.913Z",
+      "durationMs": 396,
       "metrics": {
         "storyLength": 1,
-        "totalHealthScore": 99.40764674205708,
-        "totalTokens": 42437,
+        "totalHealthScore": 100,
+        "totalTokens": 0,
         "totalCalls": 6,
         "blocksCount": 4
       },
       "llmSummary": {
-        "summary_md": "# LLM Analysis Report\n\n**Generated:** 11/28/2025, 12:27:52 AM\n\n**Bundle:** 3 commits\n\n## Refactor Intent & Story\n\n### Findings\n\n- **HIGH:** All 50 intended absent symbols were successfully removed with zero missing, zombies, or divergent symbols. (confidence: 100%)\n  - Evidence: `intended.absent`\n  - Evidence: `findings.incompleteness`\n- **HIGH:** 22 dead functions confirmed unused and safe for deletion. (confidence: 100%)\n  - Evidence: `findings.legacyAudit.dead`\n- **MEDIUM:** No legacy code remains in use and no replaced leftovers. (confidence: 100%)\n  - Evidence: `findings.legacyAudit.legacyUsed`\n  - Evidence: `findings.legacyAudit.replacedLeftovers`\n- **MEDIUM:** Convention drift is low at 2.56% across 95 symbols with dominant camelCase. (confidence: 100%)\n  - Evidence: `findings.patternDrift.conventionDrift`\n- **HIGH:** Zero blast radius confirms minimal architectural disruption. (confidence: 100%)\n  - Evidence: `scope.blastRadius`\n\n## Drift Verification\n\n### Findings\n\n- **HIGH:**... [truncated]",
-        "summary_text": "## Key Insights\n\n**Most Critical:** All 50 intended absent symbols were successfully removed with zero missing, zombies, or divergent symbols. (high severity, 100% confidence)\n\n**Immediate Actions:**\n1. Remove all 22 dead symbols (e.g., src/extension.ts:function_getRepoContext, src/facts/factsAssembler.ts:function_getIntendedLists) as they have zero callers and blastRadius 0 ensures safety [high priority, low effort]\n2. Standardize constants in src/utils/supportedLanguages.ts to camelCase (e.g.,...",
-        "healthScore": 99.40764674205708,
-        "totalTokens": 42437,
+        "summary_md": "# LLM Analysis Report\n\n**Generated:** 11/28/2025, 5:20:32 AM\n\n**Bundle:** 3 commits\n\n## Refactor Intent & Story\n\n## Drift Verification\n\n## Cleanup Plan\n\n## LLM-Driven Pattern Discovery\n\n",
+        "summary_text": "## Key Insights\n\n**Refactor Health:** 100/100 ✅\n\n**Quick Stats:** 3 commits, 0 symbols analyzed, no issues found\n",
+        "healthScore": 100,
+        "totalTokens": 0,
         "totalCalls": 6,
         "model": "x-ai/grok-4.1-fast:free",
-        "validatedEvidenceCount": 8,
+        "validatedEvidenceCount": 0,
         "blocksCount": 4,
-        "timestamp": "2025-11-28T06:27:52.853Z"
+        "timestamp": "2025-11-28T11:20:32.911Z",
+        "prompts": {
+          "intent": {
+            "size": 11698
+          },
+          "drift": {
+            "size": 11964
+          },
+          "cleanup": {
+            "size": 11703
+          },
+          "discover": {
+            "size": 13809
+          },
+          "quantify": {
+            "size": 1141
+          },
+          "plan": {
+            "size": 945
+          }
+        },
+        "summarizedFactsSize": 7813
       }
     }
   ],
   "errors": [],
   "llm_summaries": [
     {
-      "summary_md": "# LLM Analysis Report\n\n**Generated:** 11/28/2025, 12:27:52 AM\n\n**Bundle:** 3 commits\n\n## Refactor Intent & Story\n\n### Findings\n\n- **HIGH:** All 50 intended absent symbols were successfully removed with zero missing, zombies, or divergent symbols. (confidence: 100%)\n  - Evidence: `intended.absent`\n  - Evidence: `findings.incompleteness`\n- **HIGH:** 22 dead functions confirmed unused and safe for deletion. (confidence: 100%)\n  - Evidence: `findings.legacyAudit.dead`\n- **MEDIUM:** No legacy code remains in use and no replaced leftovers. (confidence: 100%)\n  - Evidence: `findings.legacyAudit.legacyUsed`\n  - Evidence: `findings.legacyAudit.replacedLeftovers`\n- **MEDIUM:** Convention drift is low at 2.56% across 95 symbols with dominant camelCase. (confidence: 100%)\n  - Evidence: `findings.patternDrift.conventionDrift`\n- **HIGH:** Zero blast radius confirms minimal architectural disruption. (confidence: 100%)\n  - Evidence: `scope.blastRadius`\n\n## Drift Verification\n\n### Findings\n\n- **HIGH:**... [truncated]",
-      "summary_text": "## Key Insights\n\n**Most Critical:** All 50 intended absent symbols were successfully removed with zero missing, zombies, or divergent symbols. (high severity, 100% confidence)\n\n**Immediate Actions:**\n1. Remove all 22 dead symbols (e.g., src/extension.ts:function_getRepoContext, src/facts/factsAssembler.ts:function_getIntendedLists) as they have zero callers and blastRadius 0 ensures safety [high priority, low effort]\n2. Standardize constants in src/utils/supportedLanguages.ts to camelCase (e.g.,...",
-      "healthScore": 99.40764674205708,
-      "totalTokens": 42437,
+      "summary_md": "# LLM Analysis Report\n\n**Generated:** 11/28/2025, 5:20:32 AM\n\n**Bundle:** 3 commits\n\n## Refactor Intent & Story\n\n## Drift Verification\n\n## Cleanup Plan\n\n## LLM-Driven Pattern Discovery\n\n",
+      "summary_text": "## Key Insights\n\n**Refactor Health:** 100/100 ✅\n\n**Quick Stats:** 3 commits, 0 symbols analyzed, no issues found\n",
+      "healthScore": 100,
+      "totalTokens": 0,
       "totalCalls": 6,
       "model": "x-ai/grok-4.1-fast:free",
-      "validatedEvidenceCount": 8,
+      "validatedEvidenceCount": 0,
       "blocksCount": 4,
-      "timestamp": "2025-11-28T06:27:52.853Z"
+      "timestamp": "2025-11-28T11:20:32.911Z",
+      "prompts": {
+        "intent": {
+          "size": 11698
+        },
+        "drift": {
+          "size": 11964
+        },
+        "cleanup": {
+          "size": 11703
+        },
+        "discover": {
+          "size": 13809
+        },
+        "quantify": {
+          "size": 1141
+        },
+        "plan": {
+          "size": 945
+        }
+      },
+      "summarizedFactsSize": 7813
     }
   ],
   "hybridFacts": {
@@ -213,20 +274,21 @@
     "batchRetrievalTime": 0,
     "speedup": 1,
     "cacheStats": {
-      "cacheHits": 38,
-      "cacheMisses": 409,
-      "hitRate": 0.08501118568232663
+      "cacheHits": 0,
+      "cacheMisses": 194,
+      "hitRate": 0
     }
   },
-  "endTime": "2025-11-28T06:27:52.854Z",
-  "totalTimeMs": 393369,
+  "endTime": "2025-11-28T11:20:32.913Z",
+  "totalTimeMs": 14930,
   "completedSteps": [
+    "workspace_overlay",
+    "scope",
+    "working",
+    "index_commits",
     "hotspots",
     "intended",
-    "scope",
-    "index_commits",
-    "workspace_overlay",
-    "working",
+    "moved_blocks",
     "drift",
     "legacy",
     "bundle_facts",
@@ -237,44 +299,53 @@
   "errorCount": 0,
   "aggregatedMetrics": {
     "totalCommits": 3,
-    "totalSymbols": 3714,
-    "totalEdges": 25565,
+    "totalSymbols": 0,
+    "totalEdges": 0,
     "totalDriftIssues": 0,
     "unresolvedCallers": 0,
     "totalHotspots": 0,
     "bundleIncompleteness": 0,
-    "patternDrift": 32,
-    "totalLegacyDead": 22,
+    "patternDrift": 0,
+    "totalLegacyDead": 0,
     "llmTotalCalls": 6,
-    "llmTotalTokens": 42437,
-    "overallHealthScore": 99.40764674205708
+    "llmTotalTokens": 0,
+    "overallHealthScore": 100
   },
   "finalStates": {
     "bundleFacts": {
       "version": "2.0",
-      "generated_at": "2025-11-28T06:22:19.088Z",
+      "generated_at": "2025-11-28T11:20:30.460Z",
       "confidence": 1,
       "bundle": {
-        "oldestSha": "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
-        "newestSha": "eb64ffb08b93451473f3c9db471d80d3a3606195",
+        "oldestSha": "66b4ad726dccaf0f8f002c95be2ed9a900897395",
+        "newestSha": "c5e686bff558c76bb0d5812dac8be3f07680f059",
         "shas": [
+          "66b4ad726dccaf0f8f002c95be2ed9a900897395",
           "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
-          "c5e686bff558c76bb0d5812dac8be3f07680f059",
-          "eb64ffb08b93451473f3c9db471d80d3a3606195"
-        ]
+          "c5e686bff558c76bb0d5812dac8be3f07680f059"
+        ],
+        "timeline": [
+          "workspace-unstaged",
+          "workspace-staged",
+          "HEAD",
+          "66b4ad726dccaf0f8f002c95be2ed9a900897395",
+          "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
+          "c5e686bff558c76bb0d5812dac8be3f07680f059"
+        ],
+        "movedLineage": []
       },
       "scope": {
-        "files": 152,
+        "files": 168,
         "blastRadius": 0
       },
       "intended": {
         "present": 0,
-        "absent": 50,
+        "absent": 0,
         "renamed": 0
       },
       "working": {
-        "symbols": 3714,
-        "edges": 25565
+        "symbols": 0,
+        "edges": 0
       },
       "findings": {
         "incompleteness": {
@@ -283,31 +354,116 @@
           "divergent": 0
         },
         "patternDrift": {
-          "mixedTargets": 31,
-          "oldNamespaces": 68,
-          "conventionDrift": {
-            "dominantConvention": "camelCase",
-            "driftPercent": 2.557889068389876,
-            "driftSymbolCount": 95
-          },
-          "mixedConventionFiles": 31
+          "mixedTargets": 0,
+          "oldNamespaces": 0
         },
         "legacyAudit": {
-          "dead": 22,
+          "dead": 0,
           "legacyUsed": 0,
           "replacedLeftovers": []
         },
         "unresolvedCallers": {
-          "total": 16418
+          "total": 0
         }
       },
       "evidence": {
         "bundle.shas": [
+          "66b4ad726dccaf0f8f002c95be2ed9a900897395",
           "ce81cf0e3c4e8732b2e98a96ba1fdd4c12851b00",
-          "c5e686bff558c76bb0d5812dac8be3f07680f059",
-          "eb64ffb08b93451473f3c9db471d80d3a3606195"
+          "c5e686bff558c76bb0d5812dac8be3f07680f059"
         ],
         "scope.files": [
+          "README.md",
+          "benchmarks/fixtures/sample.css",
+          "benchmarks/fixtures/sample.js",
+          "benchmarks/fixtures/sample.json",
+          "benchmarks/fixtures/sample.md",
+          "benchmarks/fixtures/sample.php",
+          "benchmarks/fixtures/sample.yaml",
+          "benchmarks/mocks/framework/benchmarks/mocks/framework/snapshot.js",
+          "benchmarks/mocks/framework/snapshot.js",
+          "benchmarks/mocks/framework/snapshot.ts",
+          "benchmarks/mocks/framework/src/analysis/astSerializer.js",
+          "benchmarks/mocks/framework/src/analysis/cstDiff.js",
+          "benchmarks/mocks/framework/src/analysis/cstExtractor.js",
+          "benchmarks/mocks/framework/src/analysis/cstTimeline.js",
+          "benchmarks/mocks/framework/src/analysis/dependencies.js",
+          "benchmarks/mocks/framework/src/analysis/difftastic.js",
+          "benchmarks/mocks/framework/src/analysis/git.js",
+          "benchmarks/mocks/framework/src/analysis/hotspotDetector.js",
+          "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js",
+          "benchmarks/mocks/framework/src/analysis/namingConventions.js",
+          "benchmarks/mocks/framework/src/analysis/runner/pipelineTypes.js",
+          "benchmarks/mocks/framework/src/analysis/semanticChanges.js",
+          "benchmarks/mocks/framework/src/analysis/snapshotManager.js",
+          "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js",
+          "benchmarks/mocks/framework/src/analysis/symbolDna.js",
+          "benchmarks/mocks/framework/src/analysis/symbols.js",
+          "benchmarks/mocks/framework/src/analysis/tree-sitter.js",
+          "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js",
+          "benchmarks/mocks/framework/src/contracts/llmContext.js",
+          "benchmarks/mocks/framework/src/facts/driftDetector.js",
+          "benchmarks/mocks/framework/src/facts/intendedMap.js",
+          "benchmarks/mocks/framework/src/facts/legacyAudit.js",
+          "benchmarks/mocks/framework/src/facts/scope.js",
+          "benchmarks/mocks/framework/src/facts/workingSnapshot.js",
+          "benchmarks/mocks/framework/src/storage/database.js",
+          "benchmarks/mocks/framework/src/storage/schema.js",
+          "benchmarks/mocks/framework/src/types/cstFacts.js",
+          "benchmarks/mocks/framework/src/types/index.js",
+          "benchmarks/mocks/framework/src/utils/config.js",
+          "benchmarks/mocks/framework/src/utils/edgeThresholds.js",
+          "benchmarks/mocks/framework/src/utils/logger.js",
+          "benchmarks/mocks/framework/src/utils/supportedLanguages.js",
+          "benchmarks/output/pipeline_diagnostics.json",
+          "benchmarks/output/pipeline_report.md",
+          "benchmarks/pipeline_diagnostics.ts",
+          "binaries/tree-sitter-svelte.wasm",
+          "cst-only-tracking.md",
+          "docs/cst-extractors.md",
+          "docs/hybrid-drift-optimization-plan.md",
+          "docs/pipeline-diagnostics-cst-integration-plan.md",
+          "modular-summarizer.md",
+          "package-lock.json",
+          "package.json",
+          "scripts/copy-wasm.js",
+          "scripts/download-wasm.js",
+          "scripts/remove-source-compiled.js",
+          "src/analysis/commitIndexer.ts",
+          "src/analysis/cstDiff.ts",
+          "src/analysis/cstExtractor.ts",
+          "src/analysis/cstTimeline.ts",
+          "src/analysis/embeddingIndexer.ts",
+          "src/analysis/hotspotDetector.ts",
+          "src/analysis/hybridDriftDetector.ts",
+          "src/analysis/liveAnalysis.ts",
+          "src/analysis/llmAnalyst/runner.ts",
+          "src/analysis/movedBlockDetector.ts",
+          "src/analysis/runner/steps/driftStep.ts",
+          "src/analysis/runner/steps/hotspotStep.ts",
+          "src/analysis/runner/steps/intendedStep.ts",
+          "src/analysis/runner/steps/legacyStep.ts",
+          "src/analysis/snapshotManager.ts",
+          "src/analysis/structuralDiffManager.ts",
+          "src/analysis/symbolDna.ts",
+          "src/analysis/tree-sitter.ts",
+          "src/analysis/workspaceIndexer.ts",
+          "src/commands/commands.ts",
+          "src/facts/driftDetector.ts",
+          "src/facts/factsAssembler.ts",
+          "src/facts/intendedMap.ts",
+          "src/facts/legacyAudit.ts",
+          "src/facts/scope.ts",
+          "src/facts/types.ts",
+          "src/liveTracker.ts",
+          "src/storage/database.ts",
+          "src/storage/schema.ts",
+          "src/types/cockpit.ts",
+          "src/types/cstFacts.ts",
+          "src/types/index.ts",
+          "src/utils/config.ts",
+          "src/utils/supportedLanguages-constants.js",
+          "src/utils/supportedLanguages.ts",
           ".claude/CLAUDE.md",
           ".git-context.config.json",
           ".gitignore",
@@ -317,13 +473,9 @@
           "COMPREHENSIVE_CLEANUP_PLAN.md",
           "CONFIG.md",
           "PROJECT.md",
-          "README.md",
           "benchmarks/liveAnalysis.test.ts",
-          "benchmarks/mocks/framework/snapshot.js",
           "benchmarks/mocks/reporter.ts",
-          "benchmarks/output/pipeline_diagnostics.json",
           "benchmarks/output/test-results.json",
-          "benchmarks/pipeline_diagnostics.ts",
           "benchmarks/qdrant_integration_test.ts",
           "check_symbols.js",
           "copy-wasm.js",
@@ -335,111 +487,81 @@
           "metric_test_report_2025-11-27T11-25-49.md",
           "metric_test_report_2025-11-27T12-11-31.md",
           "metric_test_report_2025-11-27T12-11-52.md",
-          "package.json",
           "pipeline-refactor-plan.md",
           "pipeline_diagnostics.json",
           "scripts/check_symbols.js",
-          "scripts/copy-wasm.js",
-          "scripts/download-wasm.js",
-          "scripts/remove-source-compiled.js",
           "scripts/vscode-mock.js",
           "src/analysis/bundleStoryEngine.ts",
-          "src/analysis/commitIndexer.ts",
           "src/analysis/contextExporter.ts",
-          "src/analysis/embeddingIndexer.ts",
           "src/analysis/runner/pipelineTypes.ts",
           "src/analysis/runner/steps/bundleFactsStep.ts",
           "src/analysis/runner/steps/historyStep.ts",
           "src/analysis/runner/steps/workspaceStep.ts",
-          "src/analysis/snapshotManager.ts",
           "src/cli/index.ts",
           "src/extension.ts",
-          "src/facts/driftDetector.ts",
-          "src/facts/factsAssembler.ts",
           "src/metrics/bundleFactsAdapter.ts",
-          "src/providers/activeBundleProvider.ts.backup"
+          "src/providers/activeBundleProvider.ts.backup",
+          "src/storage/index.ts",
+          "src/storage/qdrantClient.ts",
+          "src/storage/schema.ts.backup",
+          "temp_benchmark.db",
+          "test_debug.ts",
+          "test_output_ui_data.json",
+          "test_output_ui_data1.json",
+          "test_pipeline_integration.ts",
+          "test_pipeline_integration.ts.depricated",
+          "test_pipeline_log.txt",
+          "todo.md",
+          "vitest.config.ts",
+          "vscode-mock.js",
+          ".git-context.config.example.json",
+          ".kilocode/providers.json",
+          "backlog/DEPRECATED_CODE_CLEANUP.md",
+          "backlog/ESLINT_WARNINGS_CATEGORIZED.md",
+          "backlog/deep-think-plan.md",
+          "backlog/diff-as-you-go-plan.md",
+          "benchmarks/PIPELINE_DIAGNOSTICS.md",
+          "benchmarks/fixtures/pipeline_frozen/bundle_facts.json",
+          "benchmarks/fixtures/pipeline_frozen/drift.json",
+          "benchmarks/fixtures/pipeline_frozen/hotspots.json",
+          "benchmarks/fixtures/pipeline_frozen/index_commits.json",
+          "benchmarks/fixtures/pipeline_frozen/intended.json",
+          "benchmarks/fixtures/pipeline_frozen/legacy.json",
+          "benchmarks/fixtures/pipeline_frozen/scope.json",
+          "benchmarks/fixtures/pipeline_frozen/working.json",
+          "benchmarks/fixtures/pipeline_frozen/workspace_overlay.json",
+          "benchmarks/liveTracker.test.ts",
+          "benchmarks/pipeline_metric_test.ts",
+          "git-context.config.schema.json",
+          "src/analysis/astSerializer.ts",
+          "src/analysis/conventionEnhancements.ts",
+          "src/analysis/dependencies.ts",
+          "src/analysis/runner/pipelineRunner.ts",
+          "src/analysis/semanticChanges.ts",
+          "src/analysis/symbols.ts",
+          "src/cli/analyze.ts",
+          "src/storage/embeddings.ts"
         ],
         "scope.blastRadius": [],
+        "timeline.chain": {
+          "unstaged": 79,
+          "staged": 16,
+          "head": "HEAD",
+          "commits": 3
+        },
+        "hybrid.unstaged": {
+          "total": 0,
+          "files": []
+        },
+        "hybrid.staged": {
+          "total": 0,
+          "files": []
+        },
         "intended.present": [],
-        "intended.absent": [
-          "86b5382ccb92c983",
-          "7b9fa8219d064bee",
-          "9794b25a88243df0",
-          "8f613804471e0bb0",
-          "bd0863569c4eb4b9",
-          "b5fd4d5d5618bafc",
-          "bdaadf0fa5a1a7c0",
-          "73964622245c9155",
-          "db3b012e75f993a9",
-          "947b4695181c5b0c",
-          "9686a39788de2c36",
-          "d1be298edeebad57",
-          "fd20b33f5e552711",
-          "b309c05d6adba603",
-          "bb4b1fffdc5ffc53",
-          "e10745a2d57e3da4",
-          "3a2cc58b68a8372a",
-          "766809e5e7567ea1",
-          "0181119f73b3d2b8",
-          "110b43f599a7e8e2",
-          "e3baa5a4860cd449",
-          "9ffd1f4c5f4db178",
-          "c4c963657434deb2",
-          "b6733bc8d455f857",
-          "b78df9d8ca1a2fbb",
-          "3d2b4a114de04c1c",
-          "90dc1faad70e6c07",
-          "7a5f1da7474132a6",
-          "f0b29baef0a5c9ff",
-          "81d09b7d00b782d9",
-          "85bed87a5fe8ea5a",
-          "4761b179dae621ff",
-          "069c5bd16a5fcf29",
-          "6afe1dcd68b52890",
-          "ce4100466c338f02",
-          "6ac51a3c82d1169a",
-          "9579983fb9538289",
-          "c5a3d098f7479612",
-          "dda8c445158cd79f",
-          "ad7e89b6c7325785",
-          "084b608e4d3fe3fe",
-          "c14e9742ff896e94",
-          "7205b3ca251bd088",
-          "d1e0891b4270e661",
-          "11ba1fe8a442e19a",
-          "5452b5fc907a759b",
-          "521a02ea77c6a031",
-          "2e949356b0c6c14f",
-          "637c8f40a957b0ce",
-          "c6b8fb9ba9c5af7d"
-        ],
+        "intended.absent": [],
         "intended.renamed": [],
-        "working.symbols": [
-          "benchmarks/liveAnalysis.test.ts:const_mockOrchestratorInstance",
-          "benchmarks/mocks/reporter.ts:function_generateReport",
-          "benchmarks/mocks/reporter.ts:const_config",
-          "benchmarks/mocks/reporter.ts:const_totalTests",
-          "benchmarks/mocks/reporter.ts:const_passedTests",
-          "benchmarks/mocks/reporter.ts:const_failedTests",
-          "benchmarks/mocks/reporter.ts:const_totalIssues",
-          "benchmarks/mocks/reporter.ts:const_markdown",
-          "benchmarks/mocks/reporter.ts:function_generateHealthScoreChart",
-          "benchmarks/mocks/reporter.ts:const_scores",
-          "benchmarks/mocks/reporter.ts:const_buckets",
-          "benchmarks/mocks/reporter.ts:const_min",
-          "benchmarks/mocks/reporter.ts:const_max",
-          "benchmarks/mocks/reporter.ts:const_count",
-          "benchmarks/mocks/reporter.ts:const_bar",
-          "benchmarks/mocks/reporter.ts:function_generateConfidenceChart",
-          "benchmarks/mocks/reporter.ts:const_confidences",
-          "benchmarks/mocks/reporter.ts:function_generateIssuesSummary",
-          "benchmarks/mocks/reporter.ts:const_allIssues",
-          "benchmarks/mocks/reporter.ts:const_issueCounts"
-        ],
-        "working.edges": [
-          "imports: 583",
-          "calls: 24982"
-        ],
+        "working.symbols": [],
+        "working.edges": [],
         "findings.incompleteness": {
           "missing": [],
           "zombies": [],
@@ -448,1717 +570,14 @@
         "findings.incompleteness.missing": [],
         "findings.incompleteness.zombies": [],
         "findings.legacyAudit": {
-          "dead": [
-            {
-              "symbol_id": "src/extension.ts:function_getRepoContext",
-              "name": "getRepoContext",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/extension.ts:function_getCockpitProvider",
-              "name": "getCockpitProvider",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/extension.ts:function_getRefactorPipeline",
-              "name": "getRefactorPipeline",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/facts/factsAssembler.ts:function_getIntendedLists",
-              "name": "getIntendedLists",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/facts/factsAssembler.ts:function_getWorkingLists",
-              "name": "getWorkingLists",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/facts/factsAssembler.ts:function_getHybridFactsCount",
-              "name": "getHybridFactsCount",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/utils/supportedLanguages.ts:function_getRequiredLanguagesForExtensions",
-              "name": "getRequiredLanguagesForExtensions",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/utils/supportedLanguages.ts:function_getMissingWasmFiles",
-              "name": "getMissingWasmFiles",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/utils/supportedLanguages.ts:function_isCstOnlyLanguage",
-              "name": "isCstOnlyLanguage",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/storage/embeddings.ts:function_getEmbeddingDimension",
-              "name": "getEmbeddingDimension",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/analysis/difftastic.ts:function_getDifftasticIntegration",
-              "name": "getDifftasticIntegration",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/metrics/movedBlockAdapter.ts:function_isFileRename",
-              "name": "isFileRename",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/analysis/cstTimeline.ts:function_getCstTimelineManager",
-              "name": "getCstTimelineManager",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/analysis/hybridDriftDetector.ts:function_getHybridFactsForFile",
-              "name": "getHybridFactsForFile",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/facts/legacyAudit.ts:function_isInScope",
-              "name": "isInScope",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/facts/legacyAudit.ts:function_isLikelyUtilityFunction",
-              "name": "isLikelyUtilityFunction",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/facts/legacyAudit.ts:function_isEntryPointLike",
-              "name": "isEntryPointLike",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/facts/legacyAudit.ts:function_hasSomeComplexity",
-              "name": "hasSomeComplexity",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/types/cstFacts.ts:function_isCstFact",
-              "name": "isCstFact",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "src/types/cstFacts.ts:function_isSymbolInfo",
-              "name": "isSymbolInfo",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "benchmarks/mocks/framework/src/facts/workingSnapshot.js:function_getWorkingSnapshot",
-              "name": "getWorkingSnapshot",
-              "kind": "function"
-            },
-            {
-              "symbol_id": "benchmarks/mocks/framework/src/utils/supportedLanguages.js:function_getRequiredLanguagesForExtensions",
-              "name": "getRequiredLanguagesForExtensions",
-              "kind": "function"
-            }
-          ],
+          "dead": [],
           "legacyUsed": [],
           "replacedLeftovers": []
         },
-        "findings.patternDrift.conventionDrift": {
-          "dominantConvention": "camelCase",
-          "driftPercent": 2.557889068389876,
-          "driftSymbols": [
-            {
-              "symbolId": "benchmarks/qdrant_integration_test.ts:const_TEST_PROJECT_ID",
-              "name": "TEST_PROJECT_ID",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "testProjectId",
-              "path": "benchmarks/qdrant_integration_test.ts"
-            },
-            {
-              "symbolId": "benchmarks/qdrant_integration_test.ts:const_TEST_COMMIT_COUNT",
-              "name": "TEST_COMMIT_COUNT",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "testCommitCount",
-              "path": "benchmarks/qdrant_integration_test.ts"
-            },
-            {
-              "symbolId": "src/storage/database.ts:const_SQL",
-              "name": "SQL",
-              "convention": "PascalCase",
-              "suggestedName": "sQL",
-              "path": "src/storage/database.ts"
-            },
-            {
-              "symbolId": "src/storage/database.ts:const_DatabaseHelpers",
-              "name": "DatabaseHelpers",
-              "convention": "PascalCase",
-              "suggestedName": "databaseHelpers",
-              "path": "src/storage/database.ts"
-            },
-            {
-              "symbolId": "src/storage/schema.ts:const_MODULE_SCHEMAS",
-              "name": "MODULE_SCHEMAS",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "moduleSchemas",
-              "path": "src/storage/schema.ts"
-            },
-            {
-              "symbolId": "src/storage/schema.ts:const_ANALYSIS_VERSION",
-              "name": "ANALYSIS_VERSION",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "analysisVersion",
-              "path": "src/storage/schema.ts"
-            },
-            {
-              "symbolId": "src/utils/supportedLanguages.ts:const_LANGUAGE_CONFIG",
-              "name": "LANGUAGE_CONFIG",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "languageConfig",
-              "path": "src/utils/supportedLanguages.ts"
-            },
-            {
-              "symbolId": "src/utils/supportedLanguages.ts:const_WASM_URLS",
-              "name": "WASM_URLS",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "wasmUrls",
-              "path": "src/utils/supportedLanguages.ts"
-            },
-            {
-              "symbolId": "src/utils/supportedLanguages.ts:const_LANGUAGES",
-              "name": "LANGUAGES",
-              "convention": "PascalCase",
-              "suggestedName": "lANGUAGES",
-              "path": "src/utils/supportedLanguages.ts"
-            },
-            {
-              "symbolId": "src/utils/supportedLanguages.ts:const_SUPPORTED_LANGUAGES",
-              "name": "SUPPORTED_LANGUAGES",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "supportedLanguages",
-              "path": "src/utils/supportedLanguages.ts"
-            },
-            {
-              "symbolId": "src/utils/supportedLanguages.ts:const_EXT_TO_LANG_MAP",
-              "name": "EXT_TO_LANG_MAP",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "extToLangMap",
-              "path": "src/utils/supportedLanguages.ts"
-            },
-            {
-              "symbolId": "src/utils/supportedLanguages.ts:const_JSLANGUAGES",
-              "name": "JSLANGUAGES",
-              "convention": "PascalCase",
-              "suggestedName": "jSLANGUAGES",
-              "path": "src/utils/supportedLanguages.ts"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/snapshot.ts:const_MAX_STRING_LENGTH",
-              "name": "MAX_STRING_LENGTH",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "maxStringLength",
-              "path": "benchmarks/mocks/framework/snapshot.ts"
-            },
-            {
-              "symbolId": "src/types/index.ts:const_ContextValues",
-              "name": "ContextValues",
-              "convention": "PascalCase",
-              "suggestedName": "contextValues",
-              "path": "src/types/index.ts"
-            },
-            {
-              "symbolId": "benchmarks/fixtures/sample.js:class_Calculator",
-              "name": "Calculator",
-              "convention": "PascalCase",
-              "suggestedName": "calculator",
-              "path": "benchmarks/fixtures/sample.js"
-            },
-            {
-              "symbolId": "benchmarks/fixtures/sample.php:class_UserService",
-              "name": "UserService",
-              "convention": "PascalCase",
-              "suggestedName": "userService",
-              "path": "benchmarks/fixtures/sample.php"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/benchmarks/mocks/framework/snapshot.js:const_MAX_STRING_LENGTH",
-              "name": "MAX_STRING_LENGTH",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "maxStringLength",
-              "path": "benchmarks/mocks/framework/benchmarks/mocks/framework/snapshot.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/astSerializer.js:const_tree_sitter_1",
-              "name": "tree_sitter_1",
-              "convention": "snake_case",
-              "suggestedName": "treeSitter1",
-              "path": "benchmarks/mocks/framework/src/analysis/astSerializer.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/astSerializer.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/astSerializer.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/astSerializer.js:class_AstSerializer",
-              "name": "AstSerializer",
-              "convention": "PascalCase",
-              "suggestedName": "astSerializer",
-              "path": "benchmarks/mocks/framework/src/analysis/astSerializer.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstDiff.js:const_astSerializer_1",
-              "name": "astSerializer_1",
-              "convention": "mixed",
-              "suggestedName": "astSerializer1",
-              "path": "benchmarks/mocks/framework/src/analysis/cstDiff.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstDiff.js:const_difftastic_1",
-              "name": "difftastic_1",
-              "convention": "snake_case",
-              "suggestedName": "difftastic1",
-              "path": "benchmarks/mocks/framework/src/analysis/cstDiff.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstDiff.js:const_tree_sitter_1",
-              "name": "tree_sitter_1",
-              "convention": "snake_case",
-              "suggestedName": "treeSitter1",
-              "path": "benchmarks/mocks/framework/src/analysis/cstDiff.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstDiff.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/cstDiff.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstDiff.js:const_logger_1",
-              "name": "logger_1",
-              "convention": "snake_case",
-              "suggestedName": "logger1",
-              "path": "benchmarks/mocks/framework/src/analysis/cstDiff.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstDiff.js:class_CstDiffManager",
-              "name": "CstDiffManager",
-              "convention": "PascalCase",
-              "suggestedName": "cstDiffManager",
-              "path": "benchmarks/mocks/framework/src/analysis/cstDiff.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstExtractor.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/cstExtractor.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstExtractor.js:class_CstExtractor",
-              "name": "CstExtractor",
-              "convention": "PascalCase",
-              "suggestedName": "cstExtractor",
-              "path": "benchmarks/mocks/framework/src/analysis/cstExtractor.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstTimeline.js:const_cstFacts_1",
-              "name": "cstFacts_1",
-              "convention": "mixed",
-              "suggestedName": "cstFacts1",
-              "path": "benchmarks/mocks/framework/src/analysis/cstTimeline.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstTimeline.js:const_database_1",
-              "name": "database_1",
-              "convention": "snake_case",
-              "suggestedName": "database1",
-              "path": "benchmarks/mocks/framework/src/analysis/cstTimeline.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstTimeline.js:const_symbolDna_1",
-              "name": "symbolDna_1",
-              "convention": "mixed",
-              "suggestedName": "symbolDna1",
-              "path": "benchmarks/mocks/framework/src/analysis/cstTimeline.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstTimeline.js:const_logger_1",
-              "name": "logger_1",
-              "convention": "snake_case",
-              "suggestedName": "logger1",
-              "path": "benchmarks/mocks/framework/src/analysis/cstTimeline.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/cstTimeline.js:class_CstTimelineManager",
-              "name": "CstTimelineManager",
-              "convention": "PascalCase",
-              "suggestedName": "cstTimelineManager",
-              "path": "benchmarks/mocks/framework/src/analysis/cstTimeline.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/dependencies.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/dependencies.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/dependencies.js:const_edgeThresholds_1",
-              "name": "edgeThresholds_1",
-              "convention": "mixed",
-              "suggestedName": "edgeThresholds1",
-              "path": "benchmarks/mocks/framework/src/analysis/dependencies.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/dependencies.js:class_DependencyExtractor",
-              "name": "DependencyExtractor",
-              "convention": "PascalCase",
-              "suggestedName": "dependencyExtractor",
-              "path": "benchmarks/mocks/framework/src/analysis/dependencies.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/difftastic.js:const_child_process_1",
-              "name": "child_process_1",
-              "convention": "snake_case",
-              "suggestedName": "childProcess1",
-              "path": "benchmarks/mocks/framework/src/analysis/difftastic.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/difftastic.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/difftastic.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/difftastic.js:class_DifftasticIntegration",
-              "name": "DifftasticIntegration",
-              "convention": "PascalCase",
-              "suggestedName": "difftasticIntegration",
-              "path": "benchmarks/mocks/framework/src/analysis/difftastic.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/git.js:const_child_process_1",
-              "name": "child_process_1",
-              "convention": "snake_case",
-              "suggestedName": "childProcess1",
-              "path": "benchmarks/mocks/framework/src/analysis/git.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/git.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/git.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/git.js:class_GitOperations",
-              "name": "GitOperations",
-              "convention": "PascalCase",
-              "suggestedName": "gitOperations",
-              "path": "benchmarks/mocks/framework/src/analysis/git.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/hotspotDetector.js:const_database_1",
-              "name": "database_1",
-              "convention": "snake_case",
-              "suggestedName": "database1",
-              "path": "benchmarks/mocks/framework/src/analysis/hotspotDetector.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/hotspotDetector.js:const_logger_1",
-              "name": "logger_1",
-              "convention": "snake_case",
-              "suggestedName": "logger1",
-              "path": "benchmarks/mocks/framework/src/analysis/hotspotDetector.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/hotspotDetector.js:class_HotspotDetector",
-              "name": "HotspotDetector",
-              "convention": "PascalCase",
-              "suggestedName": "hotspotDetector",
-              "path": "benchmarks/mocks/framework/src/analysis/hotspotDetector.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js:const_logger_1",
-              "name": "logger_1",
-              "convention": "snake_case",
-              "suggestedName": "logger1",
-              "path": "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js:const_database_1",
-              "name": "database_1",
-              "convention": "snake_case",
-              "suggestedName": "database1",
-              "path": "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js:const_git_1",
-              "name": "git_1",
-              "convention": "snake_case",
-              "suggestedName": "git1",
-              "path": "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js:class_MovedBlockDetector",
-              "name": "MovedBlockDetector",
-              "convention": "PascalCase",
-              "suggestedName": "movedBlockDetector",
-              "path": "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/semanticChanges.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/semanticChanges.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/semanticChanges.js:class_SemanticChangeDetector",
-              "name": "SemanticChangeDetector",
-              "convention": "PascalCase",
-              "suggestedName": "semanticChangeDetector",
-              "path": "benchmarks/mocks/framework/src/analysis/semanticChanges.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/snapshotManager.js:const_symbolDna_1",
-              "name": "symbolDna_1",
-              "convention": "mixed",
-              "suggestedName": "symbolDna1",
-              "path": "benchmarks/mocks/framework/src/analysis/snapshotManager.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/snapshotManager.js:const_logger_1",
-              "name": "logger_1",
-              "convention": "snake_case",
-              "suggestedName": "logger1",
-              "path": "benchmarks/mocks/framework/src/analysis/snapshotManager.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/snapshotManager.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/snapshotManager.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/snapshotManager.js:const_lru_cache_1",
-              "name": "lru_cache_1",
-              "convention": "snake_case",
-              "suggestedName": "lruCache1",
-              "path": "benchmarks/mocks/framework/src/analysis/snapshotManager.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/snapshotManager.js:class_SnapshotManager",
-              "name": "SnapshotManager",
-              "convention": "PascalCase",
-              "suggestedName": "snapshotManager",
-              "path": "benchmarks/mocks/framework/src/analysis/snapshotManager.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js:const_difftastic_1",
-              "name": "difftastic_1",
-              "convention": "snake_case",
-              "suggestedName": "difftastic1",
-              "path": "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js:const_cstDiff_1",
-              "name": "cstDiff_1",
-              "convention": "mixed",
-              "suggestedName": "cstDiff1",
-              "path": "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js:const_logger_1",
-              "name": "logger_1",
-              "convention": "snake_case",
-              "suggestedName": "logger1",
-              "path": "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js:class_StructuralDiffManager",
-              "name": "StructuralDiffManager",
-              "convention": "PascalCase",
-              "suggestedName": "structuralDiffManager",
-              "path": "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/symbolDna.js:const_cstFacts_1",
-              "name": "cstFacts_1",
-              "convention": "mixed",
-              "suggestedName": "cstFacts1",
-              "path": "benchmarks/mocks/framework/src/analysis/symbolDna.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/symbols.js:const_tree_sitter_1",
-              "name": "tree_sitter_1",
-              "convention": "snake_case",
-              "suggestedName": "treeSitter1",
-              "path": "benchmarks/mocks/framework/src/analysis/symbols.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/symbols.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/symbols.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/symbols.js:const_semanticChanges_1",
-              "name": "semanticChanges_1",
-              "convention": "mixed",
-              "suggestedName": "semanticChanges1",
-              "path": "benchmarks/mocks/framework/src/analysis/symbols.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/symbols.js:const_symbolDna_1",
-              "name": "symbolDna_1",
-              "convention": "mixed",
-              "suggestedName": "symbolDna1",
-              "path": "benchmarks/mocks/framework/src/analysis/symbols.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/symbols.js:class_SymbolExtractor",
-              "name": "SymbolExtractor",
-              "convention": "PascalCase",
-              "suggestedName": "symbolExtractor",
-              "path": "benchmarks/mocks/framework/src/analysis/symbols.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/tree-sitter.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/tree-sitter.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/tree-sitter.js:const_cstExtractor_1",
-              "name": "cstExtractor_1",
-              "convention": "mixed",
-              "suggestedName": "cstExtractor1",
-              "path": "benchmarks/mocks/framework/src/analysis/tree-sitter.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/tree-sitter.js:class_TreeSitterParser",
-              "name": "TreeSitterParser",
-              "convention": "PascalCase",
-              "suggestedName": "treeSitterParser",
-              "path": "benchmarks/mocks/framework/src/analysis/tree-sitter.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js:const_logger_1",
-              "name": "logger_1",
-              "convention": "snake_case",
-              "suggestedName": "logger1",
-              "path": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js:const_cstTimeline_1",
-              "name": "cstTimeline_1",
-              "convention": "mixed",
-              "suggestedName": "cstTimeline1",
-              "path": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js:const_tree_sitter_1",
-              "name": "tree_sitter_1",
-              "convention": "snake_case",
-              "suggestedName": "treeSitter1",
-              "path": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js:class_WorkspaceIndexer",
-              "name": "WorkspaceIndexer",
-              "convention": "PascalCase",
-              "suggestedName": "workspaceIndexer",
-              "path": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/facts/driftDetector.js:const_database_1",
-              "name": "database_1",
-              "convention": "snake_case",
-              "suggestedName": "database1",
-              "path": "benchmarks/mocks/framework/src/facts/driftDetector.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/facts/driftDetector.js:const_namingConventions_1",
-              "name": "namingConventions_1",
-              "convention": "mixed",
-              "suggestedName": "namingConventions1",
-              "path": "benchmarks/mocks/framework/src/facts/driftDetector.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/facts/intendedMap.js:const_database_1",
-              "name": "database_1",
-              "convention": "snake_case",
-              "suggestedName": "database1",
-              "path": "benchmarks/mocks/framework/src/facts/intendedMap.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/facts/scope.js:const_git_1",
-              "name": "git_1",
-              "convention": "snake_case",
-              "suggestedName": "git1",
-              "path": "benchmarks/mocks/framework/src/facts/scope.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/facts/scope.js:const_database_1",
-              "name": "database_1",
-              "convention": "snake_case",
-              "suggestedName": "database1",
-              "path": "benchmarks/mocks/framework/src/facts/scope.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/facts/scope.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/facts/scope.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/facts/workingSnapshot.js:const_symbols_1",
-              "name": "symbols_1",
-              "convention": "snake_case",
-              "suggestedName": "symbols1",
-              "path": "benchmarks/mocks/framework/src/facts/workingSnapshot.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/facts/workingSnapshot.js:const_dependencies_1",
-              "name": "dependencies_1",
-              "convention": "snake_case",
-              "suggestedName": "dependencies1",
-              "path": "benchmarks/mocks/framework/src/facts/workingSnapshot.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/facts/workingSnapshot.js:const_git_1",
-              "name": "git_1",
-              "convention": "snake_case",
-              "suggestedName": "git1",
-              "path": "benchmarks/mocks/framework/src/facts/workingSnapshot.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/facts/workingSnapshot.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/facts/workingSnapshot.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/storage/database.js:const_sql_js_1",
-              "name": "sql_js_1",
-              "convention": "snake_case",
-              "suggestedName": "sqlJs1",
-              "path": "benchmarks/mocks/framework/src/storage/database.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/storage/database.js:const_schema_1",
-              "name": "schema_1",
-              "convention": "snake_case",
-              "suggestedName": "schema1",
-              "path": "benchmarks/mocks/framework/src/storage/database.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/storage/database.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/storage/database.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/storage/database.js:class_StatementWrapper",
-              "name": "StatementWrapper",
-              "convention": "PascalCase",
-              "suggestedName": "statementWrapper",
-              "path": "benchmarks/mocks/framework/src/storage/database.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/storage/database.js:class_DatabaseManager",
-              "name": "DatabaseManager",
-              "convention": "PascalCase",
-              "suggestedName": "databaseManager",
-              "path": "benchmarks/mocks/framework/src/storage/database.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/storage/database.js:const_SQL",
-              "name": "SQL",
-              "convention": "PascalCase",
-              "suggestedName": "sQL",
-              "path": "benchmarks/mocks/framework/src/storage/database.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/utils/config.js:const_supportedLanguages_1",
-              "name": "supportedLanguages_1",
-              "convention": "mixed",
-              "suggestedName": "supportedLanguages1",
-              "path": "benchmarks/mocks/framework/src/utils/config.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/utils/supportedLanguages.js:const_lru_cache_1",
-              "name": "lru_cache_1",
-              "convention": "snake_case",
-              "suggestedName": "lruCache1",
-              "path": "benchmarks/mocks/framework/src/utils/supportedLanguages.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/utils/supportedLanguages.js:const_config_1",
-              "name": "config_1",
-              "convention": "snake_case",
-              "suggestedName": "config1",
-              "path": "benchmarks/mocks/framework/src/utils/supportedLanguages.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/utils/supportedLanguages.js:const_LANGUAGE_CONFIG",
-              "name": "LANGUAGE_CONFIG",
-              "convention": "SCREAMING_SNAKE",
-              "suggestedName": "languageConfig",
-              "path": "benchmarks/mocks/framework/src/utils/supportedLanguages.js"
-            },
-            {
-              "symbolId": "benchmarks/mocks/framework/src/utils/supportedLanguages.js:const_JSLANGUAGES",
-              "name": "JSLANGUAGES",
-              "convention": "PascalCase",
-              "suggestedName": "jSLANGUAGES",
-              "path": "benchmarks/mocks/framework/src/utils/supportedLanguages.js"
-            }
-          ]
-        },
-        "findings.patternDrift.mixedConventionFiles": [
-          {
-            "path": "benchmarks/qdrant_integration_test.ts",
-            "conventions": [
-              "SCREAMING_SNAKE",
-              "camelCase"
-            ],
-            "symbolCount": 58,
-            "driftPercent": 3.4482758620689653
-          },
-          {
-            "path": "src/storage/database.ts",
-            "conventions": [
-              "camelCase",
-              "PascalCase"
-            ],
-            "symbolCount": 49,
-            "driftPercent": 4.081632653061225
-          },
-          {
-            "path": "src/storage/schema.ts",
-            "conventions": [
-              "camelCase",
-              "SCREAMING_SNAKE"
-            ],
-            "symbolCount": 22,
-            "driftPercent": 9.090909090909092
-          },
-          {
-            "path": "src/utils/supportedLanguages.ts",
-            "conventions": [
-              "camelCase",
-              "SCREAMING_SNAKE",
-              "PascalCase"
-            ],
-            "symbolCount": 34,
-            "driftPercent": 17.647058823529413
-          },
-          {
-            "path": "benchmarks/mocks/framework/snapshot.ts",
-            "conventions": [
-              "camelCase",
-              "SCREAMING_SNAKE"
-            ],
-            "symbolCount": 21,
-            "driftPercent": 4.761904761904762
-          },
-          {
-            "path": "benchmarks/fixtures/sample.js",
-            "conventions": [
-              "camelCase",
-              "PascalCase"
-            ],
-            "symbolCount": 4,
-            "driftPercent": 25
-          },
-          {
-            "path": "benchmarks/fixtures/sample.php",
-            "conventions": [
-              "camelCase",
-              "PascalCase"
-            ],
-            "symbolCount": 4,
-            "driftPercent": 25
-          },
-          {
-            "path": "benchmarks/mocks/framework/benchmarks/mocks/framework/snapshot.js",
-            "conventions": [
-              "camelCase",
-              "SCREAMING_SNAKE"
-            ],
-            "symbolCount": 24,
-            "driftPercent": 4.166666666666666
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/astSerializer.js",
-            "conventions": [
-              "snake_case",
-              "PascalCase",
-              "camelCase"
-            ],
-            "symbolCount": 12,
-            "driftPercent": 25
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/cstDiff.js",
-            "conventions": [
-              "mixed",
-              "snake_case",
-              "PascalCase",
-              "camelCase"
-            ],
-            "symbolCount": 34,
-            "driftPercent": 17.647058823529413
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/cstExtractor.js",
-            "conventions": [
-              "camelCase",
-              "snake_case",
-              "PascalCase"
-            ],
-            "symbolCount": 36,
-            "driftPercent": 5.555555555555555
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/cstTimeline.js",
-            "conventions": [
-              "mixed",
-              "snake_case",
-              "PascalCase",
-              "camelCase"
-            ],
-            "symbolCount": 37,
-            "driftPercent": 13.513513513513514
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/dependencies.js",
-            "conventions": [
-              "snake_case",
-              "mixed",
-              "PascalCase",
-              "camelCase"
-            ],
-            "symbolCount": 69,
-            "driftPercent": 4.3478260869565215
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/difftastic.js",
-            "conventions": [
-              "snake_case",
-              "camelCase",
-              "PascalCase"
-            ],
-            "symbolCount": 43,
-            "driftPercent": 6.976744186046512
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/git.js",
-            "conventions": [
-              "snake_case",
-              "PascalCase",
-              "camelCase"
-            ],
-            "symbolCount": 70,
-            "driftPercent": 4.285714285714286
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/hotspotDetector.js",
-            "conventions": [
-              "snake_case",
-              "camelCase",
-              "PascalCase"
-            ],
-            "symbolCount": 83,
-            "driftPercent": 3.614457831325301
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/movedBlockDetector.js",
-            "conventions": [
-              "snake_case",
-              "PascalCase",
-              "camelCase"
-            ],
-            "symbolCount": 68,
-            "driftPercent": 5.88235294117647
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/semanticChanges.js",
-            "conventions": [
-              "snake_case",
-              "PascalCase",
-              "camelCase"
-            ],
-            "symbolCount": 51,
-            "driftPercent": 3.9215686274509802
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/snapshotManager.js",
-            "conventions": [
-              "mixed",
-              "snake_case",
-              "PascalCase",
-              "camelCase"
-            ],
-            "symbolCount": 47,
-            "driftPercent": 10.638297872340425
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/structuralDiffManager.js",
-            "conventions": [
-              "snake_case",
-              "mixed",
-              "PascalCase",
-              "camelCase"
-            ],
-            "symbolCount": 26,
-            "driftPercent": 15.384615384615385
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/symbolDna.js",
-            "conventions": [
-              "camelCase",
-              "mixed"
-            ],
-            "symbolCount": 14,
-            "driftPercent": 7.142857142857142
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/symbols.js",
-            "conventions": [
-              "snake_case",
-              "mixed",
-              "PascalCase",
-              "camelCase"
-            ],
-            "symbolCount": 54,
-            "driftPercent": 9.25925925925926
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/tree-sitter.js",
-            "conventions": [
-              "camelCase",
-              "snake_case",
-              "mixed",
-              "PascalCase"
-            ],
-            "symbolCount": 39,
-            "driftPercent": 7.6923076923076925
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/analysis/workspaceIndexer.js",
-            "conventions": [
-              "snake_case",
-              "camelCase",
-              "mixed",
-              "PascalCase"
-            ],
-            "symbolCount": 61,
-            "driftPercent": 8.19672131147541
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/facts/driftDetector.js",
-            "conventions": [
-              "snake_case",
-              "mixed",
-              "camelCase"
-            ],
-            "symbolCount": 77,
-            "driftPercent": 2.5974025974025974
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/facts/intendedMap.js",
-            "conventions": [
-              "snake_case",
-              "camelCase"
-            ],
-            "symbolCount": 25,
-            "driftPercent": 4
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/facts/scope.js",
-            "conventions": [
-              "snake_case",
-              "camelCase"
-            ],
-            "symbolCount": 44,
-            "driftPercent": 6.8181818181818175
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/facts/workingSnapshot.js",
-            "conventions": [
-              "camelCase",
-              "snake_case"
-            ],
-            "symbolCount": 21,
-            "driftPercent": 19.047619047619047
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/storage/database.js",
-            "conventions": [
-              "camelCase",
-              "snake_case",
-              "PascalCase"
-            ],
-            "symbolCount": 55,
-            "driftPercent": 10.909090909090908
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/utils/config.js",
-            "conventions": [
-              "camelCase",
-              "mixed"
-            ],
-            "symbolCount": 40,
-            "driftPercent": 2.5
-          },
-          {
-            "path": "benchmarks/mocks/framework/src/utils/supportedLanguages.js",
-            "conventions": [
-              "snake_case",
-              "camelCase",
-              "SCREAMING_SNAKE",
-              "PascalCase"
-            ],
-            "symbolCount": 32,
-            "driftPercent": 12.5
-          }
-        ],
-        "findings.unresolvedCallers": [
-          {
-            "caller_symbol_id": "benchmarks/mocks/reporter.ts:function_generateScenarioReport",
-            "caller_name": "generateScenarioReport",
-            "caller_path": "benchmarks/mocks/reporter.ts",
-            "callee_name": "function_map",
-            "guessed_target_dna_id": null,
-            "caller_line": 162,
-            "occurrence_count": 7,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/mocks/reporter.ts:function_generateScenarioReport",
-            "caller_name": "generateScenarioReport",
-            "caller_path": "benchmarks/mocks/reporter.ts",
-            "callee_name": "function_join",
-            "guessed_target_dna_id": null,
-            "caller_line": 162,
-            "occurrence_count": 7,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/mocks/reporter.ts:function_generateScenarioReport",
-            "caller_name": "generateScenarioReport",
-            "caller_path": "benchmarks/mocks/reporter.ts",
-            "callee_name": "method_map",
-            "guessed_target_dna_id": null,
-            "caller_line": 162,
-            "occurrence_count": 6,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/mocks/reporter.ts:function_generateRecommendations",
-            "caller_name": "generateRecommendations",
-            "caller_path": "benchmarks/mocks/reporter.ts",
-            "callee_name": "function_push",
-            "guessed_target_dna_id": null,
-            "caller_line": 228,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/mocks/reporter.ts:function_generateRecommendations",
-            "caller_name": "generateRecommendations",
-            "caller_path": "benchmarks/mocks/reporter.ts",
-            "callee_name": "method_push",
-            "guessed_target_dna_id": null,
-            "caller_line": 228,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_parseArgs",
-            "caller_name": "parseArgs",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_getArg",
-            "guessed_target_dna_id": null,
-            "caller_line": 62,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_parseArgs",
-            "caller_name": "parseArgs",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_flag",
-            "guessed_target_dna_id": null,
-            "caller_line": 62,
-            "occurrence_count": 10,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_slice",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 23,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_filter",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_substring",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 10,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_map",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 6,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_now",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 9,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_find",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 9,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_toFixed",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_forEach",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "method_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 23,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "method_filter",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "method_substring",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "method_now",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 9,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_main",
-            "caller_name": "main",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "method_find",
-            "guessed_target_dna_id": null,
-            "caller_line": 299,
-            "occurrence_count": 9,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:const_onEvent",
-            "caller_name": "onEvent",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_now",
-            "guessed_target_dna_id": null,
-            "caller_line": 450,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:const_onEvent",
-            "caller_name": "onEvent",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_substring",
-            "guessed_target_dna_id": null,
-            "caller_line": 450,
-            "occurrence_count": 6,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:const_onEvent",
-            "caller_name": "onEvent",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "method_now",
-            "guessed_target_dna_id": null,
-            "caller_line": 450,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_validateHybridFactsDatabase",
-            "caller_name": "validateHybridFactsDatabase",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "function_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 919,
-            "occurrence_count": 6,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/pipeline_diagnostics.ts:function_validateHybridFactsDatabase",
-            "caller_name": "validateHybridFactsDatabase",
-            "caller_path": "benchmarks/pipeline_diagnostics.ts",
-            "callee_name": "method_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 919,
-            "occurrence_count": 6,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_createMockBundleFacts",
-            "caller_name": "createMockBundleFacts",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "function_reduce",
-            "guessed_target_dna_id": null,
-            "caller_line": 42,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_createMockBundleFacts",
-            "caller_name": "createMockBundleFacts",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "method_reduce",
-            "guessed_target_dna_id": null,
-            "caller_line": 42,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_testConnection",
-            "caller_name": "testConnection",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "function_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 88,
-            "occurrence_count": 15,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_testConnection",
-            "caller_name": "testConnection",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "method_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 88,
-            "occurrence_count": 15,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:const_qdrant",
-            "caller_name": "qdrant",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "function_getQdrantClient",
-            "guessed_target_dna_id": null,
-            "caller_line": 587,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:const_client",
-            "caller_name": "client",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "function_getClient",
-            "guessed_target_dna_id": null,
-            "caller_line": 593,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:const_client",
-            "caller_name": "client",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "method_getClient",
-            "guessed_target_dna_id": null,
-            "caller_line": 593,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_testDefaultCollections",
-            "caller_name": "testDefaultCollections",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "function_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 132,
-            "occurrence_count": 25,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_testDefaultCollections",
-            "caller_name": "testDefaultCollections",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "method_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 132,
-            "occurrence_count": 25,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_testProjectCollections",
-            "caller_name": "testProjectCollections",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "function_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 269,
-            "occurrence_count": 26,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_testProjectCollections",
-            "caller_name": "testProjectCollections",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "method_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 269,
-            "occurrence_count": 26,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_testBundleStoryEngine",
-            "caller_name": "testBundleStoryEngine",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "function_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 426,
-            "occurrence_count": 23,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_testBundleStoryEngine",
-            "caller_name": "testBundleStoryEngine",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "method_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 426,
-            "occurrence_count": 23,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_testProjectIsolation",
-            "caller_name": "testProjectIsolation",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "function_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 582,
-            "occurrence_count": 23,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_testProjectIsolation",
-            "caller_name": "testProjectIsolation",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "method_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 582,
-            "occurrence_count": 23,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_runTests",
-            "caller_name": "runTests",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "function_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 742,
-            "occurrence_count": 11,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_runTests",
-            "caller_name": "runTests",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "function_push",
-            "guessed_target_dna_id": null,
-            "caller_line": 742,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_runTests",
-            "caller_name": "runTests",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "method_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 742,
-            "occurrence_count": 11,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "benchmarks/qdrant_integration_test.ts:function_runTests",
-            "caller_name": "runTests",
-            "caller_path": "benchmarks/qdrant_integration_test.ts",
-            "callee_name": "method_push",
-            "guessed_target_dna_id": null,
-            "caller_line": 742,
-            "occurrence_count": 5,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "scripts/check_symbols.js:function_checkSymbols",
-            "caller_name": "checkSymbols",
-            "caller_path": "scripts/check_symbols.js",
-            "callee_name": "function_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 4,
-            "occurrence_count": 6,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "scripts/check_symbols.js:function_checkSymbols",
-            "caller_name": "checkSymbols",
-            "caller_path": "scripts/check_symbols.js",
-            "callee_name": "method_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 4,
-            "occurrence_count": 6,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "scripts/download-wasm.js:function_main",
-            "caller_name": "main",
-            "caller_path": "scripts/download-wasm.js",
-            "callee_name": "function_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 132,
-            "occurrence_count": 9,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "scripts/download-wasm.js:function_main",
-            "caller_name": "main",
-            "caller_path": "scripts/download-wasm.js",
-            "callee_name": "function_join",
-            "guessed_target_dna_id": null,
-            "caller_line": 132,
-            "occurrence_count": 7,
-            "severity": 1
-          },
-          {
-            "caller_symbol_id": "scripts/download-wasm.js:function_main",
-            "caller_name": "main",
-            "caller_path": "scripts/download-wasm.js",
-            "callee_name": "method_log",
-            "guessed_target_dna_id": null,
-            "caller_line": 132,
-            "occurrence_count": 9,
-            "severity": 1
-          }
-        ],
+        "findings.unresolvedCallers": [],
         "missing": [],
         "zombies": [],
-        "dead": [
-          {
-            "symbol_id": "src/extension.ts:function_getRepoContext",
-            "name": "getRepoContext",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/extension.ts:function_getCockpitProvider",
-            "name": "getCockpitProvider",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/extension.ts:function_getRefactorPipeline",
-            "name": "getRefactorPipeline",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/facts/factsAssembler.ts:function_getIntendedLists",
-            "name": "getIntendedLists",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/facts/factsAssembler.ts:function_getWorkingLists",
-            "name": "getWorkingLists",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/facts/factsAssembler.ts:function_getHybridFactsCount",
-            "name": "getHybridFactsCount",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/utils/supportedLanguages.ts:function_getRequiredLanguagesForExtensions",
-            "name": "getRequiredLanguagesForExtensions",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/utils/supportedLanguages.ts:function_getMissingWasmFiles",
-            "name": "getMissingWasmFiles",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/utils/supportedLanguages.ts:function_isCstOnlyLanguage",
-            "name": "isCstOnlyLanguage",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/storage/embeddings.ts:function_getEmbeddingDimension",
-            "name": "getEmbeddingDimension",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/analysis/difftastic.ts:function_getDifftasticIntegration",
-            "name": "getDifftasticIntegration",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/metrics/movedBlockAdapter.ts:function_isFileRename",
-            "name": "isFileRename",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/analysis/cstTimeline.ts:function_getCstTimelineManager",
-            "name": "getCstTimelineManager",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/analysis/hybridDriftDetector.ts:function_getHybridFactsForFile",
-            "name": "getHybridFactsForFile",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/facts/legacyAudit.ts:function_isInScope",
-            "name": "isInScope",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/facts/legacyAudit.ts:function_isLikelyUtilityFunction",
-            "name": "isLikelyUtilityFunction",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/facts/legacyAudit.ts:function_isEntryPointLike",
-            "name": "isEntryPointLike",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/facts/legacyAudit.ts:function_hasSomeComplexity",
-            "name": "hasSomeComplexity",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/types/cstFacts.ts:function_isCstFact",
-            "name": "isCstFact",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "src/types/cstFacts.ts:function_isSymbolInfo",
-            "name": "isSymbolInfo",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "benchmarks/mocks/framework/src/facts/workingSnapshot.js:function_getWorkingSnapshot",
-            "name": "getWorkingSnapshot",
-            "kind": "function"
-          },
-          {
-            "symbol_id": "benchmarks/mocks/framework/src/utils/supportedLanguages.js:function_getRequiredLanguagesForExtensions",
-            "name": "getRequiredLanguagesForExtensions",
-            "kind": "function"
-          }
-        ],
+        "dead": [],
         "legacyUsed": [],
         "replacedLeftovers": []
       },
@@ -2168,96 +587,43 @@
       "missing_symbols": [],
       "zombie_symbols": [],
       "divergent_symbols": [],
-      "unresolved_callers": [
-        {
-          "caller_name": "generateScenarioReport",
-          "caller_path": "benchmarks/mocks/reporter.ts",
-          "callee_name": "function_map",
-          "occurrence_count": 7,
-          "severity": 1
-        },
-        {
-          "caller_name": "generateScenarioReport",
-          "caller_path": "benchmarks/mocks/reporter.ts",
-          "callee_name": "function_join",
-          "occurrence_count": 7,
-          "severity": 1
-        },
-        {
-          "caller_name": "generateScenarioReport",
-          "caller_path": "benchmarks/mocks/reporter.ts",
-          "callee_name": "method_map",
-          "occurrence_count": 6,
-          "severity": 1
-        },
-        {
-          "caller_name": "generateRecommendations",
-          "caller_path": "benchmarks/mocks/reporter.ts",
-          "callee_name": "function_push",
-          "occurrence_count": 5,
-          "severity": 1
-        },
-        {
-          "caller_name": "generateRecommendations",
-          "caller_path": "benchmarks/mocks/reporter.ts",
-          "callee_name": "method_push",
-          "occurrence_count": 5,
-          "severity": 1
-        },
-        {
-          "caller_name": "parseArgs",
-          "caller_path": "benchmarks/pipeline_diagnostics.ts",
-          "callee_name": "function_getArg",
-          "occurrence_count": 5,
-          "severity": 1
-        },
-        {
-          "caller_name": "parseArgs",
-          "caller_path": "benchmarks/pipeline_diagnostics.ts",
-          "callee_name": "function_flag",
-          "occurrence_count": 10,
-          "severity": 1
-        },
-        {
-          "caller_name": "main",
-          "caller_path": "benchmarks/pipeline_diagnostics.ts",
-          "callee_name": "function_slice",
-          "occurrence_count": 5,
-          "severity": 1
-        },
-        {
-          "caller_name": "main",
-          "caller_path": "benchmarks/pipeline_diagnostics.ts",
-          "callee_name": "function_log",
-          "occurrence_count": 23,
-          "severity": 1
-        },
-        {
-          "caller_name": "main",
-          "caller_path": "benchmarks/pipeline_diagnostics.ts",
-          "callee_name": "function_filter",
-          "occurrence_count": 5,
-          "severity": 1
-        }
-      ],
-      "hybridDrifts": 0,
-      "conventionDrift": {
-        "dominantConvention": "camelCase",
-        "driftPercent": 2.557889068389876,
-        "driftSymbolCount": 95
-      }
+      "missing_edges": [],
+      "zombie_edges": [],
+      "unresolved_callers": [],
+      "hybridDrifts": 0
     },
     "llmOutputs": [
       {
-        "summary_md": "# LLM Analysis Report\n\n**Generated:** 11/28/2025, 12:27:52 AM\n\n**Bundle:** 3 commits\n\n## Refactor Intent & Story\n\n### Findings\n\n- **HIGH:** All 50 intended absent symbols were successfully removed with zero missing, zombies, or divergent symbols. (confidence: 100%)\n  - Evidence: `intended.absent`\n  - Evidence: `findings.incompleteness`\n- **HIGH:** 22 dead functions confirmed unused and safe for deletion. (confidence: 100%)\n  - Evidence: `findings.legacyAudit.dead`\n- **MEDIUM:** No legacy code remains in use and no replaced leftovers. (confidence: 100%)\n  - Evidence: `findings.legacyAudit.legacyUsed`\n  - Evidence: `findings.legacyAudit.replacedLeftovers`\n- **MEDIUM:** Convention drift is low at 2.56% across 95 symbols with dominant camelCase. (confidence: 100%)\n  - Evidence: `findings.patternDrift.conventionDrift`\n- **HIGH:** Zero blast radius confirms minimal architectural disruption. (confidence: 100%)\n  - Evidence: `scope.blastRadius`\n\n## Drift Verification\n\n### Findings\n\n- **HIGH:**... [truncated]",
-        "summary_text": "## Key Insights\n\n**Most Critical:** All 50 intended absent symbols were successfully removed with zero missing, zombies, or divergent symbols. (high severity, 100% confidence)\n\n**Immediate Actions:**\n1. Remove all 22 dead symbols (e.g., src/extension.ts:function_getRepoContext, src/facts/factsAssembler.ts:function_getIntendedLists) as they have zero callers and blastRadius 0 ensures safety [high priority, low effort]\n2. Standardize constants in src/utils/supportedLanguages.ts to camelCase (e.g.,...",
-        "healthScore": 99.40764674205708,
-        "totalTokens": 42437,
+        "summary_md": "# LLM Analysis Report\n\n**Generated:** 11/28/2025, 5:20:32 AM\n\n**Bundle:** 3 commits\n\n## Refactor Intent & Story\n\n## Drift Verification\n\n## Cleanup Plan\n\n## LLM-Driven Pattern Discovery\n\n",
+        "summary_text": "## Key Insights\n\n**Refactor Health:** 100/100 ✅\n\n**Quick Stats:** 3 commits, 0 symbols analyzed, no issues found\n",
+        "healthScore": 100,
+        "totalTokens": 0,
         "totalCalls": 6,
         "model": "x-ai/grok-4.1-fast:free",
-        "validatedEvidenceCount": 8,
+        "validatedEvidenceCount": 0,
         "blocksCount": 4,
-        "timestamp": "2025-11-28T06:27:52.853Z"
+        "timestamp": "2025-11-28T11:20:32.911Z",
+        "prompts": {
+          "intent": {
+            "size": 11698
+          },
+          "drift": {
+            "size": 11964
+          },
+          "cleanup": {
+            "size": 11703
+          },
+          "discover": {
+            "size": 13809
+          },
+          "quantify": {
+            "size": 1141
+          },
+          "plan": {
+            "size": 945
+          }
+        },
+        "summarizedFactsSize": 7813
       }
     ]
   }

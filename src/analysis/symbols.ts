@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SymbolInfo, SymbolDelta, SymbolChangeType, FileChange } from '../types';
 import { getTreeSitterParser } from './tree-sitter';
 import { detectLanguage, getTestFilePattern } from '../utils/config';
+import { filterPath } from '../utils/pathFilter';
 import { GitOperations } from './git';
 import { SemanticChangeDetector } from './semanticChanges';
 
@@ -447,12 +448,13 @@ export class SymbolExtractor {
     const language = detectLanguage(filePath);
     if (!language) return false;
 
-    // Skip certain directories and files
+    // Use centralized path filter (primary check)
+    if (!filterPath(filePath, { git: this.git })) {
+      return false;
+    }
+
+    // Additional skip patterns for workspace-specific exclusions
     const skipPatterns = [
-      /node_modules/,
-      /\.git/,
-      /dist/,
-      /build/,
       /vendor/,
       /\.min\./,
       getTestFilePattern()

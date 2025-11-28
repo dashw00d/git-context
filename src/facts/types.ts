@@ -13,6 +13,14 @@ export interface RefactorBundleFacts {
     oldestSha: string;
     newestSha?: string;
     shas: string[];
+    timeline?: string[];  // Explicit timeline chain: newest → oldest
+    movedLineage?: Array<{
+      symbolId: string;
+      previousSymbolId: string;
+      sourceVersion: string;
+      destVersion: string;
+      moveType: 'rename' | 'relocate' | 'refactor';
+    }>;
   };
   scope: {
     files: number;

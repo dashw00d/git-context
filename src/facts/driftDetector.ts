@@ -6,11 +6,11 @@ import { NamingConvention, analyzeConventionDrift, suggestConventionName } from 
 import type { HybridFact, CstFact } from '../types/cstFacts';
 
 export interface DriftFindings {
-  missing_symbols: Array<{symbol_id: string, expected: IntendedState}>;
-  zombie_symbols: Array<{symbol_id: string, expected: IntendedState, found: SymbolContext}>;
-  divergent_symbols: Array<{symbol_id: string, expected: IntendedState, found: SymbolContext}>;
-  missing_edges: Array<{from: string, to: string, type: string, expected: IntendedState}>;
-  zombie_edges: Array<{from: string, to: string, type: string, found: EdgeContext}>;
+  missing_symbols: Array<{symbol_id: string, expected: IntendedState, introducedAtVersion?: string, resolvedAtVersion?: string, versionDescription?: string}>;
+  zombie_symbols: Array<{symbol_id: string, expected: IntendedState, found: SymbolContext, introducedAtVersion?: string, resolvedAtVersion?: string, versionDescription?: string}>;
+  divergent_symbols: Array<{symbol_id: string, expected: IntendedState, found: SymbolContext, introducedAtVersion?: string, resolvedAtVersion?: string, versionDescription?: string}>;
+  missing_edges: Array<{from: string, to: string, type: string, expected: IntendedState, introducedAtVersion?: string, resolvedAtVersion?: string, versionDescription?: string}>;
+  zombie_edges: Array<{from: string, to: string, type: string, found: EdgeContext, introducedAtVersion?: string, resolvedAtVersion?: string, versionDescription?: string}>;
   hotspots: Array<{path: string, drift_count: number}>;
   conventionDrift?: {
     dominantConvention: NamingConvention;
@@ -41,6 +41,8 @@ export interface DriftFindings {
     type: 'missing' | 'zombie' | 'divergent' | 'modified';
     expected?: IntendedState;
     timelineDelta?: Array<{ version: string; delta: any }>;
+    introducedAtVersion?: string;
+    resolvedAtVersion?: string;
   }>;
 }
 

@@ -5,7 +5,7 @@ export function createBundleFactsStep(): PipelineStep {
   return {
     id: 'bundle_facts',
     label: 'Aggregate bundle facts',
-    deps: ['scope', 'intended', 'working', 'drift', 'legacy', 'hotspots'],
+    deps: ['scope', 'intended', 'working', 'drift', 'legacy', 'hotspots', 'index_commits', 'moved_blocks'],
 
     async run(state: PipelineState) {
       if (!state.commitFacts || state.commitFacts.length === 0) {
@@ -23,6 +23,14 @@ export function createBundleFactsStep(): PipelineStep {
         options.working = state.working;
         options.drift = state.drift;
         options.legacy = state.legacy;
+      }
+
+      // Add timeline and movedLineage if available
+      if (state.explicitTimeline) {
+        options.timeline = state.explicitTimeline;
+      }
+      if (state.movedLineage) {
+        options.movedLineage = state.movedLineage;
       }
 
       const bundleFacts = await buildRefactorBundleFacts(

@@ -31,6 +31,14 @@ export async function buildRefactorBundleFacts(
     working?: WorkingSnapshot;
     drift?: DriftFindings;
     legacy?: LegacyAuditResult;
+    timeline?: string[];
+    movedLineage?: Array<{
+      symbolId: string;
+      previousSymbolId: string;
+      sourceVersion: string;
+      destVersion: string;
+      moveType: 'rename' | 'relocate' | 'refactor';
+    }>;
   }
 ): Promise<RefactorBundleFacts> {
   // Log inputs for diagnostics
@@ -44,7 +52,7 @@ export async function buildRefactorBundleFacts(
   }
   // If full pipeline data is provided, use the comprehensive assembleFacts logic
   if (options?.commitShas && options.scope && options.intended && options.working && options.drift && options.legacy) {
-    return assembleFacts(
+    const facts = await assembleFacts(
       options.commitShas,
       options.scope,
       options.intended,
@@ -52,6 +60,14 @@ export async function buildRefactorBundleFacts(
       options.drift,
       options.legacy
     );
+    // Add timeline and movedLineage if provided
+    if (options.timeline) {
+      facts.bundle.timeline = options.timeline;
+    }
+    if (options.movedLineage) {
+      facts.bundle.movedLineage = options.movedLineage;
+    }
+    return facts;
   }
 
   // Fallback to simplified logic for backward compatibility
@@ -105,7 +121,9 @@ export async function buildRefactorBundleFacts(
     bundle: {
       oldestSha,
       newestSha,
-      shas: commitFacts.map(c => c.sha)
+      shas: commitFacts.map(c => c.sha),
+      ...(options?.timeline && { timeline: options.timeline }),
+      ...(options?.movedLineage && { movedLineage: options.movedLineage })
     },
     scope: {
       files: totalFiles,
@@ -231,8 +249,9 @@ export async function assembleFacts(
 
   if (enableCst || enableAugment) {
     const timelineManager = getCstTimelineManager();
-    const versionForFacts = newestSha !== 'unknown' ? newestSha : 'workspace';
-
+    
+    // Build version map for per-file version selection
+    const versionMap = new Map<string, string>();
     for (const filePath of scope.allPaths) {
       const language = detectLanguage(filePath);
       if (!language) continue;
@@ -240,14 +259,24 @@ export async function assembleFacts(
       const isCstOnly = isCstOnlyLanguage(language);
       if (!isCstOnly && !enableAugment) continue;
 
-      try {
-        // Use fallback to query workspace version if commit version has no facts
-        const facts = await timelineManager.getPriorFactsWithFallback(filePath, versionForFacts);
-        if (facts.length > 0) {
-          hybridFactsMap[filePath] = facts;
-        }
-      } catch (error) {
-        // Silently skip files that fail
+      let version: string;
+      if (scope.unstagedFiles?.has(filePath)) {
+        version = 'workspace-unstaged';
+      } else if (scope.stagedFiles?.has(filePath)) {
+        version = 'workspace-staged';
+      } else if (scope.commitFiles.has(filePath)) {
+        version = newestSha !== 'unknown' ? newestSha : 'HEAD';
+      } else {
+        version = newestSha !== 'unknown' ? newestSha : 'HEAD';
+      }
+      versionMap.set(filePath, version);
+    }
+
+    // Batch query with per-file versions
+    const allFacts = await timelineManager.getPriorFactsBatchWithVersions(versionMap);
+    for (const [filePath, facts] of allFacts) {
+      if (facts.length > 0) {
+        hybridFactsMap[filePath] = facts;
       }
     }
   }
@@ -304,6 +333,24 @@ export async function assembleFacts(
       "bundle.shas": commitShas,
       "scope.files": Array.from(scope.commitFiles),
       "scope.blastRadius": Array.from(scope.blastRadius),
+      
+      // Timeline chain evidence
+      "timeline.chain": {
+        unstaged: scope.unstagedFiles?.size || 0,
+        staged: scope.stagedFiles?.size || 0,
+        head: scope.commitFiles.size > 0 ? 'HEAD' : null,
+        commits: commitShas.length
+      },
+      
+      // Hybrid facts breakdown by version
+      "hybrid.unstaged": {
+        total: Object.entries(hybridFactsMap).filter(([path]) => scope.unstagedFiles?.has(path)).reduce((sum, [, facts]) => sum + facts.length, 0),
+        files: Object.keys(hybridFactsMap).filter(path => scope.unstagedFiles?.has(path))
+      },
+      "hybrid.staged": {
+        total: Object.entries(hybridFactsMap).filter(([path]) => scope.stagedFiles?.has(path)).reduce((sum, [, facts]) => sum + facts.length, 0),
+        files: Object.keys(hybridFactsMap).filter(path => scope.stagedFiles?.has(path))
+      },
 
       // Intended state evidence
       "intended.present": intendedLists.present,
@@ -647,8 +694,9 @@ async function getHybridFactsCount(scope: ScopeSet, version: string): Promise<nu
   }
   
   const timelineManager = getCstTimelineManager();
-  let count = 0;
   
+  // Build version map for per-file version selection
+  const versionMap = new Map<string, string>();
   for (const filePath of scope.allPaths) {
     const language = detectLanguage(filePath);
     if (!language) continue;
@@ -656,16 +704,20 @@ async function getHybridFactsCount(scope: ScopeSet, version: string): Promise<nu
     const isCstOnly = isCstOnlyLanguage(language);
     if (!isCstOnly && !enableAugment) continue;
     
-    try {
-      // Use fallback to query workspace version if commit version has no facts
-      const facts = await timelineManager.getPriorFactsWithFallback(filePath, version);
-      if (facts.length > 0) {
-        count++;
-      }
-    } catch (error) {
-      // Silently skip
+    let fileVersion: string;
+    if (scope.unstagedFiles?.has(filePath)) {
+      fileVersion = 'workspace-unstaged';
+    } else if (scope.stagedFiles?.has(filePath)) {
+      fileVersion = 'workspace-staged';
+    } else if (scope.commitFiles.has(filePath)) {
+      fileVersion = version;
+    } else {
+      fileVersion = version;
     }
+    versionMap.set(filePath, fileVersion);
   }
   
-  return count;
+  // Batch query with per-file versions
+  const allFacts = await timelineManager.getPriorFactsBatchWithVersions(versionMap);
+  return allFacts.size;
 }
