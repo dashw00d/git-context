@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { LlmContextReport, CommitContext, FileContext, SymbolContext, EdgeContext, RiskItem } from '../contracts/llmContext';
+import { LlmContextReport, CommitContext, FileContext, SymbolContext, EdgeContext } from '../contracts/llmContext';
 import { getDatabaseManager } from '../storage/database';
 import { getGitRoot } from '../utils/config';
 import { MermaidGenerator } from './mermaidGenerator';

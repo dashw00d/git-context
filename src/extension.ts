@@ -113,6 +113,28 @@ export async function activate(context: vscode.ExtensionContext) {
         refactorReportProvider
       )
     );
+
+    // Register command to show report
+    const showReportCommand = vscode.commands.registerCommand('gitContext.showRefactorReport', async () => {
+      const { getCockpitOrchestrator } = await import('./state/cockpitOrchestrator');
+      const orchestrator = getCockpitOrchestrator();
+      const { llmOutputs } = orchestrator.getState();
+
+      // Analysis might be nested in llmOutputs (legacy) or directly available
+      const analysis = llmOutputs?.llmAnalysis || llmOutputs;
+
+      if (analysis && analysis.markdown) {
+        const doc = await vscode.workspace.openTextDocument({
+          content: analysis.markdown,
+          language: 'markdown'
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+      } else {
+        vscode.window.showInformationMessage('Run an analysis first to view the report.');
+      }
+    });
+    context.subscriptions.push(showReportCommand);
+
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider('cockpit', cockpitProvider)
     );
@@ -221,7 +243,8 @@ export async function activate(context: vscode.ExtensionContext) {
     await registerCockpitFeatures(shell, {
       activeBundleProvider,
       commitsProvider,
-      symbolHistoryProvider
+      symbolHistoryProvider,
+      refactorReportProvider
     });
 
     // Register git watcher feature

@@ -72,6 +72,7 @@ export interface ReportDTO {
   branch?: string;
   pinned?: boolean;
   bundleSummary?: BundleSummaryDTO;
+  criticalCount?: number;
 }
 
 /* ---------- Cockpit sidebar state (host → cockpit) ---------- */
@@ -110,6 +111,9 @@ export interface CockpitState {
 
   /* Workspace analysis results */
   workspaceFacts?: WorkspaceFacts | null;
+
+  /* LLM Analysis results (legacy/compat) */
+  llmOutputs?: any;
 
   /* Selections */
   selectedCommitShas: string[];
@@ -286,6 +290,9 @@ export type CockpitClientMessage =
     reportId: string;
   }
   | {
+    type: 'openSuperReport';
+  }
+  | {
     type: 'togglePinReport';
     reportId: string;
   }
@@ -313,7 +320,7 @@ export type CockpitClientMessage =
     type: 'openEvidence';
     evidenceId: string;      // whatever your report webview emits
   }
-  
+
   /* Live Analysis */
   | {
     type: 'generateLiveReport';

@@ -169,7 +169,17 @@ export async function buildRefactorBundleFacts(
         conventionDrift: options.drift.conventionDrift ? {
           dominantConvention: options.drift.conventionDrift.dominantConvention,
           driftPercent: options.drift.conventionDrift.driftPercent,
-          driftSymbolCount: options.drift.conventionDrift.driftSymbols.length
+          driftSymbolCount: options.drift.conventionDrift.driftSymbols.length,
+          importDrift: options.drift.conventionDrift.importDrift ? {
+            dominantStyle: options.drift.conventionDrift.importDrift.dominantStyle,
+            driftPercent: options.drift.conventionDrift.importDrift.driftPercent,
+            driftImportCount: options.drift.conventionDrift.importDrift.driftImports.length
+          } : undefined,
+          fileNamingDrift: options.drift.conventionDrift.fileNamingDrift ? {
+            dominantStyle: options.drift.conventionDrift.fileNamingDrift.dominantStyle,
+            driftPercent: options.drift.conventionDrift.fileNamingDrift.driftPercent,
+            driftFileCount: options.drift.conventionDrift.fileNamingDrift.driftFiles.length
+          } : undefined
         } : undefined,
         mixedConventionFiles: options.drift.mixedConventionFiles?.length || undefined
       } : options?.working && options?.intended ? {
@@ -393,7 +403,17 @@ export async function assembleFacts(
           convention: ds.convention,
           suggestedName: ds.suggestedName,
           path: ds.path
-        }))
+        })),
+        importDrift: drift.conventionDrift.importDrift ? {
+          dominantStyle: drift.conventionDrift.importDrift.dominantStyle,
+          driftPercent: drift.conventionDrift.importDrift.driftPercent,
+          driftImports: drift.conventionDrift.importDrift.driftImports
+        } : undefined,
+        fileNamingDrift: drift.conventionDrift.fileNamingDrift ? {
+          dominantStyle: drift.conventionDrift.fileNamingDrift.dominantStyle,
+          driftPercent: drift.conventionDrift.fileNamingDrift.driftPercent,
+          driftFiles: drift.conventionDrift.fileNamingDrift.driftFiles
+        } : undefined
       } : undefined,
 
       "findings.patternDrift.mixedConventionFiles": drift.mixedConventionFiles || undefined,

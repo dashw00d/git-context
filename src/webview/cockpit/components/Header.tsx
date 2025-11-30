@@ -13,14 +13,6 @@ export const Header: React.FC<HeaderProps> = ({ state, vscode, bundleSummaryText
         vscode.postMessage({ type: 'generateReport', mode: 'selection' });
     };
 
-    const handleAnalyzeStaged = () => {
-        vscode.postMessage({ type: 'generateReport', mode: 'staged' });
-    };
-
-    const handleAnalyzeUnstaged = () => {
-        vscode.postMessage({ type: 'generateReport', mode: 'unstaged' });
-    };
-
     const handleAnalyzeLast = () => {
         vscode.postMessage({ type: 'generateReport', mode: 'lastN' });
     };
@@ -68,24 +60,14 @@ export const Header: React.FC<HeaderProps> = ({ state, vscode, bundleSummaryText
                 <button className="cockpit__button ghost" onClick={handleAnalyzeForce} disabled={state.isAnalyzing}>
                     Force Reanalyze
                 </button>
-                <button className="cockpit__button ghost" onClick={handleAnalyzeStaged} disabled={state.isAnalyzing}>
-                    Analyze staged
-                </button>
-                <button className="cockpit__button ghost" onClick={handleAnalyzeUnstaged} disabled={state.isAnalyzing}>
-                    Analyze unstaged
-                </button>
                 <button className="cockpit__button ghost" onClick={handleAnalyzeLast} disabled={state.isAnalyzing}>
                     Analyze last N
-                </button>
-                <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'bundleExport' })} disabled={state.isAnalyzing}>
-                    Export bundle
                 </button>
                 <button
                     className="cockpit__button ghost danger"
                     onClick={() => {
-                        if (confirm('Are you sure you want to reset all selections and clear the workspace? This will deselect all commits and files.')) {
-                            vscode.postMessage({ type: 'resetAll' });
-                        }
+                        // Reset all logic is handled by backend command with confirmation
+                        vscode.postMessage({ type: 'resetAll' });
                     }}
                     disabled={state.isAnalyzing}
                 >

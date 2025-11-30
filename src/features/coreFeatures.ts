@@ -7,9 +7,10 @@ import { RefactorReportProvider } from '../webview/reports/refactorReportProvide
 import { getRefactorPipeline } from '../services/pipelineFactory';
 import { GitOperations } from '../analysis/git';
 import { updateContexts, refreshCockpitState } from '../core/stateUpdaters';
-import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { getExtensionConfig } from '../utils/config';
 import { logInfo, logError } from '../utils/logger';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export async function registerCoreFeatures(
   shell: AppShell,
@@ -39,45 +40,25 @@ export async function registerCoreFeatures(
     });
 
     if (count) {
-      vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title: 'Analyzing commits...',
-        cancellable: true
-      }, async (progress, token) => {
-        try {
-          await providers.commitsProvider.initializeDatabase();
-          const pipeline = await getRefactorPipeline();
-          const git = new GitOperations();
-          const commits = await git.getRecentCommits(parseInt(count));
-          const shas = commits.map(c => c.sha);
+      try {
+        await providers.commitsProvider.initializeDatabase();
+        const git = new GitOperations();
+        const commits = await git.getRecentCommits(parseInt(count));
+        const shas = commits.map(c => c.sha);
 
-          // Report progress
-          progress.report({ increment: 0, message: `Analyzing ${shas.length} commits...` });
-
-          // Check for cancellation
-          if (token.isCancellationRequested) {
-            return;
-          }
-
-          // Just index commits (quick metadata load)
-          progress.report({ increment: 25, message: 'Indexing commits...' });
-          if (token.isCancellationRequested) return;
-
-          await pipeline.indexCommits(shas);
-
-          // Refresh UI to show indexed commits
-          progress.report({ increment: 50, message: 'Refreshing UI...' });
-          if (token.isCancellationRequested) return;
-
-          await providers.commitsProvider.refresh();
-          await refreshCockpitState(orchestrator, providers, 'command:analyzeLastCommits');
-
-          progress.report({ increment: 100, message: 'Complete' });
-          vscode.window.showInformationMessage(`Indexed ${shas.length} commits`);
-        } catch (error) {
-          vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
+        if (shas.length === 0) {
+          vscode.window.showInformationMessage('No commits found to analyze');
+          return;
         }
-      });
+
+        // Update selection so Cockpit reflects the chosen commits
+        orchestrator.updateState({ selectedCommitShas: shas }, 'command:analyzeLastN');
+
+        // Run full pipeline (index + analyze bundle)
+        await vscode.commands.executeCommand('git-context.analyze');
+      } catch (error) {
+        vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
+      }
     }
   });
 
@@ -247,16 +228,92 @@ export async function registerCoreFeatures(
 
   // Reset all
   shell.registerCommand('git-context.resetAll', async (context) => {
-    orchestrator.updateState({
-      selectedCommitShas: [],
-      selectedStagedPaths: [],
-      selectedUnstagedPaths: [],
-      bundleFacts: null,
-      bundleSummary: null
-    }, 'command:resetAll');
-    providers.commitsProvider.loadMoreOffset = 0;
-    await updateContexts();
-    await refreshCockpitState(orchestrator, providers, 'command:resetAll');
+    // If cockpit features already registered this command, prefer a single path.
+    // This registration provides the full reset (vectors + DB + orchestrator).
+    const answer = await vscode.window.showWarningMessage(
+      'Are you sure you want to reset all data? This will clear the database, vector index, and cache.',
+      { modal: true },
+      'Yes',
+      'No'
+    );
+
+    if (answer !== 'Yes') {
+      return;
+    }
+
+    try {
+      // Clear vectors
+      try {
+        const { getQdrantClient } = await import('../storage/qdrantClient');
+        const qdrant = getQdrantClient();
+        if (await qdrant.isEnabled()) {
+          const client = await qdrant.getClient();
+          if (client) {
+            const collections = await client.getCollections();
+            for (const collection of collections.collections) {
+              await client.deleteCollection(collection.name);
+              logInfo(`[Reset] Deleted vector collection: ${collection.name}`);
+            }
+          }
+        }
+      } catch (e) {
+        logError('Failed to clear vectors', e);
+      }
+
+      // Clear database tables (except migration log)
+      const { getDatabaseManager } = await import('../storage/database');
+      const dbManager = getDatabaseManager();
+      const db = dbManager.getDatabase();
+      const tablesToTruncate = [
+        'commits_metadata',
+        'branches',
+        'squash_mappings',
+        'symbol_dna',
+        'symbol_history',
+        'dna_decision_log',
+        'file_snapshots',
+        'structural_diffs',
+        'workspace_analysis',
+        'hybrid_facts',
+        'reports',
+        'file_hotspots',
+        'symbol_hotspots',
+        'hotspot_snapshots',
+        'moved_blocks',
+        'symbol_lineage'
+      ];
+
+      db.transaction(() => {
+        for (const table of tablesToTruncate) {
+          try {
+            const exists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table);
+            if (exists) {
+              db.exec(`DELETE FROM ${table}`);
+              db.exec(`DELETE FROM sqlite_sequence WHERE name='${table}'`);
+            }
+          } catch (err) {
+            logError(`[Reset] Failed to truncate table ${table}`, err);
+          }
+        }
+      })();
+
+      orchestrator.reset(undefined, 'command:resetAll');
+      providers.commitsProvider.loadMoreOffset = 0;
+      await providers.commitsProvider.refresh();
+      if (providers.activeBundleProvider) {
+        providers.activeBundleProvider.refresh();
+      }
+      if (providers.symbolHistoryProvider) {
+        providers.symbolHistoryProvider.refresh();
+      }
+      await updateContexts();
+      await refreshCockpitState(orchestrator, providers, 'command:resetAll');
+
+      vscode.window.showInformationMessage('System reset successfully');
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to reset system: ${error}`);
+      logError('System reset failed', error);
+    }
   });
 
   // Bundle clear
@@ -375,6 +432,211 @@ export async function registerCoreFeatures(
     } catch (error) {
       logError('Failed to download WASM files:', error);
       vscode.window.showErrorMessage(`Failed to download WASM files: ${error}`);
+    }
+  });
+
+  // Super Report (facts-first, zoomable prototype)
+  shell.registerCommand('git-context.superReport', async () => {
+    try {
+      // Try to get facts from orchestrator first
+      const state = orchestrator.getState();
+      let facts: any = state.bundleFacts;
+
+      // Fallback: load last-bundle-facts.json from .git/commit-tracker
+      if (!facts) {
+        try {
+          const gitRoot = (await import('../utils/config')).getGitRoot();
+          if (gitRoot) {
+            const factsPath = path.join(gitRoot, '.git', 'commit-tracker', 'last-bundle-facts.json');
+            if (fs.existsSync(factsPath)) {
+              const content = fs.readFileSync(factsPath, 'utf8');
+              facts = JSON.parse(content);
+            }
+          }
+        } catch (error) {
+          logError('[SuperReport] Failed to load last-bundle-facts.json', error);
+        }
+      }
+
+      if (!facts) {
+        vscode.window.showInformationMessage('No bundle facts available. Run an analysis first.');
+        return;
+      }
+
+      const panel = vscode.window.createWebviewPanel(
+        'gitContextSuperReport',
+        'Git Context: Super Report',
+        vscode.ViewColumn.Active,
+        { enableScripts: true }
+      );
+
+      const files: string[] = (facts.evidence?.['scope.files'] as string[]) || [];
+      const factsJson = JSON.stringify(facts);
+      const filesJson = JSON.stringify(files);
+
+      panel.webview.html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #e8e8e8; background: #0f1115; padding: 12px; }
+            .layout { display: grid; grid-template-columns: 260px 1fr; gap: 12px; height: 90vh; }
+            .panel { background: #14171c; border: 1px solid #1e232b; border-radius: 6px; padding: 10px; overflow: auto; }
+            h2, h3 { margin: 6px 0; }
+            select { background: #0f1115; color: #e8e8e8; border: 1px solid #1e232b; border-radius: 4px; padding: 6px 8px; width: 100%; }
+            .section { margin-bottom: 12px; }
+            .table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            .table th, .table td { padding: 6px 8px; border-bottom: 1px solid #1e232b; text-align: left; }
+            .muted { color: #8a8f98; font-size: 11px; }
+          </style>
+        </head>
+        <body>
+          <div class="layout">
+            <div class="panel">
+              <h3>Scope</h3>
+              <div class="section">
+                <div class="muted">Files</div>
+                <select id="fileSelect">
+                  <option value="__all">All files</option>
+                </select>
+              </div>
+              <div class="section">
+                <div class="muted">Summary</div>
+                <div id="summary"></div>
+              </div>
+            </div>
+            <div class="panel" id="content">
+              <h2>Super Report</h2>
+              <div id="timeline" class="section"></div>
+              <div id="incompleteness" class="section"></div>
+              <div id="drift" class="section"></div>
+              <div id="legacy" class="section"></div>
+              <div id="unresolved" class="section"></div>
+              <div id="hotspots" class="section"></div>
+            </div>
+          </div>
+          <script>
+            const facts = ${factsJson};
+            const files = ${filesJson};
+
+            const fileSelect = document.getElementById('fileSelect');
+            files.forEach(f => {
+              const opt = document.createElement('option');
+              opt.value = f;
+              opt.textContent = f;
+              fileSelect.appendChild(opt);
+            });
+
+            const summaryEl = document.getElementById('summary');
+            summaryEl.innerHTML = [
+              'Commits: ' + facts.bundle.shas.length,
+              'Files: ' + facts.scope.files,
+              'Symbols: ' + facts.working.symbols,
+              'Edges: ' + facts.working.edges
+            ].join('<br>');
+
+            function filterByFile(list, filePath) {
+              if (!filePath || filePath === '__all') return list || [];
+              return (list || []).filter(item => {
+                const sid = item.symbol_id || item.path || '';
+                return typeof sid === 'string' && sid.startsWith(filePath);
+              });
+            }
+
+            function renderTimeline() {
+              const el = document.getElementById('timeline');
+              el.innerHTML = '<h3>Timeline</h3>' + facts.bundle.shas.map((sha, idx) => {
+                return '<div>' + (idx + 1) + '. <code>' + sha.substring(0, 8) + '</code></div>';
+              }).join('');
+            }
+
+            function renderIncompleteness(filePath) {
+              const el = document.getElementById('incompleteness');
+              const missing = filterByFile(facts.evidence?.['findings.incompleteness.missing'], filePath);
+              const zombies = filterByFile(facts.evidence?.['findings.incompleteness.zombies'], filePath);
+              el.innerHTML = '<h3>Incompleteness</h3>' +
+                '<div>Missing: ' + missing.length + '</div>' +
+                '<div>Zombies: ' + zombies.length + '</div>' +
+                renderTable('Missing', missing, ['symbol_id','expected']) +
+                renderTable('Zombies', zombies, ['symbol_id','found']);
+            }
+
+            function renderDrift(filePath) {
+              const el = document.getElementById('drift');
+              const driftSymbols = filterByFile(facts.evidence?.['findings.patternDrift.conventionDrift']?.driftSymbols, filePath);
+              const mixedFiles = facts.evidence?.['findings.patternDrift.mixedConventionFiles'] || [];
+              el.innerHTML = '<h3>Drift</h3>' +
+                '<div>Drift symbols: ' + driftSymbols.length + '</div>' +
+                renderTable('Convention Drift', driftSymbols, ['name','suggestedName','path','convention']) +
+                '<div class="muted" style="margin-top:6px;">Mixed files: ' + mixedFiles.length + '</div>';
+            }
+
+            function renderLegacy(filePath) {
+              const el = document.getElementById('legacy');
+              const dead = filterByFile(facts.evidence?.['findings.legacyAudit.dead'], filePath);
+              const legacyUsed = filterByFile(facts.evidence?.['findings.legacyAudit.legacyUsed'], filePath);
+              const leftovers = filterByFile(facts.findings.legacyAudit.replacedLeftovers, filePath);
+              el.innerHTML = '<h3>Legacy</h3>' +
+                '<div>Dead: ' + dead.length + '</div>' +
+                '<div>Legacy used: ' + legacyUsed.length + '</div>' +
+                '<div>Replaced leftovers: ' + leftovers.length + '</div>' +
+                renderTable('Dead', dead, ['symbol_id','kind','name']) +
+                renderTable('Legacy Used', legacyUsed, ['symbol_id','kind','name']) +
+                renderTable('Replaced', leftovers, ['old','new','confidence']);
+            }
+
+            function renderUnresolved() {
+              const el = document.getElementById('unresolved');
+              const unresolved = facts.evidence?.['findings.unresolvedCallers'] || [];
+              el.innerHTML = '<h3>Unresolved Callers</h3>' +
+                '<div>Total: ' + unresolved.length + '</div>' +
+                renderTable('Unresolved', unresolved, ['caller_symbol_id','callee_name','guessed_target_dna_id','severity']);
+            }
+
+            function renderHotspots(filePath) {
+              const el = document.getElementById('hotspots');
+              const hotspots = facts.evidence?.hotspots || facts.findings.hotspots || [];
+              const filtered = filePath && filePath !== '__all' ? hotspots.filter(h => (h.path || '').startsWith(filePath)) : hotspots;
+              el.innerHTML = '<h3>Hotspots</h3>' +
+                renderTable('Hotspots', filtered, ['path','drift_count']);
+            }
+
+            function renderTable(title, rows, cols) {
+              if (!rows || rows.length === 0) return '';
+              const head = cols.map(c => '<th>' + c + '</th>').join('');
+              const body = rows.map(r => '<tr>' + cols.map(c => {
+                const val = r && r[c] !== undefined ? r[c] : '';
+                if (typeof val === 'object') {
+                  return '<td>' + escapeHtml(JSON.stringify(val)) + '</td>';
+                }
+                return '<td>' + escapeHtml(String(val)) + '</td>';
+              }).join('') + '</tr>').join('');
+              return '<div class="section"><div class="muted">' + title + '</div><table class="table"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+            }
+
+            function escapeHtml(str) {
+              return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+            }
+
+            function render(filePath) {
+              renderTimeline();
+              renderIncompleteness(filePath);
+              renderDrift(filePath);
+              renderLegacy(filePath);
+              renderUnresolved();
+              renderHotspots(filePath);
+            }
+
+            fileSelect.addEventListener('change', () => render(fileSelect.value));
+            render('__all');
+          </script>
+        </body>
+        </html>
+      `;
+    } catch (error) {
+      vscode.window.showErrorMessage('Failed to open super report: ' + (error instanceof Error ? error.message : String(error)));
+      logError('[SuperReport] Failed', error);
     }
   });
 

@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { SymbolContext, EdgeContext } from '../contracts/llmContext';
 import { IntendedState } from './intendedMap';
 import { WorkingSnapshot } from './workingSnapshot';
@@ -5,6 +7,14 @@ import { getDatabaseManager } from '../storage/database';
 import { NamingConvention, analyzeConventionDrift, detectNamingConvention } from '../analysis/namingConventions';
 import type { HybridFact } from '../types/cstFacts';
 import { BaseDetector, DetectorConfig } from '../analysis/detectors/BaseDetector';
+import {
+  analyzeImportPathDrift,
+  extractImportPaths,
+  detectFileNamingConvention,
+  FileNamingConvention,
+  ImportPathConvention
+} from '../analysis/conventionEnhancements';
+import { detectLanguage, getGitRoot } from '../utils/config';
 
 /**
  * Safely extract line number from symbol location
@@ -56,6 +66,25 @@ export interface DriftFindings {
       suggestedName: string;
       path: string;
     }>;
+    importDrift?: {
+      dominantStyle: string;
+      driftPercent: number;
+      driftImports: Array<{
+        file: string;
+        line: number;
+        importPath: string;
+        style: string;
+      }>;
+    };
+    fileNamingDrift?: {
+      dominantStyle: FileNamingConvention['style'];
+      driftPercent: number;
+      driftFiles: Array<{
+        path: string;
+        style: FileNamingConvention['style'];
+        filename: string;
+      }>;
+    };
   };
   mixedConventionFiles?: Array<{
     path: string;
@@ -621,6 +650,25 @@ function detectConventionDrift(
       suggestedName: string;
       path: string;
     }>;
+    importDrift?: {
+      dominantStyle: string;
+      driftPercent: number;
+      driftImports: Array<{
+        file: string;
+        line: number;
+        importPath: string;
+        style: string;
+      }>;
+    };
+    fileNamingDrift?: {
+      dominantStyle: FileNamingConvention['style'];
+      driftPercent: number;
+      driftFiles: Array<{
+        path: string;
+        style: FileNamingConvention['style'];
+        filename: string;
+      }>;
+    };
   };
   mixedConventionFiles?: Array<{
     path: string;
@@ -693,11 +741,19 @@ function detectConventionDrift(
       }
     }
 
+    // Analyze import path conventions (JS/TS/PHP)
+    const importDrift = detectImportPathConventionDrift(working);
+
+    // Analyze file naming conventions
+    const fileNamingDrift = detectFileNamingConventionDrift(working);
+
     return {
       conventionDrift: {
         dominantConvention: driftResult.dominantConvention,
         driftPercent: driftResult.driftPercent,
-        driftSymbols
+        driftSymbols,
+        importDrift,
+        fileNamingDrift
       },
       mixedConventionFiles: mixedConventionFiles.length > 0 ? mixedConventionFiles : undefined
     };
@@ -705,6 +761,98 @@ function detectConventionDrift(
     console.warn('Failed to detect convention drift:', error);
     return null;
   }
+}
+
+function detectImportPathConventionDrift(
+  working: WorkingSnapshot
+): {
+  dominantStyle: string;
+  driftPercent: number;
+  driftImports: Array<{ file: string; line: number; importPath: string; style: string }>;
+} | undefined {
+  const gitRoot = getGitRoot();
+  if (!gitRoot) return undefined;
+
+  const imports: Array<ImportPathConvention & { file: string }> = [];
+
+  for (const filePath of working.analyzedPaths) {
+    const language = detectLanguage(filePath);
+    if (!language) continue;
+
+    const absolutePath = path.join(gitRoot, filePath);
+    if (!fs.existsSync(absolutePath)) continue;
+
+    try {
+      const content = fs.readFileSync(absolutePath, 'utf8');
+      const fileImports = extractImportPaths(content, language).map(imp => ({
+        ...imp,
+        file: filePath
+      }));
+      imports.push(...fileImports);
+    } catch (error) {
+      console.warn(`[ConventionDrift] Failed to analyze imports for ${filePath}:`, error);
+    }
+  }
+
+  if (imports.length === 0) {
+    return undefined;
+  }
+
+  const drift = analyzeImportPathDrift(imports);
+  const driftImports = drift.driftImports.map(imp => ({
+    file: (imp as any).file || '', // file is attached above; fallback to blank if missing
+    line: imp.line,
+    importPath: imp.path,
+    style: imp.style
+  })).filter(imp => imp.file);
+
+  return {
+    dominantStyle: drift.dominantStyle,
+    driftPercent: drift.driftPercent,
+    driftImports
+  };
+}
+
+function detectFileNamingConventionDrift(
+  working: WorkingSnapshot
+): {
+  dominantStyle: FileNamingConvention['style'];
+  driftPercent: number;
+  driftFiles: Array<{ path: string; style: FileNamingConvention['style']; filename: string }>;
+} | undefined {
+  if (working.analyzedPaths.size === 0) return undefined;
+
+  const fileConventions: Array<FileNamingConvention & { path: string }> = [];
+  for (const filePath of working.analyzedPaths) {
+    const convention = detectFileNamingConvention(filePath);
+    fileConventions.push({ ...convention, path: filePath });
+  }
+
+  if (fileConventions.length === 0) {
+    return undefined;
+  }
+
+  const counts = new Map<FileNamingConvention['style'], number>();
+  for (const fc of fileConventions) {
+    counts.set(fc.style, (counts.get(fc.style) || 0) + 1);
+  }
+
+  const dominant = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || 'mixed';
+  const driftFiles = fileConventions.filter(fc => fc.style !== dominant).map(fc => ({
+    path: fc.path,
+    style: fc.style,
+    filename: fc.filename
+  }));
+
+  const driftPercent = fileConventions.length > 0
+    ? (driftFiles.length / fileConventions.length) * 100
+    : 0;
+
+  return {
+    dominantStyle: dominant,
+    driftPercent,
+    driftFiles
+  };
 }
 
 /**

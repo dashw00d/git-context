@@ -2,10 +2,8 @@ import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import { CockpitSectionKey, CockpitState, SymbolChangeType } from '../../types/cockpit';
 import { Header } from './components/Header';
-import { SelectionPanel } from './components/SelectionPanel';
-import { BundlePanel } from './components/BundlePanel';
+import { StatsSection } from './components/StatsSection';
 import { Tabs } from './components/Tabs';
-import { MetricsRow } from './components/MetricsRow';
 import { CommitsTabContent } from './components/CommitsTabContent';
 import { BundleTabContent } from './components/BundleTabContent';
 import { SymbolsTabContent } from './components/SymbolsTabContent';
@@ -171,19 +169,14 @@ const App: React.FC = () => {
         }}
       />
 
-      <section className="cockpit__dashboard">
-        <SelectionPanel state={state} vscode={vscode} />
-        <BundlePanel state={state} vscode={vscode} />
-      </section>
-
-      <MetricsRow state={state} />
+      <StatsSection state={state} vscode={vscode} />
 
       <Tabs
         active={state.activeSection}
         onChange={setActiveSection}
         counts={{
           commits: state.commits.length,
-          bundle: bundleSummaryText,
+          bundle: state.bundleSummary ? `${state.bundleSummary.fileCount} files` : 'None',
           symbols: state.symbols.length,
           reports: state.reports.length,
           live: state.liveAnalysis.pendingChanges

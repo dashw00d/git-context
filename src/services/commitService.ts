@@ -1,5 +1,5 @@
 import { getDatabaseManager, ensureDatabaseInitialized } from '../storage/database';
-import { logError, logDebug } from '../utils/logger';
+import { logError } from '../utils/logger';
 
 /**
  * Centralized service for all commit-related database operations.

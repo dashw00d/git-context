@@ -46,17 +46,17 @@ export class LlmAnalyst {
     const factsJson = JSON.stringify(slimFacts);
     const factsSize = factsJson.length;
     let processedFacts = slimFacts;
-    
+
     if (factsSize > this.maxInputChars) {
       console.log(`LLM Analyst: Facts size (${factsSize} chars) exceeds max (${this.maxInputChars}), summarizing...`);
       processedFacts = this.summarizeFacts(slimFacts);
-      
+
       // Check if still too large, apply deep summarization
       if (JSON.stringify(processedFacts).length > this.maxInputChars * 0.8) {
         console.log('LLM Analyst: Still too large, applying deep summarization...');
         processedFacts = this.deepSummarize(processedFacts);
       }
-      
+
       const summarizedSize = JSON.stringify(processedFacts).length;
       console.log(`LLM Analyst: Summarized to ${summarizedSize} chars (${((1 - summarizedSize / factsSize) * 100).toFixed(1)}% reduction)`);
     }
@@ -188,18 +188,18 @@ export class LlmAnalyst {
     try {
       // Get known files from facts for grounding examples
       const knownFiles = (facts.evidence['scope.files'] as string[]) || [];
-      const knownFilesList = knownFiles.length > 0 
+      const knownFilesList = knownFiles.length > 0
         ? `\n\nKNOWN FILES (ONLY use these in examples):\n${JSON.stringify(knownFiles)}\n\n`
         : '\n\n';
 
       // Turn 1: Discover Patterns
       console.log('LLM Analyst: Discovering emergent patterns...');
-      
+
       // Use curated discovery feed if available (efficient), otherwise fallback to raw feed (expensive)
-      const discoveryInput = (facts as any).discoveryFeed 
+      const discoveryInput = (facts as any).discoveryFeed
         ? `DISCOVERY FEED JSON:\n${JSON.stringify((facts as any).discoveryFeed)}`
         : `RAW FEED JSON:\n${JSON.stringify(rawFeed)}`;
-      
+
       const discoverPromptTemplate = this.getPrompt('discover', PROMPT_DISCOVER);
       const discoverPrompt = `${SYSTEM_PROMPT}\n\n${discoveryInput}${knownFilesList}${discoverPromptTemplate}`;
       const discovery = await this.callLLM(discoverPrompt, 'discover');
@@ -332,7 +332,7 @@ export class LlmAnalyst {
         text: `${p.name}: ${p.desc} (Impact: ${p.impact}, Coverage: ${p.coverage_pct}%)`,
         confidence: 0.9,
         severity: p.impact === 'high' ? 'high' : 'medium',
-        evidence: (p.examples || []).map((ex: string) => 
+        evidence: (p.examples || []).map((ex: string) =>
           AnalysisBlockUtils.createEvidenceAuto(ex, `${p.name} example`, knownFiles)
         )
       }));
@@ -345,7 +345,7 @@ export class LlmAnalyst {
         priority: 'high',
         effort: 'medium',
         risk: 'medium',
-        evidence: (p.fixes || []).slice(0, 3).map((fix: any) => 
+        evidence: (p.fixes || []).slice(0, 3).map((fix: any) =>
           AnalysisBlockUtils.createEvidenceAuto(
             fix.file || p.pattern,
             `${fix.before ? `Change: ${fix.before.substring(0, 30)}...` : p.pattern}`
@@ -648,9 +648,9 @@ export class LlmAnalyst {
     });
 
     // Filter to critical/high severity or high confidence (>=0.8)
-    const valuableClaims = allClaims.filter(c => 
-      c.severity === 'critical' || 
-      c.severity === 'high' || 
+    const valuableClaims = allClaims.filter(c =>
+      c.severity === 'critical' ||
+      c.severity === 'high' ||
       c.confidence >= 0.8
     );
 
@@ -677,11 +677,11 @@ export class LlmAnalyst {
     // Calculate value score for each action
     const priorityWeight: Record<'urgent' | 'high' | 'medium' | 'low', number> = { urgent: 10, high: 5, medium: 2, low: 1 };
     const effortWeight: Record<'xs' | 's' | 'm' | 'l' | 'xl', number> = { xs: 5, s: 4, m: 3, l: 2, xl: 1 };
-    
+
     const scoredActions = allActions.map(action => ({
       action,
-      score: priorityWeight[action.priority] * effortWeight[action.effort] * 
-             (action.risk === 'low' ? 1.5 : action.risk === 'medium' ? 1.0 : 0.7)
+      score: priorityWeight[action.priority] * effortWeight[action.effort] *
+        (action.risk === 'low' ? 1.5 : action.risk === 'medium' ? 1.0 : 0.7)
     }));
 
     // Sort by score (descending)
@@ -694,21 +694,21 @@ export class LlmAnalyst {
    * Calculate refactor health score (0-100)
    */
   private calculateHealthScore(facts: RefactorBundleFacts): number {
-    const totalIssues = 
+    const totalIssues =
       facts.findings.incompleteness.missing +
       facts.findings.incompleteness.zombies +
       facts.findings.legacyAudit.dead;
-    
+
     const totalSymbols = facts.working.symbols;
     const issueRate = totalSymbols > 0 ? totalIssues / totalSymbols : 0;
-    
+
     // Base score: 100 = perfect, 0 = terrible
     const baseScore = Math.max(0, 100 - (issueRate * 100));
-    
+
     // Penalties for critical issues
     const criticalPenalty = facts.findings.incompleteness.missing * 2;
     const zombiePenalty = facts.findings.incompleteness.zombies * 0.5;
-    
+
     return Math.max(0, Math.min(100, baseScore - criticalPenalty - zombiePenalty));
   }
 
@@ -725,7 +725,7 @@ export class LlmAnalyst {
     const topClaims = this.extractTopClaims(blocks, 3);
     const topActions = this.extractTopActions(blocks, 5);
     const healthScore = this.calculateHealthScore(facts);
-    
+
     // Calculate high-priority action count
     const highPriorityActions = blocks.reduce((sum, block) =>
       sum + block.actions.filter(a => a.priority === 'high' || a.priority === 'urgent').length, 0);
@@ -989,20 +989,20 @@ export class LlmAnalyst {
     const missing = take('findings.incompleteness.missing', caps.missing);
     const zombies = take('findings.incompleteness.zombies', caps.zombies);
     const divergent = take('findings.incompleteness.divergent', caps.divergent);
-    
+
     // Process hybrid drifts with snippets
     const hybridDrifts = Array.isArray(clone.findings?.hybridDrifts)
       ? clone.findings.hybridDrifts.slice(0, caps.hybridDrifts).map((d: any) => {
-          const file = d.fact?.filePath || d.fact?.path || d.file;
-          const line = d.fact?.line || d.line || 0;
-          return {
-            ...d,
-            file,
-            name: d.fact?.name || d.fact?.id || d.name,
-            origin: detectOrigin(file),
-            snippet: getSnippet(file, line)
-          };
-        })
+        const file = d.fact?.filePath || d.fact?.path || d.file;
+        const line = d.fact?.line || d.line || 0;
+        return {
+          ...d,
+          file,
+          name: d.fact?.name || d.fact?.id || d.name,
+          origin: detectOrigin(file),
+          snippet: getSnippet(file, line)
+        };
+      })
       : undefined;
 
     const addDisplayNames = (items?: any[]) =>
@@ -1098,14 +1098,14 @@ export class LlmAnalyst {
    */
   private summarizeFacts(facts: RefactorBundleFacts): RefactorBundleFacts {
     const summarized = { ...facts };
-    
+
     // Summarize evidence: top 20 symbols by impact
     if (summarized.evidence && Array.isArray(summarized.evidence['working.symbols'])) {
       const symbols = summarized.evidence['working.symbols'] as string[];
       // Take top 20 (or all if less than 20)
       summarized.evidence['working.symbols'] = symbols.slice(0, 20);
     }
-    
+
     // Aggregate edges: count by type instead of listing all
     if (summarized.evidence && Array.isArray(summarized.evidence['working.edges'])) {
       const edges = summarized.evidence['working.edges'] as string[];
@@ -1117,13 +1117,13 @@ export class LlmAnalyst {
       }
       summarized.evidence['working.edges'] = Array.from(edgeCounts.entries()).map(([type, count]) => `${type}: ${count}`);
     }
-    
+
     // Prioritize drifts: Sort by type/severity, keep top 5 per category
     if (summarized.findings.incompleteness) {
       // Note: Using findings instead of drift (refactorBundleFacts structure uses findings.incompleteness)
       // Mapping to the structure expected by the LLM prompts which might look for summarized.drift
       // For now, we modify the arrays in place if they are in evidence or findings
-      
+
       // We need to handle both 'drift' object if it exists or findings.incompleteness
       const inc = summarized.findings.incompleteness;
       // We can't easily sort here without more data, but we can slice
@@ -1132,32 +1132,32 @@ export class LlmAnalyst {
 
     // Enhance Hybrid Facts Preservation
     if (facts.hybridFacts && (facts as any).drift?.hybridDrifts) {
-        const drift = (facts as any).drift;
-        const hybridDrifts = drift.hybridDrifts.slice(0, 5).map((d: any) => ({ 
-            type: d.type, 
-            file: d.file?.slice(-30),
-            description: d.description?.slice(0, 100) + '...' 
-        }));
-        
-        if (!summarized.hybridSummary) {
-            summarized.hybridSummary = {
-                totalFacts: 0,
-                fileCount: 0,
-                topFiles: [],
-                sampleFacts: []
-            };
-        }
-        (summarized.hybridSummary as any).hybridDriftSamples = hybridDrifts;
+      const drift = (facts as any).drift;
+      const hybridDrifts = drift.hybridDrifts.slice(0, 5).map((d: any) => ({
+        type: d.type,
+        file: d.file?.slice(-30),
+        description: d.description?.slice(0, 100) + '...'
+      }));
+
+      if (!summarized.hybridSummary) {
+        summarized.hybridSummary = {
+          totalFacts: 0,
+          fileCount: 0,
+          topFiles: [],
+          sampleFacts: []
+        };
+      }
+      (summarized.hybridSummary as any).hybridDriftSamples = hybridDrifts;
     }
 
     // Add Semantic Aggregates and Evidence Snippets
     const evidenceSnippets = {
-        drift: this.extractSnippets((facts as any).drift?.unresolved_callers || [], 3, 'caller: {name} in {path}:{line}'),
-        legacy: this.extractSnippets(facts.evidence['findings.legacyAudit']?.dead || [], 3, 'Dead: {name} in {path}'),
-        hotspots: (facts.evidence.hotspots as any[])?.slice(0, 3).map(h => `Hotspot: ${h.path || h.file} (score: ${h.hotspotScore})`)
+      drift: this.extractSnippets((facts as any).drift?.unresolved_callers || [], 3, 'caller: {name} in {path}:{line}'),
+      legacy: this.extractSnippets(facts.evidence['findings.legacyAudit']?.dead || [], 3, 'Dead: {name} in {path}'),
+      hotspots: (facts.evidence.hotspots as any[])?.slice(0, 3).map(h => `Hotspot: ${h.path || h.file} (score: ${h.hotspotScore})`)
     };
     (summarized as any).evidenceSnippets = evidenceSnippets;
-    
+
     // Truncate large evidence arrays
     const maxEvidenceItems = 50;
     for (const key in summarized.evidence) {
@@ -1165,7 +1165,7 @@ export class LlmAnalyst {
         summarized.evidence[key] = summarized.evidence[key].slice(0, maxEvidenceItems);
       }
     }
-    
+
     return summarized;
   }
 
@@ -1188,7 +1188,7 @@ export class LlmAnalyst {
     const codePattern = /[{}();=<>[\]]/g;
     const codeMatches = (text.match(codePattern) || []).length;
     const codeRatio = codeMatches / Math.max(text.length, 1);
-    
+
     // Adjust chars per token based on code density
     const charsPerToken = codeRatio > 0.1 ? 3.5 : 4.0;
     return Math.ceil(text.length / charsPerToken);
@@ -1199,7 +1199,7 @@ export class LlmAnalyst {
    */
   private deepSummarize(facts: RefactorBundleFacts): RefactorBundleFacts {
     const deep = { ...facts };
-    
+
     // Keep metrics and summaries, drop raw evidence arrays
     if (deep.evidence) {
       deep.evidence = {
@@ -1210,7 +1210,7 @@ export class LlmAnalyst {
         hotspots: (deep.evidence.hotspots as any[])?.slice(0, 5)
       };
     }
-    
+
     return deep;
   }
 }

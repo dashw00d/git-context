@@ -88,6 +88,12 @@
         "icon": "$(stop)"
       },
       {
+        "command": "git-context.exportContext",
+        "title": "Export Context (JSON + Mermaid)",
+        "category": "Git Context",
+        "icon": "$(file-code)"
+      },
+      {
         "command": "git-context.generateLiveReport",
         "title": "Generate Live Analysis Report",
         "category": "Git Context"
@@ -97,6 +103,12 @@
         "title": "Download Required WASM Files",
         "category": "Git Context",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "git-context.superReport",
+        "title": "Open Super Report (Facts-First)",
+        "category": "Git Context",
+        "icon": "$(preview)"
       }
     ],
     "viewsContainers": {
@@ -114,6 +126,12 @@
           "id": "cockpit",
           "name": "Cockpit",
           "type": "webview"
+        },
+        {
+          "id": "gitContext.refactorReport",
+          "name": "Refactor Report",
+          "type": "webview",
+          "visibility": "hidden"
         }
       ]
     },

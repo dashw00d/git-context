@@ -1,4 +1,4 @@
-import { SymbolInfo, SymbolDelta, ChangeType, ModReason } from '../types';
+import { SymbolInfo, SymbolDelta, ModReason } from '../types';
 import { detectLanguage } from '../utils/config';
 
 /**

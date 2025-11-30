@@ -225,7 +225,6 @@ export function analyzeConventionDrift(symbols: Array<{
     .sort(([, a], [, b]) => b - a);
 
   const dominant = (conventionEntries[0]?.[0] as NamingConvention) || 'unknown';
-  const dominantCount = conventionEntries[0]?.[1] || 0;
 
   // Find symbols that don't match dominant
   const driftSymbols = symbolConventions

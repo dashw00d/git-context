@@ -48,6 +48,16 @@ export interface RefactorBundleFacts {
         dominantConvention: string;
         driftPercent: number;
         driftSymbolCount: number;
+        importDrift?: {
+          dominantStyle: string;
+          driftPercent: number;
+          driftImportCount: number;
+        };
+        fileNamingDrift?: {
+          dominantStyle: string;
+          driftPercent: number;
+          driftFileCount: number;
+        };
       };
       mixedConventionFiles?: number;
     };

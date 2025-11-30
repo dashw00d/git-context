@@ -712,8 +712,10 @@ export class AnalysisRenderer {
     content += `**Dominant Convention:** \`${conventionDrift.dominantConvention}\`\n`;
     content += `**Drift:** ${conventionDrift.driftPercent.toFixed(1)}% of symbols use different conventions\n\n`;
 
+    const driftEvidence = facts.evidence?.['findings.patternDrift.conventionDrift'] || {};
+
     // Show drift symbols with suggestions
-    const driftSymbols = facts.evidence?.['findings.patternDrift.conventionDrift']?.driftSymbols || [];
+    const driftSymbols = driftEvidence?.driftSymbols || [];
     if (driftSymbols.length > 0) {
       content += `#### Symbols to Migrate (${driftSymbols.length})\n\n`;
       content += `| Current Name | Convention | Suggested Name | Path |\n`;
@@ -727,6 +729,42 @@ export class AnalysisRenderer {
         content += `\n*... and ${driftSymbols.length - 30} more symbols*\n`;
       }
       content += `\n`;
+    }
+
+    // Import path drift
+    if (conventionDrift.importDrift) {
+      const driftImports = driftEvidence?.importDrift?.driftImports || [];
+      content += `#### Import Path Drift (${conventionDrift.importDrift.driftPercent.toFixed(1)}% drift)\n\n`;
+      content += `Dominant style: \`${conventionDrift.importDrift.dominantStyle}\`. Mixed import styles can mask module boundaries.\n\n`;
+      if (driftImports.length > 0) {
+        content += `| File | Line | Style | Import |\n`;
+        content += `|------|------|-------|--------|\n`;
+        for (const imp of driftImports.slice(0, 20)) {
+          content += `| \`${imp.file}\` | ${imp.line} | ${imp.style} | \`${imp.importPath}\` |\n`;
+        }
+        if (driftImports.length > 20) {
+          content += `\n*... and ${driftImports.length - 20} more imports*\n`;
+        }
+        content += `\n`;
+      }
+    }
+
+    // File naming drift
+    if (conventionDrift.fileNamingDrift) {
+      const driftFiles = driftEvidence?.fileNamingDrift?.driftFiles || [];
+      content += `#### File Naming Drift (${conventionDrift.fileNamingDrift.driftPercent.toFixed(1)}% drift)\n\n`;
+      content += `Dominant style: \`${conventionDrift.fileNamingDrift.dominantStyle}\`. Consider aligning file casing for easier discovery.\n\n`;
+      if (driftFiles.length > 0) {
+        content += `| File | Style |\n`;
+        content += `|------|-------|\n`;
+        for (const file of driftFiles.slice(0, 20)) {
+          content += `| \`${file.path}\` | ${file.style} |\n`;
+        }
+        if (driftFiles.length > 20) {
+          content += `\n*... and ${driftFiles.length - 20} more files*\n`;
+        }
+        content += `\n`;
+      }
     }
 
     // Show files with mixed conventions

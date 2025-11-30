@@ -11,6 +11,7 @@ interface DatabaseStatement {
   all: (...params: any[]) => any[];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 class StatementWrapper {
   constructor(private stmt: Statement, private dbManager: DatabaseManager) { }
 

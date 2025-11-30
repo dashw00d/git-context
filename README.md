@@ -65,7 +65,8 @@ These architectural invariants ensure stability and prevent common bugs:
 1. Clone this repository
 2. Run `npm install`
 3. Run `npm run compile`
-4. Install the extension in VS Code
+4. Run `npx vsce package`
+5. Install the extension in VS Code
 
 ### Configuration
 

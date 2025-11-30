@@ -1,19 +1,19 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
 import { getRefactorPipeline } from '../services/pipelineFactory';
-import { GitOperations } from '../analysis/git';
 import { getReportManager } from '../storage/reportManager';
 import { getDatabaseManager } from '../storage/database';
 import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
-import { getExtensionConfig } from '../utils/config';
 import { RefactorBundleFacts } from '../facts/types';
-import { CommitAnalysis } from '../types';
+import { CommitAnalysis, EdgeInfo, SymbolInfo } from '../types';
 import { makeBundleFingerprint, PIPELINE_VERSION, PROMPT_VERSION } from '../utils/fingerprint';
 import { logInfo, logError, logDebug } from '../utils/logger';
 import { isWorkspaceSha } from '../utils/workspace';
+import { MermaidGenerator } from '../analysis/mermaidGenerator';
 
 export class ReportService {
     private static instance: ReportService;
+    private readonly mermaid = new MermaidGenerator();
 
     private constructor() {
         // Singleton: use getInstance()
@@ -188,6 +188,27 @@ export class ReportService {
                 logDebug('[ReportService] LLM not available, using fallback summary');
                 summary = this.generateFallbackSummary(facts, shas);
                 analysis = { summary };
+            }
+
+            // 4.0 Always build a facts-driven markdown so the report is useful without LLM
+            const factsMarkdown = this.buildFactsMarkdown(facts);
+
+            // 4.1 Append detailed sections (Legacy/Detailed View)
+            const llmMarkdown = analysis?.markdown || '';
+            const baseMarkdown = [
+                factsMarkdown,
+                llmMarkdown ? `\n\n---\n\n## 🤖 LLM Addendum\n\n${llmMarkdown}` : ''
+            ].filter(Boolean).join('');
+            const visualsMarkdown = this.buildVisualSection(facts);
+            const detailedMarkdown = await this.appendDetailedSections(
+                baseMarkdown + visualsMarkdown,
+                [...commitShas, ...workspaceShas]
+            );
+
+            if (analysis) {
+                analysis.markdown = detailedMarkdown;
+            } else {
+                analysis = { summary, markdown: detailedMarkdown };
             }
 
             // 4.5. Compute workspace hash
@@ -454,6 +475,313 @@ export class ReportService {
             pinned: !!report.isPinned,
             branch: (report as any).branch
         }));
+    }
+
+    /**
+     * Build a small Mermaid visualization block from working edges if available
+     */
+    private buildVisualSection(facts: RefactorBundleFacts): string {
+        const edgeStrings = (facts.evidence?.['working.edges'] as string[]) || [];
+        if (!edgeStrings.length) {
+            return '';
+        }
+
+        const edges: EdgeInfo[] = [];
+        const highlight: string[] = [];
+
+        // Collect drift-related symbol IDs to highlight
+        const missing = (facts.evidence?.['findings.incompleteness.missing'] as any[]) || [];
+        const zombies = (facts.evidence?.['findings.incompleteness.zombies'] as any[]) || [];
+        highlight.push(
+            ...missing.map(m => m.symbol_id).filter(Boolean),
+            ...zombies.map(z => z.symbol_id).filter(Boolean)
+        );
+
+        for (const raw of edgeStrings) {
+            const match = raw.match(/^(.*?) -> (.*?) \((.*?)\)$/);
+            if (!match) {
+                continue;
+            }
+            const [, from, to, type] = match;
+            edges.push({
+                from,
+                to,
+                type: (type as EdgeInfo['type']) || 'imports',
+                confidence: 1,
+                isResolved: true
+            });
+        }
+
+        if (!edges.length) {
+            return '';
+        }
+
+        const symbols: SymbolInfo[] = [];
+        const symbolIds = new Set<string>();
+        for (const edge of edges) {
+            if (!symbolIds.has(edge.from)) {
+                symbolIds.add(edge.from);
+                symbols.push(this.makePlaceholderSymbol(edge.from));
+            }
+            if (!symbolIds.has(edge.to)) {
+                symbolIds.add(edge.to);
+                symbols.push(this.makePlaceholderSymbol(edge.to));
+            }
+        }
+
+        const mermaid = this.mermaid.generateGraph(edges, symbols, {
+            maxNodes: 40,
+            showConfidence: false,
+            highlightChanged: highlight
+        });
+
+        return `\n\n## 🔗 Dependency Graph (working snapshot)\n\n` +
+            '```mermaid\n' +
+            mermaid +
+            '```\n';
+    }
+
+    /**
+     * Build a facts-driven markdown report (no LLM required)
+     */
+    private buildFactsMarkdown(facts: RefactorBundleFacts): string {
+        const lines: string[] = [];
+        const findings = facts.findings;
+
+        lines.push(`# 📑 Analysis Report (Facts)`);
+        lines.push(`Generated: ${facts.generated_at}`);
+        lines.push(`Bundle: ${facts.bundle.shas.length} commits (${facts.bundle.oldestSha.substring(0, 8)}...)\n`);
+
+        lines.push(`## Scope & Totals`);
+        lines.push(`- Commits: ${facts.bundle.shas.length}`);
+        lines.push(`- Files in scope: ${facts.scope.files}`);
+        lines.push(`- Symbols: ${facts.working.symbols}`);
+        lines.push(`- Edges: ${facts.working.edges}\n`);
+
+        // Incompleteness
+        lines.push(`## Incompleteness`);
+        lines.push(`- Missing: ${findings.incompleteness.missing}`);
+        lines.push(`- Zombies: ${findings.incompleteness.zombies}`);
+        lines.push(`- Divergent: ${findings.incompleteness.divergent}\n`);
+        const missing = (facts.evidence?.['findings.incompleteness.missing'] as any[]) || [];
+        const zombies = (facts.evidence?.['findings.incompleteness.zombies'] as any[]) || [];
+        if (missing.length) {
+            lines.push(`**Top Missing (${Math.min(10, missing.length)})**`);
+            missing.slice(0, 10).forEach((m: any) => {
+                lines.push(`- \`${m.symbol_id}\` (expected: ${m.expected?.expect || 'present'})`);
+            });
+            lines.push('');
+        }
+        if (zombies.length) {
+            lines.push(`**Top Zombies (${Math.min(10, zombies.length)})**`);
+            zombies.slice(0, 10).forEach((z: any) => {
+                lines.push(`- \`${z.symbol_id}\` — ${z.found?.name || ''} (${z.found?.kind || ''})`);
+            });
+            lines.push('');
+        }
+
+        // Drift
+        lines.push(`## Pattern Drift`);
+        lines.push(`- Mixed targets: ${findings.patternDrift.mixedTargets}`);
+        lines.push(`- Old namespaces: ${findings.patternDrift.oldNamespaces}`);
+        if (findings.patternDrift.conventionDrift) {
+            const cd = findings.patternDrift.conventionDrift;
+            lines.push(`- Naming drift: ${cd.driftPercent.toFixed(1)}% (dominant: ${cd.dominantConvention})`);
+            if (cd.importDrift) {
+                lines.push(`- Import drift: ${cd.importDrift.driftPercent.toFixed(1)}% (dominant: ${cd.importDrift.dominantStyle})`);
+            }
+            if (cd.fileNamingDrift) {
+                lines.push(`- File naming drift: ${cd.fileNamingDrift.driftPercent.toFixed(1)}% (dominant: ${cd.fileNamingDrift.dominantStyle})`);
+            }
+        }
+        if (findings.patternDrift.mixedConventionFiles) {
+            lines.push(`- Mixed convention files: ${findings.patternDrift.mixedConventionFiles}`);
+        }
+        lines.push('');
+        const driftSymbols = (facts.evidence?.['findings.patternDrift.conventionDrift']?.driftSymbols as any[]) || [];
+        if (driftSymbols.length) {
+            lines.push(`**Convention Drift Symbols (${Math.min(15, driftSymbols.length)})**`);
+            driftSymbols.slice(0, 15).forEach((d: any) => {
+                lines.push(`- \`${d.name}\` → \`${d.suggestedName}\` (${d.convention}) — ${d.path}`);
+            });
+            lines.push('');
+        }
+
+        // Legacy
+        lines.push(`## Legacy Audit`);
+        lines.push(`- Dead: ${findings.legacyAudit.dead}`);
+        lines.push(`- Legacy used: ${findings.legacyAudit.legacyUsed}`);
+        lines.push(`- Replaced leftovers: ${findings.legacyAudit.replacedLeftovers.length}\n`);
+        const dead = (facts.evidence?.['findings.legacyAudit.dead'] as any[]) || [];
+        if (dead.length) {
+            lines.push(`**Dead Symbols (${Math.min(15, dead.length)})**`);
+            dead.slice(0, 15).forEach((d: any) => {
+                lines.push(`- \`${d.symbol_id}\` (${d.kind || ''})`);
+            });
+            lines.push('');
+        }
+        const replaced = findings.legacyAudit.replacedLeftovers || [];
+        if (replaced.length) {
+            lines.push(`**Replaced Leftovers (${Math.min(10, replaced.length)})**`);
+            replaced.slice(0, 10).forEach((r: any) => {
+                lines.push(`- \`${r.old.symbol_id}\` → \`${r.new.symbol_id}\` (conf ${Math.round(r.confidence * 100)}%)`);
+            });
+            lines.push('');
+        }
+
+        // Unresolved callers
+        const unresolved = findings.unresolvedCallers || (facts.findings as any).unresolved_callers?.length || 0;
+        lines.push(`## Unresolved Callers`);
+        lines.push(`- Total: ${unresolved}\n`);
+
+        // Hotspots
+        if (facts.evidence?.hotspots?.length) {
+            lines.push(`## Hotspots`);
+            (facts.evidence.hotspots as any[]).slice(0, 10).forEach((h: any) => {
+                lines.push(`- \`${h.path}\` — ${h.drift_count || h.score || ''}`);
+            });
+            lines.push('');
+        }
+
+        // Timeline
+        lines.push(`## Timeline`);
+        facts.bundle.shas.forEach((sha, idx) => {
+            lines.push(`${idx + 1}. \`${sha.substring(0, 8)}\``);
+        });
+
+        return lines.join('\n');
+    }
+
+    private makePlaceholderSymbol(id: string): SymbolInfo {
+        return {
+            id,
+            dnaId: id,
+            name: id,
+            kind: 'function',
+            signature: id,
+            location: {
+                start: { line: 0, column: 0 },
+                end: { line: 0, column: 0 }
+            }
+        };
+    }
+
+    private async appendDetailedSections(markdown: string, shas: string[]): Promise<string> {
+        try {
+            const db = getDatabaseManager().getDatabase();
+            if (!db) return markdown;
+
+            let detailedMarkdown = markdown + '\n\n---\n\n# 📊 Detailed Analysis\n\n';
+
+            // Filter out workspace SHAs for detailed commit analysis
+            const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
+
+            for (const sha of commitShas) {
+                const commitInfo = db.prepare('SELECT message, author, date FROM commits_metadata WHERE sha = ?').get(sha) as any;
+                if (!commitInfo) continue;
+
+                const shortSha = sha.substring(0, 8);
+                const title = commitInfo.message.split('\n')[0];
+                detailedMarkdown += `## Commit: ${shortSha}\n**${title}**\n\n`;
+
+                // 1. Symbol Changes
+                const symbolsStmt = db.prepare(`
+                    SELECT name, kind, path, symbol_id, change_type 
+                    FROM symbols 
+                    WHERE sha = ? 
+                    ORDER BY change_type, kind, name
+                `);
+                const symbols = symbolsStmt.all(sha) as any[];
+
+                if (symbols.length > 0) {
+                    detailedMarkdown += `### Symbol Changes\n\n`;
+                    const grouped = this.groupByChangeType(symbols);
+
+                    if (grouped.added?.length) {
+                        detailedMarkdown += `#### ➕ Added (${grouped.added.length})\n`;
+                        detailedMarkdown += this.formatSymbolList(grouped.added, db, sha, 'added');
+                    }
+                    if (grouped.modified?.length) {
+                        detailedMarkdown += `#### ✏️ Modified (${grouped.modified.length})\n`;
+                        detailedMarkdown += this.formatSymbolList(grouped.modified, db, sha, 'modified');
+                    }
+                    if (grouped.removed?.length) {
+                        detailedMarkdown += `#### ➖ Removed (${grouped.removed.length})\n`;
+                        detailedMarkdown += this.formatSymbolList(grouped.removed, db, sha, 'removed');
+                    }
+                    detailedMarkdown += '\n';
+                }
+
+                // 2. Call Graph
+                const edgesStmt = db.prepare('SELECT COUNT(*) as count FROM edges WHERE sha = ?').get(sha) as any;
+                if (edgesStmt && edgesStmt.count > 0) {
+                    detailedMarkdown += `### 🔗 Call Graph (${edgesStmt.count} connections)\n\n`;
+
+                    // Top callers
+                    const topCallers = db.prepare(`
+                        SELECT from_symbol_id, COUNT(*) as call_count
+                        FROM edges
+                        WHERE sha = ? AND change_type = 'added'
+                        GROUP BY from_symbol_id
+                        ORDER BY call_count DESC
+                        LIMIT 5
+                    `).all(sha) as any[];
+
+                    if (topCallers.length > 0) {
+                        detailedMarkdown += `**Top New Callers:**\n`;
+                        for (const caller of topCallers) {
+                            const name = this.extractSymbolName(caller.from_symbol_id);
+                            detailedMarkdown += `- \`${name}\`: ${caller.call_count} calls\n`;
+                        }
+                        detailedMarkdown += '\n';
+                    }
+                }
+
+                detailedMarkdown += '---\n\n';
+            }
+
+            return detailedMarkdown;
+        } catch (error) {
+            logError('[ReportService] Failed to append detailed sections', error);
+            return markdown; // Return original on error
+        }
+    }
+
+    private groupByChangeType(symbols: any[]): Record<string, any[]> {
+        const grouped: Record<string, any[]> = { added: [], modified: [], removed: [], signature_changed: [] };
+        for (const s of symbols) {
+            if (grouped[s.change_type]) {
+                grouped[s.change_type].push(s);
+            } else {
+                // Fallback for unknown types
+                if (!grouped[s.change_type]) grouped[s.change_type] = [];
+                grouped[s.change_type].push(s);
+            }
+        }
+        return grouped;
+    }
+
+    private formatSymbolList(symbols: any[], db: any, sha: string, type: string): string {
+        let md = '';
+        // Group by kind
+        const byKind: Record<string, any[]> = {};
+        for (const s of symbols) {
+            if (!byKind[s.kind]) byKind[s.kind] = [];
+            byKind[s.kind].push(s);
+        }
+
+        for (const [kind, items] of Object.entries(byKind)) {
+            md += `* **${kind}**:\n`;
+            for (const item of items) {
+                md += `  - \`${item.name}\` (${item.path})\n`;
+            }
+        }
+        return md;
+    }
+
+    private extractSymbolName(symbolId: string): string {
+        const parts = symbolId.split(':');
+        return parts.length > 1 ? parts[parts.length - 1] : symbolId;
     }
 }
 

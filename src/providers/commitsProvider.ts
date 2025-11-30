@@ -1,7 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
-import { getGitRoot } from '../utils/config';
 import { ActiveBundleProvider } from './activeBundleProvider';
 import { GitOperations } from '../analysis/git';
 import { BranchManager } from '../storage/branchManager';
@@ -13,9 +10,7 @@ export class CommitsProvider {
   private branchManager: BranchManager;
   private currentBranch: string | null = null;
 
-  // DEPRECATED: State moved to CockpitOrchestrator
-  // public selectedCommits = new Set<string>();
-  // public selectedFiles = new Set<string>();
+
 
   public workspaceScope: 'workspace' | 'staged' | 'unstaged' = 'workspace';
   public loadMoreOffset = 0;
@@ -30,12 +25,7 @@ export class CommitsProvider {
     this.currentBranch = null;
     this.manualCommits = new Set(context.workspaceState.get<string[]>('commit-tracker.manualCommits', []));
 
-    // DEPRECATED: State moved to CockpitOrchestrator
-    // Load initial state (no longer used - CockpitOrchestrator is single source of truth)
-    // const selectedCommits = context.workspaceState.get<string[]>('selectedCommits', []);
-    // this.selectedCommits = new Set(selectedCommits);
-    // const selectedFiles = context.workspaceState.get<string[]>('selectedFiles', []);
-    // this.selectedFiles = new Set(selectedFiles);
+
 
     this.workspaceScope = context.workspaceState.get('workspaceScope', 'workspace');
     this.loadMoreOffset = context.workspaceState.get('loadMoreOffset', 0);
@@ -195,20 +185,7 @@ export class CommitsProvider {
     this.manualCommits.add(sha);
   }
 
-  get workspaceParts(): Set<string> {
-    const { getCockpitOrchestrator } = require('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    const state = orchestrator.getState();
-    return new Set([...state.selectedStagedPaths, ...state.selectedUnstagedPaths]);
-  }
 
-  set workspaceParts(parts: Set<string>) {
-    // This setter is deprecated as files are now split into staged/unstaged
-    // For compatibility, we'll just set staged paths.
-    const { getCockpitOrchestrator } = require('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    orchestrator.updateState({ selectedStagedPaths: Array.from(parts) }, 'provider:setWorkspaceParts');
-  }
 
 
 

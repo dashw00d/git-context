@@ -1,6 +1,5 @@
-import { SymbolInfo, EdgeInfo, EdgeDelta, FileChange } from '../types';
+import { SymbolInfo, EdgeInfo, FileChange } from '../types';
 import { detectLanguage, isJSLanguage, isPHPLanguage } from '../utils/config';
-import { getDatabaseManager } from '../storage/database';
 import { GitOperations } from './git';
 import { getDefaultThreshold } from '../utils/edgeThresholds';
 

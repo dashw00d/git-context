@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import { LiveDiffTracker } from '../liveTracker';
 import { CockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { getRefactorPipeline } from '../services/pipelineFactory';

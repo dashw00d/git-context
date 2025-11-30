@@ -1,5 +1,5 @@
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
 import simpleGit, { SimpleGit } from 'simple-git';
 import { CommitInfo, FileChange } from '../types';
 import { getGitRoot } from '../utils/config';

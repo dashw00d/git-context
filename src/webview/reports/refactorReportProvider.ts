@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { logInfo, logDebug, logError } from '../../utils/logger';
+import { logDebug, logError } from '../../utils/logger';
 import { LlmAnalysis } from '../../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../../facts/types';
 import { EvidenceLink } from '../../analysis/llmAnalyst/blocks';
@@ -26,7 +26,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       vscode.window.showErrorMessage('No analysis available. Run a refactor analysis first.');
       return;
     }
-    
+
     logDebug('[WEBVIEW] showReport called with valid data');
     this._analysis = analysis;
     this._facts = facts;
@@ -54,31 +54,31 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
    */
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
-    context: vscode.WebviewViewResolveContext,
+    _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ): void {
     this._panel = webviewView as any; // Maintaining internal property name for now to minimize changes
-    
+
     // Set title if property exists (it does on WebviewView)
     webviewView.title = 'Refactor Intelligence Report';
-    
+
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [this._extensionUri]
     };
-    
+
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-    
+
     // Post initial data if available
     if (this._analysis && this._facts) {
       this._update();
     }
-    
+
     // Handle disposal
     webviewView.onDidDispose(() => {
       this._panel = undefined;
     });
-    
+
     // Setup message handling
     webviewView.webview.onDidReceiveMessage(
       async (message) => {
@@ -116,8 +116,8 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     const slimAnalysis = this._analysis ? {
       ...this._analysis,
       // Truncate markdown if too large (8000 chars ~ 2-3KB)
-      markdown: this._analysis.markdown?.length > 8000 
-        ? this._analysis.markdown.slice(0, 8000) + '... [truncated]' 
+      markdown: this._analysis.markdown?.length > 8000
+        ? this._analysis.markdown.slice(0, 8000) + '... [truncated]'
         : this._analysis.markdown,
       // Limit block items
       blocks: this._analysis.blocks.map(b => ({
@@ -130,7 +130,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     const slimFacts = this._facts ? {
       ...this._facts,
       // Remove large hybridFacts object - UI uses summaries anyway
-      hybridFacts: undefined, 
+      hybridFacts: undefined,
       evidence: {
         ...this._facts.evidence,
         // Truncate large evidence arrays if they exist in evidence object
@@ -148,14 +148,14 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     // Check size and warn/slim further if needed
     const messageStr = JSON.stringify(message);
     logDebug(`[WEBVIEW] Message size: ${messageStr.length} chars`);
-    
+
     if (messageStr.length > 1000000) {
       logError('[WEBVIEW] Message too large, further slimming needed');
       // Emergency slimming: drop markdown and more evidence
       if (message.analysis) message.analysis.markdown = '';
       if (message.facts && message.facts.evidence) {
         // Clear specific evidence fields
-        message.facts.evidence = {} as any; 
+        message.facts.evidence = {} as any;
       }
     }
 

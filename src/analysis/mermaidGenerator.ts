@@ -26,7 +26,6 @@ export class MermaidGenerator {
       nodes.add(this.formatNodeId(edge.from));
       nodes.add(this.formatNodeId(edge.to));
 
-      const style = this.getEdgeStyle(edge);
       const label = this.getEdgeLabel(edge, showConfidence);
 
       edgeDefinitions.push(`${this.formatNodeId(edge.from)} -->|"${label}"| ${this.formatNodeId(edge.to)}`);

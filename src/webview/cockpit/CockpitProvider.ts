@@ -147,14 +147,10 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         await vscode.commands.executeCommand('git-context.startLiveAnalysis');
         break;
       case 'generateReport': {
-        const mode = msg.mode as 'selection' | 'lastN' | 'staged' | 'unstaged' | undefined;
+        const mode = msg.mode as 'selection' | 'lastN' | undefined;
         const force = msg.force as boolean | undefined;
         try {
-          if (mode === 'staged') {
-            await vscode.commands.executeCommand('git-context.analyzeStagedChanges');
-          } else if (mode === 'unstaged') {
-            await vscode.commands.executeCommand('git-context.analyzeUnstagedChanges');
-          } else if (mode === 'lastN') {
+          if (mode === 'lastN') {
             // Show VS Code input box for last N commits
             const { getExtensionConfig } = await import('../../utils/config');
             const config = getExtensionConfig();
@@ -182,11 +178,8 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           } else {
             await vscode.commands.executeCommand('git-context.analyze', force);
           }
-          if (mode !== 'staged' && mode !== 'unstaged') {
-            this.orchestrator.updateState({ isAnalyzing: true, error: null }, 'ui:generateReport:start');
-          } else {
-            this.orchestrator.updateState({ isAnalyzing: false, error: null }, 'ui:generateReport:start');
-          }
+
+          this.orchestrator.updateState({ isAnalyzing: true, error: null }, 'ui:generateReport:start');
           logInfo(`[Cockpit] Triggered analysis (${mode || 'selection'})`);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -221,12 +214,6 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           'ui:setCommitsFilterScopes'
         );
         break;
-      case 'selectAllStaged':
-        await vscode.commands.executeCommand('git-context.selectAllStaged');
-        break;
-      case 'selectAllUnstaged':
-        await vscode.commands.executeCommand('git-context.selectAllUnstaged');
-        break;
       case 'clearSelection':
         await vscode.commands.executeCommand('git-context.clearSelection');
         break;
@@ -243,6 +230,9 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         if (msg.reportId) {
           await vscode.commands.executeCommand('git-context.openReport', msg.reportId);
         }
+        break;
+      case 'openSuperReport':
+        await vscode.commands.executeCommand('git-context.superReport');
         break;
       case 'regenerateReport':
         if (msg.reportId) {

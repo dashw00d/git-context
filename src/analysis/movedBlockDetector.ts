@@ -1,4 +1,4 @@
-import { Database } from 'sql.js';
+// Removed unused Database import
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
 import { getDatabaseManager } from '../storage/database';

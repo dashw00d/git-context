@@ -139,7 +139,7 @@ export class CstTimelineManager {
       }
       byVersion.get(version)!.push(path);
     }
-    
+
     // Batch query per version
     const allFacts = new Map<string, HybridFact[]>();
     for (const [version, paths] of byVersion) {
@@ -151,39 +151,9 @@ export class CstTimelineManager {
     return allFacts;
   }
 
-  /**
-   * Get prior facts for a file with workspace fallback
-   * @deprecated REMOVED - Use per-file version selection with getPriorFacts() or getPriorFactsBatchWithVersions() instead.
-   * Fallback logic masks version mismatches and prevents timeline chain analysis.
-   */
-  async getPriorFactsWithFallback(
-    filePath: string,
-    version: string
-  ): Promise<HybridFact[]> {
-    throw new Error(
-      `[CstTimeline] getPriorFactsWithFallback() has been removed. ` +
-      `Fallback logic masked timeline chain breaks. ` +
-      `Use per-file version selection with getPriorFacts() or getPriorFactsBatchWithVersions(). ` +
-      `File: ${filePath}, Version: ${version}`
-    );
-  }
 
-  /**
-   * Batch retrieve prior facts with workspace fallback
-   * @deprecated REMOVED - Use getPriorFactsBatchWithVersions() with per-file version selection instead.
-   * Fallback logic masks version mismatches and prevents timeline chain analysis.
-   */
-  async getPriorFactsBatchWithFallback(
-    filePaths: string[],
-    version: string
-  ): Promise<Map<string, HybridFact[]>> {
-    throw new Error(
-      `[CstTimeline] getPriorFactsBatchWithFallback() has been removed. ` +
-      `Fallback logic masked timeline chain breaks. ` +
-      `Use getPriorFactsBatchWithVersions() with per-file version selection. ` +
-      `Files: ${filePaths.length}, Version: ${version}`
-    );
-  }
+
+
 
   /**
    * Get facts by file hash
@@ -279,8 +249,8 @@ export class CstTimelineManager {
     }
 
     // Find matching fact in prior version (by DNA or name)
-    const priorFact = priorFacts.find(p => 
-      p.dnaId === fact.dnaId || 
+    const priorFact = priorFacts.find(p =>
+      p.dnaId === fact.dnaId ||
       (p.name === fact.name && this.sameKind(p, fact))
     );
 
@@ -296,7 +266,7 @@ export class CstTimelineManager {
 
     // Check if modified (DNA changed or location changed)
     const dnaChanged = priorFact.dnaId !== fact.dnaId;
-    const locationChanged = 
+    const locationChanged =
       priorFact.location.start.line !== fact.location.start.line ||
       priorFact.location.start.column !== fact.location.start.column;
 

@@ -1,7 +1,7 @@
 import { getDatabase } from './database';
-import { SymbolContext, EdgeContext } from '../contracts/llmContext';
+import { SymbolContext } from '../contracts/llmContext';
 import { getQdrantClient } from './qdrantClient';
-import { generateEmbedding, symbolToEmbeddingText, stringToPointId } from './embeddings';
+import { generateEmbedding, stringToPointId } from './embeddings';
 import { NamingConvention, suggestConventionName } from '../analysis/namingConventions';
 
 export interface SearchResult {
@@ -85,13 +85,13 @@ export class SearchIndex {
     if (!client) {
       throw new Error('Qdrant client not available');
     }
-    
+
     // Get project ID and ensure collection exists (handles both base and project-specific collections)
     const { getProjectId } = await import('../utils/config');
     const projectId = getProjectId();
     const collectionName = this.qdrant.getCollectionName('symbols', projectId);
     await this.qdrant.ensureCollection('symbols', projectId);
-    
+
     const queryEmbedding = await generateEmbedding(query);
 
     const results = await client.search(collectionName, {
@@ -761,7 +761,7 @@ export class SearchIndex {
     }
 
     const queryEmbedding = await generateEmbedding(query);
-    
+
     // Get project ID and ensure collection exists (handles both base and project-specific collections)
     const { getProjectId } = await import('../utils/config');
     const projectId = getProjectId();

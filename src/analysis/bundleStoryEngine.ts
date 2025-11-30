@@ -1,5 +1,4 @@
 import { CommitFacts } from './commitIndexer';
-import { WorkspaceFacts } from './workspaceIndexer';
 import { LlmAnalyst } from './llmAnalyst/runner';
 import { getQdrantClient } from '../storage/qdrantClient';
 import { generateEmbedding } from '../storage/embeddings';

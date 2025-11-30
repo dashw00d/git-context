@@ -9,7 +9,7 @@
 import * as path from 'path';
 import { getSupportedExtensions, isJSLanguage, isPHPLanguage } from '../utils/config';
 
-export type ImportPathStyle = 
+export type ImportPathStyle =
   | 'absolute'        // /src/components/Button
   | 'relative'        // ../components/Button
   | 'alias'           // @/components/Button
@@ -62,7 +62,7 @@ export function detectImportPathStyle(importPath: string): ImportPathStyle {
     if (importPath.endsWith('/index') || importPath.endsWith('/index.js') || importPath.endsWith('/index.ts')) {
       return 'index';
     }
-    
+
     // Check for extension
     const ext = path.extname(importPath);
     const supportedExts = getSupportedExtensions();
@@ -72,7 +72,7 @@ export function detectImportPathStyle(importPath: string): ImportPathStyle {
     if (!ext || supportedExts.includes(ext.slice(1))) {
       return 'no-extension';
     }
-    
+
     return 'relative';
   }
 
@@ -180,7 +180,6 @@ export function analyzeImportPathDrift(imports: ImportPathConvention[]): {
  */
 export function detectFileNamingConvention(filePath: string): FileNamingConvention {
   const filename = path.basename(filePath, path.extname(filePath));
-  const dir = path.dirname(filePath);
 
   // Analyze filename
   const hasUnderscore = filename.includes('_');
@@ -191,13 +190,14 @@ export function detectFileNamingConvention(filePath: string): FileNamingConventi
 
   // Analyze directory structure for path-based conventions
   // Check if parent directory follows a naming pattern that might influence file naming
-  const dirParts = dir.split(path.sep).filter(part => part.length > 0);
+  const dir = path.dirname(filePath);
+  const dirParts = dir.split(path.sep).filter((part: string) => part.length > 0);
   const parentDir = dirParts.length > 0 ? dirParts[dirParts.length - 1] : '';
   const hasDirUnderscore = parentDir.includes('_');
   const hasDirHyphen = parentDir.includes('-');
 
   let style: FileNamingConvention['style'];
-  
+
   if (allUpper) {
     style = 'SCREAMING_SNAKE';
   } else if (hasUnderscore && !hasUppercase) {
@@ -266,10 +266,10 @@ export function compareParameterOrders(signatures: string[]): {
   }
 
   const orders = signatures.map(sig => extractParameterOrder(sig));
-  
+
   // Find most common order (by parameter name frequency at each position)
   const positionCounts = new Map<number, Map<string, number>>();
-  
+
   for (const order of orders) {
     for (let i = 0; i < order.length; i++) {
       if (!positionCounts.has(i)) {
@@ -303,13 +303,13 @@ export function compareParameterOrders(signatures: string[]): {
   for (let i = 0; i < signatures.length; i++) {
     const order = orders[i];
     let deviation = 0;
-    
+
     for (let j = 0; j < Math.min(order.length, commonOrder.length); j++) {
       if (order[j] !== commonOrder[j]) {
         deviation++;
       }
     }
-    
+
     if (deviation > 0) {
       inconsistencies.push({
         signature: signatures[i],
@@ -344,8 +344,8 @@ export function detectReturnTypeConvention(signature: string, language: string):
   }
 
   // Check for callback pattern (function with callback parameter)
-  if (signature.includes('callback') || signature.includes('cb') || 
-      signature.match(/\(.*\)\s*=>/)) {
+  if (signature.includes('callback') || signature.includes('cb') ||
+    signature.match(/\(.*\)\s*=>/)) {
     return { type: 'callback', returnType: 'callback' };
   }
 

@@ -40,7 +40,7 @@ export async function detectIncompletenessFromFacts(
   for (const symbol of symbols) {
     const key = symbol.id;
     const filePath = symbol.filePath || 'test.ts';
-    
+
     const symbolContext: SymbolContext = {
       id: 0,
       symbol_id: key,
@@ -56,7 +56,7 @@ export async function detectIncompletenessFromFacts(
         lastSha: 'test-sha'
       });
       workingSymbols.set(key, symbolContext);
-      
+
       if (!workingSymbolsByFile.has(filePath)) {
         workingSymbolsByFile.set(filePath, []);
       }
@@ -75,7 +75,7 @@ export async function detectIncompletenessFromFacts(
         lastSha: 'test-sha'
       });
       workingSymbols.set(key, symbolContext);
-      
+
       if (!workingSymbolsByFile.has(filePath)) {
         workingSymbolsByFile.set(filePath, []);
       }
@@ -214,58 +214,5 @@ function detectSuggestedConsolidations(symbols: Array<{ id: string; zombie?: boo
   return consolidationCount;
 }
 
-/**
- * DEPRECATED: This function is no longer used - DriftDetector V2 handles divergent symbol detection.
- * Kept for reference only.
- */
-function detectDivergentSymbols(symbols: Array<{ id: string; zombie?: boolean; status: string }>): number {
-  // Detect symbols with version/duplicate indicators
-  const versionPatterns = [
-    /v\d+/i,           // V1, V2, v3
-    /version\d+/i,     // version1, version2
-    /old|new/i,        // Old/New prefix
-    /legacy/i,         // Legacy prefix
-    /\d+$/,            // Trailing numbers: validateEmail1, validateEmail2
-  ];
 
-  // Also detect similar function names that might be duplicates
-  const nameGroups = new Map<string, any[]>();
-
-  for (const symbol of symbols) {
-    // Check if symbol has version/duplicate indicators
-    const hasVersionPattern = versionPatterns.some(pattern => pattern.test(symbol.id));
-
-    if (hasVersionPattern) {
-      // This symbol is explicitly versioned/duplicated
-      continue; // Will be counted later
-    }
-
-    // Group by base name to detect implicit duplicates
-    // Only group functions/methods with similar base names
-    if (symbol.id.includes('validate') || symbol.id.includes('check') || symbol.id.includes('is')) {
-      const basePattern = symbol.id.toLowerCase().replace(/email|user|valid|ok|good/gi, '').trim();
-      if (basePattern.length > 0) {
-        if (!nameGroups.has(basePattern)) {
-          nameGroups.set(basePattern, []);
-        }
-        nameGroups.get(basePattern)!.push(symbol);
-      }
-    }
-  }
-
-  // Count symbols with explicit version patterns
-  const versionedSymbols = symbols.filter(s =>
-    versionPatterns.some(pattern => pattern.test(s.id))
-  ).length;
-
-  // Count symbols in duplicate name groups (need 2+ members)
-  let duplicateCount = 0;
-  for (const group of nameGroups.values()) {
-    if (group.length > 1) {
-      duplicateCount += group.length;
-    }
-  }
-
-  return versionedSymbols + duplicateCount;
-}
 

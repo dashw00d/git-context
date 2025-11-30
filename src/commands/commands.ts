@@ -1,15 +1,17 @@
+import * as path from 'path';
+import { spawn } from 'child_process';
 import * as vscode from 'vscode';
 import { logInfo, logError } from '../utils/logger';
 import { CommitsProvider } from '../providers/commitsProvider';
 import { ActiveBundleProvider } from '../providers/activeBundleProvider';
 import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
 import { getReportService } from '../services/reportService';
-import { getCockpitProvider } from '../extension';
 import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
 import { updateContexts, refreshCockpitState } from '../core/stateUpdaters';
 import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { makeWorkspaceSha, parseWorkspaceSha, isWorkspaceSha } from '../utils/workspace';
 import { GitOperations } from '../analysis/git';
+import { ContextExporter } from '../analysis/contextExporter';
 
 export async function registerCommands(
   context: vscode.ExtensionContext,
@@ -613,6 +615,46 @@ export async function registerCommands(
       }
     );
 
+    // Export rich context (JSON + graphs) using ContextExporter
+    const exportContextCmd = vscode.commands.registerCommand(
+      'git-context.exportContext',
+      async () => {
+        const state = orchestrator.getState();
+        const shas = state.bundleFacts?.bundle.shas || state.selectedCommitShas;
+
+        if (!shas || shas.length === 0) {
+          vscode.window.showWarningMessage('Select commits or generate a bundle before exporting context.');
+          return;
+        }
+
+        try {
+          const exporter = new ContextExporter();
+          const gitRoot = (await import('../utils/config')).getGitRoot();
+          if (!gitRoot) {
+            vscode.window.showWarningMessage('Not in a git repository. Cannot export context.');
+            return;
+          }
+
+          const defaultUri = vscode.Uri.file(path.join(gitRoot, '.git', 'commit-tracker', 'commit-context.json'));
+
+          const target = await vscode.window.showSaveDialog({
+            defaultUri,
+            filters: { 'JSON files': ['json'], 'All files': ['*'] },
+            saveLabel: 'Export Context'
+          });
+
+          if (!target) {
+            return;
+          }
+
+          const outputPath = await exporter.exportToFile(shas, target.fsPath);
+          vscode.window.showInformationMessage(`Context exported to ${outputPath}`);
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to export context: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    );
+
     // Scroll to report section (Cockpit)
     const scrollToReportSectionCmd = vscode.commands.registerCommand(
       'git-context.scrollToReportSection',
@@ -655,9 +697,6 @@ export async function registerCommands(
       'git-context.downloadWasmFiles',
       async () => {
         try {
-          const { spawn } = require('child_process');
-          const path = require('path');
-
           await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: 'Downloading required WASM files...',
@@ -752,6 +791,7 @@ export async function registerCommands(
       bundleClearCmd,
       bundleCancelCmd,
       bundleExportCmd,
+      exportContextCmd,
       scrollToReportSectionCmd,
       openSymbolHistoryCmd,
       generateLiveReportCmd,

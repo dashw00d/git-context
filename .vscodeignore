@@ -15,3 +15,4 @@ out/test/**
 out/**/*.test.js
 **/.eslintrc.json
 **/*.vsix
+.env

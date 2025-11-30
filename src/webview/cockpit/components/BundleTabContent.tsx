@@ -67,6 +67,9 @@ export const BundleTabContent: React.FC<BundleTabContentProps> = ({ state, vscod
         <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'bundleExport' })}>
           Export JSON
         </button>
+        <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'openSuperReport' })}>
+          Super Report
+        </button>
         <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'openActiveReport' })}>
           Open full report
         </button>

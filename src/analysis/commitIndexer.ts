@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { GitOperations } from './git';
-import { SnapshotManager, FileSnapshot } from './snapshotManager';
-import { StructuralDiffManager, StructuralDiffMetrics } from './structuralDiffManager';
+import { SnapshotManager } from './snapshotManager';
+import { StructuralDiffManager } from './structuralDiffManager';
 import { RiskDetector } from './heuristics';
 import { DependencyExtractor } from './dependencies';
 import { HotspotDetectorV2 } from './hotspotDetector';

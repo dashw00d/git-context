@@ -42,7 +42,7 @@ export async function registerCockpitFeatures(
   // shell.registerCommand already handles registration, but VS Code throws if ID exists.
   // Since we can't easily check existing commands API-side, we rely on single activation.
   // If this error happens, it means registerCockpitFeatures is called twice.
-  
+
   shell.registerCommand('git-context.generateLiveReport', async () => {
     const liveEngine = (orchestrator as any).liveEngine;
     if (liveEngine) {
@@ -102,10 +102,10 @@ export async function registerCockpitFeatures(
         const { getGitRoot } = await import('../utils/config');
         const gitRoot = getGitRoot();
         if (!gitRoot) return;
-        
+
         const path = await import('path');
         const fs = await import('fs');
-        
+
         let fullPath = filePath;
         if (!path.isAbsolute(filePath)) {
           fullPath = path.join(gitRoot, filePath);
@@ -125,7 +125,7 @@ export async function registerCockpitFeatures(
 
         edit.delete(uri, deleteRange);
         const applied = await vscode.workspace.applyEdit(edit);
-        
+
         if (applied) {
           vscode.window.showInformationMessage(`Applied refactor: Deleted symbol in ${filePath}`);
           // Optionally save document
@@ -270,9 +270,16 @@ export async function registerCockpitFeatures(
       const { getReportManager } = await import('../storage/reportManager');
       const reportManager = getReportManager();
       const report = reportManager.load(reportId);
-      if (report && report.facts && providers.refactorReportProvider) {
-        // Report manager stores the full analysis and facts
-        await providers.refactorReportProvider.showReport(report.analysis, report.facts);
+
+      if (report && report.analysis && report.analysis.markdown) {
+        // Open as markdown document
+        const doc = await vscode.workspace.openTextDocument({
+          content: report.analysis.markdown,
+          language: 'markdown'
+        });
+        await vscode.window.showTextDocument(doc, { preview: false });
+      } else {
+        vscode.window.showErrorMessage('Report not found or missing markdown content');
       }
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to open report: ${error}`);

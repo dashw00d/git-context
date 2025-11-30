@@ -12,7 +12,6 @@ export function convertDeltasToSnapshot(
         removed: SymbolInfo[];
         modified: SymbolDelta[];
     },
-    scopePaths: Set<string>
 ): WorkingSnapshot {
     const symbolsById = new Map<string, SymbolContext>();
     const symbolsByFile = new Map<string, SymbolContext[]>();

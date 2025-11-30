@@ -1,4 +1,4 @@
-import { LlmAnalysis, AnalysisBlock, Claim, Action, EvidenceLink } from '../analysis/llmAnalyst/blocks';
+import { LlmAnalysis, AnalysisBlock, EvidenceLink } from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
 
 /**
@@ -118,7 +118,7 @@ export class RefactorReportView {
     const blockList = document.createElement('div');
     blockList.className = 'block-list';
 
-    this.analysis.blocks.forEach((block, index) => {
+    this.analysis.blocks.forEach((block, _index) => {
       const blockItem = document.createElement('div');
       blockItem.className = `block-item ${this.selectedBlock?.id === block.id ? 'active' : ''}`;
       blockItem.onclick = () => {
@@ -238,7 +238,7 @@ export class RefactorReportView {
         title.textContent = `Claim ${index + 1}`;
         group.appendChild(title);
 
-        claim.evidence.forEach((evidence, evIndex) => {
+        claim.evidence.forEach((evidence, _evIndex) => {
           const item = document.createElement('div');
           item.className = `evidence-item ${this.selectedEvidence === evidence ? 'active' : ''}`;
           item.textContent = evidence.description;
@@ -263,7 +263,7 @@ export class RefactorReportView {
         title.textContent = `Action ${index + 1}`;
         group.appendChild(title);
 
-        action.evidence.forEach((evidence, evIndex) => {
+        action.evidence.forEach((evidence, _evIndex) => {
           const item = document.createElement('div');
           item.className = `evidence-item ${this.selectedEvidence === evidence ? 'active' : ''}`;
           item.textContent = evidence.description;

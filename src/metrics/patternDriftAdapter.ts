@@ -16,6 +16,16 @@ export interface PatternDriftMetrics {
     dominantConvention: string;
     driftPercent: number;
     driftSymbolCount: number;
+    importDrift?: {
+      dominantStyle: string;
+      driftPercent: number;
+      driftImportCount: number;
+    };
+    fileNamingDrift?: {
+      dominantStyle: string;
+      driftPercent: number;
+      driftFileCount: number;
+    };
   };
   mixedConventionFiles?: number;
 }
@@ -46,7 +56,17 @@ export function detectPatternDriftFromFacts(
     result.conventionDrift = {
       dominantConvention: drift.conventionDrift.dominantConvention,
       driftPercent: drift.conventionDrift.driftPercent,
-      driftSymbolCount: drift.conventionDrift.driftSymbols.length
+      driftSymbolCount: drift.conventionDrift.driftSymbols.length,
+      importDrift: drift.conventionDrift.importDrift ? {
+        dominantStyle: drift.conventionDrift.importDrift.dominantStyle,
+        driftPercent: drift.conventionDrift.importDrift.driftPercent,
+        driftImportCount: drift.conventionDrift.importDrift.driftImports.length
+      } : undefined,
+      fileNamingDrift: drift.conventionDrift.fileNamingDrift ? {
+        dominantStyle: drift.conventionDrift.fileNamingDrift.dominantStyle,
+        driftPercent: drift.conventionDrift.fileNamingDrift.driftPercent,
+        driftFileCount: drift.conventionDrift.fileNamingDrift.driftFiles.length
+      } : undefined
     };
   }
 
