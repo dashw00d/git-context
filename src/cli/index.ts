@@ -23,7 +23,7 @@ program
     logInfo(chalk.blue(`Analyzing last ${count} commits...`));
 
     try {
-      const { getRefactorPipeline } = await import('../extension');
+      const { getRefactorPipeline } = await import('../services/pipelineFactory');
       const { GitOperations } = await import('../analysis/git');
       const { BranchManager } = await import('../storage/branchManager');
       const { getDatabaseManager } = await import('../storage/database');
@@ -63,7 +63,7 @@ program
     logInfo(chalk.blue('Analyzing staged changes...'));
 
     try {
-      const { getRefactorPipeline } = await import('../extension');
+      const { getRefactorPipeline } = await import('../services/pipelineFactory');
       const refactorPipeline = await getRefactorPipeline();
 
       // Analyze with workspace enabled to include staged and unstaged changes
@@ -83,7 +83,7 @@ program
     logInfo(chalk.blue(`Analyzing commit ${sha}...`));
 
     try {
-      const { getRefactorPipeline } = await import('../extension');
+      const { getRefactorPipeline } = await import('../services/pipelineFactory');
       const refactorPipeline = await getRefactorPipeline();
 
       // Index and analyze the specific commit

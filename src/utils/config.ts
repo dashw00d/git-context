@@ -171,6 +171,8 @@ export function getExtensionConfig(): ExtensionConfig {
     const apiEndpoint = fileConfig?.apiEndpoint || process.env.API_ENDPOINT || getPackageJsonDefault('apiEndpoint');
     const embeddingProvider = fileConfig?.embeddingProvider || process.env.EMBEDDING_PROVIDER || getPackageJsonDefault('embeddingProvider') || apiEndpoint;
 
+    const enableCstAugmentation = fileConfig?.enableCstAugmentation ?? (process.env.ENABLE_CST_AUGMENTATION === 'true' ? true : (process.env.ENABLE_CST_AUGMENTATION === 'false' ? false : getPackageJsonDefault('enableCstAugmentation') ?? false));
+
     return {
       openRouterApiKey: fileConfig?.openRouterApiKey || process.env.OPENROUTER_API_KEY || getPackageJsonDefault('openRouterApiKey'),
       openRouterModel: fileConfig?.openRouterModel || process.env.OPENROUTER_MODEL || getPackageJsonDefault('openRouterModel'),
@@ -192,7 +194,7 @@ export function getExtensionConfig(): ExtensionConfig {
       perProjectQdrantCollections: fileConfig?.perProjectQdrantCollections || (process.env.PER_PROJECT_QDRANT_COLLECTIONS === 'true' || getPackageJsonDefault('perProjectQdrantCollections')),
       // CST tracking config
       enableCstTracking: fileConfig?.enableCstTracking ?? (process.env.ENABLE_CST_TRACKING === 'false' ? false : (process.env.ENABLE_CST_TRACKING === 'true' ? true : getPackageJsonDefault('enableCstTracking') ?? true)),
-      enableCstAugmentation: fileConfig?.enableCstAugmentation ?? (process.env.ENABLE_CST_AUGMENTATION === 'true' ? true : (process.env.ENABLE_CST_AUGMENTATION === 'false' ? false : getPackageJsonDefault('enableCstAugmentation') ?? false)),
+      enableCstAugmentation,
       cstLanguages: fileConfig?.cstLanguages || (process.env.CST_LANGUAGES ? process.env.CST_LANGUAGES.split(',') : getPackageJsonDefault('cstLanguages') || ['markdown', 'json', 'yaml', 'css']),
       // Snapshot cache config
       snapshotCacheEnabled: fileConfig?.snapshotCacheEnabled ?? (process.env.SNAPSHOT_CACHE_ENABLED === 'false' ? false : (process.env.SNAPSHOT_CACHE_ENABLED === 'true' ? true : getPackageJsonDefault('snapshotCacheEnabled') ?? true)),

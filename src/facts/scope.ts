@@ -154,7 +154,8 @@ async function computeBlastRadiusNeighbors(
 export async function computeScope(
   commitShas: string[],
   workspaceParts?: Set<'staged' | 'unstaged'>,
-  explicitTimeline?: string[]
+  explicitTimeline?: string[],
+  liveOverridePaths?: Iterable<string>
 ): Promise<ScopeSet> {
   const { ensureDatabaseInitialized } = await import('../storage/database');
 
@@ -203,6 +204,17 @@ export async function computeScope(
   } else {
     // Default: include all working changes
     workingChanges.forEach(f => scope.workingChanged.add(f.path));
+  }
+
+  // Add live overrides to working changes
+  if (liveOverridePaths) {
+    for (const path of liveOverridePaths) {
+      scope.workingChanged.add(path);
+      // If checking unstaged, treat live overrides as unstaged
+      if (!workspaceParts || workspaceParts.has('unstaged')) {
+        scope.unstagedFiles.add(path);
+      }
+    }
   }
 
   // 3. Blast-radius neighbors (top N by confidence)

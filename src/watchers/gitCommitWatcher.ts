@@ -1,15 +1,21 @@
+import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { debounce } from 'lodash';
 import { getGitRoot } from '../utils/config';
-import { getRefactorPipeline } from '../extension';
+import { RefactorPipeline } from '../analysis/refactorPipeline';
+import { CockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { GitOperations } from '../analysis/git';
 import { logError, logDebug } from '../utils/logger';
 
-export class GitCommitWatcher {
+export class GitCommitWatcher implements vscode.Disposable {
   private watcher: fs.FSWatcher | null = null;
 
-  constructor(private onCommit?: (sha: string) => Promise<void>) { }
+  constructor(
+    private pipeline: RefactorPipeline,
+    private orchestrator: CockpitOrchestrator,
+    private onCommit?: (sha: string) => Promise<void>
+  ) { }
 
   async start(): Promise<void> {
     const gitRoot = getGitRoot();
@@ -32,11 +38,10 @@ export class GitCommitWatcher {
     try {
       // No migration needed in new architecture - workspace SHA is separate
       // Just re-index the new commit
-      const pipeline = await getRefactorPipeline();
       const git = new GitOperations();
       const newSha = await git.getHeadSha();
 
-      await pipeline.indexCommits([newSha]);
+      await this.pipeline.indexCommits([newSha]);
 
       logDebug(`[GitCommitWatcher] Detected and indexed new commit ${newSha.substring(0, 8)}`);
       if (this.onCommit) {

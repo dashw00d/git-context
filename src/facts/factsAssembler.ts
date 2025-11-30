@@ -31,6 +31,7 @@ export async function buildRefactorBundleFacts(
     working?: WorkingSnapshot;
     drift?: DriftFindings;
     legacy?: LegacyAuditResult;
+    hotspots?: any[];
     timeline?: string[];
     movedLineage?: Array<{
       symbolId: string;
@@ -43,9 +44,9 @@ export async function buildRefactorBundleFacts(
 ): Promise<RefactorBundleFacts> {
   // Log inputs for diagnostics
   const intendedSize = options?.intended?.size || 0;
-  const hybridFactsCount = options?.scope ? await getHybridFactsCount(options.scope, options.commitShas?.[options.commitShas.length - 1] || 'workspace') : 0;
+  const hybridFactsCount = options?.scope ? await getHybridFactsCount(options.scope, options.commitShas?.[0] || 'HEAD') : 0;
   console.log(`[BundleFacts] Inputs: intended=${intendedSize}, hybridFacts=${hybridFactsCount} files, working.symbols=${options?.working?.symbolsById.size || 0}`);
-  
+
   // Validation warning
   if (intendedSize === 0) {
     console.warn(`[BundleFacts] WARNING: intended.present === 0. Consider using --enable-cst to populate intended state.`);
@@ -58,7 +59,8 @@ export async function buildRefactorBundleFacts(
       options.intended,
       options.working,
       options.drift,
-      options.legacy
+      options.legacy,
+      options.hotspots
     );
     // Add timeline and movedLineage if provided
     if (options.timeline) {
@@ -101,8 +103,8 @@ export async function buildRefactorBundleFacts(
     }
   }
 
-  const oldestSha = commitFacts.length > 0 ? commitFacts[0].sha : 'unknown';
-  const newestSha = commitFacts.length > 0 ? commitFacts[commitFacts.length - 1].sha : 'unknown';
+  const newestSha = commitFacts.length > 0 ? commitFacts[0].sha : 'unknown';
+  const oldestSha = commitFacts.length > 0 ? commitFacts[commitFacts.length - 1].sha : 'unknown';
 
   // Calculate confidence score based on available inputs (0.2 per input)
   const confidenceInputs = [
@@ -131,22 +133,22 @@ export async function buildRefactorBundleFacts(
     },
     intended: options?.intended
       ? (() => {
-          const counts = calculateIntendedCounts(options.intended);
-          // Heuristics: use hotspots for renamed detection (stable DNA, name change)
-          if (counts.renamed === 0 && options.working && options.intended.size > 0) {
-            const renamedFromHotspots = detectRenamedFromHotspots(options.intended, options.working);
-            if (renamedFromHotspots > 0) {
-              console.log(`[BundleFacts] Detected ${renamedFromHotspots} renamed symbols from hotspots (stable DNA, name change)`);
-              counts.renamed = renamedFromHotspots;
-            }
+        const counts = calculateIntendedCounts(options.intended);
+        // Heuristics: use hotspots for renamed detection (stable DNA, name change)
+        if (counts.renamed === 0 && options.working && options.intended.size > 0) {
+          const renamedFromHotspots = detectRenamedFromHotspots(options.intended, options.working);
+          if (renamedFromHotspots > 0) {
+            console.log(`[BundleFacts] Detected ${renamedFromHotspots} renamed symbols from hotspots (stable DNA, name change)`);
+            counts.renamed = renamedFromHotspots;
           }
-          return counts;
-        })()
+        }
+        return counts;
+      })()
       : {
-          present: totalSymbols,
-          absent: 0,
-          renamed: 0
-        },
+        present: totalSymbols,
+        absent: 0,
+        renamed: 0
+      },
     working: {
       symbols: totalSymbols,
       edges: totalEdges
@@ -231,15 +233,16 @@ export async function assembleFacts(
   intended: Map<string, IntendedState>,
   working: WorkingSnapshot,
   drift: DriftFindings,
-  legacy: LegacyAuditResult
+  legacy: LegacyAuditResult,
+  hotspots?: any[]
 ): Promise<RefactorBundleFacts> {
 
   // Calculate counts and lists
   const intendedCounts = calculateIntendedCounts(intended);
   const intendedLists = getIntendedLists(intended);
   const workingLists = getWorkingLists(working);
-  const oldestSha = commitShas.length > 0 ? commitShas[0] : 'unknown';
-  const newestSha = commitShas.length > 0 ? commitShas[commitShas.length - 1] : 'unknown';
+  const newestSha = commitShas.length > 0 ? commitShas[0] : 'unknown';
+  const oldestSha = commitShas.length > 0 ? commitShas[commitShas.length - 1] : 'unknown';
 
   // Collect hybrid facts for bundle
   const hybridFactsMap: Record<string, HybridFact[]> = {};
@@ -249,7 +252,7 @@ export async function assembleFacts(
 
   if (enableCst || enableAugment) {
     const timelineManager = getCstTimelineManager();
-    
+
     // Build version map for per-file version selection
     const versionMap = new Map<string, string>();
     for (const filePath of scope.allPaths) {
@@ -259,13 +262,14 @@ export async function assembleFacts(
       const isCstOnly = isCstOnlyLanguage(language);
       if (!isCstOnly && !enableAugment) continue;
 
+      const versionFromTimeline = scope.fileVersionMap?.get(filePath);
       let version: string;
       if (scope.unstagedFiles?.has(filePath)) {
         version = 'workspace-unstaged';
       } else if (scope.stagedFiles?.has(filePath)) {
         version = 'workspace-staged';
-      } else if (scope.commitFiles.has(filePath)) {
-        version = newestSha !== 'unknown' ? newestSha : 'HEAD';
+      } else if (versionFromTimeline) {
+        version = versionFromTimeline;
       } else {
         version = newestSha !== 'unknown' ? newestSha : 'HEAD';
       }
@@ -333,7 +337,7 @@ export async function assembleFacts(
       "bundle.shas": commitShas,
       "scope.files": Array.from(scope.commitFiles),
       "scope.blastRadius": Array.from(scope.blastRadius),
-      
+
       // Timeline chain evidence
       "timeline.chain": {
         unstaged: scope.unstagedFiles?.size || 0,
@@ -341,7 +345,7 @@ export async function assembleFacts(
         head: scope.commitFiles.size > 0 ? 'HEAD' : null,
         commits: commitShas.length
       },
-      
+
       // Hybrid facts breakdown by version
       "hybrid.unstaged": {
         total: Object.entries(hybridFactsMap).filter(([path]) => scope.unstagedFiles?.has(path)).reduce((sum, [, facts]) => sum + facts.length, 0),
@@ -395,6 +399,9 @@ export async function assembleFacts(
       "findings.patternDrift.mixedConventionFiles": drift.mixedConventionFiles || undefined,
 
       "findings.unresolvedCallers": drift.unresolved_callers || undefined,
+
+      // Hotspots evidence
+      hotspots: hotspots,
 
       // Legacy fields for backward compatibility
       missing: drift.missing_symbols.map(m => ({ symbol_id: m.symbol_id, expected: m.expected })),
@@ -503,13 +510,13 @@ export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapsho
 
   // Fallback: detect by analyzing files with multiple conventions
   const fileConventions = new Map<string, Set<string>>();
-  
+
   for (const [symbolId, symbol] of working.symbolsById) {
     const filePath = symbolId.split(':')[0];
     if (!fileConventions.has(filePath)) {
       fileConventions.set(filePath, new Set());
     }
-    
+
     // Simple convention detection based on naming patterns
     const name = symbol.name;
     if (/^[a-z]/.test(name)) {
@@ -556,7 +563,7 @@ export function detectOldNamespaces(working: WorkingSnapshot, intended: Map<stri
     const symbolName = symbol.name;
 
     // Check if path or name matches old namespace patterns
-    const matchesOldPattern = oldNamespacePatterns.some(pattern => 
+    const matchesOldPattern = oldNamespacePatterns.some(pattern =>
       pattern.test(filePath) || pattern.test(symbolName)
     );
 
@@ -592,9 +599,9 @@ function computeBasicDeadSymbols(working: WorkingSnapshot, intended: Map<string,
 
     // Include symbols that are exported or explicitly intended present
     if (symbol.kind === 'export' ||
-        (intendedState && intendedState.expect === 'present') ||
-        symbol.name.startsWith('main') ||
-        symbol.name.startsWith('index')) {
+      (intendedState && intendedState.expect === 'present') ||
+      symbol.name.startsWith('main') ||
+      symbol.name.startsWith('index')) {
       reachable.add(symbolId);
       queue.push(symbolId);
     }
@@ -639,9 +646,9 @@ function detectRenamedFromHotspots(
 ): number {
   const { getDatabaseManager } = require('../storage/database');
   const db = getDatabaseManager().getDatabase();
-  
+
   let renamedCount = 0;
-  
+
   // Check DNA continuity - symbols with same DNA but different names (indicates rename)
   // Query symbol_versions for DNA matches with different names
   const dnaStmt = db.prepare(`
@@ -655,68 +662,73 @@ function detectRenamedFromHotspots(
     AND sv2.dna_id IS NOT NULL
     LIMIT 50
   `);
-  
+
   try {
     const dnaMatches = dnaStmt.all() as any[];
     const renamedSet = new Set<string>();
-    
+
     for (const match of dnaMatches) {
       // Check if both symbols are in intended map
       const id1InIntended = intended.has(match.id1);
       const id2InIntended = intended.has(match.id2);
-      
+
       if (id1InIntended && id2InIntended) {
         // Both are in intended - likely a rename
         renamedSet.add(match.id1);
         renamedSet.add(match.id2);
       }
     }
-    
+
     renamedCount = renamedSet.size;
   } catch (error) {
     // Silently fail if query doesn't work
     console.debug(`[BundleFacts] Could not detect renamed from hotspots: ${error}`);
   }
-  
+
   return renamedCount;
 }
 
 /**
  * Get hybrid facts count for logging
  */
-async function getHybridFactsCount(scope: ScopeSet, version: string): Promise<number> {
+async function getHybridFactsCount(scope: ScopeSet, defaultVersion: string): Promise<number> {
   const config = getExtensionConfig();
   const enableCst = config.enableCstTracking ?? true;
   const enableAugment = config.enableCstAugmentation ?? false;
-  
+
   if (!enableCst && !enableAugment) {
     return 0;
   }
-  
+
   const timelineManager = getCstTimelineManager();
-  
+
   // Build version map for per-file version selection
   const versionMap = new Map<string, string>();
   for (const filePath of scope.allPaths) {
     const language = detectLanguage(filePath);
     if (!language) continue;
-    
+
     const isCstOnly = isCstOnlyLanguage(language);
     if (!isCstOnly && !enableAugment) continue;
-    
+
+    const versionFromTimeline = scope.fileVersionMap?.get(filePath);
     let fileVersion: string;
     if (scope.unstagedFiles?.has(filePath)) {
       fileVersion = 'workspace-unstaged';
     } else if (scope.stagedFiles?.has(filePath)) {
       fileVersion = 'workspace-staged';
-    } else if (scope.commitFiles.has(filePath)) {
-      fileVersion = version;
+    } else if (versionFromTimeline) {
+      fileVersion = versionFromTimeline;
     } else {
-      fileVersion = version;
+      fileVersion = defaultVersion || 'HEAD';
     }
     versionMap.set(filePath, fileVersion);
   }
-  
+
+  if (versionMap.size > 0) {
+    const firstEntry = Array.from(versionMap.entries())[0];
+  }
+
   // Batch query with per-file versions
   const allFacts = await timelineManager.getPriorFactsBatchWithVersions(versionMap);
   return allFacts.size;

@@ -1,0 +1,12 @@
+- Targeted code snippets: Small windows (6–12 lines) around top missing/zombie/legacy symbols, hotspots, and unresolved callers, tagged with version (workspace-unstaged/staged/sha). Cap count (e.g., 20) and include start/end lines.
+- Mini diffs: For the same top items, include a tiny diff hunk (e.g., git show -U3) instead of full files. Useful for renamed/moved code to show what changed.
+- Symbol shapes: Add signature + short body hash and lines-of-code for top symbols so the model can distinguish overloads/duplicates and reason about size/complexity without full text.
+- Callers/callees: For unresolved callers or diverged symbols, include 3–5 caller/callee IDs (paths + line) so the model sees usage context.
+- Hotspot rationale: Include churn/versions touched and last-modified sha/author per hotspot symbol/file; helps the LLM prioritize risk without guessing.
+- Timeline slices: Provide a short timeline summary per file with versions present/absent and “changed in X commits” counts to ground intent/drift reasoning.
+- Scope + filters: Explicitly list what’s excluded (ignored paths, languages, test-only files) so the model doesn’t assume missing code is a bug.
+- Test signals: If tests ran, pass failing test names/file paths and error snippets; even just “no tests run” is helpful context.
+- Config knobs: Surface relevant config (maxInputChars, tokensPerStep, feature flags like enableCst/enableAugment/noEmbeddings) so the model knows what data is absent by design.
+- Legacy mapping: For replacedLeftovers, include a simple mapping {oldSymbol -> newSymbol} with files/lines, so the model can spot stragglers.
+- File archetypes: Tag files with type (test, story, schema, migration, config) via path heuristics so the model doesn’t over-weight low-signal files.
+- Error logs: If any pipeline step emitted errors/warnings (parser misses, missing WASM, db gaps), include the top few to explain holes in the data.

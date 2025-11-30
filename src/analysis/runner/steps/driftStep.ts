@@ -65,16 +65,17 @@ export function createDriftStep(): PipelineStep {
 
           // Build version map based on scope membership
           const versionMap = new Map<string, string>();
-          const newestSha = state.selectedCommitShas?.[state.selectedCommitShas.length - 1];
+          const newestSha = state.selectedCommitShas?.[0];
           
           for (const filePath of eligibleFiles) {
+            const versionFromTimeline = state.scope.fileVersionMap?.get(filePath);
             let version: string;
             if (state.scope.unstagedFiles?.has(filePath)) {
               version = 'workspace-unstaged';
             } else if (state.scope.stagedFiles?.has(filePath)) {
               version = 'workspace-staged';
-            } else if (state.scope.commitFiles?.has(filePath)) {
-              version = newestSha || 'HEAD';
+            } else if (versionFromTimeline) {
+              version = versionFromTimeline;
             } else {
               version = newestSha || 'HEAD';
             }

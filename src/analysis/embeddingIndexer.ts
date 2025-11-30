@@ -6,6 +6,7 @@ import { runWithConcurrency } from './runner/concurrency';
 import { getDatabaseManager } from '../storage/database';
 import { getDatabaseService, DatabaseService } from '../services/databaseService';
 import { getProjectId } from '../utils/config';
+import type { EmbeddingMetrics } from './runner/pipelineMetrics';
 
 export class EmbeddingIndexer {
   constructor(
@@ -16,42 +17,56 @@ export class EmbeddingIndexer {
   /**
    * Index both commit and symbol shards into Qdrant
    */
-  async indexCommits(commitFacts: CommitFacts[]): Promise<void> {
+  async indexCommits(commitFacts: CommitFacts[]): Promise<EmbeddingMetrics> {
+    const metrics: EmbeddingMetrics = {
+      commitCount: commitFacts.length,
+      commitShardCount: 0,
+      symbolShardCount: 0,
+      themeShardCount: 0,
+      durationMs: 0
+    };
+    const startTime = Date.now();
+
     const qdrant = getQdrantClient();
     if (!(await qdrant.isEnabled())) {
       logDebug('[EmbeddingIndexer] Qdrant not enabled, skipping');
-      return;
+      return { ...metrics, skipped: true, reason: 'qdrant_disabled' };
     }
 
     await qdrant.ensureCollections();
     const client = await qdrant.getClient();
-    if (!client) return;
+    if (!client) {
+      return { ...metrics, skipped: true, reason: 'client_unavailable' };
+    }
 
     logInfo(`[EmbeddingIndexer] Indexing ${commitFacts.length} commits...`);
 
     // Index commit shards
-    await this.indexCommitShards(commitFacts, client);
+    metrics.commitShardCount = await this.indexCommitShards(commitFacts, client);
 
     // Index symbol shards
-    await this.indexSymbolShards(commitFacts, client);
+    metrics.symbolShardCount = await this.indexSymbolShards(commitFacts, client);
 
     // Index theme shards (new semantic memory layer)
-    await this.indexThemeShards(commitFacts, client);
+    metrics.themeShardCount = await this.indexThemeShards(commitFacts, client);
 
     logInfo(`[EmbeddingIndexer] Indexing complete`);
+    metrics.durationMs = Date.now() - startTime;
+    return metrics;
   }
 
   /**
    * Index commit-level shards
    */
-  private async indexCommitShards(commitFacts: CommitFacts[], client: any): Promise<void> {
+  private async indexCommitShards(commitFacts: CommitFacts[], client: any): Promise<number> {
     const qdrant = getQdrantClient();
     const projectId = (await getProjectId()) || 'unknown'; // Get unique project identifier
     const collectionName = qdrant.getCollectionName('commits', projectId);
-    
+
     // Ensure collection exists (handles both base and project-specific collections)
     await qdrant.ensureCollection('commits', projectId);
 
+    let processed = 0;
     await runWithConcurrency(commitFacts, 10, async (facts) => {
       const shard = await this.buildCommitShard(facts, projectId);
       const embedding = await generateEmbedding(shard.text);
@@ -66,20 +81,33 @@ export class EmbeddingIndexer {
       });
 
       logDebug(`[EmbeddingIndexer] Indexed commit ${facts.sha.substring(0, 8)} to ${collectionName}`);
+      processed += 1;
     });
+
+    // Verify indexing
+    const info = await client.getCollection(collectionName);
+    const pointsCount = (info as any).points_count ?? (info as any).pointsCount ?? 0;
+
+    if (pointsCount === 0 && processed > 0) {
+      logInfo(`[EmbeddingIndexer] WARNING: Indexed ${processed} commits but collection count is 0`);
+    } else {
+      logDebug(`[EmbeddingIndexer] Verified collection ${collectionName} has ${pointsCount} points`);
+    }
+
+    return processed;
   }
 
   /**
    * Index symbol-level shards (for fine-grained retrieval)
    */
-  private async indexSymbolShards(commitFacts: CommitFacts[], client: any): Promise<void> {
+  private async indexSymbolShards(commitFacts: CommitFacts[], client: any): Promise<number> {
     const qdrant = getQdrantClient();
     const projectId = (await getProjectId()) || 'unknown'; // Get unique project identifier
     const collectionName = qdrant.getCollectionName('symbols', projectId);
-    
+
     // Ensure collection exists (handles both base and project-specific collections)
     await qdrant.ensureCollection('symbols', projectId);
-    
+
     const symbolShards = [];
 
     // Gather symbol history from DB
@@ -106,6 +134,8 @@ export class EmbeddingIndexer {
         }]
       });
     });
+
+    return symbolShards.length;
   }
 
   /**
@@ -233,14 +263,14 @@ export class EmbeddingIndexer {
   /**
    * Index theme shards (aggregated patterns)
    */
-  private async indexThemeShards(commitFacts: CommitFacts[], client: any): Promise<void> {
+  private async indexThemeShards(commitFacts: CommitFacts[], client: any): Promise<number> {
     const qdrant = getQdrantClient();
     const projectId = (await getProjectId()) || 'unknown';
     const collectionName = qdrant.getCollectionName('patterns', projectId);
-    
+
     // Ensure collection exists (handles both base and project-specific collections)
     await qdrant.ensureCollection('patterns', projectId);
-    
+
     const themeShards: { text: string; metadata: any }[] = [];
 
     // Aggregate by inferred theme (risks + hotspots -> theme_id)
@@ -303,6 +333,8 @@ export class EmbeddingIndexer {
         });
       });
     }
+
+    return themeShards.length;
   }
 
   private inferThemeId(risks: string[], hotspots: string[]): string {

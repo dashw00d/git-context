@@ -16,10 +16,23 @@ export function createStoryStep(
 
       const llmOutputs = await storyEngine.generateStory(
         state.bundleFacts,
-        state.commitFacts || []
+        state.commitFacts || [],
+        state.history
       );
 
       state.llmOutputs = llmOutputs;
+
+      const metadata = llmOutputs?.llmAnalysis?.metadata;
+      if (metadata) {
+        state.llmMetrics = {
+          durationMs: metadata.durationMs ?? 0,
+          totalTokens: metadata.totalTokens ?? 0,
+          totalCalls: metadata.totalCalls ?? 0,
+          healthScore: metadata.healthScore,
+          validatedEvidenceCount: metadata.validatedEvidenceCount,
+          skipped: false
+        };
+      }
     }
   };
 }

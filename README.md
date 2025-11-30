@@ -181,8 +181,8 @@ For each commit, the pipeline:
 7. **Stores results** in local database
 
 ### Useful Testing Commands
- - `npx ts-node benchmarks/pipeline_diagnostics.ts --commits=6 --include-workspace --reset-db`
- - `npx ts-node benchmarks/pipeline_diagnostics.ts --commits=3 --include-workspace --reset-db --full-report`
+ - `npx ts-node benchmarks/pipeline_diagnostics.ts --commit-count=6 --include-workspace --reset-db`
+ - `npx ts-node benchmarks/pipeline_diagnostics.ts --commit-count=3 --include-workspace --reset-db --full-report`
 
 ## Supported Languages
 

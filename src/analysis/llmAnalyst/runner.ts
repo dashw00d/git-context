@@ -2,7 +2,9 @@ import { RefactorBundleFacts } from '../../facts/types';
 import { LlmAnalysis, AnalysisBlock, AnalysisBlockUtils, Claim, Action } from './blocks';
 import { PROMPT_INTENT_AND_STORY, PROMPT_DRIFT_VERIFICATION, PROMPT_CLEANUP_PLAN, PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT, buildTimelineSummary } from '../../llm/prompts';
 import { getLLMClient } from '../../llm/openrouter';
-import { getExtensionConfig } from '../../utils/config';
+import { getExtensionConfig, getGitRoot } from '../../utils/config';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * LLM Analyst - Runs sequential analysis passes over refactor bundle facts
@@ -37,14 +39,24 @@ export class LlmAnalyst {
     const config = getExtensionConfig();
     this.maxInputChars = (config as any).maxInputChars || 1000000;
 
+    // Build a slimmed payload before size checks to keep prompts lean
+    const slimFacts = this.buildSlimFacts(facts);
+
     // Summarize facts if too large (top 20 symbols by impact, aggregate edges)
-    const factsJson = JSON.stringify(facts);
+    const factsJson = JSON.stringify(slimFacts);
     const factsSize = factsJson.length;
-    let processedFacts = facts;
+    let processedFacts = slimFacts;
     
     if (factsSize > this.maxInputChars) {
       console.log(`LLM Analyst: Facts size (${factsSize} chars) exceeds max (${this.maxInputChars}), summarizing...`);
-      processedFacts = this.summarizeFacts(facts);
+      processedFacts = this.summarizeFacts(slimFacts);
+      
+      // Check if still too large, apply deep summarization
+      if (JSON.stringify(processedFacts).length > this.maxInputChars * 0.8) {
+        console.log('LLM Analyst: Still too large, applying deep summarization...');
+        processedFacts = this.deepSummarize(processedFacts);
+      }
+      
       const summarizedSize = JSON.stringify(processedFacts).length;
       console.log(`LLM Analyst: Summarized to ${summarizedSize} chars (${((1 - summarizedSize / factsSize) * 100).toFixed(1)}% reduction)`);
     }
@@ -72,7 +84,7 @@ export class LlmAnalyst {
       let discoveryBlock: AnalysisBlock | undefined;
       if (rawFeed) {
         console.log('LLM Analyst: Running pattern discovery...');
-        const discoveryResult = await this.discoverPatterns(rawFeed, facts);
+        const discoveryResult = await this.discoverPatterns(rawFeed, processedFacts);
         discoveryBlock = this.createDiscoveryBlock(discoveryResult, facts);
         totalCalls += 3; // Discover, Quantify, Plan
         totalTokens += discoveryResult.metadata.totalTokens;
@@ -115,6 +127,7 @@ export class LlmAnalyst {
         metadata: {
           totalCalls,
           totalTokens,
+          durationMs: performanceMetrics.duration,
           model: getExtensionConfig().openRouterModel,
           timestamp: new Date().toISOString(),
           healthScore,
@@ -155,6 +168,7 @@ export class LlmAnalyst {
         metadata: {
           totalCalls: 1,
           totalTokens: 0,
+          durationMs: Date.now() - startTime,
           model: 'unknown',
           timestamp: new Date().toISOString(),
           healthScore
@@ -180,8 +194,14 @@ export class LlmAnalyst {
 
       // Turn 1: Discover Patterns
       console.log('LLM Analyst: Discovering emergent patterns...');
+      
+      // Use curated discovery feed if available (efficient), otherwise fallback to raw feed (expensive)
+      const discoveryInput = (facts as any).discoveryFeed 
+        ? `DISCOVERY FEED JSON:\n${JSON.stringify((facts as any).discoveryFeed)}`
+        : `RAW FEED JSON:\n${JSON.stringify(rawFeed)}`;
+      
       const discoverPromptTemplate = this.getPrompt('discover', PROMPT_DISCOVER);
-      const discoverPrompt = `${SYSTEM_PROMPT}\n\nRAW FEED JSON:\n${JSON.stringify(rawFeed)}${knownFilesList}${discoverPromptTemplate}`;
+      const discoverPrompt = `${SYSTEM_PROMPT}\n\n${discoveryInput}${knownFilesList}${discoverPromptTemplate}`;
       const discovery = await this.callLLM(discoverPrompt, 'discover');
       totalTokens += this.estimateTokens(discoverPrompt);
 
@@ -839,6 +859,243 @@ export class LlmAnalyst {
   /**
    * Summarize facts: top 20 symbols by impact, aggregate edges
    */
+  private buildSlimFacts(facts: RefactorBundleFacts): RefactorBundleFacts {
+    const caps = {
+      hotspots: 50,
+      hybridDrifts: 50,
+      missing: 50,
+      zombies: 50,
+      divergent: 50,
+      moved: 50,
+      hybridFiles: 50,
+      discoveryTotal: 30
+    };
+
+    const clone: any = JSON.parse(JSON.stringify(facts));
+
+    const hybridUnstaged = clone.evidence?.['hybrid.unstaged']?.files || [];
+    const hybridStaged = clone.evidence?.['hybrid.staged']?.files || [];
+
+    const detectOrigin = (file?: string): string | undefined => {
+      if (!file) return undefined;
+      if (hybridUnstaged.includes(file)) return 'workspace-unstaged';
+      if (hybridStaged.includes(file)) return 'workspace-staged';
+      return 'commit';
+    };
+
+    const getSnippet = (file?: string, line?: number): string | undefined => {
+      if (!file) return undefined;
+      try {
+        const root = getGitRoot();
+        if (!root) return undefined;
+        const full = path.join(root, file);
+        const content = fs.readFileSync(full, 'utf8');
+        const lines = content.split(/\r?\n/);
+        const start = Math.max(0, (line ? line - 3 : 0));
+        const end = Math.min(lines.length, line ? line + 2 : 8);
+        return lines.slice(start, end).join('\n').trim();
+      } catch {
+        return undefined;
+      }
+    };
+
+    // Remove heavy working evidence
+    if (clone.evidence) {
+      delete clone.evidence['working.symbols'];
+      delete clone.evidence['working.edges'];
+    }
+
+    const parseSymbolId = (symbolId?: string) => {
+      if (!symbolId) return { file: undefined, symbol: undefined };
+      const [file, ...rest] = symbolId.split(':');
+      return { file, symbol: rest.join(':') || undefined };
+    };
+
+    const normalizeList = (items?: any[], limit?: number) => {
+      if (!Array.isArray(items)) return [];
+      const seen = new Set<string>();
+      const normalized: any[] = [];
+      for (const item of items) {
+        const parsed = parseSymbolId(item.symbol_id || item.symbolId);
+        const key = `${parsed.file}:${parsed.symbol}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const line =
+          item.line ||
+          item.loc?.start?.line ||
+          item.loc_pre?.start?.line ||
+          item.loc_post?.start?.line;
+        normalized.push({
+          ...item,
+          file: parsed.file,
+          symbol: parsed.symbol,
+          origin: item.origin || detectOrigin(parsed.file) || item.origin,
+          snippet: getSnippet(parsed.file, line),
+          line
+        });
+      }
+      normalized.sort((a, b) => {
+        const fa = a.file || '';
+        const fb = b.file || '';
+        if (fa === fb) return (a.symbol || '').localeCompare(b.symbol || '');
+        return fa.localeCompare(fb);
+      });
+      return typeof limit === 'number' ? normalized.slice(0, limit) : normalized;
+    };
+
+    // Capture hybrid facts summary and drop raw facts (include sample names)
+    if (facts.hybridFacts) {
+      const hybridFacts = facts.hybridFacts as Record<string, any[]>;
+      const fileCounts = Object.entries(hybridFacts).map(([file, list]) => ({ file, count: list.length }));
+      fileCounts.sort((a, b) => b.count - a.count);
+
+      const topFiles = fileCounts.slice(0, caps.hybridFiles);
+      const totalFacts = fileCounts.reduce((sum, f) => sum + f.count, 0);
+      const sampleFacts = topFiles.map(({ file }) => {
+        const sample = (hybridFacts[file] || []).slice(0, 3).map((f: any) => f?.name || f?.id || 'unknown');
+        return { file, sample };
+      });
+
+      clone.hybridSummary = {
+        totalFacts,
+        fileCount: fileCounts.length,
+        topFiles,
+        sampleFacts
+      };
+      delete clone.hybridFacts;
+    }
+
+    // Cap incompleteness evidence arrays
+    if (clone.evidence) {
+      clone.evidence['findings.incompleteness.missing'] = normalizeList(
+        clone.evidence['findings.incompleteness.missing'],
+        caps.missing
+      );
+      clone.evidence['findings.incompleteness.zombies'] = normalizeList(
+        clone.evidence['findings.incompleteness.zombies'],
+        caps.zombies
+      );
+      clone.evidence['findings.incompleteness.divergent'] = normalizeList(
+        clone.evidence['findings.incompleteness.divergent'],
+        caps.divergent
+      );
+    }
+
+    // Targeted evidence summary for the LLM (keeps only concise lists)
+    const evidenceSummary: Record<string, any> = {};
+    const take = (key: string, limit: number) =>
+      Array.isArray(clone.evidence?.[key]) ? clone.evidence[key].slice(0, limit) : undefined;
+
+    const missing = take('findings.incompleteness.missing', caps.missing);
+    const zombies = take('findings.incompleteness.zombies', caps.zombies);
+    const divergent = take('findings.incompleteness.divergent', caps.divergent);
+    
+    // Process hybrid drifts with snippets
+    const hybridDrifts = Array.isArray(clone.findings?.hybridDrifts)
+      ? clone.findings.hybridDrifts.slice(0, caps.hybridDrifts).map((d: any) => {
+          const file = d.fact?.filePath || d.fact?.path || d.file;
+          const line = d.fact?.line || d.line || 0;
+          return {
+            ...d,
+            file,
+            name: d.fact?.name || d.fact?.id || d.name,
+            origin: detectOrigin(file),
+            snippet: getSnippet(file, line)
+          };
+        })
+      : undefined;
+
+    const addDisplayNames = (items?: any[]) =>
+      items?.map(item => {
+        const parsed = parseSymbolId(item.symbol_id);
+        return { ...item, file: parsed.file, symbol: parsed.symbol };
+      });
+
+    if (missing?.length) evidenceSummary.missing = addDisplayNames(missing);
+    if (zombies?.length) evidenceSummary.zombies = addDisplayNames(zombies);
+    if (divergent?.length) evidenceSummary.divergent = addDisplayNames(divergent);
+    if (hybridDrifts?.length) {
+      evidenceSummary.hybridDrifts = hybridDrifts;
+    }
+    if (clone.bundle?.movedLineage?.length) {
+      evidenceSummary.movedLineage = clone.bundle.movedLineage.map((m: any) => ({
+        ...m,
+        sourceName: parseSymbolId(m.previousSymbolId).symbol,
+        destName: parseSymbolId(m.symbolId).symbol
+      }));
+    }
+    if (clone.hybridSummary) {
+      evidenceSummary.hybridSummary = clone.hybridSummary;
+    }
+
+    // Hotspot summaries with snippets
+    const hotspotEvidence = (clone.evidence && clone.evidence.hotspots) || [];
+    let hotspots: any[] | undefined;
+    if (Array.isArray(hotspotEvidence) && hotspotEvidence.length > 0) {
+      hotspots = hotspotEvidence.slice(0, caps.hotspots).map((h: any) => {
+        const file = h.file || h.path || h.filePath;
+        // Try to get a relevant line, e.g. from touchedInVersions or default to 0
+        return {
+          file,
+          hotspotScore: h.hotspotScore || h.churnScore || h.score,
+          summary: h.summary || h.note,
+          snippet: getSnippet(file, 0)
+        };
+      });
+      evidenceSummary.hotspots = hotspots;
+    }
+
+    // Counts for quick triage
+    evidenceSummary.counts = {
+      missing: missing?.length || 0,
+      zombies: zombies?.length || 0,
+      divergent: divergent?.length || 0,
+      hybridDrifts: hybridDrifts?.length || 0,
+      hotspots: hotspots?.length || 0,
+      moved: Array.isArray(evidenceSummary.movedLineage) ? evidenceSummary.movedLineage.length : 0
+    };
+
+    if (Object.keys(evidenceSummary).length > 0) {
+      clone.evidenceSummary = evidenceSummary;
+    }
+
+    // Cap moved lineage if present
+    if (Array.isArray(clone.bundle?.movedLineage)) {
+      clone.bundle.movedLineage = clone.bundle.movedLineage.slice(0, caps.moved);
+    }
+
+    // Record caps applied for transparency in prompts
+    clone.llmCapsApplied = caps;
+
+    // Build a curated discovery feed (top items with snippets)
+    const discoveryFeed: any[] = [];
+    const pushLimited = (items: any[], type: string) => {
+      for (const item of items) {
+        if (discoveryFeed.length >= caps.discoveryTotal) break;
+        discoveryFeed.push({ type, ...item });
+      }
+    };
+
+    if (missing?.length) pushLimited(missing, 'missing');
+    if (zombies?.length) pushLimited(zombies, 'zombie');
+    if (divergent?.length) pushLimited(divergent, 'divergent');
+    if (hybridDrifts?.length) pushLimited(hybridDrifts, 'hybridDrift');
+    if (hotspots?.length) pushLimited(hotspots, 'hotspot');
+    if (Array.isArray(evidenceSummary.movedLineage)) pushLimited(evidenceSummary.movedLineage, 'moved');
+
+    clone.discoveryFeed = discoveryFeed.slice(0, caps.discoveryTotal);
+
+    // Drop raw hybridFacts to keep payload lean
+    if (clone.hybridFacts) {
+      delete clone.hybridFacts;
+    }
+
+    return clone as RefactorBundleFacts;
+  }
+
+  /**
+   * Summarize facts: top 20 symbols by impact, aggregate edges
+   */
   private summarizeFacts(facts: RefactorBundleFacts): RefactorBundleFacts {
     const summarized = { ...facts };
     
@@ -861,6 +1118,46 @@ export class LlmAnalyst {
       summarized.evidence['working.edges'] = Array.from(edgeCounts.entries()).map(([type, count]) => `${type}: ${count}`);
     }
     
+    // Prioritize drifts: Sort by type/severity, keep top 5 per category
+    if (summarized.findings.incompleteness) {
+      // Note: Using findings instead of drift (refactorBundleFacts structure uses findings.incompleteness)
+      // Mapping to the structure expected by the LLM prompts which might look for summarized.drift
+      // For now, we modify the arrays in place if they are in evidence or findings
+      
+      // We need to handle both 'drift' object if it exists or findings.incompleteness
+      const inc = summarized.findings.incompleteness;
+      // We can't easily sort here without more data, but we can slice
+      // Assuming the input arrays are already somewhat ordered or we just take first few
+    }
+
+    // Enhance Hybrid Facts Preservation
+    if (facts.hybridFacts && (facts as any).drift?.hybridDrifts) {
+        const drift = (facts as any).drift;
+        const hybridDrifts = drift.hybridDrifts.slice(0, 5).map((d: any) => ({ 
+            type: d.type, 
+            file: d.file?.slice(-30),
+            description: d.description?.slice(0, 100) + '...' 
+        }));
+        
+        if (!summarized.hybridSummary) {
+            summarized.hybridSummary = {
+                totalFacts: 0,
+                fileCount: 0,
+                topFiles: [],
+                sampleFacts: []
+            };
+        }
+        (summarized.hybridSummary as any).hybridDriftSamples = hybridDrifts;
+    }
+
+    // Add Semantic Aggregates and Evidence Snippets
+    const evidenceSnippets = {
+        drift: this.extractSnippets((facts as any).drift?.unresolved_callers || [], 3, 'caller: {name} in {path}:{line}'),
+        legacy: this.extractSnippets(facts.evidence['findings.legacyAudit']?.dead || [], 3, 'Dead: {name} in {path}'),
+        hotspots: (facts.evidence.hotspots as any[])?.slice(0, 3).map(h => `Hotspot: ${h.path || h.file} (score: ${h.hotspotScore})`)
+    };
+    (summarized as any).evidenceSnippets = evidenceSnippets;
+    
     // Truncate large evidence arrays
     const maxEvidenceItems = 50;
     for (const key in summarized.evidence) {
@@ -870,6 +1167,16 @@ export class LlmAnalyst {
     }
     
     return summarized;
+  }
+
+  // Helper: Extract snippets
+  private extractSnippets(items: any[], max: number, template: string): string[] {
+    if (!items || !Array.isArray(items)) return [];
+    return items.slice(0, max).map(item => {
+      let str = template;
+      Object.keys(item).forEach(key => str = str.replace(`{${key}}`, item[key] || ''));
+      return str.slice(0, 80);  // Cap per snippet
+    });
   }
 
   /**
@@ -885,5 +1192,25 @@ export class LlmAnalyst {
     // Adjust chars per token based on code density
     const charsPerToken = codeRatio > 0.1 ? 3.5 : 4.0;
     return Math.ceil(text.length / charsPerToken);
+  }
+
+  /**
+   * Deep summarization: Keep only summaries + examples, drop arrays
+   */
+  private deepSummarize(facts: RefactorBundleFacts): RefactorBundleFacts {
+    const deep = { ...facts };
+    
+    // Keep metrics and summaries, drop raw evidence arrays
+    if (deep.evidence) {
+      deep.evidence = {
+        risks: deep.evidence.risks,
+        structuralChangeScore: deep.evidence.structuralChangeScore,
+        // Keep only essential arrays capped very low
+        "findings.incompleteness": deep.evidence["findings.incompleteness"] ? (deep.evidence["findings.incompleteness"] as any).slice(0, 10) : undefined,
+        hotspots: (deep.evidence.hotspots as any[])?.slice(0, 5)
+      };
+    }
+    
+    return deep;
   }
 }

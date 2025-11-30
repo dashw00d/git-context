@@ -312,6 +312,14 @@ export type CockpitClientMessage =
     /** Ask host to open an "evidence" target in editor (file/line/symbol) */
     type: 'openEvidence';
     evidenceId: string;      // whatever your report webview emits
+  }
+  
+  /* Live Analysis */
+  | {
+    type: 'generateLiveReport';
+  }
+  | {
+    type: 'startLiveAnalysis';
   };
 
 /* ---------- Host → Cockpit messages ---------- */

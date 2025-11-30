@@ -1,3 +1,5 @@
+import * as React from 'react';
+import { createRoot } from 'react-dom/client';
 import { RefactorReportView } from './RefactorReportView';
 import { LlmAnalysis } from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
@@ -17,7 +19,6 @@ const vscode = window.acquireVsCodeApi();
 // State
 let analysis: LlmAnalysis | undefined;
 let facts: RefactorBundleFacts | undefined;
-let view: RefactorReportView | undefined;
 
 /**
  * Handle messages from the extension
@@ -38,13 +39,6 @@ window.addEventListener('message', event => {
         const element = document.getElementById(sectionId);
         if (element) {
           element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-          // Try to find by data attribute or class
-          const altElement = document.querySelector(`[data-commit-sha="${sectionId.replace('commit-', '')}"]`) ||
-                            document.querySelector(`.commit-section[data-sha="${sectionId.replace('commit-', '')}"]`);
-          if (altElement) {
-            altElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
         }
       }
       break;
@@ -62,19 +56,30 @@ const handleEvidenceClick = (evidence: EvidenceLink) => {
 };
 
 /**
+ * Handle actions
+ */
+const handleAction = (action: string, data: any) => {
+  vscode.postMessage({
+    type: 'action',
+    action,
+    data
+  });
+};
+
+/**
  * Render the app
  */
 function renderApp() {
   const rootElement = document.getElementById('root');
   if (!rootElement || !analysis || !facts) return;
 
-  // Clean up previous view
-  if (view) {
-    // The view re-renders itself when data changes
-  }
-
-  // Create new view
-  view = new RefactorReportView(rootElement, analysis, facts, handleEvidenceClick);
+  const root = createRoot(rootElement);
+  root.render(React.createElement(RefactorReportView as any, {
+    analysis,
+    facts,
+    onEvidenceClick: handleEvidenceClick,
+    onAction: handleAction
+  }));
 }
 
 /**
@@ -82,5 +87,3 @@ function renderApp() {
  */
 vscode.postMessage({ type: 'ready' });
 
-// Initial render
-renderApp();

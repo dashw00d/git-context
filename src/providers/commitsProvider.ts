@@ -263,7 +263,7 @@ export class CommitsProvider {
       // 2. Get HEAD SHA for explicit HEAD node
       let headSha: string | null = null;
       try {
-        headSha = git.getHeadSha();
+        headSha = await git.getHeadSha();
       } catch {
         headSha = null;
       }
@@ -271,7 +271,7 @@ export class CommitsProvider {
       // 3. Add explicit HEAD node (baseline commit before workspace changes)
       if (!filterText && headSha) {
         try {
-          const headInfo = git.getCommitInfo(headSha);
+          const headInfo = await git.getCommitInfo(headSha);
           result.push({
             sha: headSha,
             message: headInfo.message,
@@ -295,34 +295,46 @@ export class CommitsProvider {
       const commits = await commitService.searchCommits(searchOptions);
 
       // 5. Map History Commits (exclude HEAD since we added it explicitly)
-      const historyCommits = commits
+      const historyCommits = await Promise.all(commits
         .filter((commit) => commit.sha && !isWorkspaceSha(commit.sha) && commit.sha !== headSha)
-        .map((commit) => {
-        let files: Array<{ path: string; status: any }> = [];
-        try {
-          // Only fetch files if we have a valid non-workspace SHA
-          if (commit.sha && !isWorkspaceSha(commit.sha)) {
-            files = git.getFileChanges(commit.sha).map((f: any) => ({
-              path: f.path,
-              status: f.status
-            }));
+        .map(async (commit) => {
+          let files: Array<{ path: string; status: any }> = [];
+          try {
+            // Only fetch files if we have a valid non-workspace SHA
+            if (commit.sha && !isWorkspaceSha(commit.sha)) {
+              const changes = await git.getFileChanges(commit.sha);
+              if (Array.isArray(changes)) {
+                files = changes.map((f: any) => ({
+                  path: f.path,
+                  status: f.status
+                }));
+              } else {
+                console.warn(`getFileChanges returned non-array for ${commit.sha}:`, changes);
+              }
+            }
+          } catch (e) {
+            console.warn(`Failed to fetch files for commit ${commit.sha}:`, e);
+            // If we failed to load files, but DB says there are changes,
+            // we shouldn't return empty array if possible.
+            // However, we can't invent files. The UI will show 0 files but maybe 'changes' count from DB.
           }
-        } catch (e) {
-          console.warn(`Failed to fetch files for commit ${commit.sha}:`, e);
-          // If we failed to load files, but DB says there are changes,
-          // we shouldn't return empty array if possible.
-          // However, we can't invent files. The UI will show 0 files but maybe 'changes' count from DB.
-        }
 
-        return {
-          sha: commit.sha,
-          message: commit.message,
-          author: commit.author,
-          date: commit.date.toISOString(),
-          changes: commit.changes,
-          files: files
-        };
-      });
+          return {
+            sha: commit.sha,
+            message: commit.message,
+            author: commit.author,
+            date: commit.date.toISOString(),
+            files,
+            stats: {
+              files: commit.changes || 0,
+              insertions: 0, // Not available in metadata
+              deletions: 0   // Not available in metadata
+            },
+            isHead: false,
+            isStaged: false,
+            isUnstaged: false
+          };
+        }));
 
       return [...result, ...historyCommits];
     } catch (error) {

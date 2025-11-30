@@ -62,4 +62,4 @@ Follow the existing 2-space indentation, `const`-first mindset, and explicit ret
 - **CLI/Hooks** → pre-commit analysis, standalone analyze/index/query commands, `ct index --reindex` for legacy DB migration
 
 ### Useful Commands
-npx ts-node benchmarks/pipeline_diagnostics.ts --commits=3 --no-workspace --reset-db 2>&1 | head -150
+npx ts-node benchmarks/pipeline_diagnostics.ts --commit-count=3 --no-workspace --reset-db 2>&1 | head -150

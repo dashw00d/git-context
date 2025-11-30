@@ -216,7 +216,7 @@
         },
         "git-context.perProjectQdrantCollections": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Use separate Qdrant collections per project for isolation"
         },
         "git-context.enableCstTracking": {
@@ -226,7 +226,7 @@
         },
         "git-context.enableCstAugmentation": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Enable hybrid augmentation: layer structural facts (comments, docstrings) on top of semantic symbols for supported languages"
         },
         "git-context.cstLanguages": {

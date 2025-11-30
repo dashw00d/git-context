@@ -431,13 +431,11 @@ export function getPriorVersionInChain(
   // Unstaged → check for staged, then HEAD/oldest commit
   if (currentVersion === 'workspace-unstaged') {
     if (scope.stagedFiles?.has(filePath)) return 'workspace-staged';
-    if (commitShas.length > 0) return commitShas[commitShas.length - 1]; // Most recent commit
     return 'HEAD';
   }
 
   // Staged → HEAD or most recent commit
   if (currentVersion === 'workspace-staged') {
-    if (commitShas.length > 0) return commitShas[commitShas.length - 1]; // Most recent commit
     return 'HEAD';
   }
 
@@ -449,7 +447,7 @@ export function getPriorVersionInChain(
         `File: ${filePath}`
       );
     }
-    return commitShas[commitShas.length - 1];
+    return commitShas[0];
   }
 
   // Commit SHA → previous commit in chain (older)
@@ -460,13 +458,12 @@ export function getPriorVersionInChain(
       `File: ${filePath}, Expected chain: [${commitShas.map(s => s.substring(0, 8)).join(', ')}]`
     );
   }
-  if (index === 0) {
+  if (index === commitShas.length - 1) {
     // At oldest commit - no prior version available
     throw new Error(
       `[CstTimeline] No prior version for ${currentVersion.substring(0, 8)} - already at oldest commit. ` +
       `File: ${filePath}`
     );
   }
-  return commitShas[index - 1]; // Previous (older) commit
+  return commitShas[index + 1]; // Previous (older) commit
 }
-

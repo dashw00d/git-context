@@ -536,7 +536,8 @@ export class AnalysisRenderer {
       description: evidence.description,
       filePath: evidence.filePath,
       lineNumber: evidence.lineNumber,
-      symbolId: evidence.symbolId
+      symbolId: evidence.symbolId,
+      origin: (evidence as any).origin
     };
 
     // If we have symbolId but no filePath, try to resolve it
@@ -578,7 +579,10 @@ export class AnalysisRenderer {
       }
     }
 
-    return `[${linkText}${extraInfo}](command:git-context.openEvidence?${encodedArgs})`;
+    // Append origin tag if available
+    const originTag = evidence.origin ? ` [${evidence.origin}]` : '';
+
+    return `[${linkText}${originTag}${extraInfo}](command:git-context.openEvidence?${encodedArgs})`;
   }
 
   /**

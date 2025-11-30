@@ -51,6 +51,12 @@ export const LiveTabContent: React.FC<LiveTabContentProps> = ({ state, vscode })
               <div className="cockpit__metric-value">{liveAnalysis.summary.dead}</div>
               <div className="cockpit__metric-label">Ghosts</div>
             </div>
+            {liveAnalysis.summary.hybridDrifts !== undefined && (
+              <div className="cockpit__metric info">
+                <div className="cockpit__metric-value">{liveAnalysis.summary.hybridDrifts}</div>
+                <div className="cockpit__metric-label">Hybrid</div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -71,13 +77,34 @@ export const LiveTabContent: React.FC<LiveTabContentProps> = ({ state, vscode })
       )}
 
       <div className="cockpit__actions">
-        {liveAnalysis.status === 'ready' && (
+        {!liveAnalysis.isTracking && (
           <button
             className="cockpit__button primary"
-            onClick={() => vscode.postMessage({ type: 'generateLiveReport' })}
+            onClick={() => vscode.postMessage({ type: 'startLiveAnalysis' })}
           >
-            Analyze Pending Changes
+            Start Live Analysis
           </button>
+        )}
+
+        {liveAnalysis.isTracking && (
+          <>
+            {liveAnalysis.pendingChanges > 0 && liveAnalysis.status !== 'analyzing' && (
+              <button
+                className="cockpit__button primary"
+                onClick={() => vscode.postMessage({ type: 'generateLiveReport' })}
+              >
+                Analyze Pending Changes
+              </button>
+            )}
+
+            <button
+              className="cockpit__button ghost"
+              onClick={() => vscode.postMessage({ type: 'generateLiveReport' })}
+              disabled={liveAnalysis.status === 'analyzing'}
+            >
+              Run Manual Scan
+            </button>
+          </>
         )}
 
         {liveAnalysis.status === 'analyzing' && (
@@ -87,7 +114,7 @@ export const LiveTabContent: React.FC<LiveTabContentProps> = ({ state, vscode })
           </div>
         )}
 
-        {liveAnalysis.status === 'idle' && liveAnalysis.pendingChanges > 0 && !liveAnalysis.summary && (
+        {liveAnalysis.isTracking && liveAnalysis.status === 'idle' && liveAnalysis.pendingChanges > 0 && !liveAnalysis.summary && (
           <div className="cockpit__dim">
             Edit threshold not yet reached for auto-analysis.
           </div>

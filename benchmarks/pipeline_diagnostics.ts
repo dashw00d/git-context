@@ -146,6 +146,32 @@ function summarizeStep(stepId: string, data: any): string {
         : 0;
       const hybridFilesCount = data.hybridFacts ? Object.keys(data.hybridFacts).length : 0;
       return `intended.present=${data.intended?.present || 0}, absent=${data.intended?.absent || 0}, renamed=${data.intended?.renamed || 0}, hybridFacts=${hybridFactsCount} (${hybridFilesCount} files)`;
+    case 'embedding_index':
+      if (!data) return '';
+      return data.skipped
+        ? `skipped (${data.reason || 'n/a'})`
+        : `commits=${data.commitCount || 0}, commitShards=${data.commitShardCount || 0}, symbolShards=${data.symbolShardCount || 0}, themeShards=${data.themeShardCount || 0}`;
+    case 'hotspots':
+      if (Array.isArray(data)) {
+        const totalChurn = data.reduce((sum: number, h: any) => sum + (h.hotspotScore || h.churnScore || h.dnaChurn || 0), 0);
+        return `topHotspots=${data.length}, totalChurn=${totalChurn.toFixed(1)}`;
+      }
+      return 'topHotspots=0, totalChurn=0';
+    case 'moved_blocks':
+      if (Array.isArray(data)) {
+        return `totalMoves=${data.length}`;
+      }
+      return 'totalMoves=0';
+    case 'retrieve_history':
+      if (!data) return '';
+      return data.skipped
+        ? `skipped (${data.reason || 'n/a'})`
+        : `similarCommits=${data.similarCommits || 0}, similarSymbols=${data.similarSymbols || 0}, relatedRefactors=${data.relatedRefactors || 0}`;
+    case 'llm_story':
+      if (!data) return '';
+      return data.skipped
+        ? `skipped (${data.reason || 'n/a'})`
+        : `tokens=${data.totalTokens || 0}, calls=${data.totalCalls || 0}, health=${data.healthScore ?? 'n/a'}`;
     default:
       return '';
   }
@@ -224,12 +250,14 @@ function extractStepMetrics(stepId: string, data: any): Record<string, any> {
       if (Array.isArray(data)) {
         return {
           topHotspots: data.length,
-          totalChurn: data.reduce((sum: number, h: any) => sum + (h.churnScore || h.dnaChurn || 0), 0),
+          totalChurn: data.reduce((sum: number, h: any) => sum + (h.hotspotScore || h.churnScore || h.dnaChurn || 0), 0),
           withVersionTracking: data.filter((h: any) => h.touchedInVersions).length,
           versionDescriptions: data.filter((h: any) => h.touchedInVersionsDescription).map((h: any) => h.touchedInVersionsDescription)
         };
       }
       return { topHotspots: 0, totalChurn: 0, withVersionTracking: 0, versionDescriptions: [] };
+
+
 
     case 'moved_blocks':
       if (Array.isArray(data)) {
@@ -269,24 +297,43 @@ function extractStepMetrics(stepId: string, data: any): Record<string, any> {
         hybridFilesCount: data.hybridFacts ? Object.keys(data.hybridFacts).length : 0
       };
 
+    case 'embedding_index':
+      return {
+        commitCount: data.commitCount || 0,
+        commitShardCount: data.commitShardCount || 0,
+        symbolShardCount: data.symbolShardCount || 0,
+        themeShardCount: data.themeShardCount || 0,
+        durationMs: data.durationMs || 0,
+        skipped: !!data.skipped,
+        reason: data.reason || undefined
+      };
+
     case 'llm_story':
-      // Metrics extracted from llmOutputs structure
-      if (data.llmAnalysis) {
+      if (data.metrics) {
         return {
-          storyLength: 1, // Single analysis per run
-          totalHealthScore: data.llmAnalysis.metadata?.healthScore || 0,
-          totalTokens: data.llmAnalysis.metadata?.totalTokens || 0,
-          totalCalls: data.llmAnalysis.metadata?.totalCalls || 0,
-          blocksCount: data.llmAnalysis.blocks?.length || 0
+          storyLength: 1,
+          totalHealthScore: data.metrics.healthScore || 0,
+          totalTokens: data.metrics.totalTokens || 0,
+          totalCalls: data.metrics.totalCalls || 0,
+          blocksCount: data.llmAnalysis?.blocks?.length || 0,
+          durationMs: data.metrics.durationMs || 0,
+          validatedEvidenceCount: data.metrics.validatedEvidenceCount || 0
         };
       }
       return { storyLength: 0, totalHealthScore: 0 };
 
     case 'retrieve_history':
-      return {
-        historyItems: data.symbolEvolution ? Object.keys(data.symbolEvolution).length : 0,
-        retrievedCommits: data.retrievedCommits?.length || 0
-      };
+      if (data.metrics) {
+        return {
+          similarCommits: data.metrics.similarCommits || 0,
+          similarSymbols: data.metrics.similarSymbols || 0,
+          relatedRefactors: data.metrics.relatedRefactors || 0,
+          durationMs: data.metrics.durationMs || 0,
+          skipped: !!data.metrics.skipped,
+          reason: data.metrics.reason || undefined
+        };
+      }
+      return { similarCommits: 0, similarSymbols: 0, relatedRefactors: 0 };
 
     case 'workspace_overlay':
       if (data && typeof data === 'object' && ('staged' in data || 'unstaged' in data)) {
@@ -430,18 +477,24 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
     let totalTokens = 0;
     let totalCalls = 0;
 
+    // Helper to estimate tokens (approx 4 chars per token)
+    const estimateTokens = (text: string | null): number => {
+      return text ? Math.ceil(text.length / 4) : 0;
+    };
+
     // Get config for maxInputChars
     const config = getExtensionConfig();
     const maxInputChars = (config as any).maxInputChars || 1000000;
 
-    // Summarize facts if too large
-    const factsJson = JSON.stringify(facts);
+    // Slim facts first, then summarize if still too large
+    const slimFacts = (this as any).buildSlimFacts ? (this as any).buildSlimFacts(facts) : facts;
+    const factsJson = JSON.stringify(slimFacts);
     const factsSize = factsJson.length;
-    let processedFacts = facts;
+    let processedFacts = slimFacts;
 
     if (factsSize > maxInputChars) {
       console.log(`LLM Analyst: Facts size (${factsSize} chars) exceeds max (${maxInputChars}), summarizing...`);
-      processedFacts = this.summarizeFactsHelper(facts);
+      processedFacts = this.summarizeFactsHelper(slimFacts);
       const summarizedSize = JSON.stringify(processedFacts).length;
       console.log(`LLM Analyst: Summarized to ${summarizedSize} chars (${((1 - summarizedSize / factsSize) * 100).toFixed(1)}% reduction)`);
     }
@@ -459,6 +512,7 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
         .replace('{versionCount}', String(timelineInfo.count));
       const intentPrompt = this.buildPromptHelper(promptWithTimeline, processedFacts);
       this.capturedData.prompts.intent = intentPrompt;
+      totalTokens += estimateTokens(intentPrompt);
 
       const intentBlock = AnalysisBlockUtils.createBlock('intent', 'Refactor Intent & Story', 'intent');
       intentBlock.claims = []; // Mock empty claims
@@ -473,6 +527,7 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
         .replace('{versionCount}', String(driftTimelineInfo.count));
       const driftPrompt = this.buildPromptHelper(driftPromptWithTimeline, processedFacts);
       this.capturedData.prompts.drift = driftPrompt;
+      totalTokens += estimateTokens(driftPrompt);
 
       const driftBlock = AnalysisBlockUtils.createBlock('drift', 'Drift Verification', 'drift');
       driftBlock.claims = [];
@@ -488,6 +543,7 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
         .replace('{versionCount}', String(cleanupTimelineInfo.count));
       const cleanupPrompt = this.buildPromptHelper(cleanupPromptWithTimeline, processedFacts);
       this.capturedData.prompts.cleanup = cleanupPrompt;
+      totalTokens += estimateTokens(cleanupPrompt);
 
       const cleanupBlock = AnalysisBlockUtils.createBlock('cleanup', 'Cleanup Plan', 'cleanup');
       cleanupBlock.claims = [];
@@ -501,6 +557,8 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
         const discoveryResult = await this.discoverPatterns(rawFeed, facts);
         discoveryBlock = this.callParentMethod('createDiscoveryBlock', discoveryResult, facts);
         totalCalls += 3;
+        // Tokens for discovery are added in discoverPatterns
+        totalTokens += discoveryResult.metadata.totalTokens;
       }
 
       // Combine results
@@ -566,20 +624,27 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
       ? `\n\nKNOWN FILES (ONLY use these in examples):\n${JSON.stringify(knownFiles)}\n\n`
       : '\n\n';
 
+    // Helper to estimate tokens
+    const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
+    let totalTokens = 0;
+
     // Discover prompt
     const discoverPromptTemplate = this.getPromptHelper('discover', PROMPT_DISCOVER);
     const discoverPrompt = `${SYSTEM_PROMPT}\n\nRAW FEED JSON:\n${JSON.stringify(rawFeed)}${knownFilesList}${discoverPromptTemplate}`;
     this.capturedData.prompts.discover = discoverPrompt;
+    totalTokens += estimateTokens(discoverPrompt);
 
     // Quantify prompt (mock discovery result)
     const quantifyPromptTemplate = this.getPromptHelper('quantify', PROMPT_QUANTIFY);
     const quantifyPrompt = `${SYSTEM_PROMPT}\n\nDISCOVERED PATTERNS:\n${JSON.stringify({ patterns: [] })}\n\n${quantifyPromptTemplate}`;
     this.capturedData.prompts.quantify = quantifyPrompt;
+    totalTokens += estimateTokens(quantifyPrompt);
 
     // Plan prompt (mock quantified result)
     const planPromptTemplate = this.getPromptHelper('plan', PROMPT_PLAN);
     const planPrompt = `${SYSTEM_PROMPT}\n\nQUANTIFIED PATTERNS:\n${JSON.stringify({ quantified: [] })}\n\n${planPromptTemplate}`;
     this.capturedData.prompts.plan = planPrompt;
+    totalTokens += estimateTokens(planPrompt);
 
     // Return mock response
     return {
@@ -587,7 +652,7 @@ class PromptCaptureLlmAnalyst extends LlmAnalyst {
       quantified: {},
       plan: {},
       metadata: {
-        totalTokens: 0,
+        totalTokens,
         duration: 0,
         model: 'mock'
       }
@@ -1193,6 +1258,9 @@ async function main() {
     const hotspotsStep = diagnostics.steps.find((s: any) => s.stepId === 'hotspots');
     const bundleFactsStep = diagnostics.steps.find((s: any) => s.stepId === 'bundle_facts');
     const legacyStep = diagnostics.steps.find((s: any) => s.stepId === 'legacy');
+    const embeddingStep = diagnostics.steps.find((s: any) => s.stepId === 'embedding_index');
+    const historyStep = diagnostics.steps.find((s: any) => s.stepId === 'retrieve_history');
+    const llmStep = diagnostics.steps.find((s: any) => s.stepId === 'llm_story');
 
     diagnostics.aggregatedMetrics = {
       totalCommits: indexCommitsStep?.metrics?.commitCount || 0,
@@ -1206,6 +1274,17 @@ async function main() {
       bundleIncompleteness: bundleFactsStep?.metrics?.incompleteness || 0,
       patternDrift: bundleFactsStep?.metrics?.patternDrift || 0,
       totalLegacyDead: legacyStep?.metrics?.dead || 0,
+      embeddingShards: embeddingStep
+        ? (embeddingStep.metrics.commitShardCount || 0) +
+        (embeddingStep.metrics.symbolShardCount || 0) +
+        (embeddingStep.metrics.themeShardCount || 0)
+        : 0,
+      historySimilarCommits: historyStep?.metrics?.similarCommits || 0,
+      historySimilarSymbols: historyStep?.metrics?.similarSymbols || 0,
+      historyRelatedRefactors: historyStep?.metrics?.relatedRefactors || 0,
+      llmDurationMs: llmStep?.metrics?.durationMs || 0,
+      embeddingDurationMs: embeddingStep?.metrics?.durationMs || 0,
+      historyDurationMs: historyStep?.metrics?.durationMs || 0,
       llmTotalCalls: diagnostics.llm_summaries?.reduce((sum: number, l: any) => sum + (l.totalCalls || 0), 0) || 0,
       llmTotalTokens: diagnostics.llm_summaries?.reduce((sum: number, l: any) => sum + (l.totalTokens || 0), 0) || 0,
       overallHealthScore: diagnostics.llm_summaries?.length > 0

@@ -18,6 +18,8 @@ import { createEmbeddingStep } from './runner/steps/embeddingStep';
 import { createHistoryRetrievalStep } from './runner/steps/historyStep';
 import { createStoryStep } from './runner/steps/storyStep';
 import { PipelineConfig } from './runner/pipelineTypes';
+import { IntendedState, buildIntendedMap, reconstructIntendedFromEvidence } from '../facts/intendedMap';
+import { RefactorBundleFacts } from '../facts/types';
 
 /**
  * Build explicit timeline chain from UI selections
@@ -143,6 +145,61 @@ export class RefactorPipeline {
     commitIndexerAny.structuralDiffManager?.flushDiffQueue();
 
     return finalState;
+  }
+
+  /**
+   * Run lightweight live analysis on unsaved/unstaged changes
+   * Skips heavy steps (commit indexing, embedding, LLM)
+   */
+  async analyzeLive(
+    liveOverrides: Map<string, string>,
+    previousBundleFacts: RefactorBundleFacts
+  ): Promise<PipelineState> {
+    // 1. Reconstruct Intended State
+    let intended: Map<string, IntendedState>;
+    const shas = previousBundleFacts?.bundle?.shas || [];
+
+    if (shas.length > 0) {
+      try {
+        intended = await buildIntendedMap(shas);
+      } catch (error) {
+        // Fallback if database unavailable or incomplete
+        intended = reconstructIntendedFromEvidence(previousBundleFacts?.evidence);
+      }
+    } else {
+      intended = reconstructIntendedFromEvidence(previousBundleFacts?.evidence);
+    }
+
+    // 2. Configure Lightweight Steps
+    // Note: We skip index_commits because we rely on previous bundle or workspace state
+    const steps = [
+      createWorkspaceOverlayStep(this.workspaceIndexer),
+      createScopeStep(),
+      createWorkingStep(), // Will use liveOverrides from state
+      createDriftStep(),
+      createLegacyStep()
+    ];
+
+    // 3. Run Pipeline
+    // We set workspaceParts to both staged/unstaged to ensure full scope coverage
+    // liveOverrides are passed to createWorkingStep via state
+    const initialState: PipelineState = {
+      selectedCommitShas: shas,
+      includeWorkspace: true,
+      workspaceParts: new Set(['staged', 'unstaged']),
+      explicitTimeline: buildExplicitTimeline({
+        includeUnstaged: true,
+        includeStaged: true,
+        selectedCommitShas: shas
+      }),
+      liveOverrides,
+      intended,
+      bundleFacts: previousBundleFacts, // Inject for context
+      completedSteps: new Set(),
+      errors: []
+    };
+
+    return runPipeline(steps, initialState);
   }
 
   /**

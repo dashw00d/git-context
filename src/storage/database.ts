@@ -6,7 +6,7 @@ import { getGitRoot } from '../utils/config';
 
 // Wrapper to mimic better-sqlite3 API
 interface DatabaseStatement {
-  run: (params?: any[]) => { changes: number; lastInsertRowid: number };
+  run: (...params: any[]) => { changes: number; lastInsertRowid: number };
   get: (...params: any[]) => any;
   all: (...params: any[]) => any[];
 }
@@ -14,9 +14,17 @@ interface DatabaseStatement {
 class StatementWrapper {
   constructor(private stmt: Statement, private dbManager: DatabaseManager) { }
 
+  private normalizeParams(params: any[]): any[] {
+    // Accept both better-sqlite3-style varargs and a single array of params
+    if (params.length === 1 && Array.isArray(params[0])) {
+      return params[0] as any[];
+    }
+    return params;
+  }
+
   run(...params: any[]): { changes: number; lastInsertRowid: number } {
     try {
-      this.stmt.bind(params);
+      this.stmt.bind(this.normalizeParams(params));
       this.stmt.step();
       this.stmt.reset(); // CRITICAL: Reset statement for reuse
       this.dbManager.save();
@@ -30,7 +38,7 @@ class StatementWrapper {
 
   get(...params: any[]): any {
     try {
-      this.stmt.bind(params);
+      this.stmt.bind(this.normalizeParams(params));
       if (this.stmt.step()) {
         const result = this.stmt.getAsObject();
         this.stmt.reset();
@@ -46,7 +54,7 @@ class StatementWrapper {
 
   all(...params: any[]): any[] {
     try {
-      this.stmt.bind(params);
+      this.stmt.bind(this.normalizeParams(params));
       const results: any[] = [];
       while (this.stmt.step()) {
         results.push(this.stmt.getAsObject());
@@ -127,7 +135,10 @@ export class DatabaseManager {
                 return undefined;
               }
               const stmt = this.db.prepare(sql);
-              stmt.bind(params);
+              const bindParams = (params.length === 1 && Array.isArray(params[0]))
+                ? params[0] as any[]
+                : params;
+              stmt.bind(bindParams);
               if (stmt.step()) {
                 const result = stmt.getAsObject();
                 stmt.free();
@@ -146,7 +157,10 @@ export class DatabaseManager {
                 return [];
               }
               const stmt = this.db.prepare(sql);
-              stmt.bind(params);
+              const bindParams = (params.length === 1 && Array.isArray(params[0]))
+                ? params[0] as any[]
+                : params;
+              stmt.bind(bindParams);
               const results: any[] = [];
               while (stmt.step()) {
                 results.push(stmt.getAsObject());

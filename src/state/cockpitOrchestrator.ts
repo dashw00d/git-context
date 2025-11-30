@@ -15,6 +15,13 @@ export type CockpitMetrics = {
   fileCount?: number;
 };
 
+export type StateChangeHandler = (change: CockpitStateChange) => void | Promise<void>;
+export type StateEffect<T extends keyof CockpitState = keyof CockpitState> = {
+  key?: T | T[];
+  handler: StateChangeHandler;
+  priority?: number; // Lower = higher priority
+};
+
 export function createDefaultCockpitState(): CockpitState {
   return {
     repoName: null,
@@ -51,7 +58,7 @@ export function createDefaultCockpitState(): CockpitState {
     reportsShowPinnedOnly: false,
     metrics: {},
     liveAnalysis: {
-      isTracking: true,
+      isTracking: false,
       pendingChanges: 0,
       totalEdits: 0,
       status: 'idle',
@@ -67,6 +74,7 @@ export class CockpitOrchestrator extends EventEmitter {
   private pendingPartial: Partial<CockpitState> | null = null;
   private flushTimeout: NodeJS.Timeout | null = null;
   private readonly debounceMs: number;
+  private effects: StateEffect[] = [];
 
   private constructor(debounceMs = 25) {
     super();
@@ -133,6 +141,38 @@ export class CockpitOrchestrator extends EventEmitter {
     }, reason);
   }
 
+  /**
+   * Register a side-effect handler that runs when state changes
+   * @param effect Configuration for when and how to run the handler
+   * @returns Unsubscribe function
+   */
+  registerEffect(effect: StateEffect): () => void {
+    this.effects.push(effect);
+    this.effects.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
+
+    return () => {
+      const index = this.effects.indexOf(effect);
+      if (index > -1) {
+        this.effects.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Convenience method for subscribing to specific state keys
+   */
+  onStateChange<T extends keyof CockpitState>(
+    keys: T | T[],
+    handler: StateChangeHandler
+  ): () => void {
+    const keyArray = Array.isArray(keys) ? keys : [keys];
+    return this.registerEffect({
+      key: keyArray as T[],
+      handler,
+      priority: 100
+    });
+  }
+
   subscribe(cb: (change: CockpitStateChange) => void): () => void {
     this.on('stateChange', cb);
     return () => this.off('stateChange', cb);
@@ -153,6 +193,25 @@ export class CockpitOrchestrator extends EventEmitter {
     this.emitChange(partial, reason);
   }
 
+  private async runEffects(change: CockpitStateChange): Promise<void> {
+    const changedKeys = Object.keys(change.partial) as Array<keyof CockpitState>;
+
+    for (const effect of this.effects) {
+      const shouldRun = !effect.key ||
+        (Array.isArray(effect.key)
+          ? effect.key.some(k => changedKeys.includes(k))
+          : changedKeys.includes(effect.key));
+
+      if (shouldRun) {
+        try {
+          await Promise.resolve(effect.handler(change));
+        } catch (error) {
+          logDebug(`[CockpitOrchestrator] Effect handler error: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }
+  }
+
   private emitChange(partial: Partial<CockpitState>, reason?: string): void {
     const change: CockpitStateChange = {
       full: this.state,
@@ -162,9 +221,12 @@ export class CockpitOrchestrator extends EventEmitter {
     };
     try {
       this.emit('stateChange', change);
+      this.runEffects(change).catch(err =>
+        logDebug(`[CockpitOrchestrator] Effects error: ${err instanceof Error ? err.message : String(err)}`)
+      );
       logDebug(`[CockpitOrchestrator] Emitted state change (${reason || 'unspecified'})`);
     } catch (error) {
-      logDebug(`[CockpitOrchestrator] Failed to emit state change (${reason || 'unspecified'}) - ${error}`);
+      logDebug(`[CockpitOrchestrator] Failed to emit state change (${reason || 'unspecified'}) - ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

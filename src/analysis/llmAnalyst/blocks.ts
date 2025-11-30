@@ -14,6 +14,8 @@ export interface EvidenceLink {
   filePath?: string;
   /** Optional line number */
   lineNumber?: number;
+  /** Optional origin tag (workspace-unstaged/staged/commit) */
+  origin?: string;
 }
 
 export interface Claim {
@@ -70,6 +72,8 @@ export interface LlmAnalysis {
     totalCalls: number;
     /** Total tokens used */
     totalTokens: number;
+    /** Total duration in milliseconds */
+    durationMs?: number;
     /** Model used */
     model: string;
     /** Generation timestamp */
@@ -78,6 +82,10 @@ export interface LlmAnalysis {
     healthScore?: number;
     /** Number of validated evidence items */
     validatedEvidenceCount?: number;
+    /** Indicates analysis was skipped/fallback */
+    skipped?: boolean;
+    /** Optional reason when skipped */
+    reason?: string;
   };
   /** Rendered markdown version */
   markdown: string;

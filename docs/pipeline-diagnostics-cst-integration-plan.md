@@ -190,13 +190,13 @@ diagnostics.performance = {
 **Example Usage**:
 ```bash
 # Test with CST tracking enabled
-npx ts-node benchmarks/pipeline_diagnostics.ts --commits=3 --enable-cst --test-hybrid
+npx ts-node benchmarks/pipeline_diagnostics.ts --commit-count=3 --enable-cst --test-hybrid
 
 # Test hybrid augmentation
-npx ts-node benchmarks/pipeline_diagnostics.ts --commits=3 --enable-augment --focus=drift
+npx ts-node benchmarks/pipeline_diagnostics.ts --commit-count=3 --enable-augment --focus=drift
 
 # Validate timeline
-npx ts-node benchmarks/pipeline_diagnostics.ts --commits=3 --validate-timeline
+npx ts-node benchmarks/pipeline_diagnostics.ts --commit-count=3 --validate-timeline
 ```
 
 ### Phase 7: Add Database Validation

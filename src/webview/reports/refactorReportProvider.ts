@@ -22,45 +22,30 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
    * Set the analysis data and show the webview
    */
   public showReport(analysis: LlmAnalysis, facts: RefactorBundleFacts): void {
-    logDebug('[WEBVIEW] showReport called');
-    logDebug(`[WEBVIEW] Analysis provided: ${!!analysis}`);
-    logDebug(`[WEBVIEW] Facts provided: ${!!facts}`);
-
-    if (analysis) {
-      logDebug(`[WEBVIEW] Analysis keys: ${Object.keys(analysis).join(', ')}`);
+    if (!analysis || !facts) {
+      vscode.window.showErrorMessage('No analysis available. Run a refactor analysis first.');
+      return;
     }
-    if (facts) {
-      logDebug(`[WEBVIEW] Facts keys: ${Object.keys(facts).join(', ')}`);
-      logDebug(`[WEBVIEW] Facts findings: ${JSON.stringify(facts.findings)}`);
-    }
-
+    
+    logDebug('[WEBVIEW] showReport called with valid data');
     this._analysis = analysis;
     this._facts = facts;
 
     if (this._panel) {
-      logDebug('[WEBVIEW] Updating existing panel');
-      this._panel.reveal(vscode.ViewColumn.Two);
-      this._update();
+      // View is already resolved (sidebar)
+      if (this._panel.visible) {
+        this._update();
+      } else {
+        // Focus the sidebar view using the view ID
+        vscode.commands.executeCommand('gitContext.refactorReport.focus');
+        // Data will be updated via _update called implicitly or explicitly? 
+        // resolveWebviewView posts initial data, but if already resolved but hidden, we need to update
+        this._update();
+      }
     } else {
-      logDebug('[WEBVIEW] Creating new panel');
-      this._panel = vscode.window.createWebviewPanel(
-        RefactorReportProvider.viewType,
-        'Refactor Intelligence',
-        vscode.ViewColumn.Two,
-        {
-          enableScripts: true,
-          retainContextWhenHidden: true
-        }
-      );
-
-      this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
-      logDebug('[WEBVIEW] Panel created and HTML set');
-      this._update();
-
-      this._panel.onDidDispose(() => {
-        logDebug('[WEBVIEW] Panel disposed');
-        this._panel = undefined;
-      });
+      // View not resolved yet - focus it to trigger resolution
+      vscode.commands.executeCommand('gitContext.refactorReport.focus');
+      // Once resolved, resolveWebviewView will be called and will post the data
     }
   }
 
@@ -72,8 +57,45 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ): void {
-    this._panel = webviewView as any; // Type assertion for compatibility
-    this._update();
+    this._panel = webviewView as any; // Maintaining internal property name for now to minimize changes
+    
+    // Set title if property exists (it does on WebviewView)
+    webviewView.title = 'Refactor Intelligence Report';
+    
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this._extensionUri]
+    };
+    
+    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    
+    // Post initial data if available
+    if (this._analysis && this._facts) {
+      this._update();
+    }
+    
+    // Handle disposal
+    webviewView.onDidDispose(() => {
+      this._panel = undefined;
+    });
+    
+    // Setup message handling
+    webviewView.webview.onDidReceiveMessage(
+      async (message) => {
+        if (message.type === 'evidenceClick') {
+          await this._handleEvidenceClick(message.evidence);
+        } else if (message.type === 'action') {
+          if (message.action === 'delete') {
+            await vscode.commands.executeCommand('git-context.applyRefactor', {
+              action: 'delete',
+              symbolId: message.data.symbolId,
+              filePath: message.data.filePath,
+              range: message.data.range
+            });
+          }
+        }
+      }
+    );
   }
 
   /**
@@ -88,37 +110,70 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // Set panel title if it's a WebviewPanel
-    if (this._panel && 'title' in this._panel) {
-      (this._panel as any).title = 'Refactor Intelligence Report';
-    }
-
     logDebug(`[WEBVIEW] Posting message to webview - hasAnalysis: ${!!this._analysis}, hasFacts: ${!!this._facts}`);
 
+    // Create slim payload to avoid VS Code message size limits (approx 1MB)
+    const slimAnalysis = this._analysis ? {
+      ...this._analysis,
+      // Truncate markdown if too large (8000 chars ~ 2-3KB)
+      markdown: this._analysis.markdown?.length > 8000 
+        ? this._analysis.markdown.slice(0, 8000) + '... [truncated]' 
+        : this._analysis.markdown,
+      // Limit block items
+      blocks: this._analysis.blocks.map(b => ({
+        ...b,
+        claims: b.claims.slice(0, 20),
+        actions: b.actions.slice(0, 20)
+      }))
+    } : undefined;
+
+    const slimFacts = this._facts ? {
+      ...this._facts,
+      // Remove large hybridFacts object - UI uses summaries anyway
+      hybridFacts: undefined, 
+      evidence: {
+        ...this._facts.evidence,
+        // Truncate large evidence arrays if they exist in evidence object
+        "findings.incompleteness": this._truncateEvidenceArray(this._facts.evidence["findings.incompleteness"]),
+        "scope.files": this._facts.evidence["scope.files"]?.slice(0, 100)
+      }
+    } : undefined;
+
     const message = {
-      type: 'setData',  // Changed from 'update' to match webview listener
-      analysis: this._analysis,
-      facts: this._facts
+      type: 'setData',
+      analysis: slimAnalysis,
+      facts: slimFacts
     };
 
-    // Log size of message being sent
+    // Check size and warn/slim further if needed
     const messageStr = JSON.stringify(message);
     logDebug(`[WEBVIEW] Message size: ${messageStr.length} chars`);
-    logDebug(`[WEBVIEW] Message preview (first 500 chars): ${messageStr.substring(0, 500)}`);
+    
+    if (messageStr.length > 1000000) {
+      logError('[WEBVIEW] Message too large, further slimming needed');
+      // Emergency slimming: drop markdown and more evidence
+      if (message.analysis) message.analysis.markdown = '';
+      if (message.facts && message.facts.evidence) {
+        // Clear specific evidence fields
+        message.facts.evidence = {} as any; 
+      }
+    }
 
     webview.postMessage(message);
     logDebug('[WEBVIEW] Message posted to webview');
+  }
 
-    // Set up message handler for clicks
-    webview.onDidReceiveMessage(
-      async (message) => {
-        logDebug(`[WEBVIEW] Received message from webview: ${message.type}`);
-        if (message.type === 'evidenceClick') {
-          logDebug(`[WEBVIEW] Evidence click: ${JSON.stringify(message.evidence)}`);
-          await this._handleEvidenceClick(message.evidence);
-        }
+  private _truncateEvidenceArray(obj: any): any {
+    if (!obj || typeof obj !== 'object') return obj;
+    const result: any = {};
+    for (const key in obj) {
+      if (Array.isArray(obj[key])) {
+        result[key] = obj[key].slice(0, 50);
+      } else {
+        result[key] = obj[key];
       }
-    );
+    }
+    return result;
   }
 
   /**

@@ -35,6 +35,20 @@ export interface CommitFacts {
   hotspots: Array<{ symbolId: string; impactScore: number; changeType: string }>;
 }
 
+interface FileProcessingResult {
+  symbolsAdded: number;
+  symbolsModified: number;
+  symbolsRemoved: number;
+  edgesAdded: number;
+  edgesRemoved: number;
+  maxStructuralChange: number;
+  risks: string[];
+  changedSymbols: any[];
+  symbolChanges: Array<{ dnaId: string; type: string; symbol: any; filePath: string }>;
+  edgesToInsert: Array<{ from: string; to: string; changeType: string; edgeType: string; confidence: number; isResolved: number }>;
+  hotspots: Array<{ path: string; symbols: any[] }>;
+}
+
 export class CommitIndexer {
   private cacheHits = 0;
   private cacheMisses = 0;
@@ -162,8 +176,19 @@ export class CommitIndexer {
 
     const commitInfo = await this.git.getCommitInfo(sha);
     const files = await this.git.getFileChanges(sha);
-    const parentSha = commitInfo.parent;
+    const parentSha = commitInfo.parent || null;
 
+    // Parallel processing configuration
+    const CONCURRENCY = 8;
+    const limit = pLimit(CONCURRENCY);
+
+    logInfo(`[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY})`);
+
+    // Process files in parallel
+    const promises = files.map(file => limit(() => this.processFile(file, sha, parentSha)));
+    const results = await Promise.all(promises);
+
+    // Aggregate results
     let totalSymbolsAdded = 0;
     let totalSymbolsModified = 0;
     let totalSymbolsRemoved = 0;
@@ -171,150 +196,35 @@ export class CommitIndexer {
     let totalEdgesRemoved = 0;
     let maxStructuralChange = 0;
     const allRisks: string[] = [];
-
-    // Collect for blast radius
     const changedSymbols: any[] = [];
-    const allEdges: any[] = [];
+    const allEdges: any[] = []; // Collect edge objects for blast radius
     const symbolChanges = new Map<string, { type: string; symbol: any; filePath: string }>();
+    const edgesToInsert: any[] = [];
+    const fileHotspotsToUpdate: Array<{ path: string; symbols: any[] }> = [];
 
-    // Process each changed file
-    logInfo(`[CommitIndexer] Processing ${files.length} files for ${sha}`);
-    for (const file of files) {
-      const { path, status } = file;
+    for (const res of results) {
+      if (!res) continue;
+      totalSymbolsAdded += res.symbolsAdded;
+      totalSymbolsModified += res.symbolsModified;
+      totalSymbolsRemoved += res.symbolsRemoved;
+      totalEdgesAdded += res.edgesAdded;
+      totalEdgesRemoved += res.edgesRemoved;
+      maxStructuralChange = Math.max(maxStructuralChange, res.maxStructuralChange);
+      allRisks.push(...res.risks);
+      changedSymbols.push(...res.changedSymbols);
 
-      // Use centralized path filter
-      const filterResult = await shouldProcessPathWithLog(path, {
-        git: this.git,
-        status,
-        commitSha: sha,
-        skipSizeCheck: status === 'D'
-      }, 'CommitIndexer');
-
-      if (!filterResult.shouldProcess) {
-        continue;
+      for (const change of res.symbolChanges) {
+        symbolChanges.set(change.dnaId, change);
       }
+      edgesToInsert.push(...res.edgesToInsert);
+      fileHotspotsToUpdate.push(...res.hotspots);
+    }
 
-      if (status === 'D') {
-        // File deleted - get parent snapshot only
-
-        if (parentSha) {
-          const parentBlobSha = await this.git.getBlobSha(parentSha, path);
-          const parentContent = await this.git.safeGetFileContent(parentSha, path);
-          const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
-            path,
-            parentBlobSha,
-            parentContent
-          );
-          totalSymbolsRemoved += parentSnapshot.symbols.length;
-          totalEdgesRemoved += parentSnapshot.edges.length;
-
-          // Track removed symbols
-          for (const symbol of parentSnapshot.symbols) {
-            symbolChanges.set(symbol.dnaId, { type: 'removed', symbol, filePath: path });
-          }
-        }
-        continue;
-      }
-
-      // Get current blob
-      const currentBlobSha = await this.git.getBlobSha(sha, path);
-      const currentContent = await this.git.safeGetFileContent(sha, path);
-      const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
-        path,
-        currentBlobSha,
-        currentContent
-      );
-
-      if (currentSnapshot.symbols.length > 0) {
-        logDebug(`[CommitIndexer] Found ${currentSnapshot.symbols.length} symbols in ${path}`);
-      } else {
-        logDebug(`[CommitIndexer] No symbols found in ${path} (lang: ${currentSnapshot.language})`);
-      }
-
-      // Extract and save hybrid facts (CST-only or hybrid augmentation)
-      await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
-
-      if (status === 'A') {
-        // File added
-        totalSymbolsAdded += currentSnapshot.symbols.length;
-        totalEdgesAdded += currentSnapshot.edges.length;
-
-        // Track added symbols
-        for (const symbol of currentSnapshot.symbols) {
-          changedSymbols.push(symbol);
-          symbolChanges.set(symbol.dnaId, { type: 'added', symbol, filePath: path });
-        }
-      } else if (status === 'M' && parentSha) {
-        // File modified - compare snapshots
-        const parentBlobSha = await this.git.getBlobSha(parentSha, path);
-
-        // Quick check: if blob SHAs are identical, skip expensive operations
-        if (parentBlobSha === currentBlobSha) {
-          logDebug(`[CommitIndexer] Skipping diff for ${path} - identical blob SHA`);
-          // File content is identical, no changes to track
-          // Still need to extract hybrid facts though (they might have changed even if content is same)
-          await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
-          continue;
-        }
-
-        const parentContent = await this.git.safeGetFileContent(parentSha, path);
-        const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
-          path,
-          parentBlobSha,
-          parentContent
-        );
-
-        const symbolDiff = this.snapshotManager.compareSnapshots(
-          parentSnapshot,
-          currentSnapshot
-        );
-
-        totalSymbolsAdded += symbolDiff.added.length;
-        totalSymbolsModified += symbolDiff.modified.length;
-        totalSymbolsRemoved += symbolDiff.removed.length;
-
-        // Track all changed symbols
-        for (const symbol of symbolDiff.added) {
-          changedSymbols.push(symbol);
-          symbolChanges.set(symbol.dnaId, { type: 'added', symbol, filePath: path });
-        }
-        for (const mod of symbolDiff.modified) {
-          changedSymbols.push(mod.symbol);
-          symbolChanges.set(mod.symbol.dnaId, { type: 'modified', symbol: mod.symbol, filePath: path });
-        }
-        for (const symbol of symbolDiff.removed) {
-          symbolChanges.set(symbol.dnaId, { type: 'removed', symbol, filePath: path });
-        }
-
-        // Edge diff (simplified)
-        const parentEdgeIds = new Set(parentSnapshot.edges.map(e => `${e.from}-${e.to}`));
-        const currentEdgeIds = new Set(currentSnapshot.edges.map(e => `${e.from}-${e.to}`));
-        totalEdgesAdded += currentSnapshot.edges.filter(e => !parentEdgeIds.has(`${e.from}-${e.to}`)).length;
-        totalEdgesRemoved += parentSnapshot.edges.filter(e => !currentEdgeIds.has(`${e.from}-${e.to}`)).length;
-
-        // Get structural diff metrics
-        const structDiff = await this.structuralDiffManager.getOrCreateStructuralDiff(
-          parentBlobSha,
-          currentBlobSha,
-          path,
-          parentContent,
-          currentContent
-        );
-
-        maxStructuralChange = Math.max(maxStructuralChange, structDiff.structuralChangeScore);
-
-        // Extract and save hybrid facts for modified files (with prior hash)
-        const parentFileHash = await this.computeFileHashForFacts(path, parentSha, parentContent);
-        await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols, parentFileHash);
-
-        // Detect risks based on structural changes
-        if (structDiff.interfaceChanged) {
-          allRisks.push('breaking-api');
-        }
-        if (structDiff.controlFlowChanged) {
-          allRisks.push('refactor');
-        }
-      }
+    // Construct allEdges for blast radius from edgesToInsert
+    for (const edge of edgesToInsert) {
+      // Blast radius calculator expects simple edge objects or similar
+      // It uses: edge.from, edge.to
+      allEdges.push({ from: edge.from, to: edge.to });
     }
 
     // Calculate blast radius
@@ -366,16 +276,24 @@ export class CommitIndexer {
       hotspots
     };
 
-    // Store symbol history for detailed tracking
+    // Store metadata
+    this.storeCommitMetadata(commitInfo, facts.filesChanged);
+
+    // Store symbol history
     logInfo(`[CommitIndexer] Storing ${symbolChanges.size} symbol changes for ${sha}`);
     await this.storeSymbolHistory(sha, symbolChanges, blastRadiusResult.impactScore);
 
-    // Store symbols into symbols table (legacy support for intendedMap)
+    // Store symbols
     await this.storeSymbols(sha, symbolChanges);
 
-    // Store edges into edges table (skip if modules filter excludes edges)
+    // Store edges (batch insert)
     if (!opts?.modules || opts.modules.includes('edges')) {
-      await this.storeEdges(sha, files, parentSha || null);
+      // We already collected edgesToInsert in parallel, now verify we have them all
+      // storeEdges function in legacy code re-derived them. We should update it to take pre-calculated edges
+      // OR just use the existing storeEdges for safety if logic is complex.
+      // The legacy storeEdges re-reads files/snapshots. That's wasteful.
+      // Let's use the edges we calculated in parallel!
+      await this.storeEdgesBatch(sha, edgesToInsert);
     }
 
     // Detect moved blocks
@@ -389,9 +307,278 @@ export class CommitIndexer {
     this.reconcileMovesWithSymbols(symbolChanges, movedBlocks);
 
     // Update hotspot metrics
-    await this.updateHotspots(sha, symbolChanges, files);
+    const commitInfoForAuthor = await this.git.getCommitInfo(sha);
+    await this.updateHotspotsFromBatch(sha, symbolChanges, fileHotspotsToUpdate, commitInfoForAuthor.author);
 
     return facts;
+  }
+
+  private async processFile(
+    file: { path: string; status: string },
+    sha: string,
+    parentSha: string | null
+  ): Promise<FileProcessingResult | null> {
+    const { path, status } = file;
+    const result: FileProcessingResult = {
+      symbolsAdded: 0,
+      symbolsModified: 0,
+      symbolsRemoved: 0,
+      edgesAdded: 0,
+      edgesRemoved: 0,
+      maxStructuralChange: 0,
+      risks: [],
+      changedSymbols: [],
+      symbolChanges: [],
+      edgesToInsert: [],
+      hotspots: []
+    };
+
+    // Use centralized path filter
+    const filterResult = await shouldProcessPathWithLog(path, {
+      git: this.git,
+      status: status as any,
+      commitSha: sha,
+      skipSizeCheck: status === 'D'
+    }, 'CommitIndexer');
+
+    if (!filterResult.shouldProcess) {
+      return null;
+    }
+
+    if (status === 'D') {
+      if (parentSha) {
+        const parentBlobSha = await this.git.getBlobSha(parentSha, path);
+        const parentContent = await this.git.safeGetFileContent(parentSha, path);
+        const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
+          path,
+          parentBlobSha,
+          parentContent
+        );
+        result.symbolsRemoved += parentSnapshot.symbols.length;
+        result.edgesRemoved += parentSnapshot.edges.length;
+
+        for (const symbol of parentSnapshot.symbols) {
+          result.symbolChanges.push({ dnaId: symbol.dnaId, type: 'removed', symbol, filePath: path });
+        }
+
+        // Add removed edges
+        for (const edge of parentSnapshot.edges) {
+          result.edgesToInsert.push({
+            from: edge.from,
+            to: edge.to,
+            changeType: 'removed',
+            edgeType: (edge as any).type || 'unknown',
+            confidence: (edge as any).confidence || 1.0,
+            isResolved: (edge as any).isResolved !== false ? 1 : 0
+          });
+        }
+      }
+      return result;
+    }
+
+    // Get current blob
+    const currentBlobSha = await this.git.getBlobSha(sha, path);
+    const currentContent = await this.git.safeGetFileContent(sha, path);
+    const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
+      path,
+      currentBlobSha,
+      currentContent
+    );
+
+    // Extract and save hybrid facts
+    await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
+
+    if (status === 'A') {
+      result.symbolsAdded += currentSnapshot.symbols.length;
+      result.edgesAdded += currentSnapshot.edges.length;
+
+      for (const symbol of currentSnapshot.symbols) {
+        result.changedSymbols.push(symbol);
+        result.symbolChanges.push({ dnaId: symbol.dnaId, type: 'added', symbol, filePath: path });
+      }
+
+      for (const edge of currentSnapshot.edges) {
+        result.edgesToInsert.push({
+          from: edge.from,
+          to: edge.to,
+          changeType: 'added',
+          edgeType: (edge as any).type || 'unknown',
+          confidence: (edge as any).confidence || 1.0,
+          isResolved: (edge as any).isResolved !== false ? 1 : 0
+        });
+      }
+    } else if (status === 'M' && parentSha) {
+      const parentBlobSha = await this.git.getBlobSha(parentSha, path);
+
+      if (parentBlobSha === currentBlobSha) {
+        // Identical content
+        await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
+        return result;
+      }
+
+      const parentContent = await this.git.safeGetFileContent(parentSha, path);
+      const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
+        path,
+        parentBlobSha,
+        parentContent
+      );
+
+      const symbolDiff = this.snapshotManager.compareSnapshots(
+        parentSnapshot,
+        currentSnapshot
+      );
+
+      result.symbolsAdded += symbolDiff.added.length;
+      result.symbolsModified += symbolDiff.modified.length;
+      result.symbolsRemoved += symbolDiff.removed.length;
+
+      for (const symbol of symbolDiff.added) {
+        result.changedSymbols.push(symbol);
+        result.symbolChanges.push({ dnaId: symbol.dnaId, type: 'added', symbol, filePath: path });
+      }
+      for (const mod of symbolDiff.modified) {
+        result.changedSymbols.push(mod.symbol);
+        result.symbolChanges.push({ dnaId: mod.symbol.dnaId, type: 'modified', symbol: mod.symbol, filePath: path });
+      }
+      for (const symbol of symbolDiff.removed) {
+        result.symbolChanges.push({ dnaId: symbol.dnaId, type: 'removed', symbol, filePath: path });
+      }
+
+      // Calculate edge diffs
+      const parentEdgeIds = new Set(parentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`));
+      const currentEdgeIds = new Set(currentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`));
+
+      result.edgesAdded += currentSnapshot.edges.filter(e => !parentEdgeIds.has(`${e.from}-${e.to}-${(e as any).type || 'unknown'}`)).length;
+      result.edgesRemoved += parentSnapshot.edges.filter(e => !currentEdgeIds.has(`${e.from}-${e.to}-${(e as any).type || 'unknown'}`)).length;
+
+      for (const edge of currentSnapshot.edges) {
+        const edgeKey = `${edge.from}-${edge.to}-${(edge as any).type || 'unknown'}`;
+        if (!parentEdgeIds.has(edgeKey)) {
+          result.edgesToInsert.push({
+            from: edge.from,
+            to: edge.to,
+            changeType: 'added',
+            edgeType: (edge as any).type || 'unknown',
+            confidence: (edge as any).confidence || 1.0,
+            isResolved: (edge as any).isResolved !== false ? 1 : 0
+          });
+        }
+      }
+      for (const edge of parentSnapshot.edges) {
+        const edgeKey = `${edge.from}-${edge.to}-${(edge as any).type || 'unknown'}`;
+        if (!currentEdgeIds.has(edgeKey)) {
+          result.edgesToInsert.push({
+            from: edge.from,
+            to: edge.to,
+            changeType: 'removed',
+            edgeType: (edge as any).type || 'unknown',
+            confidence: (edge as any).confidence || 1.0,
+            isResolved: (edge as any).isResolved !== false ? 1 : 0
+          });
+        }
+      }
+
+      // Structural diff
+      const structDiff = await this.structuralDiffManager.getOrCreateStructuralDiff(
+        parentBlobSha,
+        currentBlobSha,
+        path,
+        parentContent,
+        currentContent
+      );
+
+      result.maxStructuralChange = structDiff.structuralChangeScore;
+
+      if (structDiff.interfaceChanged) result.risks.push('breaking-api');
+      if (structDiff.controlFlowChanged) result.risks.push('refactor');
+
+      // Hybrid facts with parent hash
+      const parentFileHash = await this.computeFileHashForFacts(path, parentSha, parentContent);
+      await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols, parentFileHash);
+    }
+
+    // Collect potential hotspots (symbols changed in this file)
+    const fileSymbols = result.symbolChanges
+      .filter(c => c.filePath === path)
+      .map(c => c.symbol);
+
+    if (fileSymbols.length > 0) {
+      result.hotspots.push({ path, symbols: fileSymbols });
+    }
+
+    return result;
+  }
+
+  /**
+   * Batch store edges (replaces individual storeEdges calls)
+   */
+  private async storeEdgesBatch(
+    sha: string,
+    edges: Array<{ from: string; to: string; changeType: string; edgeType: string; confidence: number; isResolved: number }>
+  ): Promise<void> {
+    const db = getDatabaseManager().getDatabase();
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO edges
+      (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    db.transaction(() => {
+      for (const edge of edges) {
+        stmt.run([
+          sha,
+          edge.from,
+          edge.to,
+          edge.changeType,
+          edge.edgeType,
+          edge.confidence,
+          edge.isResolved
+        ]);
+      }
+    })();
+  }
+
+  private async updateHotspotsFromBatch(
+    sha: string,
+    symbolChanges: Map<string, { type: string; symbol: any }>,
+    fileHotspots: Array<{ path: string; symbols: any[] }>,
+    author?: string
+  ): Promise<void> {
+    // Update file-level hotspots
+    for (const { path, symbols } of fileHotspots) {
+      if (symbols.length >= 5) {
+        await this.hotspotDetector.updateFileHotspot(path, sha, symbols, author);
+      }
+    }
+
+    // Batch update symbol-level hotspots
+    const symbols = Array.from(symbolChanges.values())
+      .map(change => change.symbol)
+      .filter(s => s && s.id && s.dnaId);
+
+    if (symbols.length > 0) {
+      const limit = pLimit(8);
+      const batches: SymbolInfo[][] = [];
+      const batchSize = 50;
+
+      for (let i = 0; i < symbols.length; i += batchSize) {
+        batches.push(symbols.slice(i, i + batchSize));
+      }
+
+      await Promise.all(
+        batches.map(batch =>
+          limit(async () => {
+            await this.hotspotDetector.batchUpdateSymbols(batch, sha);
+          })
+        )
+      );
+    }
+
+    // Snapshot
+    const commitCount = this.getCommitCount();
+    if (commitCount % 10 === 0) {
+      await this.hotspotDetector.createSnapshot(sha);
+    }
   }
 
   /**
@@ -457,12 +644,11 @@ export class CommitIndexer {
     }
 
     try {
-      // Parse file
-      const tree = await this.parser.parse(content, language);
-      if (!tree) return;
-
-      // Extract hybrid facts
-      const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
+      // Parse file via worker
+      // Note: extractHybridFacts in TreeSitterParser handles worker logic
+      // We pass empty string content if not needed by worker logic for pure extraction, 
+      // but worker needs content to parse.
+      const hybridFacts = await this.parser.extractHybridFacts(content, filePath, language, existingSymbols);
 
       // Save via timeline manager
       await this.cstTimelineManager.saveFacts(filePath, commitSha, hybridFacts, prevHash);
@@ -486,10 +672,8 @@ export class CommitIndexer {
     if (!language) return undefined;
 
     try {
-      const tree = await this.parser.parse(content, language);
-      if (!tree) return undefined;
-
-      const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
+      // Reuse worker to extract facts for hash computation
+      const hybridFacts = await this.parser.extractHybridFacts(content, filePath, language);
       const serialized = JSON.stringify(hybridFacts.map(f => ({
         id: f.id,
         dnaId: f.dnaId,
@@ -853,6 +1037,22 @@ export class CommitIndexer {
       VALUES (?, 'failed', ?, ?)
     `);
     stmt.run([sha, ANALYSIS_VERSION, new Date().toISOString()]);
-    logDebug(`[CommitIndexer] Failed to index ${sha}: ${error}`);
+  }
+
+  private storeCommitMetadata(info: any, filesChanged: number): void {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO commits_metadata
+      (sha, author, date, message, parent, files_changed, loaded_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run([
+      info.sha,
+      info.author,
+      info.date,
+      info.message,
+      info.parent || null,
+      filesChanged,
+      new Date().toISOString()
+    ]);
   }
 }

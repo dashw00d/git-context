@@ -6,7 +6,7 @@ import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
 import { getReportService } from '../services/reportService';
 import { getCockpitProvider } from '../extension';
 import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
-import { updateContexts, refreshCockpitState } from '../extension';
+import { updateContexts, refreshCockpitState } from '../core/stateUpdaters';
 import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { makeWorkspaceSha, parseWorkspaceSha, isWorkspaceSha } from '../utils/workspace';
 import { GitOperations } from '../analysis/git';
@@ -47,7 +47,7 @@ export async function registerCommands(
           }, async (progress, token) => {
             try {
               await commitsProvider.initializeDatabase();
-              const { getRefactorPipeline } = await import('../extension');
+              const { getRefactorPipeline } = await import('../services/pipelineFactory');
               const pipeline = await getRefactorPipeline();
               const git = new GitOperations();
               const commits = await git.getRecentCommits(parseInt(count));
@@ -64,18 +64,29 @@ export async function registerCommands(
               // Just index commits (quick metadata load)
               progress.report({ increment: 25, message: 'Indexing commits...' });
               if (token.isCancellationRequested) return;
-              
+
               await pipeline.indexCommits(shas);
 
               // Refresh UI to show indexed commits
               progress.report({ increment: 50, message: 'Refreshing UI...' });
               if (token.isCancellationRequested) return;
 
-              await commitsProvider.refresh();
-              await refreshCockpitState('command:analyzeLastCommits');
+              // Auto-select the indexed commits
+              orchestrator.updateState({ selectedCommitShas: shas }, 'command:analyzeLastCommits');
+              await updateContexts();
 
-              progress.report({ increment: 100, message: 'Complete' });
-              vscode.window.showInformationMessage(`Indexed ${shas.length} commits`);
+              await commitsProvider.refresh();
+              await refreshCockpitState(orchestrator, {
+                commitsProvider,
+                activeBundleProvider,
+                symbolHistoryProvider: symbolHistory
+              }, 'command:analyzeLastCommits');
+
+              progress.report({ increment: 100, message: 'Starting analysis...' });
+              vscode.window.showInformationMessage(`Indexed ${shas.length} commits. Starting analysis...`);
+
+              // Trigger analysis
+              await vscode.commands.executeCommand('git-context.analyze');
             } catch (error) {
               vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
             }
@@ -89,27 +100,22 @@ export async function registerCommands(
       'git-context.analyzeStagedChanges',
       async () => {
         try {
-          await commitsProvider.initializeDatabase();
-          const { getRefactorPipeline } = await import('../extension');
-          const pipeline = await getRefactorPipeline();
-          const workspaceIndexer = pipeline.workspaceIndexer; // Expose as property
+          // Refresh to ensure we have latest staged files
+          await commitsProvider.refresh();
+          const state = orchestrator.getState();
+          const stagedPaths = state.stagedFiles.map(f => f.path);
 
-          const facts = await workspaceIndexer.analyzeWorkspace('staged');
-
-          if (!facts) {
+          if (stagedPaths.length === 0) {
             vscode.window.showInformationMessage('No staged changes to analyze');
             return;
           }
 
-          orchestrator.updateState({
-            workspaceFacts: facts,
-            activeSection: 'live'
-          }, 'command:analyzeStagedChanges');
+          // Select all staged files
+          orchestrator.updateState({ selectedStagedPaths: stagedPaths }, 'command:analyzeStagedChanges');
+          await updateContexts();
 
-          await commitsProvider.refresh();
-          await refreshCockpitState('command:analyzeStaged');
-
-          vscode.window.showInformationMessage(`Analyzed ${facts.filesChanged} staged files`);
+          // Trigger full analysis
+          await vscode.commands.executeCommand('git-context.analyze');
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to analyze staged changes: ${error}`);
         }
@@ -120,25 +126,22 @@ export async function registerCommands(
       'git-context.analyzeUnstagedChanges',
       async () => {
         try {
-          await commitsProvider.initializeDatabase();
-          const { getRefactorPipeline } = await import('../extension');
-          const pipeline = await getRefactorPipeline();
-          const workspaceIndexer = pipeline.workspaceIndexer;
+          // Refresh to ensure we have latest unstaged files
+          await commitsProvider.refresh();
+          const state = orchestrator.getState();
+          const unstagedPaths = state.unstagedFiles.map(f => f.path);
 
-          const facts = await workspaceIndexer.analyzeWorkspace('unstaged');
-          if (!facts) {
+          if (unstagedPaths.length === 0) {
             vscode.window.showInformationMessage('No unstaged files to analyze');
             return;
           }
 
-          orchestrator.updateState({
-            workspaceFacts: facts,
-            activeSection: 'live'
-          }, 'command:analyzeUnstagedChanges');
+          // Select all unstaged files
+          orchestrator.updateState({ selectedUnstagedPaths: unstagedPaths }, 'command:analyzeUnstagedChanges');
+          await updateContexts();
 
-          await commitsProvider.refresh();
-          await refreshCockpitState('command:analyzeUnstaged');
-          vscode.window.showInformationMessage(`Analyzed ${facts.filesChanged} unstaged files`);
+          // Trigger full analysis
+          await vscode.commands.executeCommand('git-context.analyze');
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to analyze unstaged changes: ${error}`);
         }
@@ -261,7 +264,7 @@ export async function registerCommands(
         try {
           const state = orchestrator.getState();
           const selected = new Set(state.selectedCommitShas);
-          const { getRefactorPipeline } = await import('../extension');
+          const { getRefactorPipeline } = await import('../services/pipelineFactory');
           const refactorPipeline = await getRefactorPipeline();
 
           let branchLoaded = false;
@@ -366,7 +369,11 @@ export async function registerCommands(
               { force: forceReanalyze, cancellationToken: cancellationTokenSource.token }
             );
             await updateContexts();
-            await refreshCockpitState('command:analyze');
+            await refreshCockpitState(orchestrator, {
+              commitsProvider,
+              activeBundleProvider,
+              symbolHistoryProvider: symbolHistory
+            }, 'command:analyze');
           } finally {
             await commitsProvider.refresh();
           }
@@ -424,7 +431,11 @@ export async function registerCommands(
           const { getReportManager } = await import('../storage/reportManager');
           const reportManager = getReportManager();
           reportManager.delete(reportId);
-          await refreshCockpitState();
+          await refreshCockpitState(orchestrator, {
+            commitsProvider,
+            activeBundleProvider,
+            symbolHistoryProvider: symbolHistory
+          });
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to delete report: ${error}`);
         }
@@ -442,7 +453,11 @@ export async function registerCommands(
           if (report) {
             report.isPinned = !report.isPinned;
             reportManager.save(report);
-            await refreshCockpitState();
+            await refreshCockpitState(orchestrator, {
+              commitsProvider,
+              activeBundleProvider,
+              symbolHistoryProvider: symbolHistory
+            });
           }
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to toggle pin: ${error}`);
@@ -511,7 +526,11 @@ export async function registerCommands(
         try {
           commitsProvider.loadMoreOffset += 20;
           await commitsProvider.refresh();
-          await refreshCockpitState();
+          await refreshCockpitState(orchestrator, {
+            commitsProvider,
+            activeBundleProvider,
+            symbolHistoryProvider: symbolHistory
+          });
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to load more commits: ${error}`);
         }
@@ -531,7 +550,11 @@ export async function registerCommands(
         }, 'command:resetAll');
         commitsProvider.loadMoreOffset = 0;
         await updateContexts();
-        await refreshCockpitState();
+        await refreshCockpitState(orchestrator, {
+          commitsProvider,
+          activeBundleProvider,
+          symbolHistoryProvider: symbolHistory
+        });
       }
     );
 
@@ -634,7 +657,7 @@ export async function registerCommands(
         try {
           const { spawn } = require('child_process');
           const path = require('path');
-          
+
           await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: 'Downloading required WASM files...',
@@ -646,7 +669,7 @@ export async function registerCommands(
                 cwd: path.join(__dirname, '..', '..'),
                 stdio: 'pipe'
               });
-              
+
               let output = '';
               nodeProcess.stdout.on('data', (data: Buffer) => {
                 output += data.toString();
@@ -657,11 +680,11 @@ export async function registerCommands(
                   }
                 });
               });
-              
+
               nodeProcess.stderr.on('data', (data: Buffer) => {
                 output += data.toString();
               });
-              
+
               nodeProcess.on('close', (code: number) => {
                 if (code === 0) {
                   vscode.window.showInformationMessage('WASM files downloaded successfully!');
@@ -690,7 +713,7 @@ export async function registerCommands(
             vscode.window.showWarningMessage('Live analysis engine not available. Please reload the window.');
             return;
           }
-          
+
           await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: 'Generating live analysis report...',

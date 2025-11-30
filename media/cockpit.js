@@ -2435,7 +2435,7 @@
           var HostPortal = 4;
           var HostComponent = 5;
           var HostText = 6;
-          var Fragment4 = 7;
+          var Fragment5 = 7;
           var Mode = 8;
           var ContextConsumer = 9;
           var ContextProvider = 10;
@@ -3592,7 +3592,7 @@
                 return "DehydratedFragment";
               case ForwardRef:
                 return getWrappedName$1(type, type.render, "ForwardRef");
-              case Fragment4:
+              case Fragment5:
                 return "Fragment";
               case HostComponent:
                 return type;
@@ -12021,7 +12021,7 @@
               }
             }
             function updateFragment2(returnFiber, current2, fragment, lanes, key) {
-              if (current2 === null || current2.tag !== Fragment4) {
+              if (current2 === null || current2.tag !== Fragment5) {
                 var created = createFiberFromFragment(fragment, returnFiber.mode, lanes, key);
                 created.return = returnFiber;
                 return created;
@@ -12424,7 +12424,7 @@
                 if (child.key === key) {
                   var elementType = element.type;
                   if (elementType === REACT_FRAGMENT_TYPE) {
-                    if (child.tag === Fragment4) {
+                    if (child.tag === Fragment5) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var existing = useFiber(child, element.props.children);
                       existing.return = returnFiber;
@@ -17900,7 +17900,7 @@
                 var _resolvedProps2 = workInProgress2.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current2, workInProgress2, type, _resolvedProps2, renderLanes2);
               }
-              case Fragment4:
+              case Fragment5:
                 return updateFragment(current2, workInProgress2, renderLanes2);
               case Mode:
                 return updateMode(current2, workInProgress2, renderLanes2);
@@ -18172,7 +18172,7 @@
               case SimpleMemoComponent:
               case FunctionComponent:
               case ForwardRef:
-              case Fragment4:
+              case Fragment5:
               case Mode:
               case Profiler:
               case ContextConsumer:
@@ -22433,7 +22433,7 @@
             return fiber;
           }
           function createFiberFromFragment(elements, mode, lanes, key) {
-            var fiber = createFiber(Fragment4, elements, key, mode);
+            var fiber = createFiber(Fragment5, elements, key, mode);
             fiber.lanes = lanes;
             return fiber;
           }
@@ -24211,14 +24211,29 @@
   var React14 = __toESM(require_react());
   var LiveTabContent = ({ state, vscode: vscode2 }) => {
     const { liveAnalysis } = state;
-    return /* @__PURE__ */ React14.createElement("div", { className: "cockpit__tab-content" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__section-header" }, /* @__PURE__ */ React14.createElement("h3", null, "Live Analysis"), /* @__PURE__ */ React14.createElement("span", { className: `cockpit__badge ${liveAnalysis.isTracking ? "success" : "warning"}` }, liveAnalysis.isTracking ? "Tracking Active" : "Tracking Paused")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__card" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metrics-grid" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.pendingChanges), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Pending Files")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.totalEdits), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Total Edits")))), liveAnalysis.summary && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__card" }, /* @__PURE__ */ React14.createElement("h4", null, "Analysis Results"), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metrics-grid" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric danger" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.zombies), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Zombies")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric warning" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.missing), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Missing")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric info" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.drift), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Drift")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric secondary" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.dead), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Ghosts")))), liveAnalysis.facts?.drift?.zombie_symbols?.length > 0 && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__section" }, /* @__PURE__ */ React14.createElement("h4", null, "Zombies Detected"), /* @__PURE__ */ React14.createElement("ul", { className: "cockpit__list" }, liveAnalysis.facts.drift.zombie_symbols.map((z) => /* @__PURE__ */ React14.createElement("li", { key: z.symbol_id, className: "cockpit__list-item" }, /* @__PURE__ */ React14.createElement("span", { className: "codicon codicon-warning" }), /* @__PURE__ */ React14.createElement("span", { className: "cockpit__list-label" }, z.found.name), /* @__PURE__ */ React14.createElement("span", { className: "cockpit__list-detail" }, "Should be absent"))))), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__actions" }, liveAnalysis.status === "ready" && /* @__PURE__ */ React14.createElement(
+    return /* @__PURE__ */ React14.createElement("div", { className: "cockpit__tab-content" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__section-header" }, /* @__PURE__ */ React14.createElement("h3", null, "Live Analysis"), /* @__PURE__ */ React14.createElement("span", { className: `cockpit__badge ${liveAnalysis.isTracking ? "success" : "warning"}` }, liveAnalysis.isTracking ? "Tracking Active" : "Tracking Paused")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__card" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metrics-grid" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.pendingChanges), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Pending Files")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.totalEdits), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Total Edits")))), liveAnalysis.summary && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__card" }, /* @__PURE__ */ React14.createElement("h4", null, "Analysis Results"), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metrics-grid" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric danger" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.zombies), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Zombies")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric warning" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.missing), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Missing")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric info" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.drift), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Drift")), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric secondary" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.dead), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Ghosts")), liveAnalysis.summary.hybridDrifts !== void 0 && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric info" }, /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-value" }, liveAnalysis.summary.hybridDrifts), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__metric-label" }, "Hybrid")))), liveAnalysis.facts?.drift?.zombie_symbols?.length > 0 && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__section" }, /* @__PURE__ */ React14.createElement("h4", null, "Zombies Detected"), /* @__PURE__ */ React14.createElement("ul", { className: "cockpit__list" }, liveAnalysis.facts.drift.zombie_symbols.map((z) => /* @__PURE__ */ React14.createElement("li", { key: z.symbol_id, className: "cockpit__list-item" }, /* @__PURE__ */ React14.createElement("span", { className: "codicon codicon-warning" }), /* @__PURE__ */ React14.createElement("span", { className: "cockpit__list-label" }, z.found.name), /* @__PURE__ */ React14.createElement("span", { className: "cockpit__list-detail" }, "Should be absent"))))), /* @__PURE__ */ React14.createElement("div", { className: "cockpit__actions" }, !liveAnalysis.isTracking && /* @__PURE__ */ React14.createElement(
+      "button",
+      {
+        className: "cockpit__button primary",
+        onClick: () => vscode2.postMessage({ type: "startLiveAnalysis" })
+      },
+      "Start Live Analysis"
+    ), liveAnalysis.isTracking && /* @__PURE__ */ React14.createElement(React14.Fragment, null, liveAnalysis.pendingChanges > 0 && liveAnalysis.status !== "analyzing" && /* @__PURE__ */ React14.createElement(
       "button",
       {
         className: "cockpit__button primary",
         onClick: () => vscode2.postMessage({ type: "generateLiveReport" })
       },
       "Analyze Pending Changes"
-    ), liveAnalysis.status === "analyzing" && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__loading" }, /* @__PURE__ */ React14.createElement("span", { className: "codicon codicon-loading codicon-modifier-spin" }), "Analyzing live changes..."), liveAnalysis.status === "idle" && liveAnalysis.pendingChanges > 0 && !liveAnalysis.summary && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__dim" }, "Edit threshold not yet reached for auto-analysis.")));
+    ), /* @__PURE__ */ React14.createElement(
+      "button",
+      {
+        className: "cockpit__button ghost",
+        onClick: () => vscode2.postMessage({ type: "generateLiveReport" }),
+        disabled: liveAnalysis.status === "analyzing"
+      },
+      "Run Manual Scan"
+    )), liveAnalysis.status === "analyzing" && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__loading" }, /* @__PURE__ */ React14.createElement("span", { className: "codicon codicon-loading codicon-modifier-spin" }), "Analyzing live changes..."), liveAnalysis.isTracking && liveAnalysis.status === "idle" && liveAnalysis.pendingChanges > 0 && !liveAnalysis.summary && /* @__PURE__ */ React14.createElement("div", { className: "cockpit__dim" }, "Edit threshold not yet reached for auto-analysis.")));
   };
 
   // src/webview/cockpit/index.tsx

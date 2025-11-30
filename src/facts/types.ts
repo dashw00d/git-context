@@ -71,6 +71,50 @@ export interface RefactorBundleFacts {
    * on supported languages (php, js/ts) to layer structural facts on top
    */
   hybridFacts?: Record<string, HybridFact[]>;
+
+  /**
+   * Summary of hybrid facts analysis
+   */
+  hybridSummary?: {
+    totalFacts: number;
+    fileCount: number;
+    topFiles: Array<{ file: string; count: number }>;
+    sampleFacts: Array<{ file: string; sample: string[] }>;
+  };
+
+  /**
+   * Summarized evidence for LLM context
+   */
+  evidenceSummary?: {
+    missing?: any[];
+    zombies?: any[];
+    divergent?: any[];
+    hybridDrifts?: any[];
+    hotspots?: any[];
+    movedLineage?: any[];
+    counts?: {
+      missing: number;
+      zombies: number;
+      divergent: number;
+      hybridDrifts: number;
+      hotspots: number;
+      moved: number;
+    };
+  };
+
+  /**
+   * Caps applied to evidence arrays during summarization
+   */
+  llmCapsApplied?: {
+    missing: number;
+    zombies: number;
+    divergent: number;
+    hybridDrifts: number;
+    hotspots: number;
+    moved: number;
+    hybridFiles: number;
+    discoveryTotal: number;
+  };
 }
 
 export interface RefactorPattern {

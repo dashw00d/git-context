@@ -139,6 +139,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       case 'setActiveSection':
         this.orchestrator.updatePartial('activeSection', msg.section, 'ui:setActiveSection');
         break;
+      case 'generateLiveReport':
+        this.orchestrator.updateLiveState({ status: 'analyzing' }, 'ui:generateLiveReport');
+        await vscode.commands.executeCommand('git-context.generateLiveReport');
+        break;
+      case 'startLiveAnalysis':
+        await vscode.commands.executeCommand('git-context.startLiveAnalysis');
+        break;
       case 'generateReport': {
         const mode = msg.mode as 'selection' | 'lastN' | 'staged' | 'unstaged' | undefined;
         const force = msg.force as boolean | undefined;

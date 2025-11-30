@@ -12,7 +12,21 @@ export function createEmbeddingStep(
     async run(state: PipelineState) {
       if (!state.commitFacts) return;
 
-      await embeddingIndexer.indexCommits(state.commitFacts);
+      try {
+        const metrics = await embeddingIndexer.indexCommits(state.commitFacts);
+        state.embeddingMetrics = metrics;
+      } catch (error) {
+        state.embeddingMetrics = {
+          commitCount: state.commitFacts.length,
+          commitShardCount: 0,
+          symbolShardCount: 0,
+          themeShardCount: 0,
+          durationMs: 0,
+          skipped: true,
+          reason: error instanceof Error ? error.message : String(error)
+        };
+        throw error;
+      }
     }
   };
 }

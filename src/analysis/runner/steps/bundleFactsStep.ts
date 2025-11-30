@@ -23,6 +23,7 @@ export function createBundleFactsStep(): PipelineStep {
         options.working = state.working;
         options.drift = state.drift;
         options.legacy = state.legacy;
+        options.hotspots = state.hotspots;
       }
 
       // Add timeline and movedLineage if available

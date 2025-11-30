@@ -316,12 +316,13 @@ export class SymbolExtractor {
       return [];
     }
 
-    const tree = await this.parser.parseFile(content, language);
-    if (!tree) {
-      return [];
-    }
-
-    const symbols = this.parser.extractSymbols(tree, filePath, language);
+    // Use worker to extract all facts, then filter for semantic symbols
+    const facts = await this.parser.extractHybridFacts(content, filePath, language);
+    
+    // Filter for semantic symbols (exclude CST nodes)
+    // Note: We strictly filter for known symbol kinds to avoid CST noise
+    const symbolKinds = new Set(['function', 'method', 'class', 'const', 'variable', 'interface', 'enum', 'module']);
+    const symbols = facts.filter(f => symbolKinds.has(f.kind)) as SymbolInfo[];
 
     // Add unique IDs and ensure they include file path for uniqueness
     return symbols.map(symbol => ({

@@ -12,7 +12,7 @@ export function createWorkingStep(): PipelineStep {
         throw new Error('Scope required for working snapshot');
       }
 
-      const working = await getWorkingSnapshot(state.scope.allPaths);
+      const working = await getWorkingSnapshot(state.scope.allPaths, state.liveOverrides);
       state.working = working;
     }
   };

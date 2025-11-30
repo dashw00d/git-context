@@ -534,3 +534,57 @@
 .facts-json pre::-webkit-scrollbar-thumb:hover {
   background: var(--vscode-scrollbarSlider-activeBackground);
 }
+
+/* Text Truncation Utilities */
+.evidence-item, .claim-text, .action-text, .header-meta span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: break-word;  /* Fallback for long words */
+  display: block;  /* Prevent inline overflow */
+}
+
+.header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.9em;
+}
+
+.evidence-json pre {
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--vscode-textBlockQuote-background);
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.three-panel-layout {
+  display: grid;
+  grid-template-columns: 250px 1fr 300px;  /* Fixed sidebar widths to prevent squeeze */
+  height: 100vh;
+  overflow: hidden;
+}
+
+@media (max-width: 1000px) {
+  .three-panel-layout {
+    grid-template-columns: 200px 1fr;
+  }
+  .inspector-panel {
+    display: none; /* Hide inspector on smaller screens */
+  }
+}
+
+@media (max-width: 600px) {
+  .three-panel-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .sidebar {
+    width: 100%;
+    height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--vscode-panel-border);
+  }
+}

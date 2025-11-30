@@ -6,6 +6,7 @@ import { generateEmbedding } from '../storage/embeddings';
 import { RefactorBundleFacts } from '../facts/types';
 import { logInfo, logWarn } from '../utils/logger';
 import { getProjectId } from '../utils/config';
+import type { HistoryMetrics } from './runner/pipelineMetrics';
 
 export interface RetrievedHistory {
   similarCommits: Array<{
@@ -48,20 +49,27 @@ export class BundleStoryEngine {
    */
   async generateStory(
     bundleFacts: RefactorBundleFacts,
-    commitFacts: CommitFacts[]
+    commitFacts: CommitFacts[],
+    precomputedHistory?: RetrievedHistory
   ): Promise<any> {
     logInfo('[BundleStory] Retrieving historical context...');
 
-    // Build bundle query shard
-    const bundleShard = this.buildBundleShard(bundleFacts, commitFacts);
-    const bundleEmbedding = await generateEmbedding(bundleShard);
+    let history: RetrievedHistory;
+    if (precomputedHistory) {
+      history = precomputedHistory;
+    } else {
+      // Build bundle query shard
+      const bundleShard = this.buildBundleShard(bundleFacts, commitFacts);
+      const bundleEmbedding = await generateEmbedding(bundleShard);
 
-    // Cross-time retrieval with multiple query strategies
-    const history = await this.retrieveHistory(
-      bundleEmbedding,
-      bundleFacts,
-      commitFacts
-    );
+      // Cross-time retrieval with multiple query strategies
+      const { history: generatedHistory } = await this.retrieveHistory(
+        bundleEmbedding,
+        bundleFacts,
+        commitFacts
+      );
+      history = generatedHistory;
+    }
 
     logInfo('[BundleStory] Running LLM analysis...');
 
@@ -101,14 +109,29 @@ export class BundleStoryEngine {
     queryEmbedding: number[] | null,
     bundleFacts: RefactorBundleFacts,
     commitFacts: CommitFacts[]
-  ): Promise<RetrievedHistory> {
+  ): Promise<{ history: RetrievedHistory; metrics: HistoryMetrics }> {
+    const startTime = Date.now();
+    const makeEmpty = (reason: string): { history: RetrievedHistory; metrics: HistoryMetrics } => ({
+      history: this.emptyHistory(),
+      metrics: {
+        durationMs: Date.now() - startTime,
+        similarCommits: 0,
+        similarSymbols: 0,
+        relatedRefactors: 0,
+        skipped: true,
+        reason
+      }
+    });
+
     const qdrant = getQdrantClient();
     if (!(await qdrant.isEnabled())) {
-      return this.emptyHistory();
+      return makeEmpty('qdrant_disabled');
     }
 
     const client = await qdrant.getClient();
-    if (!client) return this.emptyHistory();
+    if (!client) {
+      return makeEmpty('client_unavailable');
+    }
 
     // Compute embedding if not provided (history step calls directly)
     const effectiveEmbedding = queryEmbedding && queryEmbedding.length > 0
@@ -119,12 +142,12 @@ export class BundleStoryEngine {
     const projectId = await getProjectId();
     if (!projectId) {
       logInfo('[BundleStory] No project ID found, skipping retrieval');
-      return this.emptyHistory();
+      return makeEmpty('no_project_id');
     }
 
     const commitsCollection = qdrant.getCollectionName('commits', projectId);
     const symbolsCollection = qdrant.getCollectionName('symbols', projectId);
-    
+
     // Ensure collections exist before searching (handles both base and project-specific collections)
     await qdrant.ensureCollection('commits', projectId);
     await qdrant.ensureCollection('symbols', projectId);
@@ -132,23 +155,23 @@ export class BundleStoryEngine {
     // Check collection sizes before searching to avoid unnecessary queries
     const commitsInfo = await client.getCollection(commitsCollection);
     const symbolsInfo = await client.getCollection(symbolsCollection);
-    
+
     // Safely access points_count (Qdrant API returns this property)
     const commitsCount = (commitsInfo as any).points_count ?? (commitsInfo as any).pointsCount ?? 0;
     const symbolsCount = (symbolsInfo as any).points_count ?? (symbolsInfo as any).pointsCount ?? 0;
-    
+
     const commitsEmpty = commitsCount === 0;
     const symbolsEmpty = symbolsCount === 0;
-    
+
     if (commitsEmpty && symbolsEmpty) {
       logInfo('[BundleStory] Skipping search: both collections are empty');
-      return this.emptyHistory();
+      return makeEmpty('empty_collections');
     }
-    
+
     if (commitsEmpty) {
       logInfo(`[BundleStory] Commits collection is empty (${commitsCount} points), skipping commit search`);
     }
-    
+
     if (symbolsEmpty) {
       logInfo(`[BundleStory] Symbols collection is empty (${symbolsCount} points), skipping symbol search`);
     }
@@ -165,14 +188,14 @@ export class BundleStoryEngine {
     // Query 1: Similar commits (episodic memory)
     let similarCommits: any[] = [];
     if (!commitsEmpty) {
-    try {
-      similarCommits = await client.search(commitsCollection, {
-        vector: effectiveEmbedding,
-        limit: 20,
-        with_payload: true,
-        score_threshold: 0.6,
-        filter: projectFilter  // ONLY CURRENT PROJECT
-      });
+      try {
+        similarCommits = await client.search(commitsCollection, {
+          vector: effectiveEmbedding,
+          limit: 20,
+          with_payload: true,
+          score_threshold: 0.6,
+          filter: projectFilter  // ONLY CURRENT PROJECT
+        });
       } catch (error: any) {
         logWarn(`[BundleStory] Failed to search commits: ${error?.message || error}. Collection: ${commitsCollection}, Filter: ${JSON.stringify(projectFilter)}`);
       }
@@ -181,14 +204,14 @@ export class BundleStoryEngine {
     // Query 2: Similar symbols (fine-grained history)
     let similarSymbols: any[] = [];
     if (!symbolsEmpty) {
-    try {
-      similarSymbols = await client.search(symbolsCollection, {
-        vector: effectiveEmbedding,
-        limit: 30,
-        with_payload: true,
-        score_threshold: 0.65,
-        filter: projectFilter  // ONLY CURRENT PROJECT
-      });
+      try {
+        similarSymbols = await client.search(symbolsCollection, {
+          vector: effectiveEmbedding,
+          limit: 30,
+          with_payload: true,
+          score_threshold: 0.65,
+          filter: projectFilter  // ONLY CURRENT PROJECT
+        });
       } catch (error: any) {
         logWarn(`[BundleStory] Failed to search symbols: ${error?.message || error}. Collection: ${symbolsCollection}, Filter: ${JSON.stringify(projectFilter)}`);
       }
@@ -204,7 +227,7 @@ export class BundleStoryEngine {
         {
           key: 'structural_change_score',
           range: {
-            gte: 0.5  // High structural change
+            gte: 0.1  // Lowered from 0.5 to capture more refactors
           }
         }
       ]
@@ -212,13 +235,13 @@ export class BundleStoryEngine {
 
     let relatedRefactors: any[] = [];
     if (!commitsEmpty) {
-    try {
-      relatedRefactors = await client.search(commitsCollection, {
-        vector: effectiveEmbedding,
-        limit: 10,
-        filter: refactorFilter,
-        with_payload: true
-      });
+      try {
+        relatedRefactors = await client.search(commitsCollection, {
+          vector: effectiveEmbedding,
+          limit: 10,
+          filter: refactorFilter,
+          with_payload: true
+        });
       } catch (error: any) {
         logWarn(`[BundleStory] Failed to search related refactors: ${error?.message || error}. Collection: ${commitsCollection}, Filter: ${JSON.stringify(refactorFilter)}`);
       }
@@ -243,7 +266,7 @@ export class BundleStoryEngine {
       logWarn(`[BundleStory] Filter leak detected: expected ${projectId}, got ${Array.from(retrievedProjectIds).join(', ')}`);
     }
 
-    return {
+    const history: RetrievedHistory = {
       similarCommits: similarCommits.map(r => ({
         sha: (r.payload?.sha as string) || '',
         date: (r.payload?.date as string) || '',
@@ -270,6 +293,15 @@ export class BundleStoryEngine {
       })),
       symbolEvolution
     };
+
+    const metrics: HistoryMetrics = {
+      durationMs: Date.now() - startTime,
+      similarCommits: history.similarCommits.length,
+      similarSymbols: history.similarSymbols.length,
+      relatedRefactors: history.relatedRefactors.length
+    };
+
+    return { history, metrics };
   }
 
   /**

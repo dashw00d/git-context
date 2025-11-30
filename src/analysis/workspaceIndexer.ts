@@ -13,6 +13,7 @@ import { getTreeSitterParser } from './tree-sitter';
 // p-limit is CommonJS; use require style to avoid default-import issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 import pLimit = require('p-limit');
+import type { HybridFact } from '../types/cstFacts';
 
 export interface WorkspaceFacts {
   workspaceHash: string;
@@ -189,7 +190,7 @@ export class WorkspaceIndexer {
             );
 
             // Extract and save hybrid facts for modified workspace files with mode-specific version
-            const headFileHash = await this.computeFileHashForFacts(filePath, 'HEAD', headContent);
+            const headFileHash = await this.computeFileHashForFacts(filePath, headContent);
             await this.extractAndSaveHybridFacts(filePath, version, workingContent, workspaceSnapshot.symbols, headFileHash);
 
             // Risk detection
@@ -418,10 +419,10 @@ export class WorkspaceIndexer {
     }
 
     try {
-      const tree = await this.parser.parse(content, language);
-      if (!tree) return;
+      // Parse file via worker
+      const hybridFacts: HybridFact[] = await this.parser.extractHybridFacts(content, filePath, language, existingSymbols);
 
-      const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
+      // Save via timeline manager
       await this.cstTimelineManager.saveFacts(filePath, version, hybridFacts, prevHash);
       if (hybridFacts.length > 0) {
         logDebug(`[WorkspaceIndexer] Saved ${hybridFacts.length} hybrid facts for ${filePath}@${version}`);
@@ -432,22 +433,19 @@ export class WorkspaceIndexer {
   }
 
   /**
-   * Compute file hash for facts
+   * Compute file hash for facts (for delta tracking)
    */
   private async computeFileHashForFacts(
     filePath: string,
-    version: string,
     content: string
   ): Promise<string | undefined> {
     const language = detectLanguage(filePath);
     if (!language) return undefined;
 
     try {
-      const tree = await this.parser.parse(content, language);
-      if (!tree) return undefined;
-
-      const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
-      const serialized = JSON.stringify(hybridFacts.map(f => ({
+      // Use worker to extract facts for hash computation
+      const hybridFacts: HybridFact[] = await this.parser.extractHybridFacts(content, filePath, language);
+      const serialized = JSON.stringify(hybridFacts.map((f: any) => ({
         id: f.id,
         dnaId: f.dnaId,
         name: f.name,

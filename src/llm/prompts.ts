@@ -188,6 +188,11 @@ You are a senior engineer validating refactor completeness. Review every incompl
 Timeline context: {timelineSummary} ({versionCount} versions)
 Trace sequential changes through timeline for evolution context.
 
+**CONTEXTUAL AIDS:**
+- Check 'drift.examplesSummary' for high-signal missing/zombie items.
+- Review 'hybridSummary.hybridDriftSamples' for concrete CST drift examples.
+- Use 'evidenceSnippets' to ground verification in real code.
+
 **CRITICAL:** Focus on REAL ISSUES vs false positives. Prioritize high-severity findings that require immediate action.
 
 For each finding, determine if it's a real issue or a false positive:
@@ -245,6 +250,10 @@ You are a senior engineer creating a cleanup plan for an incomplete refactor. Us
 Timeline context: {timelineSummary} ({versionCount} versions)
 Consider the evolution sequence when prioritizing cleanup actions.
 
+**CONTEXTUAL AIDS:**
+- Use 'evidenceSnippets.legacy' and 'evidenceSnippets.hotspots' to identify high-value targets.
+- specific 'drift.examplesSummary' items should be top priority if critical.
+
 **VALUE PRIORITIZATION:**
 - Order by VALUE: priority/effort ratio (urgent + low effort = highest value)
 - Group HIGH-VALUE actions first (urgent/high priority with low effort)
@@ -299,28 +308,29 @@ Guidelines:
  * Scans raw AST, diffs, and graph for emergent anomalies
  */
 export const PROMPT_DISCOVER = `
-From AST JSON (tree structure), diff hunks (old/new code), graph (nodes/edges):
+Analyze the provided FEED JSON to DISCOVER emergent patterns.
 
-DISCOVER emergent patterns generically:
+If analyzing DISCOVERY FEED (curated items):
+- Look for clusters of missing/zombie/divergent items (use 'drift.examplesSummary').
+- Check hotspots for architectural instability.
+- Use provided snippets (from 'evidenceSnippets' or feed items) to identify semantic drifts (naming, logic).
+
+If analyzing RAW FEED (AST/Diff/Graph):
 - STRUCTURAL: Cycles, fan-in/out spikes, orphan nodes post-diff.
-- SEMANTIC: Repeat strings/lits (missed const), naming clusters (old_style vs new), token mismatches (colors/classes).
+- SEMANTIC: Repeat strings/lits (missed const), naming clusters (old_style vs new).
 - DRIFT: Diff-applied files w/ lingering old code; intended symbols w/o edges.
-- HOOKS: New symbols w/o callers; edge drops.
 
-**CRITICAL RULE:** ONLY use file names from bundle.scope.files or history.similarSymbols[].filePath. Do NOT invent files.
-- For examples, ONLY reference files that exist in bundle.scope.files or history.similarSymbols[].filePath
-- Format: "diff[bundle.scope.files[0]] shows <pattern in this file>"
-- Format: "ast[history.similarSymbols[0].filePath].history.similarSymbols[0].name - <pattern>"
-- If no files match pattern, use "graph.nodes[symbol_dna_id]" or skip example
+**CRITICAL RULE:** ONLY use file names/symbols present in the feed. Do NOT invent files.
+- Format: "file.ts shows <pattern>"
+- Use snippets if available to prove the pattern.
 - NEVER invent file names like "PaymentService.php" unless it exists in the provided files list
 
 **IMPORTANT:** For examples, provide DESCRIPTIVE paths that explain what the evidence shows:
-- Good: "diff[bundle.scope.files[0]] shows renamed getUser() to fetchUser()" (only if file exists)
-- Good: "ast[history.similarSymbols[0].filePath].method_name - new payment flow" (only if file exists)
-- Bad: "diff[PaymentService.php]" (if file not in bundle.scope.files)
+- Good: "User.ts shows renamed getUser() to fetchUser()" (only if file exists)
+- Good: "Hotspot in auth.ts shows frequent churn"
 - Bad: "Example" or generic file names
 
-Output ONLY JSON: {patterns: [{name:"naming_drift", desc:"...", examples:["diff[bundle.scope.files[2]] shows old camelCase method names"], count:15, pct:12}]}
+Output ONLY JSON: {patterns: [{name:"naming_drift", desc:"...", examples:["User.ts shows old camelCase methods"], count:15, pct:12}]}
 `;
 
 /**

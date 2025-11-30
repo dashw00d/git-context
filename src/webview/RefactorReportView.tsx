@@ -10,12 +10,13 @@ interface RefactorReportViewProps {
   analysis: LlmAnalysis;
   facts: RefactorBundleFacts;
   onEvidenceClick: (evidence: EvidenceLink) => void;
+  onAction?: (action: string, data: any) => void;
 }
 
 /**
  * Main refactor report webview component with three-panel layout
  */
-export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis, facts, onEvidenceClick }) => {
+export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis, facts, onEvidenceClick, onAction }) => {
   const [selectedBlock, setSelectedBlock] = useState<AnalysisBlock | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceLink | null>(null);
   const [activeTab, setActiveTab] = useState<'analysis' | 'facts'>('analysis');
@@ -30,14 +31,19 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis
   return (
     <div className="refactor-report-container">
       {/* Header */}
-      <div className="header">
-        <h1>🤖 Refactor Intelligence Report</h1>
-        <div className="header-meta">
-          <span>Bundle: {facts.bundle.shas.length} commits</span>
-          <span>Analysis: {analysis.metadata.model}</span>
-          <span>Generated: {new Date(analysis.metadata.timestamp).toLocaleString()}</span>
-        </div>
-      </div>
+          <div className="header">
+            <h1>🤖 Refactor Intelligence Report</h1>
+            <div className="header-meta">
+              <span title={`Bundle: ${facts.bundle.shas.length} commits`}>Bundle: {facts.bundle.shas.length} commits</span>
+              <span title={`Analysis: ${analysis.metadata.model}`} style={{maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis'}}>Analysis: {analysis.metadata.model}</span>
+              <span>Generated: {new Date(analysis.metadata.timestamp).toLocaleString()}</span>
+              <span>Health: {(analysis.metadata.healthScore || 0).toFixed(0)}/100</span>
+              <span>Tokens: {analysis.metadata.totalTokens?.toLocaleString() || 'n/a'}</span>
+              {analysis.metadata.totalCalls !== undefined && (
+                <span>Calls: {analysis.metadata.totalCalls}</span>
+              )}
+            </div>
+          </div>
 
       {/* Three-Panel Layout */}
       <div className="three-panel-layout">
@@ -69,6 +75,8 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis
             <div className="stats-grid">
               {(() => {
                 const stats = formatStats(facts);
+                const hybridSummary = facts.hybridSummary;
+                const counts = facts.evidenceSummary?.counts;
                 return (
                   <>
                     <div className="stat-item">
@@ -87,6 +95,16 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis
                       <span className="stat-label">Replaced</span>
                       <span className="stat-value">{stats.replaced}</span>
                     </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Hybrid Facts</span>
+                      <span className="stat-value">{hybridSummary?.totalFacts ?? 0}</span>
+                    </div>
+                    {counts && (
+                      <div className="stat-item">
+                        <span className="stat-label">Hybrid Drifts</span>
+                        <span className="stat-value">{counts.hybridDrifts}</span>
+                      </div>
+                    )}
                   </>
                 );
               })()}
@@ -105,12 +123,15 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis
                         <div
                           key={`claim-ev-${evIndex}`}
                           className={`evidence-item ${selectedEvidence === evidence ? 'active' : ''}`}
+                          title={evidence.description}
                           onClick={() => {
                             setSelectedEvidence(evidence);
                             onEvidenceClick(evidence);
                           }}
                         >
-                          {evidence.description}
+                          {evidence.description.length > 100 
+                            ? `${evidence.description.slice(0, 100)}...` 
+                            : evidence.description}
                         </div>
                       ))}
                     </div>
@@ -122,12 +143,15 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis
                         <div
                           key={`action-ev-${evIndex}`}
                           className={`evidence-item ${selectedEvidence === evidence ? 'active' : ''}`}
+                          title={evidence.description}
                           onClick={() => {
                             setSelectedEvidence(evidence);
                             onEvidenceClick(evidence);
                           }}
                         >
-                          {evidence.description}
+                          {evidence.description.length > 100 
+                            ? `${evidence.description.slice(0, 100)}...` 
+                            : evidence.description}
                         </div>
                       ))}
                     </div>
@@ -165,6 +189,7 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis
               <FactsContent
                 facts={facts}
                 onEvidenceClick={onEvidenceClick}
+                onAction={onAction}
               />
             )}
           </div>
@@ -296,7 +321,18 @@ const AnalysisContent: React.FC<{
 const FactsContent: React.FC<{
   facts: RefactorBundleFacts;
   onEvidenceClick: (evidence: EvidenceLink) => void;
-}> = ({ facts, onEvidenceClick }) => {
+  onAction?: (action: string, data: any) => void;
+}> = ({ facts, onEvidenceClick, onAction }) => {
+  const hybridSummary = facts.hybridSummary;
+  const evidenceSummary = facts.evidenceSummary || {};
+  const counts = evidenceSummary.counts || {};
+  const caps = facts.llmCapsApplied;
+  const movedLineage = facts.bundle.movedLineage || [];
+
+  const missing = evidenceSummary.missing || [];
+  const zombies = evidenceSummary.zombies || [];
+  const divergent = evidenceSummary.divergent || [];
+
   return (
     <div className="facts-content">
       <div className="facts-summary">
@@ -318,12 +354,106 @@ const FactsContent: React.FC<{
             <p><strong>Working:</strong> {facts.working.symbols}</p>
             <p><strong>Edges:</strong> {facts.working.edges}</p>
           </div>
+          {hybridSummary && (
+            <div className="fact-card">
+              <h4>Hybrid Facts</h4>
+              <p><strong>Total:</strong> {hybridSummary.totalFacts}</p>
+              <p><strong>Files:</strong> {hybridSummary.fileCount}</p>
+              <p><strong>Top Files:</strong> {hybridSummary.topFiles.slice(0, 3).map(f => `${f.file} (${f.count})`).join(', ')}</p>
+            </div>
+          )}
+          {caps && (
+            <div className="fact-card">
+              <h4>LLM Caps</h4>
+              <p><strong>Missing:</strong> {caps.missing}</p>
+              <p><strong>Zombies:</strong> {caps.zombies}</p>
+              <p><strong>Hybrid Drifts:</strong> {caps.hybridDrifts}</p>
+            </div>
+          )}
         </div>
       </div>
 
+        <div className="facts-lists">
+          <h3>🚧 Incompleteness</h3>
+          <div className="fact-list">
+            <strong>Missing ({counts.missing ?? missing.length}):</strong>
+            {missing.length === 0 ? <div className="muted">None</div> : (
+              <ul>
+                {missing.map((m: any, idx: number) => (
+                  <li key={`miss-${idx}`}>{formatSymbolRef(m)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="fact-list">
+            <strong>Zombies ({counts.zombies ?? zombies.length}):</strong>
+            {zombies.length === 0 ? <div className="muted">None</div> : (
+              <ul>
+                {zombies.map((z: any, idx: number) => (
+                  <li key={`zomb-${idx}`} className="fact-item-row">
+                    <span>{formatSymbolRef(z)}</span>
+                    {onAction && (
+                      <button
+                        className="action-button small danger"
+                        onClick={() => onAction('delete', {
+                          symbolId: z.symbol_id,
+                          filePath: z.file || (z.symbol_id && z.symbol_id.split(':')[0]),
+                          range: z.loc || z.location // Ensure we have location
+                        })}
+                        title="Remove this symbol"
+                      >
+                        🗑️
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="fact-list">
+            <strong>Divergent ({counts.divergent ?? divergent.length}):</strong>
+            {divergent.length === 0 ? <div className="muted">None</div> : (
+              <ul>
+                {divergent.map((d: any, idx: number) => (
+                  <li key={`div-${idx}`}>{formatSymbolRef(d)}</li>
+                ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {hybridSummary && hybridSummary.sampleFacts?.length > 0 && (
+        <div className="facts-lists">
+          <h3>🧬 Hybrid Facts (samples)</h3>
+          <ul>
+            {hybridSummary.sampleFacts.map((f, idx) => (
+              <li key={`hy-${idx}`}>
+                <strong>{f.file}</strong>: {f.sample.join(', ')}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {movedLineage.length > 0 && (
+        <div className="facts-lists">
+          <h3>🚚 Moved Symbols</h3>
+          <ul>
+            {movedLineage.slice(0, 20).map((m, idx) => (
+              <li key={`mv-${idx}`}>
+                {(m as any).sourceName || m.previousSymbolId} → {(m as any).destName || m.symbolId} ({m.sourceVersion} → {m.destVersion})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="facts-json">
         <h3>🔧 Full Facts JSON</h3>
-        <pre>{JSON.stringify(facts, null, 2)}</pre>
+        <details>
+          <summary>Expand raw facts (for debugging)</summary>
+          <pre>{JSON.stringify(facts, null, 2)}</pre>
+        </details>
       </div>
     </div>
   );
@@ -360,4 +490,13 @@ function getPriorityIcon(priority: string): string {
     case 'low': return '🟢';
     default: return '⚪';
   }
+}
+
+function formatSymbolRef(entry: any): string {
+  const sym = entry.symbol || entry.symbol_id || entry.symbolId || 'unknown';
+  const file = entry.file || (entry.symbol_id && entry.symbol_id.split(':')[0]);
+  if (file) {
+    return `${file}:${sym}`;
+  }
+  return sym;
 }

@@ -194,3 +194,63 @@ async function buildIntendedMapFallback(
 
   return intended;
 }
+
+/**
+ * Reconstruct IntendedState from evidence arrays when database unavailable
+ */
+export function reconstructIntendedFromEvidence(evidence: Record<string, any>): Map<string, IntendedState> {
+  const intended = new Map<string, IntendedState>();
+
+  if (!evidence) {
+    return intended;
+  }
+
+  const present = evidence["intended.present"] as string[] || [];
+  const absent = evidence["intended.absent"] as string[] || [];
+  const renamed = evidence["intended.renamed"] as string[] || [];
+  const renamedSet = new Set(renamed);
+
+  // Parse symbol IDs: path:kind:name
+  function parseSymbolId(id: string): { path: string; kind: string; name: string } {
+    const parts = id.split(':');
+    if (parts.length >= 3) {
+      return {
+        path: parts[0],
+        kind: parts[1],
+        // Handle names with colons (e.g., "namespace:ClassName")
+        name: parts.slice(2).join(':')
+      };
+    }
+    // Fallback for malformed IDs
+    return {
+      path: parts[0] || '',
+      kind: parts[1] || 'unknown',
+      name: parts[parts.length - 1] || ''
+    };
+  }
+
+  // Process present symbols
+  present.forEach(id => {
+    const parsed = parseSymbolId(id);
+    intended.set(id, {
+      expect: 'present',
+      lastSha: 'bundle',
+      lastName: parsed.name,
+      lastPath: parsed.path,
+      isRenamed: renamedSet.has(id)
+    });
+  });
+
+  // Process absent symbols
+  absent.forEach(id => {
+    const parsed = parseSymbolId(id);
+    intended.set(id, {
+      expect: 'absent',
+      lastSha: 'bundle',
+      lastName: parsed.name,
+      lastPath: parsed.path
+    });
+  });
+
+  return intended;
+}

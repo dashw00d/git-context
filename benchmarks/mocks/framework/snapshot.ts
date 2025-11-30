@@ -52,7 +52,7 @@ export function deepSerializeStepState(stepId: string, state: PipelineState): Se
 
   const deepSerialize = (value: any, depth = 0): any => {
     if (value === null || value === undefined) return value;
-    
+
     // Handle primitives
     if (typeof value !== 'object') {
       // Truncate large strings
@@ -86,8 +86,8 @@ export function deepSerializeStepState(stepId: string, state: PipelineState): Se
     // Handle objects - skip non-serializable
     if (value.constructor && value.constructor.name !== 'Object') {
       // Skip DB connections, Qdrant instances, etc.
-      if (typeof value.query === 'function' || typeof value.prepare === 'function' || 
-          typeof value.get === 'function' || value.constructor.name.includes('Database')) {
+      if (typeof value.query === 'function' || typeof value.prepare === 'function' ||
+        typeof value.get === 'function' || value.constructor.name.includes('Database')) {
         return '[Omitted: External/Non-serializable]';
       }
     }
@@ -106,15 +106,16 @@ export function deepSerializeStepState(stepId: string, state: PipelineState): Se
 
   // Use existing serializeStepState for structured extraction, then deep serialize
   const baseData = serializeStepState(stepId, state);
-  
+
   // Special handling for LLM and history steps
   if (stepId === 'llm_story' && state.llmOutputs) {
     const llmAnalysis = state.llmOutputs.llmAnalysis;
     if (llmAnalysis) {
       return {
+        metrics: state.llmMetrics || null,
         llmAnalysis: {
-          summary: llmAnalysis.summary ? (llmAnalysis.summary.length > MAX_STRING_LENGTH 
-            ? llmAnalysis.summary.substring(0, MAX_STRING_LENGTH) + '... [truncated]' 
+          summary: llmAnalysis.summary ? (llmAnalysis.summary.length > MAX_STRING_LENGTH
+            ? llmAnalysis.summary.substring(0, MAX_STRING_LENGTH) + '... [truncated]'
             : llmAnalysis.summary) : undefined,
           blocks: llmAnalysis.blocks ? llmAnalysis.blocks.map((block: any) => ({
             id: block.id,
@@ -136,8 +137,8 @@ export function deepSerializeStepState(stepId: string, state: PipelineState): Se
             timestamp: block.timestamp
           })) : [],
           metadata: llmAnalysis.metadata || {},
-          markdown: llmAnalysis.markdown ? (llmAnalysis.markdown.length > MAX_STRING_LENGTH 
-            ? llmAnalysis.markdown.substring(0, MAX_STRING_LENGTH) + '... [truncated]' 
+          markdown: llmAnalysis.markdown ? (llmAnalysis.markdown.length > MAX_STRING_LENGTH
+            ? llmAnalysis.markdown.substring(0, MAX_STRING_LENGTH) + '... [truncated]'
             : llmAnalysis.markdown) : undefined
         },
         history: state.llmOutputs.history ? deepSerialize(state.llmOutputs.history) : undefined
@@ -146,12 +147,17 @@ export function deepSerializeStepState(stepId: string, state: PipelineState): Se
   }
 
   if (stepId === 'retrieve_history' && state.history) {
+    const historyPayload = deepSerialize(state.history);
+    const symbolEvolution = state.history.symbolEvolution instanceof Map
+      ? Object.fromEntries(state.history.symbolEvolution)
+      : state.history.symbolEvolution;
+
     return {
-      ...deepSerialize(state.history),
-      // Ensure symbolEvolution Map is converted
-      symbolEvolution: state.history.symbolEvolution instanceof Map
-        ? Object.fromEntries(state.history.symbolEvolution)
-        : state.history.symbolEvolution
+      metrics: state.historyMetrics || null,
+      history: {
+        ...historyPayload,
+        symbolEvolution
+      }
     };
   }
 
@@ -227,7 +233,7 @@ export function serializeStepState(stepId: string, state: PipelineState): Serial
       return state.hotspots || null;
 
     case 'moved_blocks':
-      return state.movedLineage || null;
+      return state.movedBlocks || null;
 
     case 'workspace_overlay':
       return state.workspaceFacts || null;
@@ -242,6 +248,15 @@ export function serializeStepState(stepId: string, state: PipelineState): Serial
         ...state.bundleFacts,
         hybridFacts: state.bundleFacts.hybridFacts || {}
       };
+
+    case 'embedding_index':
+      return state.embeddingMetrics || null;
+
+    case 'retrieve_history':
+      return state.historyMetrics || null;
+
+    case 'llm_story':
+      return state.llmMetrics || null;
 
     case 'llm_story':
       // Base serialization - deepSerializeStepState handles the full extraction

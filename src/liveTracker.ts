@@ -29,25 +29,61 @@ export class LiveDiffTracker extends EventEmitter {
     private cstTimelineManager = getCstTimelineManager();
     private parser = getTreeSitterParser();
 
+    private isTracking: boolean = false;
+
     constructor() {
         super();
         this.git = new GitOperations();
         this.symbolExtractor = new SymbolExtractor(this.git);
 
+        // Don't start tracking automatically
+        this.updateConfig();
+        
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (e.affectsConfiguration('git-context.live')) {
+                this.updateConfig();
+                if (this.isTracking) {
+                    this.setupWatcher();
+                }
+            }
+        });
+    }
+
+    public startTracking() {
+        if (this.isTracking) return;
+        
+        this.isTracking = true;
         this.disposables.push(
             vscode.workspace.onDidChangeTextDocument(this.handleChange, this),
             vscode.workspace.onDidSaveTextDocument(this.resetBuffer, this)
         );
-
-        this.updateConfig();
         this.setupWatcher();
+        
+        // Update UI state
+        getCockpitOrchestrator().updateLiveState({ isTracking: true }, 'liveTracker:start');
+        
+        logInfo('[LiveTracker] Started tracking live changes');
+    }
 
-        vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('git-context.live')) {
-                this.updateConfig();
-                this.setupWatcher();
-            }
-        });
+    public stopTracking() {
+        if (!this.isTracking) return;
+        
+        this.isTracking = false;
+        this.disposeWatchers();
+        
+        // Update UI state
+        getCockpitOrchestrator().updateLiveState({ isTracking: false }, 'liveTracker:stop');
+        
+        logInfo('[LiveTracker] Stopped tracking live changes');
+    }
+
+    private disposeWatchers() {
+        this.disposables.forEach(d => d.dispose());
+        this.disposables = [];
+        if (this.watcher) {
+            this.watcher.dispose();
+            this.watcher = undefined;
+        }
     }
 
     private updateConfig() {
@@ -75,7 +111,11 @@ export class LiveDiffTracker extends EventEmitter {
     private setupWatcher() {
         if (this.watcher) {
             this.watcher.dispose();
-            // Remove old watcher from disposables if it was added there (it wasn't in previous code, but good practice)
+            // Remove from disposables to avoid accumulation
+            const idx = this.disposables.indexOf(this.watcher);
+            if (idx !== -1) {
+                this.disposables.splice(idx, 1);
+            }
         }
 
         const pattern = `**/*.{${this.threshold.extensions.join(',')}}`;
@@ -106,7 +146,7 @@ export class LiveDiffTracker extends EventEmitter {
 
     private async triggerAnalysis(staged: boolean): Promise<void> {
         try {
-            const { getRefactorPipeline } = await import('./extension');
+            const { getRefactorPipeline } = await import('./services/pipelineFactory');
             const pipeline = await getRefactorPipeline();
             const workspaceIndexer = pipeline.workspaceIndexer;
 
@@ -260,25 +300,21 @@ export class LiveDiffTracker extends EventEmitter {
             return; // Not CST-only and augmentation disabled
         }
 
+        const content = doc.getText();
+        const version = isStaged ? 'workspace-staged' : 'workspace-unstaged';
+
         try {
-            const content = doc.getText();
-            const tree = await this.parser.parse(content, language);
-            if (!tree) return;
+            // Parse file via worker
+            const hybridFacts = await this.parser.extractHybridFacts(content, filePath, language);
 
-            // Get existing symbols for hybrid augmentation (future use)
-            // TODO: Use existingSymbols for hybrid augmentation when implementing CST+semantic hybrid facts
-            // const existingSymbols = this.symbolCache.get(doc.uri.toString()) || [];
-
-            // Extract hybrid facts
-            const hybridFacts = this.parser.extractHybridFacts(tree, filePath, language);
-
-            // Save to timeline manager with mode-specific version
-            const version = isStaged ? 'workspace-staged' : 'workspace-unstaged';
+            // Save via timeline manager
             await this.cstTimelineManager.saveFacts(filePath, version, hybridFacts);
-
-            logDebug(`[LiveTracker] Saved ${hybridFacts.length} hybrid facts for ${filePath}`);
+            
+            if (hybridFacts.length > 0) {
+                logDebug(`[LiveTracker] Saved ${hybridFacts.length} hybrid facts for ${filePath}`);
+            }
         } catch (error) {
-            logDebug(`[LiveTracker] Error extracting hybrid facts for ${filePath}: ${error}`);
+            logError(`[LiveTracker] Error extracting hybrid facts for ${filePath}`, error);
         }
     }
 
@@ -315,8 +351,8 @@ export class LiveDiffTracker extends EventEmitter {
     }
 
     public dispose() {
+        this.stopTracking();
         this.removeAllListeners();
-        this.disposables.forEach(d => d.dispose());
         this.changeBuffers.clear();
         this.editCounts.clear();
         this.symbolCache.clear();

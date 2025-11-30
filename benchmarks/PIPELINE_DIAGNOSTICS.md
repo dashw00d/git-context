@@ -9,7 +9,7 @@ This harness lets you run the real pipeline with frozen step snapshots, replay s
 - `--replay-from=<stepId>` — Load a snapshot for a step, then run remaining steps.
 - `--out=<dir>` — Directory for snapshots (defaults to `benchmarks/fixtures/pipeline_frozen`).
 - `--focus=<step1,step2>` — Only emit detailed logs for these steps.
-- `--commits=<n>` — Number of recent commits to analyze (default 6).
+- `--commit-count=<n>` — Number of recent commits to analyze (default 6).
 - `--no-workspace` — Skip workspace overlay.
 - `--reset-db` — Delete the existing commit-tracker DB before running.
 
@@ -17,7 +17,7 @@ This harness lets you run the real pipeline with frozen step snapshots, replay s
 
 1) Freeze a baseline (TypeScript entrypoint):
 ```bash
-npx ts-node benchmarks/pipeline_diagnostics.ts --freeze --commits=6
+npx ts-node benchmarks/pipeline_diagnostics.ts --freeze --commit-count=6
 ```
 Per-step snapshots land in `benchmarks/fixtures/pipeline_frozen`.
 

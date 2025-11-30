@@ -25,7 +25,7 @@ async function getSymbolsForVersion(
 
   // For HEAD, use the newest commit SHA
   const sha = version === 'HEAD' 
-    ? (state.selectedCommitShas?.[state.selectedCommitShas.length - 1] || 'HEAD')
+    ? (state.selectedCommitShas?.[0] || 'HEAD')
     : version;
 
   // Get symbols with change types

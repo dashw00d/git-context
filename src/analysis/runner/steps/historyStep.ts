@@ -14,14 +14,15 @@ export function createHistoryRetrievalStep(
         throw new Error('Bundle facts required');
       }
 
-      // Use internal method to just retrieve history
-      const history = await (storyEngine as any).retrieveHistory(
+      // Use internal method to just retrieve history (and metrics)
+      const { history, metrics } = await (storyEngine as any).retrieveHistory(
         null,  // Will generate embedding internally
         state.bundleFacts,
         state.commitFacts || []
       );
 
       state.history = history;
+      state.historyMetrics = metrics;
     }
   };
 }

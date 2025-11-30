@@ -6,6 +6,7 @@ import type { LegacyAuditResult } from '../../facts/legacyAudit';
 import type { FileHotspot, SymbolHotspot } from '../hotspotDetector';
 import type { MovedBlock, CrossVersionSymbolLineage } from '../movedBlockDetector';
 import type { WorkspaceFacts } from '../workspaceIndexer';
+import type { EmbeddingMetrics, HistoryMetrics, LlmMetrics } from './pipelineMetrics';
 
 export interface PipelineState {
   // Inputs
@@ -13,6 +14,7 @@ export interface PipelineState {
   includeWorkspace: boolean;
   workspaceParts?: Set<'staged' | 'unstaged'>;  // Which workspace parts to include
   explicitTimeline?: string[];  // Explicit timeline chain: newest → oldest (e.g. ['workspace-unstaged', 'workspace-staged', 'HEAD', 'abc123'])
+  liveOverrides?: Map<string, string>; // In-memory content overrides for live analysis
 
   // Intermediates
   commitFacts?: any[];
@@ -33,6 +35,10 @@ export interface PipelineState {
   hotspots?: Array<FileHotspot | SymbolHotspot>;
   movedBlocks?: MovedBlock[];
   movedLineage?: CrossVersionSymbolLineage[];
+
+  embeddingMetrics?: EmbeddingMetrics;
+  historyMetrics?: HistoryMetrics;
+  llmMetrics?: LlmMetrics;
 
   // Progress tracking
   currentStepId?: string | null;

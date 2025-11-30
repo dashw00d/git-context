@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { getRefactorPipeline } from '../extension';
+import { getRefactorPipeline } from '../services/pipelineFactory';
 import { GitOperations } from '../analysis/git';
 import { getReportManager } from '../storage/reportManager';
 import { getDatabaseManager } from '../storage/database';
@@ -62,7 +62,7 @@ export class ReportService {
                 const isEmpty = !facts || facts.scope.files === 0 && facts.working.symbols === 0;
                 if (isEmpty) {
                     logInfo(`[ReportService] Empty cache hit for ${fingerprint}; forcing reanalysis...`);
-                    orchestrator.updateState({analysisStep: 'Reindexing empty commits...'}, 'report:reindexStart');
+                    orchestrator.updateState({ analysisStep: 'Reindexing empty commits...' }, 'report:reindexStart');
                     const commitShas = shas.filter(s => !isWorkspaceSha(s));
                     await pipeline.indexCommits(commitShas);
                     commitShas.forEach(s => tempAnalyzed.add(s));
@@ -163,7 +163,8 @@ export class ReportService {
 
             // 3. Use facts and analysis from new pipeline
             const facts = result.bundleFacts;
-            const llmAnalysis = result.llmOutputs;
+            const llmOutputs = result.llmOutputs;
+            const llmAnalysis = llmOutputs?.llmAnalysis;
 
             // 4. Prepare analysis results
             let summary: string;
@@ -178,9 +179,11 @@ export class ReportService {
                     metadata: llmAnalysis.metadata
                 };
 
-                logInfo(`[ReportService] LLM analysis complete: ` +
+                if (llmAnalysis.metadata) {
+                    logInfo(`[ReportService] LLM analysis complete: ` +
                         `health score ${llmAnalysis.metadata.healthScore}/100, ` +
                         `${llmAnalysis.metadata.totalTokens} tokens`);
+                }
             } else {
                 logDebug('[ReportService] LLM not available, using fallback summary');
                 summary = this.generateFallbackSummary(facts, shas);
