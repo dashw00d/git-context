@@ -3,6 +3,7 @@ import { ActiveBundleProvider } from './activeBundleProvider';
 import { GitOperations } from '../analysis/git';
 import { BranchManager } from '../storage/branchManager';
 import { makeWorkspaceSha, isWorkspaceSha } from '../utils/workspace';
+import { getStore } from '../state/store';
 
 
 export class CommitsProvider {
@@ -63,11 +64,8 @@ export class CommitsProvider {
   }
 
   async toggleCommitSelection(sha: string): Promise<void> {
-    // DEPRECATED: Use CockpitOrchestrator.updateState() instead
-    // This method kept for backwards compatibility with tree views
-    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    const state = orchestrator.getState();
+    const store = getStore();
+    const state = store.getState();
     const selected = new Set(state.selectedCommitShas);
 
     if (selected.has(sha)) {
@@ -76,27 +74,20 @@ export class CommitsProvider {
       selected.add(sha);
     }
 
-    orchestrator.updateState({ selectedCommitShas: Array.from(selected) }, 'provider:toggleCommit');
+    store.dispatch({ type: 'SELECTION_SET', payload: { shas: Array.from(selected) } });
     this.refresh();
   }
 
   async clearSelection(): Promise<void> {
-    // DEPRECATED: Use CockpitOrchestrator.updateState() instead
-    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    orchestrator.updateState({
-      selectedCommitShas: [],
-      selectedStagedPaths: [],
-      selectedUnstagedPaths: []
-    }, 'provider:clearSelection');
+    const store = getStore();
+    store.dispatch({ type: 'SELECTION_CLEARED' });
     this.refresh();
   }
 
   async toggleFileSelection(file: any): Promise<void> {
     const filePath = typeof file === 'string' ? file : (file.path || file.id);
-    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    const state = orchestrator.getState();
+    const store = getStore();
+    const state = store.getState();
     const selectedStaged = new Set(state.selectedStagedPaths);
     const selectedUnstaged = new Set(state.selectedUnstagedPaths);
 
@@ -142,10 +133,12 @@ export class CommitsProvider {
       updatedUnstaged = Array.from(selectedUnstaged);
     }
 
-    orchestrator.updateState({
-      selectedStagedPaths: updatedStaged,
-      selectedUnstagedPaths: updatedUnstaged
-    }, 'provider:toggleFile');
+    if (updatedStaged) {
+      store.dispatch({ type: 'STAGED_SELECTION_UPDATED', payload: { paths: updatedStaged } });
+    }
+    if (updatedUnstaged) {
+      store.dispatch({ type: 'UNSTAGED_SELECTION_UPDATED', payload: { paths: updatedUnstaged } });
+    }
     this.refresh();
   }
 
@@ -156,9 +149,8 @@ export class CommitsProvider {
       const staged = await git.getStagedFiles();
       const stagedPaths = staged.map((file: { path: string; status: any }) => file.path);
 
-      const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
-      const orchestrator = getCockpitOrchestrator();
-      orchestrator.updateState({ selectedStagedPaths: stagedPaths }, 'provider:selectAllStaged');
+      const store = getStore();
+      store.dispatch({ type: 'STAGED_SELECTION_UPDATED', payload: { paths: stagedPaths } });
       this.refresh();
     } catch (error) {
       console.error('Failed to select all staged files:', error);
@@ -172,9 +164,8 @@ export class CommitsProvider {
       const unstaged = await git.getUnstagedFiles();
       const unstagedPaths = unstaged.map((file: { path: string; status: any }) => file.path);
 
-      const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
-      const orchestrator = getCockpitOrchestrator();
-      orchestrator.updateState({ selectedUnstagedPaths: unstagedPaths }, 'provider:selectAllUnstaged');
+      const store = getStore();
+      store.dispatch({ type: 'UNSTAGED_SELECTION_UPDATED', payload: { paths: unstagedPaths } });
       this.refresh();
     } catch (error) {
       console.error('Failed to select all unstaged files:', error);
@@ -322,9 +313,8 @@ export class CommitsProvider {
   }
 
   exportSelectionDto(): { selectedCommitShas: string[]; selectedFiles: string[]; workspaceScope: 'workspace' | 'staged' | 'unstaged' } {
-    const { getCockpitOrchestrator } = require('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    const state = orchestrator.getState();
+    const store = getStore();
+    const state = store.getState();
 
     return {
       selectedCommitShas: state.selectedCommitShas,

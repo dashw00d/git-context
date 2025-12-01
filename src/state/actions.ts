@@ -1,4 +1,4 @@
-import { CockpitSectionKey, SymbolChangeType, BundleFactsDTO, BundleSummaryDTO, CommitDTO, ReportDTO, StagedFileDTO, UnstagedFileDTO, SymbolDTO, ContextFrame, ExplorerNode } from '../types/cockpit';
+import { CockpitSectionKey, SymbolChangeType, BundleFactsDTO, BundleSummaryDTO, CommitDTO, ReportDTO, StagedFileDTO, UnstagedFileDTO, SymbolDTO, ContextFrame, ExplorerNode, BundleView } from '../types/cockpit';
 
 export type Action =
     // Analysis
@@ -8,6 +8,7 @@ export type Action =
     | { type: 'ANALYSIS_COMPLETED'; payload: { facts: BundleFactsDTO; summary: BundleSummaryDTO; reportId: string; history?: any } }
     | { type: 'ANALYSIS_FAILED'; payload: { error: string } }
     | { type: 'ANALYSIS_CANCELLED' }
+    | { type: 'ANALYSIS_PROGRESS_UPDATED'; payload: { isAnalyzing?: boolean; step?: string; progress?: number } }
 
     // Selection
     | { type: 'SELECTION_TOGGLED'; payload: { sha: string } }
@@ -28,6 +29,8 @@ export type Action =
 
     // Bundle
     | { type: 'BUNDLE_CLEARED' }
+    | { type: 'BUNDLE_VIEW_UPDATED'; payload: { view: BundleView } }
+    | { type: 'BUNDLE_VIEW_CLEARED' }
 
     // Symbols
     | { type: 'SYMBOLS_UPDATED'; payload: { symbols: SymbolDTO[] } }
@@ -59,4 +62,3 @@ export type Action =
     | { type: 'FRAME_ANALYSIS_TIER_2_COMPLETE'; payload: { frameId: string; data: any } }
     | { type: 'FRAME_ANALYSIS_TIER_3_COMPLETE'; payload: { frameId: string; data: any } }
     | { type: 'FRAME_ANALYSIS_TIER_FAILED'; payload: { frameId: string; tier: number; error: string } };
-

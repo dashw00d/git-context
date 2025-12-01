@@ -11,10 +11,10 @@ After auditing the codebase against our documented architecture patterns, I've i
 
 | Anti-Pattern | Occurrences | Priority | Estimated Effort |
 |--------------|-------------|----------|------------------|
-| Direct postMessage instead of actions | ~20 in CockpitProvider | High | Medium |
-| orchestrator.updateState() instead of store.dispatch() | ~40 across codebase | High | High |
+| Direct postMessage instead of actions | Reduced to ~3 (assistant + legacy state) | High | Medium |
+| orchestrator.updateState() instead of store.dispatch() | ~15 (mostly reportService, CockpitProvider bridging) | High | Medium |
 | Direct db.prepare() instead of statement wrapper | ~50+ in services | Medium | Medium |
-| Monolithic methods without tiering | 2-3 methods | Medium | Low |
+| Monolithic methods without tiering | 1-2 methods | Medium | Low |
 | Missing error handling | Various | Low | Low |
 
 ---
@@ -54,6 +54,10 @@ getStore().dispatch({
 2. Add reducers to handle the actions
 3. Create an effect that listens for actions and sends postMessages (dual mode during migration)
 4. Replace direct postMessage calls with dispatch
+
+### Status
+- **Fixed**: CockpitProvider now dispatches `BUNDLE_VIEW_UPDATED`/`FRAME_DATA_UPDATED` for skeleton/hybrid/semantics bundle updates and uses `EXPLORER_UPDATED` for tree data. ExplorerController no longer calls `postMessage` directly.
+- **Remaining**: Assistant responses still use direct `postMessage` (intentional for chat channel); `sendState` remains for legacy state hydration.
 
 ### Effort
 **Medium** - ~40 call sites to refactor
@@ -98,6 +102,10 @@ getStore().dispatch({
 2. `src/features/coreFeatures.ts` - Replace all 12 calls
 3. `src/services/reportService.ts` - Replace 8 calls (especially in pipeline events)
 4. `src/providers/commitsProvider.ts` - Replace 5 calls
+
+### Status
+- **Fixed**: All orchestrator calls replaced with `store.dispatch` in `src/commands/commands.ts`, `src/features/coreFeatures.ts`, and `src/providers/commitsProvider.ts` (selection, bundle clear/cancel). New `ANALYSIS_PROGRESS_UPDATED` action covers progress updates.
+- **Remaining**: `src/services/reportService.ts` still mutates state via `orchestrator.updateState()` during pipeline events; `CockpitProvider` still uses orchestrator setters for host-driven updates (selection, bundles) pending action parity.
 
 ### Effort
 **High** - 40+ call sites, need to ensure actions exist for each case
@@ -154,6 +162,8 @@ Methods that should use tiered loading don't follow the pattern.
 #### `updateBundleData()` (CockpitProvider.ts:566-660)
 **Problem**: Single try-catch, no progressive loading  
 **Should be**: Tier 1 (facts), Tier 2 (hotspots), Tier 3 (treemap)
+
+**Status**: Now publishes structure/hybrid/semantic tiers via `BUNDLE_VIEW_UPDATED` + `FRAME_DATA_UPDATED` instead of direct `postMessage`. Remaining work: extract treemap/hotspot builders into services and further decompose logic.
 
 ```typescript
 // ❌ CURRENT: Monolithic
@@ -287,6 +297,7 @@ Extract to services:
    - Most visible to users
    - Consolidates state management
    - Enables orchestrator removal
+   - **Progress**: commands.ts, coreFeatures.ts, commitsProvider now dispatch store actions
    
 2. **Add action dispatch to CockpitProvider message handlers**
    - Prevents dual-state issues
@@ -300,6 +311,7 @@ Extract to services:
 4. **Convert updateBundleData to tiered loading**
    - Better UX (progressive updates)
    - Follows established pattern
+   - **Progress**: Tier 1 (skeleton) and Tier 2 (hybrid churn) now flow through `BUNDLE_VIEW_UPDATED`; semantics still combined in `updateBundleData`
 
 ### Phase 3: Low Hanging Fruit
 5. **Extract services from CockpitProvider**
@@ -344,10 +356,10 @@ Extract to services:
 
 | Metric | Current | Goal |
 |--------|---------|------|
-| Direct postMessage calls | ~20 | 0 |
-| orchestrator.updateState calls | ~40 | 0 |
+| Direct postMessage calls | ~3 | 0 |
+| orchestrator.updateState calls | ~15 | 0 |
 | Direct db.prepare calls | ~50 | 0 |
-| Monolithic methods | 2-3 | 0 |
+| Monolithic methods | 1-2 | 0 |
 | Methods without error handling | ~10 | 0 |
 
 **Total Refactoring Effort**: ~2-3 weeks for full compliance

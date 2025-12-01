@@ -62,7 +62,11 @@ export class CockpitOrchestrator extends EventEmitter {
         // Quick mapping for common actions:
         if (action.type === 'ANALYSIS_STARTED') partial = { isAnalyzing: true, analysisStep: action.payload.step };
         else if (action.type === 'ANALYSIS_COMPLETED') partial = { isAnalyzing: false, bundleFacts: action.payload.facts };
+        else if (action.type === 'ANALYSIS_PROGRESS_UPDATED') partial = { isAnalyzing: action.payload.isAnalyzing, analysisStep: action.payload.step, analysisProgress: action.payload.progress };
         else if (action.type === 'SELECTION_TOGGLED') partial = { selectedCommitShas: state.selectedCommitShas };
+        else if (action.type === 'SECTION_CHANGED') partial = { activeSection: action.payload.section };
+        else if (action.type === 'EXPLORER_UPDATED') partial = { explorerData: action.payload.nodes };
+        else if (action.type === 'BUNDLE_VIEW_UPDATED') partial = { bundleView: action.payload.view };
         // ... etc.
         // If we miss something, the UI might not update granularly if it relies on partial keys.
         // But React usually diffs props.

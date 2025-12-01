@@ -19,6 +19,7 @@ export const initialState: CockpitState = {
     bundleSummary: null,
     bundleFacts: null,
     bundleReportId: null,
+    bundleView: null,
     symbols: [],
     symbolFilterText: '',
     symbolKindFilter: 'all',
@@ -76,6 +77,13 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
             return { ...state, isAnalyzing: false, error: action.payload.error };
         case 'ANALYSIS_CANCELLED':
             return { ...state, isAnalyzing: false, analysisStep: undefined };
+        case 'ANALYSIS_PROGRESS_UPDATED':
+            return {
+                ...state,
+                isAnalyzing: action.payload.isAnalyzing ?? state.isAnalyzing,
+                analysisStep: action.payload.step ?? state.analysisStep,
+                analysisProgress: action.payload.progress ?? state.analysisProgress
+            };
 
         case 'SELECTION_TOGGLED': {
             const sha = action.payload.sha;
@@ -108,7 +116,11 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
             return { ...state, lastNCommits: action.payload.n };
 
         case 'BUNDLE_CLEARED':
-            return { ...state, bundleFacts: null, bundleSummary: null, bundleReportId: null };
+            return { ...state, bundleFacts: null, bundleSummary: null, bundleReportId: null, bundleView: null };
+        case 'BUNDLE_VIEW_UPDATED':
+            return { ...state, bundleView: action.payload.view };
+        case 'BUNDLE_VIEW_CLEARED':
+            return { ...state, bundleView: null };
 
         case 'SYMBOLS_UPDATED':
             return { ...state, symbols: action.payload.symbols };
@@ -133,10 +145,14 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
 
         // Navigation
         case 'NAVIGATE_TO':
+            // Persist bundle tiered data when returning to the overview
+            const targetFrame = action.payload.frame.level === 'bundle' && state.bundleView
+                ? { ...action.payload.frame, data: { ...state.bundleView, ...(action.payload.frame.data || {}) } }
+                : action.payload.frame;
             return {
                 ...state,
                 history: [...state.history, state.activeFrame],
-                activeFrame: action.payload.frame
+                activeFrame: targetFrame
             };
         case 'NAVIGATE_BACK': {
             if (state.history.length === 0) return state;
@@ -168,12 +184,14 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         }
         case 'FRAME_ANALYSIS_TIER_FAILED': {
             // Log tier failure but keep existing data
+            const nextStatus = action.payload.tier === 1 ? 'error' : 'ready';
             if (state.activeFrame.id === action.payload.frameId) {
                 const errors = state.activeFrame.data?.errors || [];
                 return {
                     ...state,
                     activeFrame: {
                         ...state.activeFrame,
+                        status: nextStatus,
                         data: {
                             ...state.activeFrame.data,
                             errors: [...errors, { tier: action.payload.tier, error: action.payload.error }]

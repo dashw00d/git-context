@@ -50,6 +50,28 @@ export interface BundleSummaryDTO {
 // If you want strong typing, alias to your existing RefactorBundleFacts
 export type BundleFactsDTO = RefactorBundleFacts | null;
 
+export interface BundleView {
+  tier?: 'structure' | 'hybrid' | 'semantics';
+  summary?: {
+    commits: number;
+    files: number;
+    symbols: number;
+    staged?: number;
+    unstaged?: number;
+  };
+  hotspots?: Array<{ path: string; name?: string; score: number; size?: number; added?: number; removed?: number; count?: number; status?: string }>;
+  treemap?: any[];
+  risks?: Array<{ path: string; name?: string; issue: string; detail?: string }>;
+  skeleton?: { mode?: string; roots?: string[]; files?: string[] };
+  virtualCommits?: {
+    staged: any[];
+    unstaged: any[];
+    stats: { staged: { added: number; removed: number }; unstaged: { added: number; removed: number } };
+  };
+  isPartial?: boolean;
+  error?: string;
+}
+
 export interface SymbolDTO {
   id: string;                 // symbol_id or "path:name"
   name: string;
@@ -145,6 +167,7 @@ export interface CockpitState {
   bundleSummary: BundleSummaryDTO | null;
   bundleFacts: BundleFactsDTO;  // used by full report webview, not rendered in cockpit
   bundleReportId: string | null;       // id of currently active report, if any
+  bundleView: BundleView | null;
 
   /* Symbols section */
   symbols: SymbolDTO[];

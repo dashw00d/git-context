@@ -45,6 +45,7 @@ const defaultState: CockpitState = {
   bundleSummary: null,
   bundleFacts: null,
   bundleReportId: null,
+  bundleView: null,
   symbols: [],
   symbolFilterText: '',
   symbolKindFilter: 'all',

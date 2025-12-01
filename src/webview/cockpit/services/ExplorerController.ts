@@ -23,11 +23,6 @@ export class ExplorerController {
             // For now, we'll just pass the current facts/skeleton logic but wrapped
             const nodes = ExplorerService.getInstance().getExplorerTree(facts, null, bundles);
 
-            this.view.webview.postMessage({
-                type: 'updateExplorerTree',
-                payload: nodes
-            });
-
             // Sync with store
             getStore().dispatch({ type: 'EXPLORER_UPDATED', payload: { nodes } });
 

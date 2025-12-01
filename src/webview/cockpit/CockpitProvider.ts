@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { logInfo, logError, logDebug } from '../../utils/logger';
-import { CockpitClientMessage, CockpitSectionKey, CockpitState, ContextFrame, ExplorerNode } from '../../types/cockpit';
+import { CockpitClientMessage, CockpitSectionKey, CockpitState, ContextFrame, BundleView } from '../../types/cockpit';
 import { CockpitStateChange, getCockpitOrchestrator } from '../../state/cockpitOrchestrator';
 import { getStore } from '../../state/store';
 import { Action } from '../../state/actions';
@@ -152,46 +152,14 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
   }
 
   updateAnalysisProgress(isAnalyzing: boolean, step?: string, progress?: number) {
-    this.orchestrator.updateState(
-      { isAnalyzing, analysisStep: step, analysisProgress: progress },
-      'host:analysisProgress'
-    );
-    this.sendAnalysisProgress(isAnalyzing, step, progress);
+    getStore().dispatch({
+      type: 'ANALYSIS_PROGRESS_UPDATED',
+      payload: { isAnalyzing, step, progress }
+    });
   }
 
   focusSection(section: CockpitSectionKey) {
-    this.orchestrator.updatePartial('activeSection', section, 'host:focusSection');
-    this.sendFocusSection(section);
-  }
-
-  private sendFocusSection(section: CockpitSectionKey) {
-    if (!this.view) {
-      return;
-    }
-    try {
-      this.view.webview.postMessage({
-        type: 'focusSection',
-        payload: { section }
-      });
-      logInfo(`[Cockpit] Sent focusSection message for ${section}`);
-    } catch (error) {
-      logError('[Cockpit] Failed to send focusSection', error);
-    }
-  }
-
-  private sendAnalysisProgress(isAnalyzing: boolean, step?: string, progress?: number) {
-    if (!this.view) {
-      return;
-    }
-    try {
-      this.view.webview.postMessage({
-        type: 'analysisProgress',
-        payload: { isAnalyzing, step, progress }
-      });
-      logInfo('[Cockpit] Sent analysis progress update');
-    } catch (error) {
-      logError('[Cockpit] Failed to send analysis progress', error);
-    }
+    getStore().dispatch({ type: 'SECTION_CHANGED', payload: { section } });
   }
 
   private async handleMessage(msg: CockpitClientMessage | { type: 'ready' } | { type: 'clearError' } | { type: 'dispatch'; action: Action }) {
@@ -511,6 +479,15 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * Push bundle-stage data into the Redux store so the webview can render via state updates.
+   */
+  private pushBundleView(view: BundleView) {
+    const store = getStore();
+    store.dispatch({ type: 'BUNDLE_VIEW_UPDATED', payload: { view } });
+    store.dispatch({ type: 'FRAME_DATA_UPDATED', payload: { frameId: 'root', data: view } });
+  }
+
   async updateSkeleton(config: any) {
     try {
       const { getRefactorPipeline } = await import('../../services/pipelineFactory');
@@ -519,7 +496,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       const skeleton = await pipeline.workspaceIndexer.getSkeleton(config);
       this.skeletonCache = skeleton;
 
-      if (this.view && skeleton) {
+      if (skeleton) {
         // Convert skeleton files to explorer nodes with 'scanning' status
         // This provides immediate visual feedback in the Explorer tree
         const nodes = skeleton.files.map((f: string) => ({
@@ -530,10 +507,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           children: []
         }));
 
-        this.view.webview.postMessage({
-          type: 'updateExplorerTree',
-          payload: nodes
-        });
+        getStore().dispatch({ type: 'EXPLORER_UPDATED', payload: { nodes } });
         logInfo(`[Cockpit] Sent skeleton update (${nodes.length} files scanning)`);
 
         // NEW: Update Bundle View with Skeleton immediately
@@ -545,17 +519,20 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           status: 'scanning'
         }));
 
-        this.view.webview.postMessage({
-          type: 'updateBundle',
-          payload: {
-            hotspots: pendingHotspots,
-            summary: {
-              files: skeleton.files.length,
-              commits: 0,
-              symbols: 0
-            },
-            isPartial: true
-          }
+        this.pushBundleView({
+          tier: 'structure',
+          hotspots: pendingHotspots,
+          summary: {
+            files: skeleton.files.length,
+            commits: 0,
+            symbols: 0
+          },
+          skeleton: {
+            mode: skeleton.mode,
+            roots: skeleton.roots,
+            files: skeleton.files.slice(0, 200)
+          },
+          isPartial: true
         });
       }
     } catch (error) {
@@ -638,22 +615,12 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
 
       const payload = { hotspots, summary, risks: topRisks, treemap, tier: facts ? 'semantics' : undefined };
 
-      if (this.view) {
-        this.view.webview.postMessage({
-          type: 'updateBundle',
-          payload
-        });
-        logInfo(`[Cockpit] Sent bundle data (${hotspots.length} hotspots)`);
-      }
+      this.pushBundleView(payload);
+      logInfo(`[Cockpit] Sent bundle data (${hotspots.length} hotspots)`);
     } catch (error) {
       logError('[Cockpit] Failed to update bundle data', error);
       // Send empty data to stop loading state
-      if (this.view) {
-        this.view.webview.postMessage({
-          type: 'updateBundle',
-          payload: { hotspots: [], error: String(error) }
-        });
-      }
+      this.pushBundleView({ hotspots: [], error: String(error) });
     }
   }
 
@@ -760,27 +727,37 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       const skeleton = await skeletonService.resolveSkeleton(config as any);
       this.skeletonCache = skeleton;
 
-      if (this.view) {
-        this.view.webview.postMessage({
-          type: 'updateBundle',
-          payload: {
-            tier: 'structure',
-            summary: {
-              commits: this.state.selectedCommitShas.length,
-              files: skeleton.files.length,
-              symbols: this.state.bundleSummary?.symbolCount || 0
-            },
-            skeleton: {
-              mode: skeleton.mode,
-              roots: skeleton.roots,
-              files: skeleton.files.slice(0, 200) // cap to avoid huge payloads
-            }
-          }
-        });
-        // Trigger explorer tree update with skeleton data
-        await this.updateExplorerTree();
-        logInfo(`[Cockpit] Sent skeleton progress (${skeleton.files.length} files scanning)`);
-      }
+      const nodes = skeleton.files.map((f: string) => ({
+        id: f,
+        name: f.split('/').slice(-1)[0] || f,
+        type: 'file',
+        status: 'scanning',
+        children: []
+      }));
+      getStore().dispatch({ type: 'EXPLORER_UPDATED', payload: { nodes } });
+
+      this.pushBundleView({
+        tier: 'structure',
+        summary: {
+          commits: this.state.selectedCommitShas.length,
+          files: skeleton.files.length,
+          symbols: this.state.bundleSummary?.symbolCount || 0
+        },
+        skeleton: {
+          mode: skeleton.mode,
+          roots: skeleton.roots,
+          files: skeleton.files.slice(0, 200) // cap to avoid huge payloads
+        },
+        hotspots: skeleton.files.slice(0, 200).map((path: string) => ({
+          path,
+          name: path.split('/').slice(-1)[0] || path,
+          score: 0,
+          status: 'scanning'
+        })),
+        isPartial: true
+      });
+
+      logInfo(`[Cockpit] Sent skeleton progress (${skeleton.files.length} files scanning)`);
     } catch (error) {
       logDebug(`[Cockpit] Failed to send skeleton progress: ${error}`);
     }
@@ -817,28 +794,25 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       }
       const treemap = this.buildTreemap(hotspots);
 
-      this.view.webview.postMessage({
-        type: 'updateBundle',
-        payload: {
-          tier: 'hybrid',
-          summary: {
-            commits: this.state.selectedCommitShas.length,
-            files: (this.state.bundleSummary?.fileCount || 0),
-            symbols: this.state.bundleSummary?.symbolCount || 0,
-            staged: staged.length,
-            unstaged: unstaged.length
-          },
-          virtualCommits: {
-            staged,
-            unstaged,
-            stats: {
-              staged: stagedDiff,
-              unstaged: unstagedDiff
-            }
-          },
-          treemap,
-          hotspots
-        }
+      this.pushBundleView({
+        tier: 'hybrid',
+        summary: {
+          commits: this.state.selectedCommitShas.length,
+          files: (this.state.bundleSummary?.fileCount || 0),
+          symbols: this.state.bundleSummary?.symbolCount || 0,
+          staged: staged.length,
+          unstaged: unstaged.length
+        },
+        virtualCommits: {
+          staged,
+          unstaged,
+          stats: {
+            staged: stagedDiff,
+            unstaged: unstagedDiff
+          }
+        },
+        treemap,
+        hotspots
       });
       logInfo(`[Cockpit] Sent hybrid progress (staged=${staged.length}, unstaged=${unstaged.length})`);
     } catch (error) {
@@ -882,25 +856,11 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         type: 'FRAME_ANALYSIS_TIER_1_COMPLETE',
         payload: { frameId, data: tier1Data }
       });
-
-      // Also send legacy postMessage for backward compatibility
-      this.view.webview.postMessage({
-        type: 'updateFrame',
-        payload: {
-          frame: { ...initialFrame, status: 'scanning', tier: 'hybrid' },
-          data: tier1Data
-        }
-      });
     } catch (error) {
       logError(`[Tier 1] Failed for ${frameId}`, error);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_FAILED',
         payload: { frameId, tier: 1, error: String(error) }
-      });
-      // Even Tier 1 failure shouldn't completely block - show error frame
-      this.view.webview.postMessage({
-        type: 'updateFrame',
-        payload: { frame: { id: frameId, status: 'error' }, error: String(error) }
       });
       return;
     }
@@ -911,17 +871,6 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_2_COMPLETE',
         payload: { frameId, data: tier2Data }
-      });
-
-      // Update message with tier 2 data
-      const currentState = getStore().getState();
-      const currentData = currentState.activeFrame.data || {};
-      this.view.webview.postMessage({
-        type: 'updateFrame',
-        payload: {
-          frame: { ...initialFrame, status: 'scanning', tier: 'semantics' },
-          data: { ...currentData }
-        }
       });
     } catch (error) {
       logError(`[Tier 2] Failed for ${frameId}`, error);
@@ -941,39 +890,12 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         type: 'FRAME_ANALYSIS_TIER_3_COMPLETE',
         payload: { frameId, data: tier3Data }
       });
-
-      // Final update with all data
-      const finalState = getStore().getState();
-      const finalData = finalState.activeFrame.data || {};
-
-      // Build final frame
-      const finalFrame: ContextFrame = {
-        ...initialFrame,
-        status: 'ready',
-        tier: 'semantics'
-      };
-
-      this.view.webview.postMessage({
-        type: 'updateFrame',
-        payload: { frame: finalFrame, data: finalData }
-      });
       logInfo(`[Cockpit] Analyzed frame ${frameId} (${level})`);
     } catch (error) {
       logError(`[Tier 3] Failed for ${frameId}`, error);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_FAILED',
         payload: { frameId, tier: 3, error: String(error) }
-      });
-
-      // Still send final frame even if Tier 3 fails
-      const finalState = getStore().getState();
-      const finalData = finalState.activeFrame.data || {};
-      this.view.webview.postMessage({
-        type: 'updateFrame',
-        payload: {
-          frame: { ...initialFrame, status: 'ready', tier: 'hybrid' },
-          data: finalData
-        }
       });
     }
   }
@@ -1059,11 +981,8 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       if (persistedHotspots) {
         this.hotspotCache.set(summary.id || 'bundle', persistedHotspots);
       }
-      if (persistedTreemap && this.view) {
-        this.view.webview.postMessage({
-          type: 'updateBundle',
-          payload: { treemap: persistedTreemap, hotspots: persistedHotspots || [], summary, tier: 'semantics' }
-        });
+      if (persistedTreemap) {
+        this.pushBundleView({ treemap: persistedTreemap, hotspots: persistedHotspots || [], summary, tier: 'semantics' });
       }
       await this.updateBundleData();
       await this.updateExplorerTree();

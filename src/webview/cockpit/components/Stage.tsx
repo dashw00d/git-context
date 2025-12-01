@@ -749,6 +749,10 @@ export const Stage: React.FC<StageProps & { cockpitState?: CockpitState; vscode?
         });
     };
 
+    const bundleData = frame.level === 'bundle' ? (frame.data || cockpitState?.bundleView || undefined) : undefined;
+    const frameData = bundleData ?? frame.data;
+    const tier = frame.tier || frameData?.tier;
+
     return (
         <div style={StageContainer}>
             <div style={HeaderStyle}>
@@ -773,21 +777,21 @@ export const Stage: React.FC<StageProps & { cockpitState?: CockpitState; vscode?
                             {frame.breadcrumbs.join(' / ')}
                         </span>
                     )}
-                    {(frame.tier || frame.data?.tier) && (
+                    {tier && (
                         <span style={{
                             padding: '2px 6px',
                             borderRadius: '4px',
-                            background: (frame.tier || frame.data?.tier) === 'structure' ? 'var(--vscode-badge-background)' : (frame.tier || frame.data?.tier) === 'hybrid' ? 'var(--vscode-inputValidation-warningBackground)' : 'var(--vscode-charts-green)',
-                            color: (frame.tier || frame.data?.tier) === 'structure' ? 'var(--vscode-badge-foreground)' : 'var(--vscode-foreground)',
+                            background: tier === 'structure' ? 'var(--vscode-badge-background)' : tier === 'hybrid' ? 'var(--vscode-inputValidation-warningBackground)' : 'var(--vscode-charts-green)',
+                            color: tier === 'structure' ? 'var(--vscode-badge-foreground)' : 'var(--vscode-foreground)',
                             fontSize: '0.75em',
                             textTransform: 'uppercase'
                         }}>
-                            {frame.tier || frame.data?.tier}
+                            {tier}
                         </span>
                     )}
-                    {frame.level === 'bundle' && frame.data?.summary && (
+                    {frame.level === 'bundle' && frameData?.summary && (
                         <span style={{ fontSize: '0.8em', opacity: 0.7 }}>
-                            • {frame.data.summary.files} files • {frame.data.summary.symbols} symbols
+                            • {frameData.summary.files} files • {frameData.summary.symbols} symbols
                         </span>
                     )}
                 </div>

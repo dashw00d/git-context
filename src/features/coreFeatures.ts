@@ -11,6 +11,7 @@ import { getExtensionConfig } from '../utils/config';
 import { logInfo, logError } from '../utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getStore } from '../state/store';
 
 export async function registerCoreFeatures(
   shell: AppShell,
@@ -23,6 +24,7 @@ export async function registerCoreFeatures(
   }
 ): Promise<void> {
   const orchestrator = shell.getOrchestrator();
+  const store = getStore();
 
   // Analyze last N commits
   shell.registerCommand('git-context.analyzeLastCommits', async (context, countArg) => {
@@ -52,7 +54,7 @@ export async function registerCoreFeatures(
         }
 
         // Update selection so Cockpit reflects the chosen commits
-        orchestrator.updateState({ selectedCommitShas: shas }, 'command:analyzeLastN');
+        store.dispatch({ type: 'SELECTION_SET', payload: { shas } });
 
         // Run full pipeline (index + analyze bundle)
         await vscode.commands.executeCommand('git-context.analyze');
@@ -90,25 +92,21 @@ export async function registerCoreFeatures(
     const sha = typeof shaOrItem === 'string' ? shaOrItem : (shaOrItem?.id || shaOrItem?.sha);
     if (sha) {
       // Update orchestrator state instead of provider
-      const state = orchestrator.getState();
+      const state = store.getState();
       const selected = new Set(state.selectedCommitShas);
       if (selected.has(sha)) {
         selected.delete(sha);
       } else {
         selected.add(sha);
       }
-      orchestrator.updateState({ selectedCommitShas: Array.from(selected) }, 'command:toggleCommit');
+      store.dispatch({ type: 'SELECTION_SET', payload: { shas: Array.from(selected) } });
       await updateContexts();
     }
   });
 
   // Clear selection
   shell.registerCommand('git-context.clearSelection', async (context) => {
-    orchestrator.updateState({
-      selectedCommitShas: [],
-      selectedStagedPaths: [],
-      selectedUnstagedPaths: []
-    }, 'command:clearSelection');
+    store.dispatch({ type: 'SELECTION_CLEARED' });
     await updateContexts();
   });
 
@@ -138,10 +136,10 @@ export async function registerCoreFeatures(
         }
       }
       if (sha) {
-        const state = orchestrator.getState();
+        const state = store.getState();
         const selected = new Set(state.selectedCommitShas);
         selected.add(sha);
-        orchestrator.updateState({ selectedCommitShas: Array.from(selected) }, 'command:addCommitBySha');
+        store.dispatch({ type: 'SELECTION_SET', payload: { shas: Array.from(selected) } });
         await updateContexts();
       }
     } catch (error) {
@@ -151,16 +149,16 @@ export async function registerCoreFeatures(
 
   // Select all staged
   shell.registerCommand('git-context.selectAllStaged', async (context) => {
-    const state = orchestrator.getState();
+    const state = store.getState();
     const stagedPaths = state.stagedFiles.map(f => f.path);
-    orchestrator.updateState({ selectedStagedPaths: stagedPaths }, 'command:selectAllStaged');
+    store.dispatch({ type: 'STAGED_SELECTION_UPDATED', payload: { paths: stagedPaths } });
   });
 
   // Select all unstaged
   shell.registerCommand('git-context.selectAllUnstaged', async (context) => {
-    const state = orchestrator.getState();
+    const state = store.getState();
     const unstagedPaths = state.unstagedFiles.map(f => f.path);
-    orchestrator.updateState({ selectedUnstagedPaths: unstagedPaths }, 'command:selectAllUnstaged');
+    store.dispatch({ type: 'UNSTAGED_SELECTION_UPDATED', payload: { paths: unstagedPaths } });
   });
 
   // Add more commits
@@ -266,10 +264,7 @@ export async function registerCoreFeatures(
 
   // Bundle clear
   shell.registerCommand('git-context.bundle.clear', async (context) => {
-    orchestrator.updateState({
-      bundleFacts: null,
-      bundleSummary: null
-    }, 'command:bundleClear');
+    store.dispatch({ type: 'BUNDLE_CLEARED' });
     // Clear bundle state (provider method may not exist, that's ok)
     await updateContexts();
   });
@@ -277,7 +272,7 @@ export async function registerCoreFeatures(
   // Bundle cancel
   shell.registerCommand('git-context.bundle.cancel', async (context) => {
     // Cancel any running analysis
-    orchestrator.updateState({ isAnalyzing: false }, 'command:bundleCancel');
+    store.dispatch({ type: 'ANALYSIS_CANCELLED' });
   });
 
   // Bundle export
