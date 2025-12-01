@@ -460,4 +460,352 @@ export class WorkspaceIndexer {
       return undefined;
     }
   }
+  /**
+   * Get the workspace file tree for the Explorer
+   */
+  async getWorkspaceTree(): Promise<any[]> {
+    const allFiles = await this.git.getAllFiles();
+    const gitRoot = this.git.getRoot();
+
+    // Filter files
+    const filteredFiles: string[] = [];
+    for (const file of allFiles) {
+      if (await filterPath(file, {
+        git: this.git,
+        gitRoot,
+        status: 'M', // Dummy status for filtering
+        skipSizeCheck: true
+      })) {
+        filteredFiles.push(file);
+      }
+    }
+
+    // Build Tree
+    const root: any[] = [];
+    const map = new Map<string, any>();
+
+    for (const filePath of filteredFiles) {
+      const parts = filePath.split('/');
+      let currentLevel = root;
+      let currentPath = '';
+
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const isFile = i === parts.length - 1;
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+        let node = map.get(currentPath);
+        if (!node) {
+          node = {
+            id: currentPath,
+            name: part,
+            type: isFile ? 'file' : 'folder',
+            status: 'unknown', // Default status
+            children: isFile ? [] : []
+          };
+          map.set(currentPath, node);
+          currentLevel.push(node);
+        }
+
+        if (!isFile) {
+          currentLevel = node.children;
+        }
+      }
+    }
+
+    // Sort: Folders first, then files, alphabetical
+    const sortNodes = (nodes: any[]) => {
+      nodes.sort((a, b) => {
+        if (a.type === b.type) return a.name.localeCompare(b.name);
+        return a.type === 'folder' ? -1 : 1;
+      });
+      nodes.forEach(n => {
+        if (n.children) sortNodes(n.children);
+      });
+    };
+    sortNodes(root);
+
+    return root;
+  }
+  /**
+   * Get context data for a specific file (Tier 2: Metadata + Structure)
+   */
+  async getFileContext(filePath: string): Promise<any> {
+    const gitRoot = this.git.getRoot();
+    const fullPath = path.join(gitRoot, filePath);
+
+    // 1. Basic Metadata
+    let content = '';
+    try {
+      content = fs.readFileSync(fullPath, 'utf8');
+    } catch {
+      return null; // File not found
+    }
+
+    // 2. Git Metadata & Timeline
+    let lastCommit = null;
+    let timeline: any[] = [];
+
+    try {
+      // Fetch history
+      timeline = await this.git.getFileHistory(filePath, 10);
+      if (timeline.length > 0) {
+        lastCommit = timeline[0];
+      }
+
+      // Check Staged Changes (Virtual Commit)
+      const stagedFiles = await this.git.getStagedFiles();
+      const stagedFile = stagedFiles.find(f => f.path === filePath);
+      if (stagedFile) {
+        timeline.unshift({
+          hash: 'workspace-staged',
+          author: 'You',
+          date: new Date().toISOString(),
+          message: 'Staged Changes',
+          virtual: true,
+          stats: { additions: 0, deletions: 0 } // TODO: Calculate stats
+        });
+      }
+
+      // Check Unstaged Changes (Virtual Commit)
+      const unstagedFiles = await this.git.getUnstagedFiles();
+      const unstagedFile = unstagedFiles.find(f => f.path === filePath);
+      if (unstagedFile) {
+        timeline.unshift({
+          hash: 'workspace-unstaged',
+          author: 'You',
+          date: new Date().toISOString(),
+          message: 'Unstaged Changes',
+          virtual: true,
+          stats: { additions: 0, deletions: 0 } // TODO: Calculate stats
+        });
+      }
+
+    } catch (e) {
+      // Ignore git errors for new files
+    }
+
+    // 3. Symbols (CST)
+    let symbols: any[] = [];
+    const language = detectLanguage(filePath);
+    if (language) {
+      try {
+        symbols = await this.parser.extractHybridFacts(content, filePath, language);
+      } catch (e) {
+        logDebug(`[WorkspaceIndexer] Failed to parse symbols for ${filePath}: ${e}`);
+      }
+    }
+
+    return {
+      id: filePath,
+      language,
+      size: content.length,
+      lineCount: content.split('\n').length,
+      lastModified: lastCommit?.date,
+      lastAuthor: lastCommit?.author,
+      timeline,
+      content,
+      blastRadius: await this.getBlastRadius(filePath, content),
+      drift: this.detectDrift(symbols),
+      symbols: symbols.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        kind: s.kind,
+        range: s.range,
+        signature: s.signature
+      }))
+    };
+  }
+
+  /**
+   * Simple naming drift detector
+   */
+  private detectDrift(symbols: any[]): any[] {
+    const drift: any[] = [];
+
+    for (const symbol of symbols) {
+      if (symbol.kind === 'function' || symbol.kind === 'method') {
+        // Expect camelCase
+        if (!/^[a-z][a-zA-Z0-9]*$/.test(symbol.name)) {
+          drift.push({
+            symbol: symbol.name,
+            issue: 'Naming Convention',
+            detail: 'Should be camelCase',
+            severity: 'medium'
+          });
+        }
+      } else if (symbol.kind === 'class' || symbol.kind === 'interface') {
+        // Expect PascalCase
+        if (!/^[A-Z][a-zA-Z0-9]*$/.test(symbol.name)) {
+          drift.push({
+            symbol: symbol.name,
+            issue: 'Naming Convention',
+            detail: 'Should be PascalCase',
+            severity: 'medium'
+          });
+        }
+      }
+    }
+    return drift;
+  }
+
+  /**
+   * Get context for the Bundle Stage (Heatmap)
+   */
+  async getBundleContext(config?: { mode: 'repo' | 'module' | 'changes' | 'custom'; roots: string[]; includeConnected: boolean; exclusions: string[] }): Promise<any> {
+    // 1. Resolve Skeleton
+    // Use the ContextSkeletonService to determine the exact list of files to analyze
+    // based on the provided configuration (mode, roots, exclusions).
+    const { ContextSkeletonService } = await import('../services/contextSkeleton');
+    const skeletonService = new ContextSkeletonService();
+    const skeleton = await skeletonService.resolveSkeleton(config || { mode: 'repo', roots: [], includeConnected: false, exclusions: [] });
+
+    // 2. Get hotspots for resolved files
+    // We need to filter hotspots by the files in the skeleton
+    const hotspots = await this.git.getHotspots(20);
+    const skeletonSet = new Set(skeleton.files);
+
+    const filteredHotspots = hotspots.filter((h: any) => skeletonSet.has(h.path));
+
+    // If 'changes' mode, ensure all changed files are included even if not in hotspots
+    // This handles new files that haven't been committed yet.
+    if (config?.mode === 'changes') {
+      for (const file of skeleton.files) {
+        if (!filteredHotspots.find(h => h.path === file)) {
+          filteredHotspots.push({ path: file, count: 0, added: 0, removed: 0, size: undefined });
+        }
+      }
+    }
+
+    return {
+      hotspots: filteredHotspots.map(h => ({
+        path: h.path,
+        score: h.count, // Churn count
+        name: h.path.split('/').pop(),
+        added: h.added,
+        removed: h.removed,
+        size: h.size
+      })),
+      scope: {
+        files: skeleton.files.length,
+        roots: skeleton.roots,
+        mode: skeleton.mode
+      }
+    };
+  }
+
+  /**
+   * Get the skeleton of files to be analyzed based on config
+   */
+  async getSkeleton(config: { mode: 'repo' | 'module' | 'changes' | 'custom'; roots: string[]; includeConnected: boolean; exclusions: string[] }): Promise<any> {
+    const { ContextSkeletonService } = await import('../services/contextSkeleton');
+    const skeletonService = new ContextSkeletonService();
+    return skeletonService.resolveSkeleton(config);
+  }
+
+  /**
+   * Simple regex-based import extractor for Blast Radius
+   */
+  private async getBlastRadius(filePath: string, content: string): Promise<any> {
+    const imports: Set<string> = new Set();
+    const basedir = path.dirname(filePath);
+
+    // Regex for JS/TS imports
+    const importRegex = /from\s+['"]([^'"]+)['"]|require\(['"]([^'"]+)['"]\)/g;
+    let match;
+
+    while ((match = importRegex.exec(content)) !== null) {
+      const importPath = match[1] || match[2];
+      if (importPath && importPath.startsWith('.')) {
+        // Resolve relative path
+        try {
+          const resolved = path.resolve(basedir, importPath);
+          // Try to find the file with extensions
+          // This is a simplification; in reality we'd check file existence
+          // For the prototype, we'll just return the resolved path relative to root if possible
+          // But we need to map it back to workspace relative path
+          // Let's just store the raw import for now, or try to resolve simple cases
+          imports.add(importPath);
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+
+    return {
+      outgoing: Array.from(imports).map(imp => ({
+        target: imp,
+        type: 'import'
+      })),
+      incoming: [] // TODO: Reverse index needed for incoming
+    };
+  }
+
+  /**
+   * Get context for a specific symbol
+   */
+  async getSymbolContext(symbolId: string): Promise<any> {
+    // symbolId format: "path/to/file.ts::symbolName"
+    const [filePath, symbolName] = symbolId.split('::');
+
+    if (!filePath || !symbolName) return null;
+
+    const content = await this.snapshotManager.getFileContent(filePath);
+    if (!content) return null;
+
+    // 1. Find symbol range
+    const language = detectLanguage(filePath);
+    let symbolRange = null;
+    let symbolContent = '';
+
+    if (language) {
+      try {
+        const symbols = await this.parser.extractHybridFacts(content, filePath, language);
+        const symbol = symbols.find((s: any) => s.name === symbolName) as any;
+        if (symbol && symbol.range) {
+          symbolRange = symbol.range;
+          // Extract content based on range (1-based lines)
+          const lines = content.split('\n');
+          symbolContent = lines.slice(symbol.range.start.line - 1, symbol.range.end.line).join('\n');
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    if (!symbolContent) {
+      return { id: symbolId, error: 'Symbol not found' };
+    }
+
+    // 2. Get history for this symbol (git log -L)
+    // Note: git log -L requires start,end:file
+    let history: any[] = [];
+    if (symbolRange) {
+      try {
+        const { stdout } = await this.git.spawnGit([
+          'log',
+          '-L',
+          `${symbolRange.start.line},${symbolRange.end.line}:${filePath}`,
+          '--format=%h|%an|%aI|%s'
+        ]);
+
+        history = stdout.trim().split('\n').filter(Boolean).map(line => {
+          const [hash, author, date, message] = line.split('|');
+          return { hash, author, date, message };
+        });
+      } catch (e) {
+        // git log -L can fail if lines don't match history, fallback to file history?
+        // For now, just return empty
+      }
+    }
+
+    return {
+      id: symbolId,
+      name: symbolName,
+      filePath,
+      content: symbolContent,
+      range: symbolRange,
+      history
+    };
+  }
 }

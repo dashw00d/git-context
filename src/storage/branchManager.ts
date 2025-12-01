@@ -2,10 +2,17 @@ import { getDatabaseManager } from './database';
 import { logError } from '../utils/logger';
 
 export class BranchManager {
-  private db: any;
+  private _db: any;
 
   constructor(db?: any) {
-    this.db = db || getDatabaseManager().getDatabase();
+    this._db = db;
+  }
+
+  private get db() {
+    if (!this._db) {
+      this._db = getDatabaseManager().getDatabase();
+    }
+    return this._db;
   }
 
   recordCommit(sha: string, branch: string | null | undefined): void {

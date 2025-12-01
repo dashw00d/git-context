@@ -30,7 +30,10 @@ vi.mock('../src/storage/database', () => ({
                 get: () => ({ count: 0 })
             })
         })
-    }),
+    })
+}));
+
+vi.mock('../src/storage/schema', () => ({
     ANALYSIS_VERSION: 1
 }));
 
@@ -46,14 +49,15 @@ describe('stateUpdaters', () => {
     let activeBundleProvider: any;
     let state: any;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         state = {
             commitsFilterText: '',
             commitsFilterScopes: { staged: true, unstaged: true, history: true },
             lastNCommits: 20,
             selectedCommitShas: [],
             selectedStagedPaths: [],
-            selectedUnstagedPaths: []
+            selectedUnstagedPaths: [],
+            bundleFacts: null
         };
 
         orchestrator = {
@@ -81,6 +85,23 @@ describe('stateUpdaters', () => {
         activeBundleProvider = {
             exportBundleFacts: vi.fn().mockReturnValue(null)
         };
+
+        // Initialize effects with REAL store and mock providers
+        const { CockpitEffects } = await import('../src/state/effects');
+        const { getStore } = await import('../src/state/store');
+        const store = getStore();
+
+        // Mock store.getState to return our test state
+        vi.spyOn(store, 'getState').mockReturnValue(state);
+
+        // Spy on dispatch to debug
+        vi.spyOn(store, 'dispatch');
+
+        new CockpitEffects(store, {
+            commitsProvider,
+            activeBundleProvider,
+            symbolHistoryProvider: {} as any
+        });
     });
 
     it('should respect lastNCommits when fetching commits', async () => {
@@ -93,6 +114,9 @@ describe('stateUpdaters', () => {
             activeBundleProvider as unknown as ActiveBundleProvider
         );
 
+        // Wait for async effects to run
+        await new Promise(resolve => setTimeout(resolve, 10));
+
         // Expect exportCommitsDto to be called with at least 50
         const calls = (commitsProvider.exportCommitsDto as any).mock.calls;
         expect(calls.length).toBeGreaterThan(0);
@@ -101,7 +125,7 @@ describe('stateUpdaters', () => {
     });
 
     it('should use default limit if lastNCommits is small', async () => {
-        state.lastNCommits = 5; // Less than default 20
+        state.lastNCommits = 2; // Less than default 5
 
         await updateCommitsState(
             orchestrator as unknown as CockpitOrchestrator,
@@ -109,10 +133,13 @@ describe('stateUpdaters', () => {
             activeBundleProvider as unknown as ActiveBundleProvider
         );
 
-        // Should still use at least default 20
+        // Wait for async effects to run
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        // Should still use at least default 5
         const calls = (commitsProvider.exportCommitsDto as any).mock.calls;
         expect(calls.length).toBeGreaterThan(0);
         const limitArg = calls[0][0];
-        expect(limitArg).toBeGreaterThanOrEqual(20);
+        expect(limitArg).toBeGreaterThanOrEqual(5);
     });
 });

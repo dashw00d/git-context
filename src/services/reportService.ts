@@ -10,6 +10,7 @@ import { makeBundleFingerprint, PIPELINE_VERSION, PROMPT_VERSION } from '../util
 import { logInfo, logError, logDebug } from '../utils/logger';
 import { isWorkspaceSha } from '../utils/workspace';
 import { MermaidGenerator } from '../analysis/mermaidGenerator';
+import { getStore } from '../state/store';
 
 export class ReportService {
     private static instance: ReportService;
@@ -44,6 +45,8 @@ export class ReportService {
         const orchestrator = getCockpitOrchestrator();
         const pipeline = await getRefactorPipeline();
         const reportManager = getReportManager();
+        const store = getStore();
+        let serializedHistory: any = undefined;
 
         // 1. Check Cache (Layer 3)
         const fingerprint = makeBundleFingerprint(
@@ -73,14 +76,27 @@ export class ReportService {
                         bundleFacts: facts,
                         bundleSummary: cachedReport.analysis,
                         bundleReportId: cachedReport.id,
-                        isAnalyzing: false
+                        isAnalyzing: false,
+                        analysisStep: undefined,
+                        pipelineErrors: [],
+                        retrievedHistory: undefined // Or load if cached, but for now reset
                     }, 'report:cached');
+                    store.dispatch({
+                        type: 'ANALYSIS_COMPLETED',
+                        payload: {
+                            facts,
+                            summary: cachedReport.analysis,
+                            reportId: cachedReport.id,
+                            history: undefined
+                        }
+                    });
                     return cachedReport.id;
                 }
             }
         }
 
         orchestrator.updateState({ isAnalyzing: true, analysisStep: 'Analyzing commits...' }, 'report:start');
+        store.dispatch({ type: 'ANALYSIS_STARTED', payload: { step: 'Analyzing commits...' } });
 
         try {
             // 2. Run Analysis with new layered pipeline
@@ -112,6 +128,7 @@ export class ReportService {
                                 analysisStep: event.step.label,
                                 analysisProgress: undefined
                             }, `report:step:${event.step.id}`);
+                            store.dispatch({ type: 'ANALYSIS_STEP_UPDATED', payload: { step: event.step.label } });
                             break;
 
                         case 'complete':
@@ -119,6 +136,7 @@ export class ReportService {
                                 analysisStep: event.step.label,
                                 analysisProgress: 100
                             }, `report:step:${event.step.id}:complete`);
+                            store.dispatch({ type: 'ANALYSIS_STEP_UPDATED', payload: { step: event.step.label, progress: 100 } });
                             break;
 
                         case 'error':
@@ -126,13 +144,14 @@ export class ReportService {
                                 error: String(event.error),
                                 isAnalyzing: false
                             }, `report:error`);
+                            store.dispatch({ type: 'ANALYSIS_FAILED', payload: { error: String(event.error) } });
                             break;
 
                         case 'finished':
                             if (event.state.errors.length === 0) {
                                 // Serialize symbolEvolution map
                                 const history = event.state.history;
-                                const serializedHistory = history ? {
+                                serializedHistory = history ? {
                                     ...history,
                                     symbolEvolution: history.symbolEvolution
                                         ? Object.fromEntries(history.symbolEvolution)
@@ -146,6 +165,15 @@ export class ReportService {
                                     analysisStep: undefined,
                                     pipelineErrors: []
                                 }, 'report:complete');
+                                store.dispatch({
+                                    type: 'ANALYSIS_COMPLETED',
+                                    payload: {
+                                        facts: event.state.bundleFacts,
+                                        summary: undefined as any,
+                                        reportId: '',
+                                        history: serializedHistory
+                                    }
+                                });
                             }
                             break;
                     }
@@ -239,7 +267,7 @@ export class ReportService {
             const reportId = options.existingReportId || crypto.randomUUID();
             const title = options.title || this.generateTitle([...commitShas, ...workspaceShas]);
 
-            const report = {
+            const report: any = {
                 id: reportId,
                 title,
                 commitShas: shas,
@@ -259,7 +287,12 @@ export class ReportService {
                 mode: scope
             };
 
-            reportManager.save(report);
+            // Include treemap/hotspots in persisted report for faster rehydration
+            reportManager.save({
+                ...report,
+                treemap: (facts as any).treemap,
+                hotspots: (facts as any).evidence?.hotspots || (facts as any).findings?.hotspots
+            });
 
             // 6. Update State
             orchestrator.updateState({
@@ -275,6 +308,22 @@ export class ReportService {
                 bundleReportId: reportId,
                 isAnalyzing: false
             }, 'report:generated');
+            store.dispatch({
+                type: 'ANALYSIS_COMPLETED',
+                payload: {
+                    facts,
+                    summary: {
+                        id: reportId,
+                        commitCount: shas.length,
+                        fileCount: facts.scope.files,
+                        symbolCount: facts.working.symbols,
+                        createdAt: new Date().toISOString(),
+                        debtScore: 0
+                    },
+                    reportId,
+                    history: serializedHistory
+                }
+            });
 
             return reportId;
 
@@ -284,6 +333,7 @@ export class ReportService {
                 isAnalyzing: false,
                 error: error instanceof Error ? error.message : String(error)
             }, 'report:error');
+            store.dispatch({ type: 'ANALYSIS_FAILED', payload: { error: error instanceof Error ? error.message : String(error) } });
             throw error;
         }
     }

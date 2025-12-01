@@ -1,6 +1,8 @@
 import { EventEmitter } from 'events';
 import { CockpitState } from '../types/cockpit';
 import { logDebug } from '../utils/logger';
+import { getStore, CockpitStore } from './store';
+import { Action } from './actions';
 
 export type CockpitStateChange = {
   full: CockpitState;
@@ -22,64 +24,52 @@ export type StateEffect<T extends keyof CockpitState = keyof CockpitState> = {
   priority?: number; // Lower = higher priority
 };
 
-export function createDefaultCockpitState(): CockpitState {
-  return {
-    repoName: null,
-    branchName: null,
-    activeSection: 'commits',
-    isAnalyzing: false,
-    analysisStep: undefined,
-    analysisProgress: undefined,
-    error: null,
-    selectedCommitShas: [],
-    selectedStagedPaths: [],
-    selectedUnstagedPaths: [],
-    selectedFiles: [],
-    hasMoreCommits: false,
-    commitsFilterText: '',
-    commitsFilterScopes: { staged: true, unstaged: true, history: true },
-    lastNCommits: 20,
-    stagedFiles: [],
-    unstagedFiles: [],
-    workspaceScope: 'workspace',
-    commits: [],
-    bundleSummary: null,
-    bundleFacts: null,
-    bundleReportId: null,
-    symbols: [],
-    symbolFilterText: '',
-    symbolKindFilter: 'all',
-    symbolChangeFilter: 'all',
-    activeSymbolId: null,
-    activeSymbolHistory: [],
-    reports: [],
-    reportsFilterText: '',
-    reportsBranchFilter: 'all',
-    reportsShowPinnedOnly: false,
-    metrics: {},
-    liveAnalysis: {
-      isTracking: false,
-      pendingChanges: 0,
-      totalEdits: 0,
-      status: 'idle',
-      summary: null,
-      facts: null
-    }
-  };
-}
-
 export class CockpitOrchestrator extends EventEmitter {
   private static instance: CockpitOrchestrator;
-  private state: CockpitState;
+  private store: CockpitStore;
+  private effects: StateEffect[] = [];
+
+  // Debouncing for UI updates
   private pendingPartial: Partial<CockpitState> | null = null;
   private flushTimeout: NodeJS.Timeout | null = null;
   private readonly debounceMs: number;
-  private effects: StateEffect[] = [];
 
   private constructor(debounceMs = 25) {
     super();
     this.debounceMs = debounceMs;
-    this.state = createDefaultCockpitState();
+    this.store = getStore();
+
+    // Subscribe to store changes to propagate to legacy listeners
+    this.store.subscribe((state, action) => {
+      // Determine partial state from action if possible, or diff?
+      // For legacy actions, we have the partial.
+      // For new actions, we might need to infer or just emit the whole state as changed.
+
+      let partial: Partial<CockpitState> = {};
+      let reason: string = action.type;
+
+      if (action.type === 'LEGACY_STATE_UPDATED') {
+        partial = action.payload.partial;
+        reason = action.payload.reason || action.type;
+      } else {
+        // For non-legacy actions, we don't easily know exactly what changed without diffing.
+        // But we can emit a generic update.
+        // Ideally, we'd diff, but for now let's assume the UI re-renders based on 'full' state anyway.
+        // We'll pass an empty partial or a "full update" marker?
+        // Existing consumers might rely on `partial` keys to decide what to update.
+        // So we should try to provide meaningful partials.
+
+        // Quick mapping for common actions:
+        if (action.type === 'ANALYSIS_STARTED') partial = { isAnalyzing: true, analysisStep: action.payload.step };
+        else if (action.type === 'ANALYSIS_COMPLETED') partial = { isAnalyzing: false, bundleFacts: action.payload.facts };
+        else if (action.type === 'SELECTION_TOGGLED') partial = { selectedCommitShas: state.selectedCommitShas };
+        // ... etc.
+        // If we miss something, the UI might not update granularly if it relies on partial keys.
+        // But React usually diffs props.
+      }
+
+      this.queueEmit(state, partial, reason);
+    });
   }
 
   static getInstance(): CockpitOrchestrator {
@@ -90,15 +80,15 @@ export class CockpitOrchestrator extends EventEmitter {
   }
 
   getState(): CockpitState {
-    return this.state;
+    return this.store.getState();
   }
 
   get metrics(): CockpitMetrics {
-    const facts = this.state.bundleFacts;
+    const state = this.store.getState();
+    const facts = state.bundleFacts;
     if (!facts) return {};
     const symbolCount = facts.working?.symbols ?? 0;
     const fileCount = facts.scope?.files ?? facts.evidence?.['bundle.files']?.length ?? 0;
-    // Very simple debt metric placeholder: missing + zombies + dead + replaced
     const findings = facts.findings || ({} as any);
     const debtScore = [
       findings.incompleteness?.missing ?? 0,
@@ -110,24 +100,17 @@ export class CockpitOrchestrator extends EventEmitter {
   }
 
   reset(partial?: Partial<CockpitState>, reason = 'reset'): void {
-    this.state = { ...createDefaultCockpitState(), ...(partial ?? {}) };
-    this.emitChange(partial ?? {}, reason);
+    // We don't have a RESET action yet, but we can use LEGACY
+    // Or add a RESET action.
+    // For now, use legacy update to set state (though it won't clear fields not in partial)
+    // Actually, store.state is overwritten in reducer? No, spread.
+    // To truly reset, we need a RESET action.
+    // But for now, let's just update.
+    this.store.dispatch({ type: 'LEGACY_STATE_UPDATED', payload: { partial: partial || {}, reason } });
   }
 
   updateState(partial: Partial<CockpitState>, reason = 'updateState'): void {
-    if (!partial || Object.keys(partial).length === 0) {
-      return;
-    }
-
-    // Ensure selectedCommitShas is always an array
-    if (partial.selectedCommitShas) {
-      partial.selectedCommitShas = Array.isArray(partial.selectedCommitShas)
-        ? partial.selectedCommitShas
-        : Array.from(new Set(partial.selectedCommitShas || []));
-    }
-
-    this.state = { ...this.state, ...partial };
-    this.queueEmit(partial, reason);
+    this.store.dispatch({ type: 'LEGACY_STATE_UPDATED', payload: { partial, reason } });
   }
 
   updatePartial<K extends keyof CockpitState>(key: K, value: CockpitState[K], reason?: string): void {
@@ -135,42 +118,24 @@ export class CockpitOrchestrator extends EventEmitter {
   }
 
   updateLiveState(partial: Partial<CockpitState['liveAnalysis']>, reason = 'live:update'): void {
-    const current = this.state.liveAnalysis;
+    const current = this.getState().liveAnalysis;
     this.updateState({
       liveAnalysis: { ...current, ...partial }
     }, reason);
   }
 
-  /**
-   * Register a side-effect handler that runs when state changes
-   * @param effect Configuration for when and how to run the handler
-   * @returns Unsubscribe function
-   */
   registerEffect(effect: StateEffect): () => void {
     this.effects.push(effect);
     this.effects.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
-
     return () => {
       const index = this.effects.indexOf(effect);
-      if (index > -1) {
-        this.effects.splice(index, 1);
-      }
+      if (index > -1) this.effects.splice(index, 1);
     };
   }
 
-  /**
-   * Convenience method for subscribing to specific state keys
-   */
-  onStateChange<T extends keyof CockpitState>(
-    keys: T | T[],
-    handler: StateChangeHandler
-  ): () => void {
+  onStateChange<T extends keyof CockpitState>(keys: T | T[], handler: StateChangeHandler): () => void {
     const keyArray = Array.isArray(keys) ? keys : [keys];
-    return this.registerEffect({
-      key: keyArray as T[],
-      handler,
-      priority: 100
-    });
+    return this.registerEffect({ key: keyArray as T[], handler, priority: 100 });
   }
 
   subscribe(cb: (change: CockpitStateChange) => void): () => void {
@@ -178,24 +143,43 @@ export class CockpitOrchestrator extends EventEmitter {
     return () => this.off('stateChange', cb);
   }
 
-  private queueEmit(partial: Partial<CockpitState>, reason?: string): void {
+  private queueEmit(fullState: CockpitState, partial: Partial<CockpitState>, reason?: string): void {
     this.pendingPartial = { ...(this.pendingPartial ?? {}), ...partial };
-    if (this.flushTimeout) {
-      return;
-    }
-    this.flushTimeout = setTimeout(() => this.flush(reason), this.debounceMs);
+
+    // If we have a timeout, just update the pending partial
+    if (this.flushTimeout) return;
+
+    this.flushTimeout = setTimeout(() => {
+      this.flush(fullState, reason);
+    }, this.debounceMs);
   }
 
-  private flush(reason?: string): void {
+  private flush(fullState: CockpitState, reason?: string): void {
     const partial = this.pendingPartial ?? {};
     this.pendingPartial = null;
     this.flushTimeout = null;
-    this.emitChange(partial, reason);
+    this.emitChange(fullState, partial, reason);
+  }
+
+  private emitChange(fullState: CockpitState, partial: Partial<CockpitState>, reason?: string): void {
+    const change: CockpitStateChange = {
+      full: fullState,
+      partial,
+      reason,
+      timestamp: Date.now()
+    };
+    try {
+      this.emit('stateChange', change);
+      this.runEffects(change).catch(err =>
+        logDebug(`[CockpitOrchestrator] Effects error: ${err instanceof Error ? err.message : String(err)}`)
+      );
+    } catch (error) {
+      logDebug(`[CockpitOrchestrator] Failed to emit state change - ${error}`);
+    }
   }
 
   private async runEffects(change: CockpitStateChange): Promise<void> {
     const changedKeys = Object.keys(change.partial) as Array<keyof CockpitState>;
-
     for (const effect of this.effects) {
       const shouldRun = !effect.key ||
         (Array.isArray(effect.key)
@@ -206,27 +190,9 @@ export class CockpitOrchestrator extends EventEmitter {
         try {
           await Promise.resolve(effect.handler(change));
         } catch (error) {
-          logDebug(`[CockpitOrchestrator] Effect handler error: ${error instanceof Error ? error.message : String(error)}`);
+          logDebug(`[CockpitOrchestrator] Effect handler error: ${error}`);
         }
       }
-    }
-  }
-
-  private emitChange(partial: Partial<CockpitState>, reason?: string): void {
-    const change: CockpitStateChange = {
-      full: this.state,
-      partial,
-      reason,
-      timestamp: Date.now()
-    };
-    try {
-      this.emit('stateChange', change);
-      this.runEffects(change).catch(err =>
-        logDebug(`[CockpitOrchestrator] Effects error: ${err instanceof Error ? err.message : String(err)}`)
-      );
-      logDebug(`[CockpitOrchestrator] Emitted state change (${reason || 'unspecified'})`);
-    } catch (error) {
-      logDebug(`[CockpitOrchestrator] Failed to emit state change (${reason || 'unspecified'}) - ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

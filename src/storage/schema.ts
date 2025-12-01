@@ -429,7 +429,7 @@ CREATE INDEX IF NOT EXISTS idx_migration_log_version ON migration_log(version);
 // Database type is now 'any' to work with the wrapper API
 
 // Type definitions for modular schema system
-export type ModuleName = 'core' | 'commits' | 'symbols' | 'edges' | 'conventions' | 'structural' | 'hotspots' | 'moved' | 'reports';
+export type ModuleName = 'core' | 'commits' | 'symbols' | 'edges' | 'conventions' | 'structural' | 'hotspots' | 'moved' | 'reports' | 'bundles';
 
 export interface Migration {
   name: string;
@@ -817,6 +817,26 @@ CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash
     currentVersion: 4
   },
 
+  // Bundles Module: bundles, bundle_files
+  bundles: {
+    schema: `CREATE TABLE IF NOT EXISTS bundles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  config_json TEXT
+);
+CREATE TABLE IF NOT EXISTS bundle_files (
+  bundle_id TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  PRIMARY KEY (bundle_id, file_path),
+  FOREIGN KEY (bundle_id) REFERENCES bundles(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_bundles_updated ON bundles(updated_at DESC);`,
+    migrations: [],
+    currentVersion: 1
+  },
+
   // Hotspots Module: file_hotspots, symbol_hotspots, hotspot_snapshots
   hotspots: {
     schema: `CREATE TABLE IF NOT EXISTS file_hotspots (
@@ -956,7 +976,7 @@ function truncateError(msg: string | undefined, maxLen = 200): string {
  */
 export function migrateDatabase(db: any): string[] {
   const gaps: string[] = [];
-  
+
   // Exec core module schema first (creates migration_log with module column)
   try {
     db.exec(MODULE_SCHEMAS.core.schema);
@@ -982,11 +1002,11 @@ export function migrateDatabase(db: any): string[] {
   }
 
   // Module execution order (dependencies matter)
-  const moduleOrder: ModuleName[] = ['core', 'commits', 'symbols', 'edges', 'conventions', 'structural', 'hotspots', 'moved', 'reports'];
+  const moduleOrder: ModuleName[] = ['core', 'commits', 'symbols', 'edges', 'conventions', 'structural', 'hotspots', 'moved', 'reports', 'bundles'];
 
   for (const modName of moduleOrder) {
     const mod = MODULE_SCHEMAS[modName];
-    
+
     try {
       // Get current version for this module
       const maxVerResult = db.prepare('SELECT MAX(version) as maxVer FROM migration_log WHERE module = ?').get(modName) as any;

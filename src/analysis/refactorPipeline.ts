@@ -55,17 +55,17 @@ export class RefactorPipeline {
   private config: PipelineConfig = {
     concurrency: 8,
     skipEmbedding: false,
-    skipLLM: false,
+    skipLLM: true,
     maxRetries: 3,
     enableCacheStats: true,
     cacheTTL: 3600
   };
 
   constructor(
-    private commitIndexer: CommitIndexer,
+    public readonly commitIndexer: CommitIndexer,
     public readonly workspaceIndexer: WorkspaceIndexer,
-    private embeddingIndexer: EmbeddingIndexer,
-    private storyEngine: BundleStoryEngine,
+    public readonly embeddingIndexer: EmbeddingIndexer,
+    public readonly storyEngine: BundleStoryEngine,
     config?: Partial<PipelineConfig>
   ) {
     if (config) {

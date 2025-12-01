@@ -210,6 +210,7 @@ export class CommitsProvider {
       if (!filterText || 'staged changes'.includes(filterText.toLowerCase()) || 'unstaged changes'.includes(filterText.toLowerCase())) {
         try {
           const stagedFiles = await git.getStagedFiles();
+          console.log(`[CommitsProvider] Staged files: ${stagedFiles.length}`);
           if (stagedFiles.length > 0) {
             result.push({
               sha: makeWorkspaceSha('staged', branch),

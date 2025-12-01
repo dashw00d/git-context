@@ -66,12 +66,20 @@ export class PipelineFactory {
       const llmAnalyst = new LlmAnalyst();
       const storyEngine = new BundleStoryEngine(llmAnalyst);
 
-      this.pipeline = new RefactorPipeline(
+      const pipeline = new RefactorPipeline(
         commitIndexer,
         workspaceIndexer,
         embeddingIndexer,
         storyEngine
       );
+
+      // Only cache the pipeline if we successfully got a database connection
+      // Otherwise we might cache a broken pipeline that will crash later
+      if (db) {
+        this.pipeline = pipeline;
+      } else {
+        return pipeline;
+      }
     }
 
     return this.pipeline;

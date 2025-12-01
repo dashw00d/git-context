@@ -342,6 +342,50 @@
             }
           },
           "description": "Threshold configuration for detector algorithms (BaseDetector)"
+        },
+        "git-context.bundleConfig": {
+          "type": "object",
+          "default": {
+            "mode": "repo",
+            "roots": [],
+            "includeConnected": false,
+            "exclusions": []
+          },
+          "description": "Configuration for the Bundle Scope (mode, roots, exclusions)",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "repo",
+                "module",
+                "changes",
+                "custom"
+              ],
+              "default": "repo",
+              "description": "Scope mode: repo (full), module (current), changes (staged/unstaged), or custom"
+            },
+            "roots": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [],
+              "description": "Custom root paths for 'custom' mode"
+            },
+            "includeConnected": {
+              "type": "boolean",
+              "default": false,
+              "description": "Include connected files (callers/callees)"
+            },
+            "exclusions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": [],
+              "description": "Glob patterns to exclude"
+            }
+          }
         }
       }
     }

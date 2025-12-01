@@ -14,7 +14,7 @@ const parsers = new Map<string, any>();
 const cstExtractor = new CstExtractor();
 
 // Message types
-type WorkerMessage = 
+type WorkerMessage =
   | { type: 'init'; wasmDir: string; languages: string[] }
   | { type: 'parse'; id: number; content: string; languageId: string; filePath: string; extractHybrid?: boolean; existingSymbols?: SymbolInfo[] }
   | { type: 'serialize'; id: number; content: string; languageId: string; maxDepth?: number };
@@ -64,7 +64,7 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
   // Basic symbol extraction logic mirroring TreeSitterParser
   // Note: Full implementation should match TreeSitterParser exactly.
   // For brevity in this worker implementation, I'll include the core logic.
-  
+
   if (language === LANGUAGES.PHP) {
     if (node.type === 'function_definition' || node.type === 'method_declaration') {
       const nameNode = node.childForFieldName('name');
@@ -204,9 +204,9 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
 
     try {
       const tree = parser.parse(msg.content);
-      
-      let result: any = {};
-      
+
+      const result: any = {};
+
       if (msg.extractHybrid) {
         const isCstOnly = isCstOnlyLanguage(msg.languageId);
         const symbols = msg.existingSymbols || (isCstOnly ? [] : extractSymbols(tree, msg.filePath, msg.languageId));

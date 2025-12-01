@@ -62,59 +62,7 @@ export async function registerCoreFeatures(
     }
   });
 
-  // Analyze staged changes
-  shell.registerCommand('git-context.analyzeStagedChanges', async (context) => {
-    try {
-      await providers.commitsProvider.initializeDatabase();
-      const pipeline = await getRefactorPipeline();
-      const workspaceIndexer = pipeline.workspaceIndexer; // Expose as property
 
-      const facts = await workspaceIndexer.analyzeWorkspace('staged');
-
-      if (!facts) {
-        vscode.window.showInformationMessage('No staged changes to analyze');
-        return;
-      }
-
-      orchestrator.updateState({
-        workspaceFacts: facts,
-        activeSection: 'live'
-      }, 'command:analyzeStagedChanges');
-
-      await providers.commitsProvider.refresh();
-      await refreshCockpitState(orchestrator, providers, 'command:analyzeStaged');
-
-      vscode.window.showInformationMessage(`Analyzed ${facts.filesChanged} staged files`);
-    } catch (error) {
-      vscode.window.showErrorMessage(`Failed to analyze staged changes: ${error}`);
-    }
-  });
-
-  // Analyze unstaged changes
-  shell.registerCommand('git-context.analyzeUnstagedChanges', async (context) => {
-    try {
-      await providers.commitsProvider.initializeDatabase();
-      const pipeline = await getRefactorPipeline();
-      const workspaceIndexer = pipeline.workspaceIndexer;
-
-      const facts = await workspaceIndexer.analyzeWorkspace('unstaged');
-      if (!facts) {
-        vscode.window.showInformationMessage('No unstaged files to analyze');
-        return;
-      }
-
-      orchestrator.updateState({
-        workspaceFacts: facts,
-        activeSection: 'live'
-      }, 'command:analyzeUnstagedChanges');
-
-      await providers.commitsProvider.refresh();
-      await refreshCockpitState(orchestrator, providers, 'command:analyzeUnstaged');
-      vscode.window.showInformationMessage(`Analyzed ${facts.filesChanged} unstaged files`);
-    } catch (error) {
-      vscode.window.showErrorMessage(`Failed to analyze unstaged changes: ${error}`);
-    }
-  });
 
   // Open symbol in file
   shell.registerCommand('git-context.openSymbol', async (context, sha, filePath, range) => {

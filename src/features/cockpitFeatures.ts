@@ -4,12 +4,12 @@ import { CommitsProvider } from '../providers/commitsProvider';
 import { ActiveBundleProvider } from '../providers/activeBundleProvider';
 import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
 import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
-import { getReportService } from '../services/reportService';
 import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
-import { makeWorkspaceSha, parseWorkspaceSha, isWorkspaceSha } from '../utils/workspace';
-import { GitOperations } from '../analysis/git';
-import { updateContexts, refreshCockpitState } from '../core/stateUpdaters';
-import { logInfo, logError } from '../utils/logger';
+import { updateContexts } from '../core/stateUpdaters';
+import { logInfo } from '../utils/logger';
+
+import { getStore } from '../state/store';
+import { CockpitEffects } from '../state/effects';
 
 export async function registerCockpitFeatures(
   shell: AppShell,
@@ -22,6 +22,10 @@ export async function registerCockpitFeatures(
   }
 ): Promise<void> {
   const orchestrator = shell.getOrchestrator();
+  const store = getStore();
+
+  // Initialize Effects System
+  new CockpitEffects(store, providers);
 
   // Live Analysis Commands
   shell.registerCommand('git-context.startLiveAnalysis', async () => {
@@ -95,7 +99,7 @@ export async function registerCockpitFeatures(
       if (Array.isArray(args) && args.length > 0) {
         args = args[0];
       }
-      const { action, symbolId, filePath, range } = args;
+      const { action, symbolId, filePath, range, suggestedName } = args;
 
       // Basic "Delete Symbol" implementation
       if (action === 'delete' && filePath && range) {
@@ -134,6 +138,64 @@ export async function registerCockpitFeatures(
         } else {
           vscode.window.showErrorMessage(`Failed to apply edit to ${filePath}`);
         }
+      } else if (action === 'rename' && suggestedName && symbolId) {
+        // Try a conservative textual rename with user selection if multiple matches exist
+        if (!filePath) {
+          vscode.window.showInformationMessage(`Suggested rename for ${symbolId}: ${suggestedName} (no file path to apply)`);
+          return;
+        }
+        const { getGitRoot } = await import('../utils/config');
+        const gitRoot = getGitRoot();
+        if (!gitRoot) {
+          vscode.window.showInformationMessage(`Suggested rename for ${symbolId}: ${suggestedName} (no git root)`);
+          return;
+        }
+        const fullPath = vscode.Uri.file(`${gitRoot}/${filePath}`);
+        const doc = await vscode.workspace.openTextDocument(fullPath);
+        const text = doc.getText();
+        const parts = symbolId.split(':');
+        const namePart = parts[parts.length - 1];
+        const regex = new RegExp(`\\b${namePart}\\b`, 'g');
+        const matches: Array<{ start: number; end: number; linePreview: string; line: number }> = [];
+        let m: RegExpExecArray | null;
+        while ((m = regex.exec(text)) !== null) {
+          const start = m.index;
+          const end = m.index + namePart.length;
+          const line = doc.positionAt(start).line;
+          const lineText = doc.lineAt(line).text.trim();
+          matches.push({ start, end, linePreview: lineText, line });
+        }
+        if (matches.length === 0) {
+          vscode.window.showInformationMessage(`Suggested rename for ${symbolId}: ${suggestedName} (symbol not found)`);
+          return;
+        }
+
+        let target = matches[0];
+        if (matches.length > 1) {
+          const pick = await vscode.window.showQuickPick(
+            matches.map((mtch, idx) => ({
+              label: `Line ${mtch.line + 1}`,
+              description: mtch.linePreview,
+              idx
+            })),
+            { placeHolder: 'Select occurrence to rename' }
+          );
+          if (pick) {
+            target = matches[pick.idx];
+          }
+        }
+
+        const edit = new vscode.WorkspaceEdit();
+        const startPos = doc.positionAt(target.start);
+        const endPos = doc.positionAt(target.end);
+        edit.replace(fullPath, new vscode.Range(startPos, endPos), suggestedName);
+        const applied = await vscode.workspace.applyEdit(edit);
+        if (applied) {
+          await doc.save();
+          vscode.window.showInformationMessage(`Renamed ${symbolId} → ${suggestedName}`);
+        } else {
+          vscode.window.showErrorMessage(`Failed to apply rename for ${symbolId}`);
+        }
       } else {
         vscode.window.showErrorMessage(`Unsupported refactor action: ${JSON.stringify(args)}`);
       }
@@ -145,122 +207,15 @@ export async function registerCockpitFeatures(
   // Main analyze command
   shell.registerCommand('git-context.analyze', async (context, forceReanalyze = false) => {
     try {
-      const state = orchestrator.getState();
-      const selected = new Set(state.selectedCommitShas);
-      const reportService = await getReportService();
-
-      let branchLoaded = false;
-      let branchName: string | null = null;
-      const ensureBranch = async (): Promise<string | null> => {
-        if (!branchLoaded) {
-          const { GitOperations } = await import('../analysis/git');
-          const git = new GitOperations();
-          branchName = await git.getCurrentBranch();
-          branchLoaded = true;
-        }
-        return branchName;
-      };
-
-      type WorkspaceRequest = {
-        sha?: string;
-        fromPaths: boolean;
-      };
-      const workspaceRequests = new Map<'staged' | 'unstaged', WorkspaceRequest>();
-
-      if (state.selectedStagedPaths.length > 0) {
-        workspaceRequests.set('staged', { sha: undefined, fromPaths: true });
-      }
-      if (state.selectedUnstagedPaths.length > 0) {
-        workspaceRequests.set('unstaged', { sha: undefined, fromPaths: true });
-      }
-
-      for (const sha of Array.from(selected).filter(isWorkspaceSha)) {
-        const parsed = parseWorkspaceSha(sha);
-        if (parsed) {
-          const existing = workspaceRequests.get(parsed.mode) || { sha: undefined, fromPaths: false };
-          workspaceRequests.set(parsed.mode, { sha, fromPaths: existing.fromPaths });
-        }
-      }
-
-      // In new architecture, workspace analysis happens as part of the pipeline
-      // Just ensure workspace SHAs are in the selected set
-      for (const [mode, request] of workspaceRequests.entries()) {
-        if (!request.sha) {
-          const currentBranch = await ensureBranch();
-          request.sha = makeWorkspaceSha(mode, currentBranch);
-        }
-        // Normalize legacy workspace SHAs to include branch for lookup consistency
-        const parsed = request.sha ? parseWorkspaceSha(request.sha) : null;
-        if (parsed && !request.sha.includes('@')) {
-          const currentBranch = await ensureBranch();
-          request.sha = makeWorkspaceSha(mode, currentBranch);
-        }
-
-        // Check if there are actually files to analyze for this workspace mode
-        const { GitOperations } = await import('../analysis/git');
-        const git = new GitOperations();
-        const files = mode === 'staged'
-          ? await git.getStagedFiles()
-          : await git.getUnstagedFiles();
-
-        if (files.length > 0) {
-          selected.add(request.sha!);
-        } else if (request.fromPaths) {
-          vscode.window.showInformationMessage(`No ${mode} files to analyze`);
-        }
-      }
-
-      const shas = Array.from(selected);
-      if (shas.length === 0) {
-        vscode.window.showWarningMessage('Please select commits or workspace changes to analyze.');
-        return;
-      }
-
-      // Auto-include HEAD if selection has few files
-      const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
-      if (commitShas.length > 0) {
-        const git = new GitOperations();
-        let estFiles = 0;
-        for (const sha of commitShas) {
-          try {
-            const files = await git.getFileChanges(sha);
-            estFiles += files.length;
-          } catch (error) {
-            // Skip on error
-          }
-        }
-        if (estFiles < 10) {
-          try {
-            const headSha = await git.getHeadSha();
-            if (!shas.includes(headSha)) {
-              logInfo(`[Auto-include] Adding HEAD (${headSha.substring(0, 8)}) to selection (${estFiles} files < 10 threshold)`);
-              shas.push(headSha);
-            }
-          } catch (error) {
-            // Skip HEAD inclusion on error
-          }
-        }
-      }
-
-      const cancellationTokenSource = new vscode.CancellationTokenSource();
-      try {
-        await reportService.generateReport(
-          shas,
-          'full',
-          { force: forceReanalyze, cancellationToken: cancellationTokenSource.token }
-        );
-        await updateContexts();
-        await refreshCockpitState(orchestrator, providers, 'command:analyze');
-      } finally {
-        await providers.commitsProvider.refresh();
-      }
+      const selection = store.getState().selectedCommitShas || [];
+      store.dispatch({
+        type: 'ANALYSIS_REQUESTED',
+        payload: { selection, force: !!forceReanalyze }
+      });
     } catch (error) {
-      // Update UI state on error
+      console.error('[Cockpit] Analysis trigger failed:', error);
       orchestrator.updateState({ isAnalyzing: false, error: error instanceof Error ? error.message : String(error) }, 'command:analyze:error');
-      vscode.window.showErrorMessage(`Failed to analyze selection: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      // Ensure UI state is reset
-      orchestrator.updateState({ isAnalyzing: false }, 'command:analyze:complete');
+      vscode.window.showErrorMessage(`Failed to trigger analysis: ${error instanceof Error ? error.message : String(error)}`);
     }
   });
 
@@ -306,7 +261,7 @@ export async function registerCockpitFeatures(
       const { getReportManager } = await import('../storage/reportManager');
       const reportManager = getReportManager();
       reportManager.delete(reportId);
-      await refreshCockpitState(orchestrator, providers, 'command:deleteReport');
+      store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'reports' } });
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to delete report: ${error}`);
     }
@@ -321,7 +276,7 @@ export async function registerCockpitFeatures(
       if (report) {
         report.isPinned = !report.isPinned;
         reportManager.save(report);
-        await refreshCockpitState(orchestrator, providers, 'command:togglePinReport');
+        store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'reports' } });
       }
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to toggle pin: ${error}`);

@@ -202,7 +202,7 @@ export class SnapshotManager {
   private flushSnapshotQueueInternal(): void {
     if (this.writeQueue.length === 0) return;
     const batch = this.writeQueue.splice(0, this.BATCH_SIZE);
-    
+
     // Get wrapped database with transaction support
     const db = getDatabaseManager().getDatabase();
     const stmt = db.prepare(`
@@ -212,7 +212,7 @@ export class SnapshotManager {
     `);
 
     const now = new Date().toISOString();
-    
+
     // Use transaction wrapper instead of manual BEGIN/COMMIT
     db.transaction(() => {
       for (const snapshot of batch) {
@@ -308,7 +308,7 @@ export class SnapshotManager {
           // Modified
           const changeType = sigChanged && bodyChanged ? 'both'
             : sigChanged ? 'signature'
-            : 'body';
+              : 'body';
 
           modified.push({ symbol, previousSymbol: prev, changeType });
         }
@@ -324,5 +324,19 @@ export class SnapshotManager {
     }
 
     return { added, removed, modified, renamed };
+  }
+  /**
+   * Helper to read file content from disk
+   */
+  async getFileContent(filePath: string): Promise<string | null> {
+    try {
+      const fs = require('fs');
+      if (fs.existsSync(filePath)) {
+        return fs.readFileSync(filePath, 'utf-8');
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 }

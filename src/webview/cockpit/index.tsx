@@ -9,6 +9,7 @@ import { BundleTabContent } from './components/BundleTabContent';
 import { SymbolsTabContent } from './components/SymbolsTabContent';
 import { ReportsTabContent } from './components/ReportsTabContent';
 import { LiveTabContent } from './components/LiveTabContent';
+import { SuperWebview } from './components/SuperWebview';
 import { formatDate } from './utils';
 
 declare global {
@@ -61,12 +62,25 @@ const defaultState: CockpitState = {
     status: 'idle',
     summary: null,
     facts: null
-  }
+  },
+  bundleConfig: {
+    mode: 'repo',
+    roots: [],
+    includeConnected: false,
+    exclusions: []
+  },
+  activeFrame: {
+    level: 'bundle',
+    id: 'root',
+    name: 'Bundle Overview',
+    status: 'ready'
+  },
+  history: [],
+  explorerData: []
 };
 
 const App: React.FC = () => {
   const [state, setState] = React.useState<CockpitState>(defaultState);
-  const filterDebounceRef = React.useRef<Record<string, NodeJS.Timeout>>({});
 
   React.useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -92,139 +106,9 @@ const App: React.FC = () => {
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  const setActiveSection = (section: CockpitSectionKey | 'live') => {
-    setState((prev) => ({ ...prev, activeSection: section }));
-    vscode.postMessage({ type: 'setActiveSection', section });
-  };
-
-  const updateCommitsFilterText = (text: string) => {
-    setState((prev) => ({ ...prev, commitsFilterText: text }));
-    if (filterDebounceRef.current.commitsFilter) {
-      clearTimeout(filterDebounceRef.current.commitsFilter);
-    }
-    filterDebounceRef.current.commitsFilter = setTimeout(() => {
-      vscode.postMessage({ type: 'setCommitsFilterText', text });
-    }, 300);
-  };
-
-  const toggleCommitsScope = (scope: keyof CockpitState['commitsFilterScopes']) => {
-    const scopes = { ...state.commitsFilterScopes, [scope]: !state.commitsFilterScopes[scope] };
-    setState((prev) => ({ ...prev, commitsFilterScopes: scopes }));
-    vscode.postMessage({ type: 'setCommitsFilterScopes', scopes });
-  };
-
-  const updateSymbolFilterText = (text: string) => {
-    setState((prev) => ({ ...prev, symbolFilterText: text }));
-    if (filterDebounceRef.current.symbolFilter) {
-      clearTimeout(filterDebounceRef.current.symbolFilter);
-    }
-    filterDebounceRef.current.symbolFilter = setTimeout(() => {
-      vscode.postMessage({ type: 'setSymbolFilterText', text });
-    }, 300);
-  };
-
-  const updateSymbolKind = (kind: string | 'all') => {
-    setState((prev) => ({ ...prev, symbolKindFilter: kind }));
-    vscode.postMessage({ type: 'setSymbolKindFilter', kind });
-  };
-
-  const updateSymbolChangeFilter = (change: 'all' | SymbolChangeType) => {
-    setState((prev) => ({ ...prev, symbolChangeFilter: change }));
-    vscode.postMessage({ type: 'setSymbolChangeFilter', change });
-  };
-
-  const updateReportsFilterText = (text: string) => {
-    setState((prev) => ({ ...prev, reportsFilterText: text }));
-    if (filterDebounceRef.current.reportsFilter) {
-      clearTimeout(filterDebounceRef.current.reportsFilter);
-    }
-    filterDebounceRef.current.reportsFilter = setTimeout(() => {
-      vscode.postMessage({ type: 'setReportsFilterText', text });
-    }, 300);
-  };
-
-  const updateReportsBranchFilter = (branch: string | 'all') => {
-    setState((prev) => ({ ...prev, reportsBranchFilter: branch }));
-    vscode.postMessage({ type: 'setReportsBranchFilter', branch });
-  };
-
-  const updateReportsPinned = (value: boolean) => {
-    setState((prev) => ({ ...prev, reportsShowPinnedOnly: value }));
-    vscode.postMessage({ type: 'setReportsShowPinnedOnly', value });
-  };
-
-  const bundleSummaryText = state.bundleSummary
-    ? `${state.bundleSummary.commitCount} commits, ${state.bundleSummary.fileCount} files${state.bundleSummary.symbolCount ? `, ${state.bundleSummary.symbolCount} symbols` : ''}`
-    : 'Bundle: none';
-
   return (
-    <div className="cockpit">
-      <Header
-        state={state}
-        vscode={vscode}
-        bundleSummaryText={bundleSummaryText}
-        onDismissError={() => {
-          setState((prev) => ({ ...prev, error: null }));
-          vscode.postMessage({ type: 'clearError' });
-        }}
-      />
-
-      <StatsSection state={state} vscode={vscode} />
-
-      <Tabs
-        active={state.activeSection}
-        onChange={setActiveSection}
-        counts={{
-          commits: state.commits.length,
-          bundle: state.bundleSummary ? `${state.bundleSummary.fileCount} files` : 'None',
-          symbols: state.symbols.length,
-          reports: state.reports.length,
-          live: state.liveAnalysis.pendingChanges
-        }}
-      />
-
-      <div className="cockpit__tab-container">
-        {state.activeSection === 'commits' && (
-          <CommitsTabContent
-            state={state}
-            vscode={vscode}
-            updateCommitsFilterText={updateCommitsFilterText}
-            toggleCommitsScope={toggleCommitsScope}
-            formatDate={formatDate}
-          />
-        )}
-        {state.activeSection === 'bundle' && (
-          <BundleTabContent
-            state={state}
-            vscode={vscode}
-            formatDate={formatDate}
-          />
-        )}
-        {state.activeSection === 'symbols' && (
-          <SymbolsTabContent
-            state={state}
-            vscode={vscode}
-            updateSymbolFilterText={updateSymbolFilterText}
-            updateSymbolKind={updateSymbolKind}
-            updateSymbolChangeFilter={updateSymbolChangeFilter}
-          />
-        )}
-        {state.activeSection === 'reports' && (
-          <ReportsTabContent
-            state={state}
-            vscode={vscode}
-            updateReportsFilterText={updateReportsFilterText}
-            updateReportsBranchFilter={updateReportsBranchFilter}
-            updateReportsPinned={updateReportsPinned}
-          />
-        )}
-        {state.activeSection === 'live' && (
-          <LiveTabContent
-            state={state}
-            vscode={vscode}
-          />
-        )}
-      </div>
+    <div className="cockpit" style={{ padding: 0, margin: 0, height: '100vh', overflow: 'hidden' }}>
+      <SuperWebview vscode={vscode} cockpitState={state} />
     </div>
   );
 };

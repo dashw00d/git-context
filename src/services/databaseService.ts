@@ -449,6 +449,158 @@ export class DatabaseService extends ServiceBase {
       }
     });
   }
+  // ===== BUNDLE OPERATIONS =====
+
+  async createBundle(name: string, config: any): Promise<string> {
+    return this.executeInTransaction(async () => {
+      try {
+        const db = this.db.getDatabase();
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+
+        // Insert bundle
+        const stmt = db.prepare(`
+          INSERT INTO bundles (id, name, created_at, updated_at, config_json)
+          VALUES (?, ?, ?, ?, ?)
+        `);
+        stmt.run(id, name, now, now, JSON.stringify(config));
+        stmt.free?.();
+
+        // Insert files
+        if (config.files && Array.isArray(config.files)) {
+          const fileStmt = db.prepare(`
+            INSERT INTO bundle_files (bundle_id, file_path)
+            VALUES (?, ?)
+          `);
+          for (const file of config.files) {
+            fileStmt.run(id, file);
+          }
+          fileStmt.free?.();
+        }
+
+        // Invalidate cache
+        this.cache?.delete('bundles_list');
+
+        return id;
+      } catch (error) {
+        this.handleDbError(error, 'createBundle');
+        throw error;
+      }
+    });
+  }
+
+  async getBundles(): Promise<any[]> {
+    return this.queryWithCache('bundles_list', async () => {
+      try {
+        await ensureDatabaseInitialized();
+        const db = this.db.getDatabase();
+        const stmt = db.prepare('SELECT * FROM bundles ORDER BY updated_at DESC');
+        const results = stmt.all() as any[];
+        stmt.free?.();
+
+        // Parse config
+        return results.map(b => ({
+          ...b,
+          config: JSON.parse(b.config_json || '{}')
+        }));
+      } catch (error) {
+        this.handleDbError(error, 'getBundles');
+        return [];
+      }
+    });
+  }
+
+  async getBundle(id: string): Promise<any | null> {
+    return this.queryWithCache(`bundle_${id}`, async () => {
+      try {
+        await ensureDatabaseInitialized();
+        const db = this.db.getDatabase();
+
+        const stmt = db.prepare('SELECT * FROM bundles WHERE id = ?');
+        const bundle = stmt.get(id) as any;
+        stmt.free?.();
+
+        if (!bundle) return null;
+
+        return {
+          ...bundle,
+          config: JSON.parse(bundle.config_json || '{}')
+        };
+      } catch (error) {
+        this.handleDbError(error, 'getBundle');
+        return null;
+      }
+    });
+  }
+
+  async deleteBundle(id: string): Promise<void> {
+    await this.executeInTransaction(async () => {
+      try {
+        const db = this.db.getDatabase();
+        const stmt = db.prepare('DELETE FROM bundles WHERE id = ?');
+        stmt.run(id);
+        stmt.free?.();
+
+        // Invalidate cache
+        this.cache?.delete(`bundle_${id}`);
+        this.cache?.delete('bundles_list');
+      } catch (error) {
+        this.handleDbError(error, 'deleteBundle');
+      }
+    });
+  }
+
+  async updateBundle(id: string, updates: { name?: string; config?: any }): Promise<void> {
+    await this.executeInTransaction(async () => {
+      try {
+        const db = this.db.getDatabase();
+        const now = new Date().toISOString();
+
+        const sets: string[] = ['updated_at = ?'];
+        const params: any[] = [now];
+
+        if (updates.name) {
+          sets.push('name = ?');
+          params.push(updates.name);
+        }
+
+        if (updates.config) {
+          sets.push('config_json = ?');
+          params.push(JSON.stringify(updates.config));
+        }
+
+        params.push(id);
+
+        const stmt = db.prepare(`UPDATE bundles SET ${sets.join(', ')} WHERE id = ?`);
+        stmt.run(...params);
+        stmt.free?.();
+
+        // Update files if config changed
+        if (updates.config && updates.config.files) {
+          // Delete old files
+          const delStmt = db.prepare('DELETE FROM bundle_files WHERE bundle_id = ?');
+          delStmt.run(id);
+          delStmt.free?.();
+
+          // Insert new files
+          const fileStmt = db.prepare(`
+            INSERT INTO bundle_files (bundle_id, file_path)
+            VALUES (?, ?)
+          `);
+          for (const file of updates.config.files) {
+            fileStmt.run(id, file);
+          }
+          fileStmt.free?.();
+        }
+
+        // Invalidate cache
+        this.cache?.delete(`bundle_${id}`);
+        this.cache?.delete('bundles_list');
+      } catch (error) {
+        this.handleDbError(error, 'updateBundle');
+      }
+    });
+  }
 }
 
 // Singleton instance

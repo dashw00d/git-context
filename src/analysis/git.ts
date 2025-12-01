@@ -8,6 +8,7 @@ import { logDebug, logWarn, logError } from '../utils/logger';
 export class GitOperations {
   private gitRoot: string;
   private git: SimpleGit;
+  private static hotspotCache: Map<string, { expires: number; data: HotspotStat[] }> = new Map();
 
   constructor() {
     const root = getGitRoot();
@@ -606,6 +607,200 @@ export class GitOperations {
   }
 
   /**
+   * Get all tracked files in the repository
+   */
+  async getAllFiles(): Promise<string[]> {
+    try {
+      const output = await this.git.raw(['ls-files', '--cached', '--exclude-standard']);
+      return this.parseFileList(output);
+    } catch (error: any) {
+      logError(`Failed to get all files: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get commit history for a specific file
+   */
+  async getFileHistory(filePath: string, limit: number = 10): Promise<any[]> {
+    try {
+      // Format: hash|author|date|message
+      const { stdout } = await this.spawnGit([
+        'log',
+        `-${limit}`,
+        '--format=%h|%an|%aI|%s',
+        '--',
+        filePath
+      ]);
+
+      return stdout.trim().split('\n').filter(Boolean).map(line => {
+        const [hash, author, date, message] = line.split('|');
+        return { hash, author, date, message, virtual: false };
+      });
+    } catch (error: any) {
+      logError(`Failed to get file history for ${filePath}: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get recent commits for a file with added/removed stats.
+   */
+  async getFileHistoryWithStats(filePath: string, limit: number = 10): Promise<any[]> {
+    try {
+      // Format: hash|author|date|message\nnumstat lines
+      const { stdout } = await this.spawnGit([
+        'log',
+        `-${limit}`,
+        '--format=%H|%an|%aI|%s',
+        '--numstat',
+        '--',
+        filePath
+      ]);
+
+      const lines = stdout.trim().split('\n');
+      const entries: any[] = [];
+      let current: any = null;
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        if (line.includes('|') && line.split('|').length >= 4) {
+          const [hash, author, date, message] = line.split('|');
+          if (current) entries.push(current);
+          current = { hash, author, date, message, stats: { additions: 0, deletions: 0 } };
+        } else if (current) {
+          const parts = line.split('\t');
+          if (parts.length === 3) {
+            const add = parseInt(parts[0], 10);
+            const del = parseInt(parts[1], 10);
+            if (!isNaN(add)) current.stats.additions += add;
+            if (!isNaN(del)) current.stats.deletions += del;
+          }
+        }
+      }
+      if (current) entries.push(current);
+      return entries;
+    } catch (error: any) {
+      logError(`Failed to get file history with stats for ${filePath}: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get top modified files (hotspots) based on commit history
+   */
+  async getHotspots(limit: number = 20): Promise<HotspotStat[]> {
+    try {
+      // Cache hotspots per HEAD for 5 minutes to avoid repeated heavy git log calls
+      try {
+        const head = await this.git.revparse(['HEAD']);
+        const key = `${head}`;
+        const cached = GitOperations.hotspotCache.get(key);
+        const now = Date.now();
+        if (cached && cached.expires > now) {
+          return cached.data.slice(0, limit);
+        }
+        const { stdout } = await this.spawnGit([
+          'log',
+          '--pretty=format:%H',
+          '--numstat',
+          '--no-merges',
+          '--since="3 months ago"' // Configurable?
+        ]);
+
+        const fileCounts = new Map<string, { count: number; added: number; removed: number }>();
+        const lines = stdout.split('\n');
+        for (const line of lines) {
+          // numstat lines: added<TAB>removed<TAB>path OR commit hash line
+          const parts = line.trim().split('\t');
+          if (parts.length === 3) {
+            const added = parseInt(parts[0], 10);
+            const removed = parseInt(parts[1], 10);
+            const p = parts[2];
+            if (!fileCounts.has(p)) fileCounts.set(p, { count: 0, added: 0, removed: 0 });
+            const entry = fileCounts.get(p)!;
+            entry.count += 1;
+            if (!isNaN(added)) entry.added += added;
+            if (!isNaN(removed)) entry.removed += removed;
+          }
+        }
+
+        // Load sizes once for weighting
+        const sizes = await this.getFileSizes(Array.from(fileCounts.keys()));
+
+        const data: HotspotStat[] = Array.from(fileCounts.entries())
+          .map(([path, stats]) => ({ path, count: stats.count, added: stats.added, removed: stats.removed, size: sizes.get(path) }))
+          .sort((a, b) => b.count - a.count);
+
+        GitOperations.hotspotCache.set(key, { expires: now + 5 * 60 * 1000, data });
+        return data.slice(0, limit);
+      } catch (cacheError) {
+        logWarn(`Hotspot caching failed, falling back: ${cacheError}`);
+      }
+
+      // Get all file names from log, count occurrences, plus added/removed
+      const { stdout } = await this.spawnGit([
+        'log',
+        '--pretty=format:%H',
+        '--numstat',
+        '--no-merges',
+        '--since="3 months ago"' // Configurable?
+      ]);
+
+      const fileCounts = new Map<string, { count: number; added: number; removed: number }>();
+      const lines = stdout.split('\n');
+
+      for (const line of lines) {
+        const parts = line.trim().split('\t');
+        if (parts.length === 3) {
+          const added = parseInt(parts[0], 10);
+          const removed = parseInt(parts[1], 10);
+          const p = parts[2];
+          if (!fileCounts.has(p)) fileCounts.set(p, { count: 0, added: 0, removed: 0 });
+          const entry = fileCounts.get(p)!;
+          entry.count += 1;
+          if (!isNaN(added)) entry.added += added;
+          if (!isNaN(removed)) entry.removed += removed;
+        }
+      }
+
+      const data: HotspotStat[] = Array.from(fileCounts.entries())
+        .map(([path, stats]) => ({ path, count: stats.count, added: stats.added, removed: stats.removed }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, limit);
+      return data;
+
+    } catch (error: any) {
+      logError(`Failed to get hotspots: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get diff stats for staged or unstaged changes (added/removed totals)
+   */
+  async getDiffStats(mode: 'staged' | 'unstaged'): Promise<{ added: number; removed: number }> {
+    try {
+      const args = mode === 'staged' ? ['diff', '--cached', '--numstat'] : ['diff', '--numstat'];
+      const { stdout } = await this.spawnGit(args);
+      let added = 0;
+      let removed = 0;
+      stdout.split('\n').forEach(line => {
+        const parts = line.trim().split('\t');
+        if (parts.length >= 3) {
+          const a = parseInt(parts[0], 10);
+          const r = parseInt(parts[1], 10);
+          if (!isNaN(a)) added += a;
+          if (!isNaN(r)) removed += r;
+        }
+      });
+      return { added, removed };
+    } catch (error: any) {
+      logError(`Failed to get diff stats (${mode}): ${error.message}`);
+      return { added: 0, removed: 0 };
+    }
+  }
+
+  /**
    * Spawn a git command asynchronously (using simple-git raw)
    */
   async spawnGit(args: string[]): Promise<{ stdout: string; stderr: string }> {
@@ -617,4 +812,30 @@ export class GitOperations {
       return { stdout: '', stderr: error.message || String(error) };
     }
   }
+
+  /**
+   * Get file sizes (in bytes) for a list of paths
+   */
+  async getFileSizes(paths: string[]): Promise<Map<string, number>> {
+    const sizes = new Map<string, number>();
+    for (const p of paths) {
+      try {
+        const stat = fs.statSync(path.join(this.gitRoot, p));
+        if (stat.isFile()) {
+          sizes.set(p, stat.size);
+        }
+      } catch {
+        // ignore missing files
+      }
+    }
+    return sizes;
+  }
+}
+
+export interface HotspotStat {
+  path: string;
+  count: number;
+  size?: number;
+  added?: number;
+  removed?: number;
 }

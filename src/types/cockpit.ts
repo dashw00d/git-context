@@ -4,6 +4,13 @@ import { WorkspaceFacts } from '../analysis/workspaceIndexer';
 /** Which section (accordion) is active/open in the cockpit sidebar */
 export type CockpitSectionKey = 'commits' | 'bundle' | 'symbols' | 'reports' | 'live';
 
+export interface BundleConfig {
+  mode: 'repo' | 'module' | 'changes' | 'custom';
+  roots: string[];
+  includeConnected: boolean;
+  exclusions: string[];
+}
+
 /* ---------- DTOs shared between host and cockpit ---------- */
 
 export interface CommitDTO {
@@ -165,6 +172,38 @@ export interface CockpitState {
     summary: LiveAnalysisSummary | null;
     facts: any; // Relaxed type for now, or define LiveFactsDTO
   };
+
+  /* Bundle Scope Configuration */
+  bundleConfig: BundleConfig;
+
+  /* Navigation State (Centralized) */
+  activeFrame: ContextFrame;
+  history: ContextFrame[];
+  explorerData: ExplorerNode[];
+}
+
+export type ZoomLevel = 'bundle' | 'blast_radius' | 'file' | 'symbol';
+export type AnalysisStatus = 'ready' | 'scanning' | 'unknown';
+
+export interface ContextFrame {
+  level: ZoomLevel;
+  id: string;
+  name: string;
+  description?: string;
+  parentId?: string;
+  status: AnalysisStatus;
+  data?: any; // Hydrated data (metadata, timeline, symbols, etc.)
+  breadcrumbs?: string[];
+  tier?: 'structure' | 'hybrid' | 'semantics';
+}
+
+export interface ExplorerNode {
+  id: string;
+  name: string;
+  description?: string;
+  type: 'file' | 'symbol' | 'folder';
+  status: AnalysisStatus;
+  children?: ExplorerNode[];
 }
 
 export interface LiveAnalysisSummary {
@@ -275,6 +314,18 @@ export type CockpitClientMessage =
     type: 'openSymbolInEditor';
     symbolId: string;
   }
+  | {
+    type: 'applyRefactorSuggestion';
+    payload: { symbolId: string; suggestedName: string; filePath?: string };
+  }
+  | {
+    type: 'askAssistant';
+    payload?: any;
+  }
+  | {
+    type: 'applyRefactorSuggestion';
+    payload: { symbolId: string; suggestedName: string; filePath?: string };
+  }
 
   /* Saved reports section */
   | {
@@ -291,6 +342,10 @@ export type CockpitClientMessage =
   }
   | {
     type: 'openSuperReport';
+  }
+  | {
+    type: 'setLastNCommits';
+    value: number;
   }
   | {
     type: 'togglePinReport';
@@ -327,6 +382,33 @@ export type CockpitClientMessage =
   }
   | {
     type: 'startLiveAnalysis';
+  }
+  | {
+    type: 'getExplorerTree';
+  }
+  | {
+    type: 'analyzeFrame';
+    frameId: string;
+  }
+  | {
+    type: 'getBundleData';
+  }
+  | {
+    type: 'createBundle';
+    name: string;
+    config: BundleConfig;
+  }
+  | {
+    type: 'deleteBundle';
+    id: string;
+  }
+  | {
+    type: 'switchBundle';
+    id: string;
+  }
+  | {
+    type: 'updateBundleConfig';
+    config: Partial<BundleConfig>;
   };
 
 /* ---------- Host → Cockpit messages ---------- */
@@ -334,4 +416,7 @@ export type CockpitClientMessage =
 export type CockpitHostMessage =
   | { type: 'updateState'; payload: CockpitState }
   | { type: 'analysisProgress'; payload: { isAnalyzing: boolean; step?: string; progress?: number } }
-  | { type: 'focusSection'; payload: { section: CockpitSectionKey } };
+  | { type: 'focusSection'; payload: { section: CockpitSectionKey } }
+  | { type: 'updateExplorerTree'; payload: any[] }
+  | { type: 'updateFrame'; payload: { frame: any; data: any } }
+  | { type: 'updateBundle'; payload: any };
