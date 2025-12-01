@@ -1,9 +1,9 @@
-import { CockpitOrchestrator } from '../state/cockpitOrchestrator';
-import { CommitsProvider } from '../providers/commitsProvider';
-import { ActiveBundleProvider } from '../providers/activeBundleProvider';
-import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
-import { getStore } from '../state/store';
 import * as vscode from 'vscode';
+import { ActiveBundleProvider } from '../providers/activeBundleProvider';
+import { CommitsProvider } from '../providers/commitsProvider';
+import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
+import { CockpitOrchestrator } from '../state/cockpitOrchestrator';
+import { getStore } from '../state/store';
 import { logError } from '../utils/logger';
 
 /**
@@ -82,7 +82,11 @@ export async function updateContexts(): Promise<void> {
     const orchestrator = getCockpitOrchestrator();
     const state = orchestrator.getState();
 
-    await vscode.commands.executeCommand('setContext', 'gitContext.hasActiveBundle', !!state.bundleFacts);
+    await vscode.commands.executeCommand(
+      'setContext',
+      'gitContext.hasActiveBundle',
+      !!state.bundleFacts
+    );
     const hasSelection = state.selectedCommitShas.length > 0;
     await vscode.commands.executeCommand('setContext', 'gitContext.hasSelection', hasSelection);
   } catch (error) {

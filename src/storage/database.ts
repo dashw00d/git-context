@@ -1,8 +1,12 @@
-import * as path from 'path';
+/* eslint-disable no-console, no-restricted-syntax */
+
 import * as fs from 'fs';
+import * as path from 'path';
 import initSqlJs, { Database, Statement } from 'sql.js';
-import { migrateDatabase, auditAllModules, ANALYSIS_VERSION } from './schema';
 import { getGitRoot } from '../utils/config';
+import { logInfo } from '../utils/logger';
+import { auditAllModules, migrateDatabase } from './schema';
+import { prepare } from './statement-wrapper';
 
 // Wrapper to mimic better-sqlite3 API
 interface DatabaseStatement {
@@ -13,7 +17,10 @@ interface DatabaseStatement {
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 class StatementWrapper {
-  constructor(private stmt: Statement, private dbManager: DatabaseManager) { }
+  constructor(
+    private stmt: Statement,
+    private dbManager: DatabaseManager
+  ) {}
 
   private normalizeParams(params: any[]): any[] {
     // Accept both better-sqlite3-style varargs and a single array of params
@@ -103,7 +110,6 @@ export class DatabaseManager {
         // Return a wrapper that creates a fresh statement for each operation
         // This is necessary because sql.js statements can't be reused
         return {
-
           run: (...params: any[]) => {
             try {
               if (!this.db) {
@@ -136,9 +142,8 @@ export class DatabaseManager {
                 return undefined;
               }
               const stmt = this.db.prepare(sql);
-              const bindParams = (params.length === 1 && Array.isArray(params[0]))
-                ? params[0] as any[]
-                : params;
+              const bindParams =
+                params.length === 1 && Array.isArray(params[0]) ? (params[0] as any[]) : params;
               stmt.bind(bindParams);
               if (stmt.step()) {
                 const result = stmt.getAsObject();
@@ -158,9 +163,8 @@ export class DatabaseManager {
                 return [];
               }
               const stmt = this.db.prepare(sql);
-              const bindParams = (params.length === 1 && Array.isArray(params[0]))
-                ? params[0] as any[]
-                : params;
+              const bindParams =
+                params.length === 1 && Array.isArray(params[0]) ? (params[0] as any[]) : params;
               stmt.bind(bindParams);
               const results: any[] = [];
               while (stmt.step()) {
@@ -172,7 +176,7 @@ export class DatabaseManager {
               console.error('Statement.all() error:', error);
               return []; // Return empty array instead of throwing
             }
-          }
+          },
         };
       },
       exec: (sql: string) => {
@@ -226,7 +230,7 @@ export class DatabaseManager {
             throw e;
           }
         };
-      }
+      },
     };
   }
 
@@ -235,7 +239,9 @@ export class DatabaseManager {
     if (this.db) {
       // Check if the file still exists - if not, the database was deleted
       if (!fs.existsSync(this.dbPath)) {
-        console.log('[DB-INIT] Database file was deleted, clearing reference and reinitializing...');
+        console.log(
+          '[DB-INIT] Database file was deleted, clearing reference and reinitializing...'
+        );
         try {
           this.db.close();
         } catch (error) {
@@ -278,7 +284,7 @@ export class DatabaseManager {
             return wasmPath;
           }
           return oldWasmPath;
-        }
+        },
       });
       console.log(`[DB-INIT] WASM loaded in ${Date.now() - wasmStartTime}ms`);
 
@@ -289,7 +295,11 @@ export class DatabaseManager {
         try {
           const filebuffer = fs.readFileSync(this.dbPath);
           this.db = new SQL.Database(filebuffer);
-          console.log(`[DB-INIT] Database file loaded in ${Date.now() - loadStartTime}ms (${filebuffer.length} bytes)`);
+          console.log(
+            `[DB-INIT] Database file loaded in ${
+              Date.now() - loadStartTime
+            }ms (${filebuffer.length} bytes)`
+          );
         } catch (error: any) {
           // If file is locked, corrupted, or has I/O errors, create a new one
           if (error.code === 'EACCES' || error.code === 'EBUSY' || error.errno === 10) {
@@ -336,7 +346,7 @@ export class DatabaseManager {
     }
 
     // Cleanup stale metadata
-    DatabaseHelpers.cleanupStaleMetadata(this.db);
+    DatabaseHelpers.cleanupStaleMetadata();
   }
 
   public auditSchemaGaps(): string[] {
@@ -398,7 +408,7 @@ export async function ensureDatabaseInitialized(): Promise<void> {
   } catch (error: any) {
     // If database is locked (SQLITE_IOERR), retry once after a short delay
     if (error.message && error.message.includes('locked')) {
-      console.warn('Database locked, retrying initialization...');
+      logInfo('[DB] Database locked, retrying initialization...');
       await new Promise(resolve => setTimeout(resolve, 100));
       try {
         await manager.initialize();
@@ -426,8 +436,8 @@ export const DatabaseHelpers = {
   /**
    * Insert commit metadata
    */
-  insertCommitMetadata(db: any, metadata: any): void {
-    const stmt = db.prepare(`
+  insertCommitMetadata(metadata: any): void {
+    const stmt = prepare(`
       INSERT OR REPLACE INTO commits_metadata
       (sha, author, date, message, parent, files_changed, loaded_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -446,11 +456,11 @@ export const DatabaseHelpers = {
   /**
    * Insert commit analysis results
    */
-  insertCommitAnalysis(db: any, analysis: any): void {
-    const stmt = db.prepare(`
+  insertCommitAnalysis(analysis: any): void {
+    const stmt = prepare(`
       INSERT OR REPLACE INTO commits_analysis
       (sha, summary_md, raw_llm_json, symbols_added, symbols_removed, symbols_modified,
-       edges_added, edges_removed, risks, blast_radius, analyzed_at, 
+       edges_added, edges_removed, risks, blast_radius, analyzed_at,
        pipeline_version, prompt_version, model)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
@@ -479,8 +489,8 @@ export const DatabaseHelpers = {
   /**
    * Get commit metadata
    */
-  getCommitMetadata(db: any, sha: string): any {
-    const stmt = db.prepare(`
+  getCommitMetadata(sha: string): any {
+    const stmt = prepare(`
       SELECT * FROM commits_metadata WHERE sha = ?
     `);
     return stmt.get(sha);
@@ -489,8 +499,8 @@ export const DatabaseHelpers = {
   /**
    * Get commit analysis results
    */
-  getCommitAnalysis(db: any, sha: string): any {
-    const stmt = db.prepare(`
+  getCommitAnalysis(sha: string): any {
+    const stmt = prepare(`
       SELECT * FROM commits_analysis WHERE sha = ?
     `);
     return stmt.get(sha);
@@ -499,17 +509,17 @@ export const DatabaseHelpers = {
   /**
    * Check if commit is analyzed with compatible version
    */
-  isCommitAnalyzed(db: any, sha: string, minPipelineVersion?: string): boolean {
+  isCommitAnalyzed(sha: string, minPipelineVersion?: string): boolean {
     if (!minPipelineVersion) {
       // If no version specified, just check if analyzed
-      const stmt = db.prepare(`
+      const stmt = prepare(`
         SELECT 1 FROM commits_analysis WHERE sha = ? LIMIT 1
       `);
       return !!stmt.get(sha);
     }
 
     // Check if analyzed with compatible version
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       SELECT pipeline_version FROM commits_analysis WHERE sha = ?
     `);
     const row = stmt.get(sha);
@@ -523,13 +533,13 @@ export const DatabaseHelpers = {
   /**
    * Cleanup stale metadata (0 changes, old, no analysis)
    */
-  cleanupStaleMetadata(db: any): void {
+  cleanupStaleMetadata(): void {
     try {
       // Delete commits with 0 files changed, loaded > 7 days ago, and no analysis
       // SQLite datetime('now', '-7 days') works if dates are ISO strings
-      const stmt = db.prepare(`
-        DELETE FROM commits_metadata 
-        WHERE files_changed = 0 
+      const stmt = prepare(`
+        DELETE FROM commits_metadata
+        WHERE files_changed = 0
           AND loaded_at < datetime('now', '-7 days')
           AND sha NOT IN (SELECT sha FROM commits_analysis)
       `);
@@ -540,7 +550,7 @@ export const DatabaseHelpers = {
     } catch (error) {
       console.error('[DB-CLEANUP] Failed to cleanup stale metadata:', error);
     }
-  }
+  },
 };
 
 /**

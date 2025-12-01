@@ -112,7 +112,7 @@ export class AnalysisBlockUtils {
       claims,
       actions,
       confidence: 0.8, // Default confidence
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -145,7 +145,7 @@ export class AnalysisBlockUtils {
       description,
       symbolId,
       filePath,
-      lineNumber
+      lineNumber,
     };
   }
 
@@ -154,7 +154,11 @@ export class AnalysisBlockUtils {
    * Parses the evidence path to generate human-readable text
    * @param knownFiles Optional set of known file paths to validate against (prevents hallucinated files)
    */
-  static createEvidenceAuto(path: string, context?: string, knownFiles?: Set<string> | string[]): EvidenceLink {
+  static createEvidenceAuto(
+    path: string,
+    context?: string,
+    knownFiles?: Set<string> | string[]
+  ): EvidenceLink {
     const description = this.parseEvidencePathToDescription(path, context);
     const parsed = this.parseEvidencePath(path);
 
@@ -163,7 +167,7 @@ export class AnalysisBlockUtils {
       description,
       symbolId: parsed.symbolId,
       filePath: parsed.filePath,
-      lineNumber: parsed.lineNumber
+      lineNumber: parsed.lineNumber,
     };
 
     // Validate filePath against known files if provided
@@ -176,7 +180,7 @@ export class AnalysisBlockUtils {
           description: `${description} (validate existence)`,
           symbolId: parsed.symbolId,
           filePath: undefined, // Remove invalid file path
-          lineNumber: parsed.lineNumber
+          lineNumber: parsed.lineNumber,
         };
       }
     }
@@ -255,7 +259,7 @@ export class AnalysisBlockUtils {
         working: ['symbols', 'edges'],
         scope: ['files', 'paths'],
         bundle: ['commits', 'shas'],
-        evidence: ['claims', 'actions']
+        evidence: ['claims', 'actions'],
       };
 
       // Validate section is recognized
@@ -279,16 +283,17 @@ export class AnalysisBlockUtils {
         'patternDrift.oldNamespaces': 'Old namespaces',
         'patternDrift.conventionDrift': 'Naming convention drift',
         'patternDrift.mixedConventionFiles': 'Files with mixed conventions',
-        'blastRadius': 'Blast radius',
-        'symbols': 'Working symbols',
-        'edges': 'Symbol relationships',
-        'files': 'Changed files',
-        'shas': 'Commit SHAs',
-        'present': 'Symbols expected present',
-        'absent': 'Symbols expected absent'
+        blastRadius: 'Blast radius',
+        symbols: 'Working symbols',
+        edges: 'Symbol relationships',
+        files: 'Changed files',
+        shas: 'Commit SHAs',
+        present: 'Symbols expected present',
+        absent: 'Symbols expected absent',
       };
 
-      const readableName = readableNames[subpath] ||
+      const readableName =
+        readableNames[subpath] ||
         readableNames[parts.slice(-2).join('.')] ||
         lastPart.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
 
@@ -312,13 +317,17 @@ export class AnalysisBlockUtils {
   /**
    * Parse evidence path to extract file/symbol info
    */
-  static parseEvidencePath(path: string): { filePath?: string; symbolId?: string; lineNumber?: number } {
+  static parseEvidencePath(path: string): {
+    filePath?: string;
+    symbolId?: string;
+    lineNumber?: number;
+  } {
     const result: { filePath?: string; symbolId?: string; lineNumber?: number } = {};
 
     // Extract file path from various formats
     const filePatterns = [
-      /diff\[([^\]]+)\]/,           // diff[file.php]
-      /ast\[([^\]]+)\]/,            // ast[file.php]
+      /diff\[([^\]]+)\]/, // diff[file.php]
+      /ast\[([^\]]+)\]/, // ast[file.php]
       /^([^:]+\.(?:php|ts|js|tsx|jsx)):/, // file.php:symbol
     ];
 
@@ -332,8 +341,8 @@ export class AnalysisBlockUtils {
 
     // Extract symbol ID
     const symbolPatterns = [
-      /graph\.nodes\[([^\]]+)\]/,   // graph.nodes[symbol_id]
-      /([^:]+):(\w+)$/,              // file:symbol
+      /graph\.nodes\[([^\]]+)\]/, // graph.nodes[symbol_id]
+      /([^:]+):(\w+)$/, // file:symbol
     ];
 
     for (const pattern of symbolPatterns) {

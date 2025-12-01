@@ -1,20 +1,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getGitRoot } from '../utils/config';
-import { ScopeSet } from './scope';
-import { IntendedState } from './intendedMap';
-import { WorkingSnapshot } from './workingSnapshot';
+import { CommitFacts } from '../analysis/commitIndexer';
+import { getCstTimelineManager } from '../analysis/cstTimeline';
+import { WorkspaceFacts } from '../analysis/workspaceIndexer';
+import { prepare } from '../storage/statement-wrapper';
+import { getGitRoot, detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
+import { logDebug, logError, logInfo, logWarn } from '../utils/logger';
 import { DriftFindings } from './driftDetector';
+import { IntendedState } from './intendedMap';
 import { LegacyAuditResult } from './legacyAudit';
+import { ScopeSet } from './scope';
 import { RefactorBundleFacts } from './types';
+import { WorkingSnapshot } from './workingSnapshot';
 
 // Re-export for backward compatibility
 export type { RefactorBundleFacts } from './types';
 
-import { CommitFacts } from '../analysis/commitIndexer';
-import { WorkspaceFacts } from '../analysis/workspaceIndexer';
-import { getCstTimelineManager } from '../analysis/cstTimeline';
-import { getExtensionConfig, isCstOnlyLanguage, detectLanguage } from '../utils/config';
 import type { HybridFact } from '../types/cstFacts';
 
 /**
@@ -23,7 +24,10 @@ import type { HybridFact } from '../types/cstFacts';
  */
 export async function buildRefactorBundleFacts(
   commitFacts: CommitFacts[],
-  workspaceFacts: WorkspaceFacts | { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null } | null,
+  workspaceFacts:
+    | WorkspaceFacts
+    | { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null }
+    | null,
   options?: {
     commitShas?: string[];
     scope?: ScopeSet;
@@ -44,15 +48,30 @@ export async function buildRefactorBundleFacts(
 ): Promise<RefactorBundleFacts> {
   // Log inputs for diagnostics
   const intendedSize = options?.intended?.size || 0;
-  const hybridFactsCount = options?.scope ? await getHybridFactsCount(options.scope, options.commitShas?.[0] || 'HEAD') : 0;
-  console.log(`[BundleFacts] Inputs: intended=${intendedSize}, hybridFacts=${hybridFactsCount} files, working.symbols=${options?.working?.symbolsById.size || 0}`);
+  const hybridFactsCount = options?.scope
+    ? await getHybridFactsCount(options.scope, options.commitShas?.[0] || 'HEAD')
+    : 0;
+  logInfo(
+    `Inputs: intended=${intendedSize}, hybridFacts=${hybridFactsCount} files, working.symbols=${
+      options?.working?.symbolsById.size || 0
+    }`
+  );
 
   // Validation warning
   if (intendedSize === 0) {
-    console.warn(`[BundleFacts] WARNING: intended.present === 0. Consider using --enable-cst to populate intended state.`);
+    logWarn(
+      `WARNING: intended.present === 0. Consider using --enable-cst to populate intended state.`
+    );
   }
   // If full pipeline data is provided, use the comprehensive assembleFacts logic
-  if (options?.commitShas && options.scope && options.intended && options.working && options.drift && options.legacy) {
+  if (
+    options?.commitShas &&
+    options.scope &&
+    options.intended &&
+    options.working &&
+    options.drift &&
+    options.legacy
+  ) {
     const facts = await assembleFacts(
       options.commitShas,
       options.scope,
@@ -73,7 +92,10 @@ export async function buildRefactorBundleFacts(
   }
 
   // Fallback to simplified logic for backward compatibility
-  let totalSymbols = commitFacts.reduce((sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved, 0);
+  let totalSymbols = commitFacts.reduce(
+    (sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved,
+    0
+  );
   const totalEdges = commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0);
   let totalFiles = commitFacts.reduce((sum, c) => sum + c.filesChanged, 0);
   const allRisks = Array.from(new Set(commitFacts.flatMap(c => c.risks)));
@@ -83,14 +105,23 @@ export async function buildRefactorBundleFacts(
   if (workspaceFacts) {
     // Check if it's the new structured format
     if ('staged' in workspaceFacts || 'unstaged' in workspaceFacts) {
-      const structured = workspaceFacts as { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null };
+      const structured = workspaceFacts as {
+        staged: WorkspaceFacts | null;
+        unstaged: WorkspaceFacts | null;
+      };
       if (structured.staged) {
-        totalSymbols += structured.staged.symbolsAdded + structured.staged.symbolsModified + structured.staged.symbolsRemoved;
+        totalSymbols +=
+          structured.staged.symbolsAdded +
+          structured.staged.symbolsModified +
+          structured.staged.symbolsRemoved;
         totalFiles += structured.staged.filesChanged;
         allRisks.push(...structured.staged.risks);
       }
       if (structured.unstaged) {
-        totalSymbols += structured.unstaged.symbolsAdded + structured.unstaged.symbolsModified + structured.unstaged.symbolsRemoved;
+        totalSymbols +=
+          structured.unstaged.symbolsAdded +
+          structured.unstaged.symbolsModified +
+          structured.unstaged.symbolsRemoved;
         totalFiles += structured.unstaged.filesChanged;
         allRisks.push(...structured.unstaged.risks);
       }
@@ -112,7 +143,7 @@ export async function buildRefactorBundleFacts(
     options?.intended ? 1 : 0,
     options?.working ? 1 : 0,
     options?.drift ? 1 : 0,
-    options?.legacy ? 1 : 0
+    options?.legacy ? 1 : 0,
   ];
   const confidence = confidenceInputs.reduce((sum, present) => sum + present * 0.2, 0);
 
@@ -125,112 +156,155 @@ export async function buildRefactorBundleFacts(
       newestSha,
       shas: commitFacts.map(c => c.sha),
       ...(options?.timeline && { timeline: options.timeline }),
-      ...(options?.movedLineage && { movedLineage: options.movedLineage })
+      ...(options?.movedLineage && { movedLineage: options.movedLineage }),
     },
     scope: {
       files: totalFiles,
-      blastRadius: maxStructuralChange * 10 // Rough approximation
+      blastRadius: maxStructuralChange * 10, // Rough approximation
     },
     intended: options?.intended
       ? (() => {
-        const counts = calculateIntendedCounts(options.intended);
-        // Heuristics: use hotspots for renamed detection (stable DNA, name change)
-        if (counts.renamed === 0 && options.working && options.intended.size > 0) {
-          const renamedFromHotspots = detectRenamedFromHotspots(options.intended, options.working);
-          if (renamedFromHotspots > 0) {
-            console.log(`[BundleFacts] Detected ${renamedFromHotspots} renamed symbols from hotspots (stable DNA, name change)`);
-            counts.renamed = renamedFromHotspots;
+          const counts = calculateIntendedCounts(options.intended);
+          // Heuristics: use hotspots for renamed detection (stable DNA, name change)
+          if (counts.renamed === 0 && options.working && options.intended.size > 0) {
+            const renamedFromHotspots = detectRenamedFromHotspots(
+              options.intended,
+              options.working
+            );
+            if (renamedFromHotspots > 0) {
+              logInfo(
+                `Detected ${renamedFromHotspots} renamed symbols from hotspots (stable DNA, name change)`
+              );
+              counts.renamed = renamedFromHotspots;
+            }
           }
-        }
-        return counts;
-      })()
+          return counts;
+        })()
       : {
-        present: totalSymbols,
-        absent: 0,
-        renamed: 0
-      },
+          present: totalSymbols,
+          absent: 0,
+          renamed: 0,
+        },
     working: {
       symbols: totalSymbols,
-      edges: totalEdges
+      edges: totalEdges,
     },
     findings: {
-      incompleteness: options?.drift ? {
-        missing: options.drift.missing_symbols.length,
-        zombies: options.drift.zombie_symbols.length,
-        divergent: options.drift.divergent_symbols.length
-      } : {
-        missing: 0,
-        zombies: 0,
-        divergent: 0
-      },
-      patternDrift: options?.drift && options?.working && options?.intended ? {
-        mixedTargets: detectMixedTargets(options.drift, options.working),
-        oldNamespaces: detectOldNamespaces(options.working, options.intended),
-        conventionDrift: options.drift.conventionDrift ? {
-          dominantConvention: options.drift.conventionDrift.dominantConvention,
-          driftPercent: options.drift.conventionDrift.driftPercent,
-          driftSymbolCount: options.drift.conventionDrift.driftSymbols.length,
-          importDrift: options.drift.conventionDrift.importDrift ? {
-            dominantStyle: options.drift.conventionDrift.importDrift.dominantStyle,
-            driftPercent: options.drift.conventionDrift.importDrift.driftPercent,
-            driftImportCount: options.drift.conventionDrift.importDrift.driftImports.length
-          } : undefined,
-          fileNamingDrift: options.drift.conventionDrift.fileNamingDrift ? {
-            dominantStyle: options.drift.conventionDrift.fileNamingDrift.dominantStyle,
-            driftPercent: options.drift.conventionDrift.fileNamingDrift.driftPercent,
-            driftFileCount: options.drift.conventionDrift.fileNamingDrift.driftFiles.length
-          } : undefined
-        } : undefined,
-        mixedConventionFiles: options.drift.mixedConventionFiles?.length || undefined
-      } : options?.working && options?.intended ? {
-        // Compute basic pattern drift even without full drift analysis
-        mixedTargets: detectMixedTargets({
-          missing_symbols: [],
-          zombie_symbols: [],
-          divergent_symbols: [],
-          missing_edges: [],
-          zombie_edges: [],
-          hotspots: []
-        }, options.working),
-        oldNamespaces: detectOldNamespaces(options.working, options.intended)
-      } : {
-        mixedTargets: 0,
-        oldNamespaces: 0
-      },
-      legacyAudit: options?.legacy ? {
-        dead: options.legacy.dead.length,
-        legacyUsed: options.legacy.legacyUsed.length,
-        replacedLeftovers: options.legacy.replacedLeftovers.map(r => ({
-          old: r.old.symbol_id,
-          new: r.new.symbol_id,
-          confidence: r.confidence
-        }))
-      } : options?.working && options?.intended ? {
-        // Compute basic dead symbol detection from reachability analysis
-        dead: computeBasicDeadSymbols(options.working, options.intended),
-        legacyUsed: 0,
-        replacedLeftovers: []
-      } : {
-        dead: 0,
-        legacyUsed: 0,
-        replacedLeftovers: []
-      }
+      incompleteness: options?.drift
+        ? {
+            missing: options.drift.missing_symbols.length,
+            zombies: options.drift.zombie_symbols.length,
+            divergent: options.drift.divergent_symbols.length,
+          }
+        : {
+            missing: 0,
+            zombies: 0,
+            divergent: 0,
+          },
+      patternDrift:
+        options?.drift && options?.working && options?.intended
+          ? {
+              mixedTargets: detectMixedTargets(options.drift, options.working),
+              oldNamespaces: detectOldNamespaces(options.working, options.intended),
+              conventionDrift: options.drift.conventionDrift
+                ? {
+                    dominantConvention: options.drift.conventionDrift.dominantConvention,
+                    driftPercent: options.drift.conventionDrift.driftPercent,
+                    driftSymbolCount: options.drift.conventionDrift.driftSymbols.length,
+                    importDrift: options.drift.conventionDrift.importDrift
+                      ? {
+                          dominantStyle: options.drift.conventionDrift.importDrift.dominantStyle,
+                          driftPercent: options.drift.conventionDrift.importDrift.driftPercent,
+                          driftImportCount:
+                            options.drift.conventionDrift.importDrift.driftImports.length,
+                        }
+                      : undefined,
+                    fileNamingDrift: options.drift.conventionDrift.fileNamingDrift
+                      ? {
+                          dominantStyle:
+                            options.drift.conventionDrift.fileNamingDrift.dominantStyle,
+                          driftPercent: options.drift.conventionDrift.fileNamingDrift.driftPercent,
+                          driftFileCount:
+                            options.drift.conventionDrift.fileNamingDrift.driftFiles.length,
+                        }
+                      : undefined,
+                  }
+                : undefined,
+              mixedConventionFiles: options.drift.mixedConventionFiles?.length || undefined,
+            }
+          : options?.working && options?.intended
+            ? {
+                // Compute basic pattern drift even without full drift analysis
+                mixedTargets: detectMixedTargets(
+                  {
+                    missing_symbols: [],
+                    zombie_symbols: [],
+                    divergent_symbols: [],
+                    missing_edges: [],
+                    zombie_edges: [],
+                    hotspots: [],
+                  },
+                  options.working
+                ),
+                oldNamespaces: detectOldNamespaces(options.working, options.intended),
+              }
+            : {
+                mixedTargets: 0,
+                oldNamespaces: 0,
+              },
+      legacyAudit: options?.legacy
+        ? {
+            dead: options.legacy.dead.length,
+            legacyUsed: options.legacy.legacyUsed.length,
+            replacedLeftovers: options.legacy.replacedLeftovers.map(r => ({
+              old: r.old.symbol_id,
+              new: r.new.symbol_id,
+              confidence: r.confidence,
+            })),
+          }
+        : options?.working && options?.intended
+          ? {
+              // Compute basic dead symbol detection from reachability analysis
+              dead: computeBasicDeadSymbols(options.working, options.intended),
+              legacyUsed: 0,
+              replacedLeftovers: [],
+            }
+          : {
+              dead: 0,
+              legacyUsed: 0,
+              replacedLeftovers: [],
+            },
     },
     evidence: {
       risks: allRisks,
       structuralChangeScore: maxStructuralChange,
       ...(options?.intended && {
-        "intended.present": Array.from(options.intended.values())
+        'intended.present': Array.from(options.intended.values())
           .filter(state => state.expect === 'present')
-          .map(state => Array.from(options.intended!.keys())[Array.from(options.intended!.values()).indexOf(state)]),
-        "intended.absent": Array.from(options.intended.values())
+          .map(
+            state =>
+              Array.from(options.intended!.keys())[
+                Array.from(options.intended!.values()).indexOf(state)
+              ]
+          ),
+        'intended.absent': Array.from(options.intended.values())
           .filter(state => state.expect === 'absent')
-          .map(state => Array.from(options.intended!.keys())[Array.from(options.intended!.values()).indexOf(state)]),
-        "intended.renamed": Array.from(options.intended.values())
+          .map(
+            state =>
+              Array.from(options.intended!.keys())[
+                Array.from(options.intended!.values()).indexOf(state)
+              ]
+          ),
+        'intended.renamed': Array.from(options.intended.values())
           .filter(state => state.expect === 'present' && state.isRenamed)
-          .map(state => Array.from(options.intended!.keys())[Array.from(options.intended!.values()).indexOf(state)])
-      })
-    }
+          .map(
+            state =>
+              Array.from(options.intended!.keys())[
+                Array.from(options.intended!.values()).indexOf(state)
+              ]
+          ),
+      }),
+    },
   };
 }
 
@@ -246,7 +320,6 @@ export async function assembleFacts(
   legacy: LegacyAuditResult,
   hotspots?: any[]
 ): Promise<RefactorBundleFacts> {
-
   // Calculate counts and lists
   const intendedCounts = calculateIntendedCounts(intended);
   const intendedLists = getIntendedLists(intended);
@@ -296,38 +369,40 @@ export async function assembleFacts(
   }
 
   const facts: RefactorBundleFacts = {
-    version: "2.0",
+    version: '2.0',
     generated_at: new Date().toISOString(),
     confidence: 1.0, // Full confidence when using complete pipeline data
     bundle: {
       oldestSha,
       newestSha,
-      shas: commitShas
+      shas: commitShas,
     },
     scope: {
       files: scope.commitFiles.size,
-      blastRadius: scope.blastRadius.size
+      blastRadius: scope.blastRadius.size,
     },
     intended: intendedCounts,
     working: {
       symbols: working.symbolsById.size,
-      edges: working.edges.length
+      edges: working.edges.length,
     },
     findings: {
       incompleteness: {
         missing: drift.missing_symbols.length,
         zombies: drift.zombie_symbols.length,
-        divergent: drift.divergent_symbols.length
+        divergent: drift.divergent_symbols.length,
       },
       patternDrift: {
         mixedTargets: detectMixedTargets(drift, working),
         oldNamespaces: detectOldNamespaces(working, intended),
-        conventionDrift: drift.conventionDrift ? {
-          dominantConvention: drift.conventionDrift.dominantConvention,
-          driftPercent: drift.conventionDrift.driftPercent,
-          driftSymbolCount: drift.conventionDrift.driftSymbols.length
-        } : undefined,
-        mixedConventionFiles: drift.mixedConventionFiles?.length || undefined
+        conventionDrift: drift.conventionDrift
+          ? {
+              dominantConvention: drift.conventionDrift.dominantConvention,
+              driftPercent: drift.conventionDrift.driftPercent,
+              driftSymbolCount: drift.conventionDrift.driftSymbols.length,
+            }
+          : undefined,
+        mixedConventionFiles: drift.mixedConventionFiles?.length || undefined,
       },
       legacyAudit: {
         dead: legacy.dead.length,
@@ -335,107 +410,153 @@ export async function assembleFacts(
         replacedLeftovers: legacy.replacedLeftovers.map(item => ({
           old: item.old.symbol_id,
           new: item.new.symbol_id,
-          confidence: item.confidence
-        }))
+          confidence: item.confidence,
+        })),
       },
-      unresolvedCallers: drift.unresolved_callers ? {
-        total: drift.unresolved_callers.length
-      } : undefined
+      unresolvedCallers: drift.unresolved_callers
+        ? {
+            total: drift.unresolved_callers.length,
+          }
+        : undefined,
     },
     evidence: {
       // Scope evidence
-      "bundle.shas": commitShas,
-      "scope.files": Array.from(scope.commitFiles),
-      "scope.blastRadius": Array.from(scope.blastRadius),
+      'bundle.shas': commitShas,
+      'scope.files': Array.from(scope.commitFiles),
+      'scope.blastRadius': Array.from(scope.blastRadius),
 
       // Timeline chain evidence
-      "timeline.chain": {
+      'timeline.chain': {
         unstaged: scope.unstagedFiles?.size || 0,
         staged: scope.stagedFiles?.size || 0,
         head: scope.commitFiles.size > 0 ? 'HEAD' : null,
-        commits: commitShas.length
+        commits: commitShas.length,
       },
 
       // Hybrid facts breakdown by version
-      "hybrid.unstaged": {
-        total: Object.entries(hybridFactsMap).filter(([path]) => scope.unstagedFiles?.has(path)).reduce((sum, [, facts]) => sum + facts.length, 0),
-        files: Object.keys(hybridFactsMap).filter(path => scope.unstagedFiles?.has(path))
+      'hybrid.unstaged': {
+        total: Object.entries(hybridFactsMap)
+          .filter(([path]) => scope.unstagedFiles?.has(path))
+          .reduce((sum, [, facts]) => sum + facts.length, 0),
+        files: Object.keys(hybridFactsMap).filter(path => scope.unstagedFiles?.has(path)),
       },
-      "hybrid.staged": {
-        total: Object.entries(hybridFactsMap).filter(([path]) => scope.stagedFiles?.has(path)).reduce((sum, [, facts]) => sum + facts.length, 0),
-        files: Object.keys(hybridFactsMap).filter(path => scope.stagedFiles?.has(path))
+      'hybrid.staged': {
+        total: Object.entries(hybridFactsMap)
+          .filter(([path]) => scope.stagedFiles?.has(path))
+          .reduce((sum, [, facts]) => sum + facts.length, 0),
+        files: Object.keys(hybridFactsMap).filter(path => scope.stagedFiles?.has(path)),
       },
 
       // Intended state evidence
-      "intended.present": intendedLists.present,
-      "intended.absent": intendedLists.absent,
-      "intended.renamed": intendedLists.renamed,
+      'intended.present': intendedLists.present,
+      'intended.absent': intendedLists.absent,
+      'intended.renamed': intendedLists.renamed,
 
       // Working state evidence
-      "working.symbols": workingLists.symbols,
-      "working.edges": workingLists.edges,
+      'working.symbols': workingLists.symbols,
+      'working.edges': workingLists.edges,
 
       // Findings evidence
-      "findings.incompleteness": {
-        missing: drift.missing_symbols.map(m => ({ symbol_id: m.symbol_id, expected: m.expected })),
-        zombies: drift.zombie_symbols.map(z => ({ symbol_id: z.symbol_id, found: { name: z.found.name, kind: z.found.kind } })),
-        divergent: drift.divergent_symbols
+      'findings.incompleteness': {
+        missing: drift.missing_symbols.map(m => ({
+          symbol_id: m.symbol_id,
+          expected: m.expected,
+        })),
+        zombies: drift.zombie_symbols.map(z => ({
+          symbol_id: z.symbol_id,
+          found: { name: z.found.name, kind: z.found.kind },
+        })),
+        divergent: drift.divergent_symbols,
       },
-      "findings.incompleteness.missing": drift.missing_symbols.map(m => ({ symbol_id: m.symbol_id, expected: m.expected })),
-      "findings.incompleteness.zombies": drift.zombie_symbols.map(z => ({ symbol_id: z.symbol_id, found: { name: z.found.name, kind: z.found.kind } })),
+      'findings.incompleteness.missing': drift.missing_symbols.map(m => ({
+        symbol_id: m.symbol_id,
+        expected: m.expected,
+      })),
+      'findings.incompleteness.zombies': drift.zombie_symbols.map(z => ({
+        symbol_id: z.symbol_id,
+        found: { name: z.found.name, kind: z.found.kind },
+      })),
 
-      "findings.legacyAudit": {
-        dead: legacy.dead.map(d => ({ symbol_id: d.symbol_id, name: d.name, kind: d.kind })),
-        legacyUsed: legacy.legacyUsed.map(l => ({ symbol_id: l.symbol_id, name: l.name, kind: l.kind })),
+      'findings.legacyAudit': {
+        dead: legacy.dead.map(d => ({
+          symbol_id: d.symbol_id,
+          name: d.name,
+          kind: d.kind,
+        })),
+        legacyUsed: legacy.legacyUsed.map(l => ({
+          symbol_id: l.symbol_id,
+          name: l.name,
+          kind: l.kind,
+        })),
         replacedLeftovers: legacy.replacedLeftovers.map(r => ({
           old: r.old.symbol_id,
           new: r.new.symbol_id,
-          confidence: r.confidence
-        }))
+          confidence: r.confidence,
+        })),
       },
 
-      "findings.patternDrift.conventionDrift": drift.conventionDrift ? {
-        dominantConvention: drift.conventionDrift.dominantConvention,
-        driftPercent: drift.conventionDrift.driftPercent,
-        driftSymbols: drift.conventionDrift.driftSymbols.map(ds => ({
-          symbolId: ds.symbolId,
-          name: ds.name,
-          convention: ds.convention,
-          suggestedName: ds.suggestedName,
-          path: ds.path
-        })),
-        importDrift: drift.conventionDrift.importDrift ? {
-          dominantStyle: drift.conventionDrift.importDrift.dominantStyle,
-          driftPercent: drift.conventionDrift.importDrift.driftPercent,
-          driftImports: drift.conventionDrift.importDrift.driftImports
-        } : undefined,
-        fileNamingDrift: drift.conventionDrift.fileNamingDrift ? {
-          dominantStyle: drift.conventionDrift.fileNamingDrift.dominantStyle,
-          driftPercent: drift.conventionDrift.fileNamingDrift.driftPercent,
-          driftFiles: drift.conventionDrift.fileNamingDrift.driftFiles
-        } : undefined
-      } : undefined,
+      'findings.patternDrift.conventionDrift': drift.conventionDrift
+        ? {
+            dominantConvention: drift.conventionDrift.dominantConvention,
+            driftPercent: drift.conventionDrift.driftPercent,
+            driftSymbols: drift.conventionDrift.driftSymbols.map(ds => ({
+              symbolId: ds.symbolId,
+              name: ds.name,
+              convention: ds.convention,
+              suggestedName: ds.suggestedName,
+              path: ds.path,
+            })),
+            importDrift: drift.conventionDrift.importDrift
+              ? {
+                  dominantStyle: drift.conventionDrift.importDrift.dominantStyle,
+                  driftPercent: drift.conventionDrift.importDrift.driftPercent,
+                  driftImports: drift.conventionDrift.importDrift.driftImports,
+                }
+              : undefined,
+            fileNamingDrift: drift.conventionDrift.fileNamingDrift
+              ? {
+                  dominantStyle: drift.conventionDrift.fileNamingDrift.dominantStyle,
+                  driftPercent: drift.conventionDrift.fileNamingDrift.driftPercent,
+                  driftFiles: drift.conventionDrift.fileNamingDrift.driftFiles,
+                }
+              : undefined,
+          }
+        : undefined,
 
-      "findings.patternDrift.mixedConventionFiles": drift.mixedConventionFiles || undefined,
+      'findings.patternDrift.mixedConventionFiles': drift.mixedConventionFiles || undefined,
 
-      "findings.unresolvedCallers": drift.unresolved_callers || undefined,
+      'findings.unresolvedCallers': drift.unresolved_callers || undefined,
 
       // Hotspots evidence
       hotspots: hotspots,
 
       // Legacy fields for backward compatibility
-      missing: drift.missing_symbols.map(m => ({ symbol_id: m.symbol_id, expected: m.expected })),
-      zombies: drift.zombie_symbols.map(z => ({ symbol_id: z.symbol_id, found: { name: z.found.name, kind: z.found.kind } })),
-      dead: legacy.dead.map(d => ({ symbol_id: d.symbol_id, name: d.name, kind: d.kind })),
-      legacyUsed: legacy.legacyUsed.map(l => ({ symbol_id: l.symbol_id, name: l.name, kind: l.kind })),
+      missing: drift.missing_symbols.map(m => ({
+        symbol_id: m.symbol_id,
+        expected: m.expected,
+      })),
+      zombies: drift.zombie_symbols.map(z => ({
+        symbol_id: z.symbol_id,
+        found: { name: z.found.name, kind: z.found.kind },
+      })),
+      dead: legacy.dead.map(d => ({
+        symbol_id: d.symbol_id,
+        name: d.name,
+        kind: d.kind,
+      })),
+      legacyUsed: legacy.legacyUsed.map(l => ({
+        symbol_id: l.symbol_id,
+        name: l.name,
+        kind: l.kind,
+      })),
       replacedLeftovers: legacy.replacedLeftovers.map(r => ({
         old: r.old.symbol_id,
         new: r.new.symbol_id,
-        confidence: r.confidence
-      }))
+        confidence: r.confidence,
+      })),
     },
     // Include hybrid facts if available
-    hybridFacts: Object.keys(hybridFactsMap).length > 0 ? hybridFactsMap : undefined
+    hybridFacts: Object.keys(hybridFactsMap).length > 0 ? hybridFactsMap : undefined,
   };
 
   return facts;
@@ -447,7 +568,8 @@ export async function assembleFacts(
 export async function saveFacts(facts: RefactorBundleFacts): Promise<string> {
   const gitRoot = getGitRoot();
   if (!gitRoot) {
-    throw new Error('Not in a git repository');
+    logError('Not in a git repository');
+    return ''; // Return empty string instead of throwing
   }
 
   const factsDir = path.join(gitRoot, '.git', 'commit-tracker');
@@ -467,7 +589,11 @@ export async function saveFacts(facts: RefactorBundleFacts): Promise<string> {
 /**
  * Calculate counts for intended state summary
  */
-export function calculateIntendedCounts(intended: Map<string, IntendedState>): { present: number; absent: number; renamed: number } {
+export function calculateIntendedCounts(intended: Map<string, IntendedState>): {
+  present: number;
+  absent: number;
+  renamed: number;
+} {
   let present = 0;
   let absent = 0;
   let renamed = 0;
@@ -489,7 +615,11 @@ export function calculateIntendedCounts(intended: Map<string, IntendedState>): {
 /**
  * Get detailed lists for intended state
  */
-function getIntendedLists(intended: Map<string, IntendedState>): { present: string[]; absent: string[]; renamed: string[] } {
+function getIntendedLists(intended: Map<string, IntendedState>): {
+  present: string[];
+  absent: string[];
+  renamed: string[];
+} {
   const present: string[] = [];
   const absent: string[] = [];
   const renamed: string[] = [];
@@ -511,10 +641,13 @@ function getIntendedLists(intended: Map<string, IntendedState>): { present: stri
 /**
  * Get detailed lists for working state
  */
-function getWorkingLists(working: WorkingSnapshot): { symbols: string[]; edges: string[] } {
+function getWorkingLists(working: WorkingSnapshot): {
+  symbols: string[];
+  edges: string[];
+} {
   return {
     symbols: Array.from(working.symbolsById.keys()),
-    edges: working.edges.map(e => `${e.from_symbol_id} -> ${e.to_symbol_id} (${e.edge_type})`)
+    edges: working.edges.map(e => `${e.from_symbol_id} -> ${e.to_symbol_id} (${e.edge_type})`),
   };
 }
 
@@ -563,7 +696,10 @@ export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapsho
  * Detect old namespace usage patterns
  * Looks for symbols using deprecated/old namespace patterns
  */
-export function detectOldNamespaces(working: WorkingSnapshot, intended: Map<string, IntendedState>): number {
+export function detectOldNamespaces(
+  working: WorkingSnapshot,
+  intended: Map<string, IntendedState>
+): number {
   const oldNamespacePatterns = [
     /^(old|legacy|deprecated|v1|v2|old_|legacy_|deprecated_)/i,
     /(Old|Legacy|Deprecated)([A-Z]|$)/,
@@ -572,7 +708,7 @@ export function detectOldNamespaces(working: WorkingSnapshot, intended: Map<stri
     /\\Deprecated\\/,
     /\/old\//,
     /\/legacy\//,
-    /\/deprecated\//
+    /\/deprecated\//,
   ];
 
   let oldNamespaceCount = 0;
@@ -583,8 +719,8 @@ export function detectOldNamespaces(working: WorkingSnapshot, intended: Map<stri
     const symbolName = symbol.name;
 
     // Check if path or name matches old namespace patterns
-    const matchesOldPattern = oldNamespacePatterns.some(pattern =>
-      pattern.test(filePath) || pattern.test(symbolName)
+    const matchesOldPattern = oldNamespacePatterns.some(
+      pattern => pattern.test(filePath) || pattern.test(symbolName)
     );
 
     if (matchesOldPattern) {
@@ -609,7 +745,10 @@ export function detectOldNamespaces(working: WorkingSnapshot, intended: Map<stri
  * Compute basic dead symbol detection from reachability analysis
  * Identifies symbols that are not reachable from entry points
  */
-function computeBasicDeadSymbols(working: WorkingSnapshot, intended: Map<string, IntendedState>): number {
+function computeBasicDeadSymbols(
+  working: WorkingSnapshot,
+  intended: Map<string, IntendedState>
+): number {
   const reachable = new Set<string>();
   const queue: string[] = [];
 
@@ -618,10 +757,12 @@ function computeBasicDeadSymbols(working: WorkingSnapshot, intended: Map<string,
     const intendedState = intended.get(symbolId);
 
     // Include symbols that are exported or explicitly intended present
-    if (symbol.kind === 'export' ||
+    if (
+      symbol.kind === 'export' ||
       (intendedState && intendedState.expect === 'present') ||
       symbol.name.startsWith('main') ||
-      symbol.name.startsWith('index')) {
+      symbol.name.startsWith('index')
+    ) {
       reachable.add(symbolId);
       queue.push(symbolId);
     }
@@ -632,9 +773,7 @@ function computeBasicDeadSymbols(working: WorkingSnapshot, intended: Map<string,
     const currentSymbolId = queue.shift()!;
 
     // Find all edges where current symbol is the source
-    const outgoingEdges = working.edges.filter(edge =>
-      edge.from_symbol_id === currentSymbolId
-    );
+    const outgoingEdges = working.edges.filter(edge => edge.from_symbol_id === currentSymbolId);
 
     for (const edge of outgoingEdges) {
       const targetSymbolId = edge.to_symbol_id;
@@ -664,14 +803,11 @@ function detectRenamedFromHotspots(
   intended: Map<string, IntendedState>,
   working: WorkingSnapshot
 ): number {
-  const { getDatabaseManager } = require('../storage/database');
-  const db = getDatabaseManager().getDatabase();
-
   let renamedCount = 0;
 
   // Check DNA continuity - symbols with same DNA but different names (indicates rename)
   // Query symbol_versions for DNA matches with different names
-  const dnaStmt = db.prepare(`
+  const dnaStmt = prepare(`
     SELECT DISTINCT sv1.symbol_id as id1, sv1.name as name1,
            sv2.symbol_id as id2, sv2.name as name2
     FROM symbol_versions sv1
@@ -702,7 +838,7 @@ function detectRenamedFromHotspots(
     renamedCount = renamedSet.size;
   } catch (error) {
     // Silently fail if query doesn't work
-    console.debug(`[BundleFacts] Could not detect renamed from hotspots: ${error}`);
+    logDebug(`Could not detect renamed from hotspots: ${error}`);
   }
 
   return renamedCount;

@@ -1,8 +1,8 @@
-import { HybridFact, CstFact, DeltaChange, isCstFact } from '../types/cstFacts';
-import { SymbolInfo } from '../types';
 import { getDatabase } from '../storage/database';
+import { prepare } from '../storage/statement-wrapper';
+import { DeltaChange, HybridFact, isCstFact } from '../types/cstFacts';
+import { logDebug, logError } from '../utils/logger';
 import { computeHybridDna } from './symbolDna';
-import { logDebug } from '../utils/logger';
 import type { ScopeSet } from '../facts/scope';
 
 /**
@@ -25,7 +25,7 @@ export class CstTimelineManager {
     }
 
     // Ensure hybrid_facts table exists
-    this.ensureTableExists(db);
+    this.ensureTableExists();
 
     // Compute file hash for this version
     const fileHash = this.computeFileHash(facts);
@@ -44,24 +44,25 @@ export class CstTimelineManager {
       await this.appendToTimeline(filePath, commitSha, fact, delta, fileHash);
     }
 
-    logDebug(`[CstTimeline] Saved ${facts.length} hybrid facts for ${filePath}@${commitSha.substring(0, 8)}`);
+    logDebug(
+      `[CstTimeline] Saved ${
+        facts.length
+      } hybrid facts for ${filePath}@${commitSha.substring(0, 8)}`
+    );
   }
 
   /**
    * Get prior facts for a file at a specific version
    */
-  async getPriorFacts(
-    filePath: string,
-    commitSha: string
-  ): Promise<HybridFact[] | null> {
+  async getPriorFacts(filePath: string, commitSha: string): Promise<HybridFact[] | null> {
     const db = getDatabase();
     if (!db) return null;
 
-    this.ensureTableExists(db);
+    this.ensureTableExists();
 
     try {
       // Get all facts for this file/version
-      const stmt = db.prepare(`
+      const stmt = prepare(`
         SELECT serialized_fact FROM hybrid_facts
         WHERE file_path = ? AND version = ?
         ORDER BY created_at DESC
@@ -89,13 +90,13 @@ export class CstTimelineManager {
     const db = getDatabase();
     if (!db || filePaths.length === 0) return new Map();
 
-    this.ensureTableExists(db);
+    this.ensureTableExists();
 
     try {
       // Use IN clause for batch retrieval
       const placeholders = filePaths.map(() => '?').join(',');
-      const stmt = db.prepare(`
-        SELECT file_path, serialized_fact 
+      const stmt = prepare(`
+        SELECT file_path, serialized_fact
         FROM hybrid_facts
         WHERE file_path IN (${placeholders}) AND version = ?
         ORDER BY file_path, created_at DESC
@@ -125,7 +126,7 @@ export class CstTimelineManager {
    * Accepts a map of filePath → version for efficient batch queries
    */
   async getPriorFactsBatchWithVersions(
-    versionMap: Map<string, string>  // filePath → version
+    versionMap: Map<string, string> // filePath → version
   ): Promise<Map<string, HybridFact[]>> {
     if (!versionMap || versionMap.size === 0) {
       return new Map();
@@ -151,23 +152,16 @@ export class CstTimelineManager {
     return allFacts;
   }
 
-
-
-
-
   /**
    * Get facts by file hash
    */
-  private async getFactsByHash(
-    filePath: string,
-    hash: string
-  ): Promise<HybridFact[] | null> {
+  private async getFactsByHash(filePath: string, hash: string): Promise<HybridFact[] | null> {
     const db = getDatabase();
     if (!db) return null;
 
     try {
       // Get all facts for this file/hash
-      const stmt = db.prepare(`
+      const stmt = prepare(`
         SELECT serialized_fact FROM hybrid_facts
         WHERE file_path = ? AND hash = ?
         ORDER BY created_at DESC
@@ -201,7 +195,7 @@ export class CstTimelineManager {
     const timelineEntry = {
       version,
       dna: dnaId,
-      delta
+      delta,
     };
 
     // Get existing timeline or create new
@@ -216,7 +210,7 @@ export class CstTimelineManager {
     }
 
     // Update or insert fact
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       INSERT OR REPLACE INTO hybrid_facts
       (file_path, version, fact_id, dna_id, serialized_fact, timeline_json, hash, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -230,34 +224,30 @@ export class CstTimelineManager {
       JSON.stringify(fact),
       JSON.stringify(timeline),
       fileHash,
-      new Date().toISOString()
+      new Date().toISOString(),
     ]);
   }
 
   /**
    * Compute delta between current fact and prior facts
    */
-  private computeDelta(
-    fact: HybridFact,
-    priorFacts: HybridFact[] | null
-  ): DeltaChange {
+  private computeDelta(fact: HybridFact, priorFacts: HybridFact[] | null): DeltaChange {
     if (!priorFacts || priorFacts.length === 0) {
       return {
         type: 'added',
-        newDna: computeHybridDna(fact)
+        newDna: computeHybridDna(fact),
       };
     }
 
     // Find matching fact in prior version (by DNA or name)
-    const priorFact = priorFacts.find(p =>
-      p.dnaId === fact.dnaId ||
-      (p.name === fact.name && this.sameKind(p, fact))
+    const priorFact = priorFacts.find(
+      p => p.dnaId === fact.dnaId || (p.name === fact.name && this.sameKind(p, fact))
     );
 
     if (!priorFact) {
       return {
         type: 'added',
-        newDna: computeHybridDna(fact)
+        newDna: computeHybridDna(fact),
       };
     }
 
@@ -275,10 +265,12 @@ export class CstTimelineManager {
         type: 'modified',
         oldDna: priorFact.dnaId,
         newDna: fact.dnaId,
-        locationDelta: locationChanged ? {
-          oldLine: priorFact.location.start.line,
-          newLine: fact.location.start.line
-        } : undefined
+        locationDelta: locationChanged
+          ? {
+              oldLine: priorFact.location.start.line,
+              newLine: fact.location.start.line,
+            }
+          : undefined,
       };
     }
 
@@ -286,7 +278,7 @@ export class CstTimelineManager {
     return {
       type: 'modified', // Still mark as modified for timeline tracking
       oldDna: priorFact.dnaId,
-      newDna: fact.dnaId
+      newDna: fact.dnaId,
     };
   }
 
@@ -308,33 +300,35 @@ export class CstTimelineManager {
    */
   private computeFileHash(facts: HybridFact[]): string {
     const crypto = require('crypto');
-    const serialized = JSON.stringify(facts.map(f => ({
-      id: f.id,
-      dnaId: f.dnaId,
-      name: f.name,
-      kind: f.kind
-    })));
-    return crypto.createHash('sha256')
-      .update(serialized)
-      .digest('hex')
-      .substring(0, 16);
+    const serialized = JSON.stringify(
+      facts.map(f => ({
+        id: f.id,
+        dnaId: f.dnaId,
+        name: f.name,
+        kind: f.kind,
+      }))
+    );
+    return crypto.createHash('sha256').update(serialized).digest('hex').substring(0, 16);
   }
 
   /**
    * Ensure hybrid_facts table exists
    */
-  private ensureTableExists(db: any): void {
+  private ensureTableExists(): void {
+    const db = getDatabase();
+    if (!db) return;
+
     try {
       // Check if table exists
-      const checkStmt = db.prepare(`
-        SELECT name FROM sqlite_master 
+      const checkStmt = prepare(`
+        SELECT name FROM sqlite_master
         WHERE type='table' AND name='hybrid_facts'
       `);
       const exists = checkStmt.get();
 
       if (!exists) {
         // Create table
-        const createStmt = db.prepare(`
+        const createStmt = prepare(`
           CREATE TABLE IF NOT EXISTS hybrid_facts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             file_path TEXT NOT NULL,
@@ -351,20 +345,20 @@ export class CstTimelineManager {
         createStmt.run();
 
         // Create indexes
-        const idx1 = db.prepare(`
-          CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version 
+        const idx1 = prepare(`
+          CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version
           ON hybrid_facts(file_path, version)
         `);
         idx1.run();
 
-        const idx2 = db.prepare(`
-          CREATE INDEX IF NOT EXISTS idx_hybrid_facts_dna 
+        const idx2 = prepare(`
+          CREATE INDEX IF NOT EXISTS idx_hybrid_facts_dna
           ON hybrid_facts(dna_id)
         `);
         idx2.run();
 
-        const idx3 = db.prepare(`
-          CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash 
+        const idx3 = prepare(`
+          CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash
           ON hybrid_facts(file_path, hash)
         `);
         idx3.run();
@@ -412,10 +406,11 @@ export function getPriorVersionInChain(
   // HEAD → most recent commit (if available)
   if (currentVersion === 'HEAD') {
     if (commitShas.length === 0) {
-      throw new Error(
-        `[CstTimeline] Cannot determine prior version for HEAD - no commits in timeline chain. ` +
-        `File: ${filePath}`
+      logError(
+        `Cannot determine prior version for HEAD - no commits in timeline chain. ` +
+          `File: ${filePath}`
       );
+      return ''; // Return empty string instead of throwing
     }
     return commitShas[0];
   }
@@ -423,17 +418,19 @@ export function getPriorVersionInChain(
   // Commit SHA → previous commit in chain (older)
   const index = commitShas.indexOf(currentVersion);
   if (index === -1) {
-    throw new Error(
-      `[CstTimeline] Version ${currentVersion.substring(0, 8)} not found in timeline chain. ` +
-      `File: ${filePath}, Expected chain: [${commitShas.map(s => s.substring(0, 8)).join(', ')}]`
+    logError(
+      `Version ${currentVersion.substring(0, 8)} not found in timeline chain. ` +
+        `File: ${filePath}, Expected chain: [${commitShas.map(s => s.substring(0, 8)).join(', ')}]`
     );
+    return ''; // Return empty string instead of throwing
   }
   if (index === commitShas.length - 1) {
     // At oldest commit - no prior version available
-    throw new Error(
-      `[CstTimeline] No prior version for ${currentVersion.substring(0, 8)} - already at oldest commit. ` +
-      `File: ${filePath}`
+    logError(
+      `No prior version for ${currentVersion.substring(0, 8)} - already at oldest commit. ` +
+        `File: ${filePath}`
     );
+    return ''; // Return empty string instead of throwing
   }
   return commitShas[index + 1]; // Previous (older) commit
 }

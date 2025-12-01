@@ -1,5 +1,5 @@
-import { getDatabaseManager } from './database';
 import { logError } from '../utils/logger';
+import { getDatabaseManager } from './database';
 
 export class BranchManager {
   private _db: any;
@@ -36,20 +36,20 @@ export class BranchManager {
     }
     try {
       this.db.prepare(`UPDATE commit_branches SET is_head = 0 WHERE branch = ?`).run(branch);
-      this.db.prepare(`UPDATE commit_branches SET is_head = 1 WHERE sha = ? AND branch = ?`).run(headSha, branch);
-      this.db.prepare(`
+      this.db
+        .prepare(`UPDATE commit_branches SET is_head = 1 WHERE sha = ? AND branch = ?`)
+        .run(headSha, branch);
+      this.db
+        .prepare(
+          `
         INSERT OR REPLACE INTO branches (name, head_sha, created_at, last_analyzed_at)
         VALUES (?, ?, COALESCE(
           (SELECT created_at FROM branches WHERE name = ?),
           ?
         ), ?)
-      `).run(
-        branch,
-        headSha,
-        branch,
-        new Date().toISOString(),
-        new Date().toISOString()
-      );
+      `
+        )
+        .run(branch, headSha, branch, new Date().toISOString(), new Date().toISOString());
     } catch (error) {
       logError('[BranchManager] Failed to update branch head', error);
     }
@@ -90,7 +90,9 @@ export class BranchManager {
         ORDER BY cb1.first_seen_at DESC
         LIMIT ?
       `);
-      const rows = stmt.all(sourceBranch, targetBranch, limit) as Array<{ sha: string }>;
+      const rows = stmt.all(sourceBranch, targetBranch, limit) as Array<{
+        sha: string;
+      }>;
       return rows.map(r => r.sha);
     } catch (error) {
       logError('[BranchManager] Failed to compare branches', error);
@@ -100,7 +102,9 @@ export class BranchManager {
 
   getTrackedBranches(): string[] {
     try {
-      const rows = this.db.prepare(`SELECT name FROM branches ORDER BY name ASC`).all() as Array<{ name: string }>;
+      const rows = this.db.prepare(`SELECT name FROM branches ORDER BY name ASC`).all() as Array<{
+        name: string;
+      }>;
       return rows.map(r => r.name);
     } catch (error) {
       logError('[BranchManager] Failed to list branches', error);

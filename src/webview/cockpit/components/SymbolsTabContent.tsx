@@ -15,7 +15,7 @@ export const SymbolsTabContent: React.FC<SymbolsTabContentProps> = ({
   vscode,
   updateSymbolFilterText,
   updateSymbolKind,
-  updateSymbolChangeFilter
+  updateSymbolChangeFilter,
 }) => {
   return (
     <div className="cockpit__tab-body">
@@ -24,12 +24,12 @@ export const SymbolsTabContent: React.FC<SymbolsTabContentProps> = ({
           className="cockpit__input"
           placeholder="Search symbols..."
           value={state.symbolFilterText}
-          onChange={(e) => updateSymbolFilterText(e.target.value)}
+          onChange={e => updateSymbolFilterText(e.target.value)}
         />
         <select
           className="cockpit__input"
           value={state.symbolKindFilter}
-          onChange={(e) => updateSymbolKind(e.target.value)}
+          onChange={e => updateSymbolKind(e.target.value)}
         >
           <option value="all">All kinds</option>
           <option value="function">function</option>
@@ -40,7 +40,7 @@ export const SymbolsTabContent: React.FC<SymbolsTabContentProps> = ({
         <select
           className="cockpit__input"
           value={state.symbolChangeFilter}
-          onChange={(e) => updateSymbolChangeFilter(e.target.value as 'all' | SymbolChangeType)}
+          onChange={e => updateSymbolChangeFilter(e.target.value as 'all' | SymbolChangeType)}
         >
           <option value="all">All changes</option>
           <option value="added">added</option>

@@ -1,9 +1,9 @@
-import { ServiceBase, ServiceConfig } from './base/ServiceBase';
 import { ensureDatabaseInitialized } from '../storage/database';
+import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
-import { DatabaseError } from '../utils/errors';
+import { ServiceBase, ServiceConfig } from './base/ServiceBase';
 import type { SymbolInfo } from '../types';
-import type { SymbolWithDNA, SymbolHistory } from './databaseService';
+import type { SymbolHistory, SymbolWithDNA } from './databaseService';
 
 /**
  * Specialized service for symbol database operations
@@ -14,10 +14,10 @@ export class SymbolService extends ServiceBase {
     // Symbol operations are more cache-heavy due to frequent lookups
     super({
       enableCache: true,
-      cacheSize: 2000,  // Larger cache for symbols
+      cacheSize: 2000, // Larger cache for symbols
       cacheTTL: 1800000, // 30 minutes for symbol data
       enableTransactions: true,
-      ...config
+      ...config,
     });
   }
 
@@ -29,10 +29,9 @@ export class SymbolService extends ServiceBase {
     return this.queryWithCache(`symbols_dna_${dnaHash}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
 
         // Get latest version of each symbol with this DNA
-        const stmt = db.prepare(`
+        const stmt = prepare(`
           SELECT s.*, sv.dna_id as dna, sv.sha, sv.path, sv.name, sv.kind,
                  sv.signature_hash, sv.body_hash,
                  ROW_NUMBER() OVER (PARTITION BY sv.dna_id ORDER BY sv.sha DESC) as rn
@@ -55,10 +54,13 @@ export class SymbolService extends ServiceBase {
             signature: row.signature,
             bodyHash: row.body_hash,
             location: {
-              start: { line: row.start_line || 0, column: row.start_column || 0 },
-              end: { line: row.end_line || 0, column: row.end_column || 0 }
+              start: {
+                line: row.start_line || 0,
+                column: row.start_column || 0,
+              },
+              end: { line: row.end_line || 0, column: row.end_column || 0 },
             },
-            dna: row.dna
+            dna: row.dna,
           }));
       } catch (error) {
         this.handleDbError(error, 'getSymbolsByDNA');
@@ -75,8 +77,7 @@ export class SymbolService extends ServiceBase {
     return this.queryWithCache(`symbols_commit_${sha}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare('SELECT * FROM symbols WHERE sha = ?');
+        const stmt = prepare('SELECT * FROM symbols WHERE sha = ?');
         const results = stmt.all(sha) as any[];
         stmt.free?.();
 
@@ -90,8 +91,8 @@ export class SymbolService extends ServiceBase {
           bodyHash: row.body_hash,
           location: {
             start: { line: row.start_line || 0, column: row.start_column || 0 },
-            end: { line: row.end_line || 0, column: row.end_column || 0 }
-          }
+            end: { line: row.end_line || 0, column: row.end_column || 0 },
+          },
         }));
       } catch (error) {
         this.handleDbError(error, 'getSymbolsByCommit');
@@ -108,8 +109,7 @@ export class SymbolService extends ServiceBase {
     return this.queryWithCache(`symbol_history_${dnaId}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare(`
+        const stmt = prepare(`
           SELECT * FROM symbol_history
           WHERE symbol_dna_id = ?
           ORDER BY created_at DESC
@@ -127,7 +127,7 @@ export class SymbolService extends ServiceBase {
           body_hash: row.body_hash,
           change_type: row.change_type,
           impact_score: row.impact_score,
-          created_at: row.created_at
+          created_at: row.created_at,
         }));
       } catch (error) {
         this.handleDbError(error, 'getSymbolHistory');
@@ -145,8 +145,7 @@ export class SymbolService extends ServiceBase {
     return this.queryWithCache(cacheKey, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare(`
+        const stmt = prepare(`
           SELECT DISTINCT s.*, sv.dna_id as dna
           FROM symbols s
           JOIN symbol_versions sv ON s.sha = sv.sha AND s.symbol_id = sv.symbol_id
@@ -168,9 +167,9 @@ export class SymbolService extends ServiceBase {
           bodyHash: row.body_hash,
           location: {
             start: { line: row.start_line || 0, column: row.start_column || 0 },
-            end: { line: row.end_line || 0, column: row.end_column || 0 }
+            end: { line: row.end_line || 0, column: row.end_column || 0 },
           },
-          dna: row.dna
+          dna: row.dna,
         }));
       } catch (error) {
         this.handleDbError(error, 'findSymbolsByName');
@@ -187,10 +186,9 @@ export class SymbolService extends ServiceBase {
     return this.queryWithCache(`symbols_recent_${commitCount}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
 
         // Get recent commits first
-        const commitStmt = db.prepare(`
+        const commitStmt = prepare(`
           SELECT sha FROM commits_metadata
           ORDER BY date DESC
           LIMIT ?
@@ -204,7 +202,7 @@ export class SymbolService extends ServiceBase {
         const placeholders = shaList.map(() => '?').join(',');
 
         // Get symbols from these commits
-        const symbolStmt = db.prepare(`
+        const symbolStmt = prepare(`
           SELECT DISTINCT s.*, sv.dna_id as dna
           FROM symbols s
           JOIN symbol_versions sv ON s.sha = sv.sha AND s.symbol_id = sv.symbol_id
@@ -225,9 +223,9 @@ export class SymbolService extends ServiceBase {
           bodyHash: row.body_hash,
           location: {
             start: { line: row.start_line || 0, column: row.start_column || 0 },
-            end: { line: row.end_line || 0, column: row.end_column || 0 }
+            end: { line: row.end_line || 0, column: row.end_column || 0 },
           },
-          dna: row.dna
+          dna: row.dna,
         }));
       } catch (error) {
         this.handleDbError(error, 'getRecentlyModifiedSymbols');
@@ -243,8 +241,7 @@ export class SymbolService extends ServiceBase {
   async storeSymbolHistory(history: SymbolHistory[]): Promise<void> {
     await this.executeInTransaction(async () => {
       try {
-        const db = this.db.getDatabase();
-        const stmt = db.prepare(`
+        const stmt = prepare(`
           INSERT OR IGNORE INTO symbol_history
           (symbol_dna_id, sha, file_path, name, kind, signature, body_hash, change_type, impact_score, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -284,20 +281,19 @@ export class SymbolService extends ServiceBase {
     return this.queryWithCache('symbol_stats', async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
 
         // Total symbols
-        const totalStmt = db.prepare('SELECT COUNT(*) as count FROM symbols');
+        const totalStmt = prepare('SELECT COUNT(*) as count FROM symbols');
         const total = (totalStmt.get() as { count: number }).count;
         totalStmt.free?.();
 
         // Unique DNA
-        const dnaStmt = db.prepare('SELECT COUNT(DISTINCT dna_id) as count FROM symbol_versions');
+        const dnaStmt = prepare('SELECT COUNT(DISTINCT dna_id) as count FROM symbol_versions');
         const dna = (dnaStmt.get() as { count: number }).count;
         dnaStmt.free?.();
 
         // Most common kinds
-        const kindsStmt = db.prepare(`
+        const kindsStmt = prepare(`
           SELECT kind, COUNT(*) as count
           FROM symbols
           GROUP BY kind
@@ -310,7 +306,7 @@ export class SymbolService extends ServiceBase {
         return {
           totalSymbols: total,
           uniqueDNA: dna,
-          mostCommonKinds: kinds
+          mostCommonKinds: kinds,
         };
       } catch (error) {
         this.handleDbError(error, 'getSymbolStats');

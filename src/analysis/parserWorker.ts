@@ -1,8 +1,9 @@
-import { parentPort } from 'worker_threads';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
+import { parentPort } from 'worker_threads';
 import { SymbolInfo, HybridFact } from '../types';
 import { LANGUAGES, isCstOnlyLanguage, getExtensionConfig } from '../utils/config';
+import { logWarn } from '../utils/logger';
 import { CstExtractor } from './cstExtractor';
 
 // Use require for web-tree-sitter to avoid ESM issues in worker
@@ -16,7 +17,15 @@ const cstExtractor = new CstExtractor();
 // Message types
 type WorkerMessage =
   | { type: 'init'; wasmDir: string; languages: string[] }
-  | { type: 'parse'; id: number; content: string; languageId: string; filePath: string; extractHybrid?: boolean; existingSymbols?: SymbolInfo[] }
+  | {
+      type: 'parse';
+      id: number;
+      content: string;
+      languageId: string;
+      filePath: string;
+      extractHybrid?: boolean;
+      existingSymbols?: SymbolInfo[];
+    }
   | { type: 'serialize'; id: number; content: string; languageId: string; maxDepth?: number };
 
 // ... (init and extract functions remain) ...
@@ -24,7 +33,7 @@ type WorkerMessage =
 function serializeNode(node: any, depth: number): any {
   const serialized: any = {
     type: node.type,
-    range: [node.startPosition.row + 1, node.endPosition.row + 1]
+    range: [node.startPosition.row + 1, node.endPosition.row + 1],
   };
 
   // Include text for leaf nodes or specific interesting nodes
@@ -54,9 +63,16 @@ function serializeNode(node: any, depth: number): any {
 
 function isInterestingNode(type: string): boolean {
   return [
-    'identifier', 'string', 'string_literal', 'number', 'integer',
-    'property_identifier', 'type_identifier', 'variable_name',
-    'method_name', 'class_name'
+    'identifier',
+    'string',
+    'string_literal',
+    'number',
+    'integer',
+    'property_identifier',
+    'type_identifier',
+    'variable_name',
+    'method_name',
+    'class_name',
   ].includes(type);
 }
 
@@ -78,8 +94,8 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
           signature: node.text.split('{')[0].trim(),
           location: {
             start: { line: node.startPosition.row + 1, column: node.startPosition.column },
-            end: { line: node.endPosition.row + 1, column: node.endPosition.column }
-          }
+            end: { line: node.endPosition.row + 1, column: node.endPosition.column },
+          },
         };
       }
     }
@@ -95,8 +111,8 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
           signature: `class ${name}`,
           location: {
             start: { line: node.startPosition.row + 1, column: node.startPosition.column },
-            end: { line: node.endPosition.row + 1, column: node.endPosition.column }
-          }
+            end: { line: node.endPosition.row + 1, column: node.endPosition.column },
+          },
         };
       }
     }
@@ -113,8 +129,8 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
           signature: node.text.split('{')[0].trim(),
           location: {
             start: { line: node.startPosition.row + 1, column: node.startPosition.column },
-            end: { line: node.endPosition.row + 1, column: node.endPosition.column }
-          }
+            end: { line: node.endPosition.row + 1, column: node.endPosition.column },
+          },
         };
       }
     }
@@ -130,8 +146,8 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
           signature: `class ${name}`,
           location: {
             start: { line: node.startPosition.row + 1, column: node.startPosition.column },
-            end: { line: node.endPosition.row + 1, column: node.endPosition.column }
-          }
+            end: { line: node.endPosition.row + 1, column: node.endPosition.column },
+          },
         };
       }
     }
@@ -175,7 +191,7 @@ async function initialize(wasmDir: string, languages: string[]) {
           parsers.set(lang, parser);
         }
       } catch (error) {
-        console.warn(`[ParserWorker] Failed to load ${lang}: ${error}`);
+        logWarn(`Failed to load ${lang}: ${error}`);
       }
     }
 
@@ -198,7 +214,11 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
 
     const parser = parsers.get(msg.languageId);
     if (!parser) {
-      parentPort?.postMessage({ type: 'result', id: msg.id, error: `No parser for ${msg.languageId}` });
+      parentPort?.postMessage({
+        type: 'result',
+        id: msg.id,
+        error: `No parser for ${msg.languageId}`,
+      });
       return;
     }
 
@@ -209,7 +229,9 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
 
       if (msg.extractHybrid) {
         const isCstOnly = isCstOnlyLanguage(msg.languageId);
-        const symbols = msg.existingSymbols || (isCstOnly ? [] : extractSymbols(tree, msg.filePath, msg.languageId));
+        const symbols =
+          msg.existingSymbols ||
+          (isCstOnly ? [] : extractSymbols(tree, msg.filePath, msg.languageId));
         const cstFacts = cstExtractor.extractCstFacts(tree, msg.filePath, msg.languageId, symbols);
         result.hybridFacts = [...symbols, ...cstFacts];
       } else {
@@ -228,7 +250,11 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
     }
     const parser = parsers.get(msg.languageId);
     if (!parser) {
-      parentPort?.postMessage({ type: 'result', id: msg.id, error: `No parser for ${msg.languageId}` });
+      parentPort?.postMessage({
+        type: 'result',
+        id: msg.id,
+        error: `No parser for ${msg.languageId}`,
+      });
       return;
     }
     try {
@@ -241,4 +267,3 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
     }
   }
 });
-

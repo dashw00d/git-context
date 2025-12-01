@@ -347,7 +347,8 @@ export class RefactorReportView {
       empty.appendChild(emptyH2);
 
       const emptyP = document.createElement('p');
-      emptyP.textContent = 'Choose an analysis block to view detailed findings and recommendations.';
+      emptyP.textContent =
+        'Choose an analysis block to view detailed findings and recommendations.';
       empty.appendChild(emptyP);
       content.appendChild(empty);
       return content;
@@ -411,7 +412,7 @@ export class RefactorReportView {
         // Evidence
         const evidenceDiv = document.createElement('div');
         evidenceDiv.className = 'claim-evidence';
-        claim.evidence.forEach((evidence) => {
+        claim.evidence.forEach(evidence => {
           const link = document.createElement('button');
           link.className = 'evidence-link';
           link.textContent = evidence.description;
@@ -481,7 +482,7 @@ export class RefactorReportView {
         // Evidence
         const evidenceDiv = document.createElement('div');
         evidenceDiv.className = 'action-evidence';
-        action.evidence.forEach((evidence) => {
+        action.evidence.forEach(evidence => {
           const link = document.createElement('button');
           link.className = 'evidence-link';
           link.textContent = evidence.description;
@@ -643,31 +644,46 @@ export class RefactorReportView {
    */
   private getBlockIcon(type: AnalysisBlock['type']): string {
     switch (type) {
-      case 'intent': return '🎯';
-      case 'drift': return '🔍';
-      case 'cleanup': return '🧹';
-      case 'summary': return '📊';
-      default: return '📝';
+      case 'intent':
+        return '🎯';
+      case 'drift':
+        return '🔍';
+      case 'cleanup':
+        return '🧹';
+      case 'summary':
+        return '📊';
+      default:
+        return '📝';
     }
   }
 
   private getSeverityIcon(severity: string): string {
     switch (severity) {
-      case 'critical': return '🚨';
-      case 'high': return '🔴';
-      case 'medium': return '🟡';
-      case 'low': return '🟢';
-      default: return '⚪';
+      case 'critical':
+        return '🚨';
+      case 'high':
+        return '🔴';
+      case 'medium':
+        return '🟡';
+      case 'low':
+        return '🟢';
+      default:
+        return '⚪';
     }
   }
 
   private getPriorityIcon(priority: string): string {
     switch (priority) {
-      case 'urgent': return '🚨';
-      case 'high': return '🔴';
-      case 'medium': return '🟡';
-      case 'low': return '🟢';
-      default: return '⚪';
+      case 'urgent':
+        return '🚨';
+      case 'high':
+        return '🔴';
+      case 'medium':
+        return '🟡';
+      case 'low':
+        return '🟢';
+      default:
+        return '⚪';
     }
   }
 }

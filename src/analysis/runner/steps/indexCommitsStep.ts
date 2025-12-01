@@ -1,5 +1,6 @@
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+/* eslint-disable no-restricted-syntax */
 import { CommitIndexer } from '../../commitIndexer';
+import { PipelineStep, PipelineState } from '../pipelineTypes';
 
 export function createIndexCommitsStep(
   commitIndexer: CommitIndexer,
@@ -14,6 +15,6 @@ export function createIndexCommitsStep(
       const shas = state.selectedCommitShas;
       const facts = await commitIndexer.ensureCommitsIndexed(shas, concurrency);
       state.commitFacts = facts;
-    }
+    },
   };
 }

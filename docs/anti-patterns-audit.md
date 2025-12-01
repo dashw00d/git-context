@@ -57,7 +57,7 @@ getStore().dispatch({
 
 ### Status
 - **Fixed**: CockpitProvider now dispatches `BUNDLE_VIEW_UPDATED`/`FRAME_DATA_UPDATED` for skeleton/hybrid/semantics bundle updates and uses `EXPLORER_UPDATED` for tree data. ExplorerController no longer calls `postMessage` directly.
-- **Remaining**: Assistant responses still use direct `postMessage` (intentional for chat channel); `sendState` remains for legacy state hydration.
+- **Fixed**: All `postMessage` calls in `CockpitProvider` replaced with Redux actions. `sendState` remains for legacy state hydration but uses store state.
 
 ### Effort
 **Medium** - ~40 call sites to refactor
@@ -105,7 +105,8 @@ getStore().dispatch({
 
 ### Status
 - **Fixed**: All orchestrator calls replaced with `store.dispatch` in `src/commands/commands.ts`, `src/features/coreFeatures.ts`, and `src/providers/commitsProvider.ts` (selection, bundle clear/cancel). New `ANALYSIS_PROGRESS_UPDATED` action covers progress updates.
-- **Remaining**: `src/services/reportService.ts` still mutates state via `orchestrator.updateState()` during pipeline events; `CockpitProvider` still uses orchestrator setters for host-driven updates (selection, bundles) pending action parity.
+- **Fixed**: `CockpitProvider` fully migrated to Redux actions. Removed `orchestrator` dependency entirely from `CockpitProvider`.
+- **Remaining**: `src/services/reportService.ts` still mutates state via `orchestrator.updateState()` during pipeline events.
 
 ### Effort
 **High** - 40+ call sites, need to ensure actions exist for each case
@@ -147,8 +148,11 @@ stmt.finalize(); // Wrapper ensures this happens
 2. Replace all `db.prepare()` calls
 3. Add automated linter rule to catch this
 
+### Status
+- **Fixed**: All services (`commitService`, `symbolService`, `databaseService`, `reportService`) now use the `prepare` wrapper from `statement-wrapper.ts`. No direct `db.prepare()` calls found.
+
 ### Effort
-**Medium** - ~50 call sites, but mechanical replacement
+**Completed**
 
 ---
 
@@ -356,9 +360,9 @@ Extract to services:
 
 | Metric | Current | Goal |
 |--------|---------|------|
-| Direct postMessage calls | ~3 | 0 |
-| orchestrator.updateState calls | ~15 | 0 |
-| Direct db.prepare calls | ~50 | 0 |
+| Direct postMessage calls | ~1 (assistant only) | 0 |
+| orchestrator.updateState calls | ~8 (reportService) | 0 |
+| Direct db.prepare calls | 0 | 0 |
 | Monolithic methods | 1-2 | 0 |
 | Methods without error handling | ~10 | 0 |
 

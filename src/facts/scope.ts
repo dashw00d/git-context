@@ -1,17 +1,16 @@
 import { GitOperations } from '../analysis/git';
-import { getDatabaseManager } from '../storage/database';
-import { getExtensionConfig, getSupportedExtensions, createCustomIgnoreMatcher } from '../utils/config';
-import { filterPath } from '../utils/pathFilter';
+import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
+import { filterPath } from '../utils/pathFilter';
 
 export interface ScopeSet {
-  commitFiles: Set<string>;        // Files touched by selected commits
-  workingChanged: Set<string>;     // Files changed in working tree (backward compat)
-  stagedFiles: Set<string>;        // Files in staged working tree
-  unstagedFiles: Set<string>;      // Files in unstaged working tree
-  blastRadius: Set<string>;        // Neighbor files from dependency analysis
-  allPaths: Set<string>;           // Union of all paths to analyze
-  fileVersionMap?: Map<string, string>;  // filePath → first version in timeline where it appeared
+  commitFiles: Set<string>; // Files touched by selected commits
+  workingChanged: Set<string>; // Files changed in working tree (backward compat)
+  stagedFiles: Set<string>; // Files in staged working tree
+  unstagedFiles: Set<string>; // Files in unstaged working tree
+  blastRadius: Set<string>; // Neighbor files from dependency analysis
+  allPaths: Set<string>; // Union of all paths to analyze
+  fileVersionMap?: Map<string, string>; // filePath → first version in timeline where it appeared
 }
 
 /**
@@ -35,13 +34,11 @@ async function computeBlastRadiusNeighbors(
   workingChangedFiles: Set<string>,
   maxNeighbors: number
 ): Promise<string[]> {
-  const db = getDatabaseManager().getDatabase();
-
   // Extract symbol IDs that changed in selected commits (batched query)
   const changedSymbols = new Set<string>();
   if (commitShas.length > 0) {
     const placeholders = commitShas.map(() => '?').join(',');
-    const symbolsStmt = db.prepare(`
+    const symbolsStmt = prepare(`
       SELECT symbol_id FROM symbols WHERE sha IN (${placeholders})
     `);
     const allSymbols = symbolsStmt.all(...commitShas) as any[];
@@ -65,7 +62,7 @@ async function computeBlastRadiusNeighbors(
 
     // Batch query by directory prefix
     for (const prefix of dirPrefixes) {
-      const symbolsStmt = db.prepare(`
+      const symbolsStmt = prepare(`
         SELECT symbol_id FROM symbols
         WHERE path LIKE ? AND change_type IN ('added', 'modified', 'removed')
         LIMIT 50  -- Limit per prefix to avoid explosion
@@ -82,8 +79,8 @@ async function computeBlastRadiusNeighbors(
   }
 
   // Build full repo adjacency map from all edges (not just selected commits)
-  const adjacencyMap = new Map<string, Array<{ neighborId: string, confidence: number }>>();
-  const edgesStmt = db.prepare(`
+  const adjacencyMap = new Map<string, Array<{ neighborId: string; confidence: number }>>();
+  const edgesStmt = prepare(`
     SELECT from_symbol_id, to_symbol_id, confidence
     FROM edges
     ORDER BY confidence DESC
@@ -111,7 +108,10 @@ async function computeBlastRadiusNeighbors(
   }
 
   // Depth-limited BFS from changed symbols (depth 2-3)
-  const queue: Array<{ symbolId: string, depth: number }> = Array.from(changedSymbols).map(id => ({ symbolId: id, depth: 0 }));
+  const queue: Array<{ symbolId: string; depth: number }> = Array.from(changedSymbols).map(id => ({
+    symbolId: id,
+    depth: 0,
+  }));
   const visited = new Set<string>(changedSymbols);
   const maxDepth = 3;
   const maxTotalFiles = Math.max(maxNeighbors * 2, 50); // Allow more files for BFS exploration
@@ -168,7 +168,7 @@ export async function computeScope(
     stagedFiles: new Set(),
     unstagedFiles: new Set(),
     blastRadius: new Set(),
-    allPaths: new Set()
+    allPaths: new Set(),
   };
 
   // 1. Files touched by selected commits
@@ -218,21 +218,22 @@ export async function computeScope(
   }
 
   // 3. Blast-radius neighbors (top N by confidence)
-  const blastRadiusFiles = await computeBlastRadiusNeighbors(commitShas, scope.commitFiles, scope.workingChanged, 20); // Max 20 extra files
+  const blastRadiusFiles = await computeBlastRadiusNeighbors(
+    commitShas,
+    scope.commitFiles,
+    scope.workingChanged,
+    20
+  ); // Max 20 extra files
   blastRadiusFiles.forEach(f => scope.blastRadius.add(f));
 
   // Union all paths
-  const allPaths = new Set([
-    ...scope.commitFiles,
-    ...scope.workingChanged,
-    ...scope.blastRadius
-  ]);
+  const allPaths = new Set([...scope.commitFiles, ...scope.workingChanged, ...scope.blastRadius]);
 
   // Filter out build artifacts, ignored directories, and unsupported extensions
   // Use centralized path filter (scope doesn't have commitSha/gitRoot for size checks,
   // but that's acceptable since scope is pre-filtered by commitIndexer/workspaceIndexer)
   const filteredPaths = new Set<string>();
-  
+
   for (const p of allPaths) {
     if (await filterPath(p, { git })) {
       filteredPaths.add(p);
@@ -244,13 +245,13 @@ export async function computeScope(
   // Track which version each file first appeared in (if timeline provided)
   if (explicitTimeline && explicitTimeline.length > 0) {
     const fileVersionMap = new Map<string, string>();
-    
+
     // Iterate through timeline from oldest to newest to find first appearance
     // (timeline is newest → oldest, so reverse to get chronological order)
     for (let i = explicitTimeline.length - 1; i >= 0; i--) {
       const version = explicitTimeline[i];
       let versionFiles: Set<string>;
-      
+
       if (version === 'workspace-unstaged') {
         versionFiles = scope.unstagedFiles;
       } else if (version === 'workspace-staged') {
@@ -264,7 +265,7 @@ export async function computeScope(
         const commitFiles = await git.getFileChanges(version);
         versionFiles = new Set(commitFiles.map(f => f.path));
       }
-      
+
       // Track first appearance (oldest version wins - this is the first time it appeared)
       for (const filePath of versionFiles) {
         if (filteredPaths.has(filePath) && !fileVersionMap.has(filePath)) {
@@ -272,7 +273,7 @@ export async function computeScope(
         }
       }
     }
-    
+
     // Also track blast radius files (they entered scope when blast radius was computed)
     for (const filePath of scope.blastRadius) {
       if (filteredPaths.has(filePath) && !fileVersionMap.has(filePath)) {
@@ -281,12 +282,14 @@ export async function computeScope(
         fileVersionMap.set(filePath, newestVersion);
       }
     }
-    
+
     scope.fileVersionMap = fileVersionMap;
   }
 
   // Log scope composition for debugging
-  logDebug(`[Scope] staged=${scope.stagedFiles.size}, unstaged=${scope.unstagedFiles.size}, total working=${scope.workingChanged.size}, commits=${scope.commitFiles.size}, blast=${scope.blastRadius.size}, all=${scope.allPaths.size}`);
+  logDebug(
+    `[Scope] staged=${scope.stagedFiles.size}, unstaged=${scope.unstagedFiles.size}, total working=${scope.workingChanged.size}, commits=${scope.commitFiles.size}, blast=${scope.blastRadius.size}, all=${scope.allPaths.size}`
+  );
 
   return scope;
 }

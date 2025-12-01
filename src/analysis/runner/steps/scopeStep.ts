@@ -1,5 +1,6 @@
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+/* eslint-disable no-restricted-syntax */
 import { computeScope } from '../../../facts/scope';
+import { PipelineStep, PipelineState } from '../pipelineTypes';
 
 export function createScopeStep(): PipelineStep {
   return {
@@ -19,6 +20,6 @@ export function createScopeStep(): PipelineStep {
         state.liveOverrides?.keys()
       );
       state.scope = scope;
-    }
+    },
   };
 }

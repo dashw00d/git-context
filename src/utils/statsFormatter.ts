@@ -14,7 +14,6 @@ export function formatStats(facts: RefactorBundleFacts): {
     missing: facts.findings.incompleteness.missing,
     zombies: facts.findings.incompleteness.zombies,
     dead: facts.findings.legacyAudit.dead,
-    replaced: facts.findings.legacyAudit.replacedLeftovers.length
+    replaced: facts.findings.legacyAudit.replacedLeftovers.length,
   };
 }
-

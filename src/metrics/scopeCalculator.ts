@@ -68,7 +68,7 @@ export function calculateScopeFromFacts(
   // Blast radius using BFS algorithm matching real computeBlastRadiusNeighbors
   const blastRadius = new Set<string>();
   const symbolToFile = new Map<string, string>();
-  const adjacencyMap = new Map<string, Array<{neighborId: string, confidence: number}>>();
+  const adjacencyMap = new Map<string, Array<{ neighborId: string; confidence: number }>>();
 
   // Build symbol to file mapping
   [...symbols, ...commits.flatMap(c => c.symbols || [])].forEach(symbol => {
@@ -101,18 +101,21 @@ export function calculateScopeFromFacts(
   symbols.forEach(symbol => changedSymbols.add(symbol.id));
 
   // BFS from changed symbols (depth 2-3, max 50 files)
-  const queue: Array<{symbolId: string, depth: number}> = Array.from(changedSymbols).map(id => ({symbolId: id, depth: 0}));
+  const queue: Array<{ symbolId: string; depth: number }> = Array.from(changedSymbols).map(id => ({
+    symbolId: id,
+    depth: 0,
+  }));
   const visited = new Set<string>(changedSymbols);
   const maxDepth = 3;
   const maxFiles = 50;
 
   while (queue.length > 0 && blastRadius.size < maxFiles) {
-    const {symbolId, depth} = queue.shift()!;
+    const { symbolId, depth } = queue.shift()!;
     if (depth > maxDepth || visited.has(symbolId)) continue;
     visited.add(symbolId);
 
     const neighbors = adjacencyMap.get(symbolId) || [];
-    for (const {neighborId} of neighbors) {
+    for (const { neighborId } of neighbors) {
       if (changedSymbols.has(neighborId)) continue; // Skip changed symbols
 
       const filePath = symbolToFile.get(neighborId);
@@ -120,7 +123,7 @@ export function calculateScopeFromFacts(
         blastRadius.add(filePath);
 
         if (depth < maxDepth) {
-          queue.push({symbolId: neighborId, depth: depth + 1});
+          queue.push({ symbolId: neighborId, depth: depth + 1 });
         }
       }
     }
@@ -133,7 +136,7 @@ export function calculateScopeFromFacts(
     commitFiles: commitFiles.size,
     workingChanged: workingChanged.size,
     blastRadius: blastRadius.size,
-    totalFiles: allPaths.size
+    totalFiles: allPaths.size,
   };
 }
 
@@ -155,15 +158,18 @@ function extractFileFromSymbolId(symbolId: string): string | null {
 export function createScopeSet(metrics: ScopeMetrics): ScopeSet {
   // Create dummy sets for the interface
   const dummyFiles = Array.from({ length: metrics.commitFiles }, (_, i) => `commit-file-${i}.ts`);
-  const dummyWorking = Array.from({ length: metrics.workingChanged }, (_, i) => `working-file-${i}.ts`);
+  const dummyWorking = Array.from(
+    { length: metrics.workingChanged },
+    (_, i) => `working-file-${i}.ts`
+  );
   const dummyBlast = Array.from({ length: metrics.blastRadius }, (_, i) => `blast-file-${i}.ts`);
 
   return {
     commitFiles: new Set(dummyFiles),
     workingChanged: new Set(dummyWorking),
-    stagedFiles: new Set(),  // Empty for metrics-based scope
-    unstagedFiles: new Set(),  // Empty for metrics-based scope
+    stagedFiles: new Set(), // Empty for metrics-based scope
+    unstagedFiles: new Set(), // Empty for metrics-based scope
     blastRadius: new Set(dummyBlast),
-    allPaths: new Set([...dummyFiles, ...dummyWorking, ...dummyBlast])
+    allPaths: new Set([...dummyFiles, ...dummyWorking, ...dummyBlast]),
   };
 }

@@ -62,9 +62,11 @@ export class RiskDetector {
   private hasBreakingChanges(modifiedSymbols: SymbolDelta[]): boolean {
     for (const delta of modifiedSymbols) {
       // Public function/method signature changes
-      if ((delta.symbol.kind === 'function' || delta.symbol.kind === 'method') &&
-          delta.changeType === 'signature_changed' &&
-          this.isPublicSymbol(delta.symbol)) {
+      if (
+        (delta.symbol.kind === 'function' || delta.symbol.kind === 'method') &&
+        delta.changeType === 'signature_changed' &&
+        this.isPublicSymbol(delta.symbol)
+      ) {
         return true;
       }
 
@@ -91,7 +93,7 @@ export class RiskDetector {
       /drop\s+table/i,
       /migration\.php$/,
       /migration\.js$/,
-      /migration\.ts$/
+      /migration\.ts$/,
     ];
 
     return files.some(file => {
@@ -113,9 +115,10 @@ export class RiskDetector {
     }
 
     // Many symbols renamed or moved
-    const renamedSymbols = symbols.modified.filter(delta =>
-      delta.changeType === 'signature_changed' &&
-      this.isRename(delta.symbol, delta.previousSymbol)
+    const renamedSymbols = symbols.modified.filter(
+      delta =>
+        delta.changeType === 'signature_changed' &&
+        this.isRename(delta.symbol, delta.previousSymbol)
     );
 
     if (renamedSymbols.length > 5) {
@@ -123,7 +126,8 @@ export class RiskDetector {
     }
 
     // Large number of symbol changes
-    const totalSymbolChanges = symbols.added.length + symbols.removed.length + symbols.modified.length;
+    const totalSymbolChanges =
+      symbols.added.length + symbols.removed.length + symbols.modified.length;
     if (totalSymbolChanges > 20) {
       return true;
     }
@@ -151,7 +155,7 @@ export class RiskDetector {
       /tls/i,
       /certificate/i,
       /vulnerability/i,
-      /exploit/i
+      /exploit/i,
     ];
 
     // Check file names
@@ -185,7 +189,7 @@ export class RiskDetector {
       /throughput/i,
       /bottleneck/i,
       /slow/i,
-      /fast/i
+      /fast/i,
     ];
 
     // Check file names
@@ -219,7 +223,7 @@ export class RiskDetector {
       /role/i,
       /access/i,
       /authenticate/i,
-      /authorization/i
+      /authorization/i,
     ];
 
     // Check file names
@@ -254,7 +258,7 @@ export class RiskDetector {
       /checkout/i,
       /transaction/i,
       /money/i,
-      /currency/i
+      /currency/i,
     ];
 
     // Check file names
@@ -284,7 +288,10 @@ export class RiskDetector {
    */
   private isRename(current: any, previous: any): boolean {
     // Same signature structure but different name
-    return current.name !== previous.name &&
-           current.signature.replace(current.name, 'X') === previous.signature.replace(previous.name, 'X');
+    return (
+      current.name !== previous.name &&
+      current.signature.replace(current.name, 'X') ===
+        previous.signature.replace(previous.name, 'X')
+    );
   }
 }

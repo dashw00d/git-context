@@ -1,15 +1,16 @@
-import { LLMResponse, AnalysisResult } from '../types';
+import { AnalysisResult, LLMResponse } from '../types';
+import { logError } from '../utils/logger';
 import { getLLMClient } from './openrouter';
 import {
+  FILE_COMPARISON_PROMPT,
   STAGE_1_COMPRESSION_PROMPT,
   STAGE_2_SUMMARY_PROMPT,
   SYMBOL_EXPLANATION_PROMPT,
-  FILE_COMPARISON_PROMPT
 } from './prompts';
 
 export class LLMSummarizer {
   private _client: ReturnType<typeof getLLMClient> | null = null;
-  
+
   private get client() {
     if (!this._client) {
       this._client = getLLMClient();
@@ -30,7 +31,7 @@ export class LLMSummarizer {
 
       return summary;
     } catch (error) {
-      console.error('LLM summarization failed:', error);
+      logError('LLM summarization failed:', error);
       // Return minimal fallback response
       return {
         summary_md: `- Commit analysis failed: ${error}\n- Files changed: ${analysis.files.length}\n- Symbols modified: ${analysis.symbols.modified.length}`,
@@ -38,7 +39,7 @@ export class LLMSummarizer {
         migration_notes: [],
         refactor_clusters: [],
         tests_needed: ['Verify changes manually'],
-        questions_for_author: ['LLM analysis failed - manual review required']
+        questions_for_author: ['LLM analysis failed - manual review required'],
       };
     }
   }
@@ -50,18 +51,18 @@ export class LLMSummarizer {
     const symbolsAdded = analysis.symbols.added.map(s => ({
       name: s.name,
       type: s.kind,
-      signature: s.signature.substring(0, 100) // Truncate long signatures
+      signature: s.signature.substring(0, 100), // Truncate long signatures
     }));
 
     const symbolsModified = analysis.symbols.modified.map(s => ({
       name: s.symbol.name,
       type: s.symbol.kind,
-      change: s.changeType
+      change: s.changeType,
     }));
 
     const symbolsRemoved = analysis.symbols.removed.map(s => ({
       name: s.name,
-      type: s.kind
+      type: s.kind,
     }));
 
     const edgesAdded = analysis.edges.added.map(e => `${e.from} -> ${e.to} (${e.type})`);
@@ -77,9 +78,18 @@ export class LLMSummarizer {
       }
     }
 
-    const prompt = STAGE_1_COMPRESSION_PROMPT
-      .replace('{file_count}', analysis.files.length.toString())
-      .replace('{diff_stats}', `Files: ${analysis.files.length}, Symbols: ${analysis.symbols.added.length + analysis.symbols.modified.length + analysis.symbols.removed.length}`)
+    const prompt = STAGE_1_COMPRESSION_PROMPT.replace(
+      '{file_count}',
+      analysis.files.length.toString()
+    )
+      .replace(
+        '{diff_stats}',
+        `Files: ${analysis.files.length}, Symbols: ${
+          analysis.symbols.added.length +
+          analysis.symbols.modified.length +
+          analysis.symbols.removed.length
+        }`
+      )
       .replace('{symbols_added}', JSON.stringify(symbolsAdded.slice(0, 10))) // Limit for token efficiency
       .replace('{symbols_modified}', JSON.stringify(symbolsModified.slice(0, 10)))
       .replace('{symbols_removed}', JSON.stringify(symbolsRemoved.slice(0, 10)))
@@ -88,14 +98,19 @@ export class LLMSummarizer {
       .replace('{morph_highlights}', JSON.stringify(analysis.difftasticHighlights.slice(0, 5)))
       .replace('{snippets_json}', snippetsJson);
 
-    const response = await this.client.complete([{
-      role: 'user',
-      content: prompt
-    }], {
-      temperature: 0.1,
-      jsonMode: true,
-      maxTokens: 1000
-    });
+    const response = await this.client.complete(
+      [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      {
+        temperature: 0.1,
+        jsonMode: true,
+        maxTokens: 1000,
+      }
+    );
 
     try {
       return JSON.parse(response);
@@ -106,7 +121,7 @@ export class LLMSummarizer {
         breaking_changes: [],
         key_symbols: [],
         risk_indicators: [],
-        change_patterns: []
+        change_patterns: [],
       };
     }
   }
@@ -118,24 +133,40 @@ export class LLMSummarizer {
     // Extract a small sample of the raw diff for context
     const diffSample = this.extractDiffSample(analysis);
 
-    const prompt = STAGE_2_SUMMARY_PROMPT
-      .replace('{stage_1_json}', JSON.stringify(stage1Data, null, 2))
+    const prompt = STAGE_2_SUMMARY_PROMPT.replace(
+      '{stage_1_json}',
+      JSON.stringify(stage1Data, null, 2)
+    )
       .replace('{diff_sample}', diffSample)
       .replace('{commit_message}', analysis.commit.message);
 
-    const response = await this.client.complete([{
-      role: 'user',
-      content: prompt
-    }], {
-      temperature: 0.2,
-      jsonMode: true,
-      maxTokens: 2000
-    });
+    const response = await this.client.complete(
+      [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      {
+        temperature: 0.2,
+        jsonMode: true,
+        maxTokens: 2000,
+      }
+    );
 
     try {
       return JSON.parse(response) as LLMResponse;
     } catch (error) {
-      throw new Error(`Failed to parse LLM response: ${error}`);
+      logError(`Failed to parse LLM response: ${error}`);
+      // Return default response instead of throwing
+      return {
+        summary_md: 'Failed to parse LLM response',
+        breaking_changes: [],
+        migration_notes: [],
+        refactor_clusters: [],
+        tests_needed: [],
+        questions_for_author: [],
+      };
     }
   }
 
@@ -153,11 +184,21 @@ export class LLMSummarizer {
     lines.push(`Symbols removed: ${analysis.symbols.removed.length}`);
 
     if (analysis.symbols.added.length > 0) {
-      lines.push(`Added: ${analysis.symbols.added.slice(0, 3).map(s => s.name).join(', ')}`);
+      lines.push(
+        `Added: ${analysis.symbols.added
+          .slice(0, 3)
+          .map(s => s.name)
+          .join(', ')}`
+      );
     }
 
     if (analysis.symbols.modified.length > 0) {
-      lines.push(`Modified: ${analysis.symbols.modified.slice(0, 3).map(s => s.symbol.name).join(', ')}`);
+      lines.push(
+        `Modified: ${analysis.symbols.modified
+          .slice(0, 3)
+          .map(s => s.symbol.name)
+          .join(', ')}`
+      );
     }
 
     return lines.join('\n');
@@ -187,9 +228,9 @@ export class LLMSummarizer {
           snippets.push({
             symbol: missing.symbol_id,
             file: filePath,
-            before: beforeContent.substring(0, 500),  // Truncate
+            before: beforeContent.substring(0, 500), // Truncate
             after: afterContent.substring(0, 500),
-            version: missing.introducedAtVersion || lastSha
+            version: missing.introducedAtVersion || lastSha,
           });
         }
       } catch (error) {
@@ -214,8 +255,7 @@ export class LLMSummarizer {
     commitSha: string,
     commitMessage: string
   ): Promise<string> {
-    const prompt = SYMBOL_EXPLANATION_PROMPT
-      .replace('{symbol_name}', symbolName)
+    const prompt = SYMBOL_EXPLANATION_PROMPT.replace('{symbol_name}', symbolName)
       .replace('{change_type}', changeType)
       .replace('{file_path}', filePath)
       .replace('{line_number}', lineNumber.toString())
@@ -224,13 +264,18 @@ export class LLMSummarizer {
       .replace('{commit_sha}', commitSha)
       .replace('{commit_message}', commitMessage);
 
-    return await this.client.complete([{
-      role: 'user',
-      content: prompt
-    }], {
-      temperature: 0.3,
-      maxTokens: 1000
-    });
+    return await this.client.complete(
+      [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      {
+        temperature: 0.3,
+        maxTokens: 1000,
+      }
+    );
   }
 
   /**
@@ -245,8 +290,7 @@ export class LLMSummarizer {
     diffSummary: string,
     symbolChanges: string[]
   ): Promise<string> {
-    const prompt = FILE_COMPARISON_PROMPT
-      .replace('{commit_a_sha}', commitASha)
+    const prompt = FILE_COMPARISON_PROMPT.replace('{commit_a_sha}', commitASha)
       .replace('{commit_a_message}', commitAMessage)
       .replace('{commit_b_sha}', commitBSha)
       .replace('{commit_b_message}', commitBMessage)
@@ -254,12 +298,17 @@ export class LLMSummarizer {
       .replace('{diff_summary}', diffSummary)
       .replace('{symbol_changes}', symbolChanges.join('\n'));
 
-    return await this.client.complete([{
-      role: 'user',
-      content: prompt
-    }], {
-      temperature: 0.2,
-      maxTokens: 1500
-    });
+    return await this.client.complete(
+      [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      {
+        temperature: 0.2,
+        maxTokens: 1500,
+      }
+    );
   }
 }

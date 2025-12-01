@@ -7,6 +7,7 @@
 
 import { MovedBlockDetectorV2, MovedBlockResult } from '../analysis/movedBlockDetector';
 import { SymbolInfo } from '../types';
+import { logWarn } from '../utils/logger';
 
 export interface MovedBlockMetrics {
   totalMovedBlocks: number;
@@ -22,8 +23,18 @@ export interface MovedBlockMetrics {
  * Detect moved blocks using real MovedBlockDetector
  */
 export async function detectMovedBlocksFromFacts(
-  deletedSymbols: Array<{ id: string; name: string; filePath?: string; content?: string }>,
-  addedSymbols: Array<{ id: string; name: string; filePath?: string; content?: string }>
+  deletedSymbols: Array<{
+    id: string;
+    name: string;
+    filePath?: string;
+    content?: string;
+  }>,
+  addedSymbols: Array<{
+    id: string;
+    name: string;
+    filePath?: string;
+    content?: string;
+  }>
 ): Promise<MovedBlockMetrics> {
   try {
     // Check if this is fixture mode (content provided) - use direct content hashing
@@ -41,10 +52,10 @@ export async function detectMovedBlocksFromFacts(
       signature: '',
       location: {
         start: { line: 1, column: 0 },
-        end: { line: 10, column: 0 }
+        end: { line: 10, column: 0 },
       },
       filePath: symbol.filePath || 'test-file',
-      content: symbol.content || `function ${symbol.name}() {}`
+      content: symbol.content || `function ${symbol.name}() {}`,
     }));
 
     const addedSymbolInfos: SymbolInfo[] = addedSymbols.map(symbol => ({
@@ -55,10 +66,10 @@ export async function detectMovedBlocksFromFacts(
       signature: '',
       location: {
         start: { line: 1, column: 0 },
-        end: { line: 10, column: 0 }
+        end: { line: 10, column: 0 },
       },
       filePath: symbol.filePath || 'test-file',
-      content: symbol.content || `function ${symbol.name}() {}`
+      content: symbol.content || `function ${symbol.name}() {}`,
     }));
 
     // Create detector and run detection
@@ -70,24 +81,25 @@ export async function detectMovedBlocksFromFacts(
     );
 
     // Calculate metrics
-    const fileRenames = result.movedBlocks.filter(block =>
-      block.moveReason === 'file_rename' || block.moveReason === 'module_split'
+    const fileRenames = result.movedBlocks.filter(
+      block => block.moveReason === 'file_rename' || block.moveReason === 'module_split'
     ).length;
 
-    const blockMoves = result.movedBlocks.filter(block =>
-      block.moveReason === 'block_move'
+    const blockMoves = result.movedBlocks.filter(block => block.moveReason === 'block_move').length;
+
+    const symbolRenames = result.symbolLineage.filter(
+      lineage => lineage.moveType === 'symbol_rename'
     ).length;
 
-    const symbolRenames = result.symbolLineage.filter(lineage =>
-      lineage.moveType === 'symbol_rename'
-    ).length;
+    const averageSimilarity =
+      result.movedBlocks.length > 0
+        ? result.movedBlocks.reduce((sum, block) => sum + block.similarityScore, 0) /
+          result.movedBlocks.length
+        : 0;
 
-    const averageSimilarity = result.movedBlocks.length > 0
-      ? result.movedBlocks.reduce((sum, block) => sum + block.similarityScore, 0) / result.movedBlocks.length
-      : 0;
-
-    const movedLines = result.movedBlocks.reduce((sum, block) =>
-      sum + (block.sourceEndLine - block.sourceStartLine), 0
+    const movedLines = result.movedBlocks.reduce(
+      (sum, block) => sum + (block.sourceEndLine - block.sourceStartLine),
+      0
     );
 
     return {
@@ -97,11 +109,10 @@ export async function detectMovedBlocksFromFacts(
       symbolRenames,
       averageSimilarity,
       movedSymbols: result.symbolLineage.length,
-      movedLines
+      movedLines,
     };
-
   } catch (error) {
-    console.warn('Moved block detection failed, using simplified metrics:', error);
+    logWarn(`Moved block detection failed, using simplified metrics: ${error}`);
 
     // Return simplified metrics on failure
     return {
@@ -111,7 +122,7 @@ export async function detectMovedBlocksFromFacts(
       symbolRenames: 0,
       averageSimilarity: 0,
       movedSymbols: 0,
-      movedLines: 0
+      movedLines: 0,
     };
   }
 }
@@ -121,8 +132,18 @@ export async function detectMovedBlocksFromFacts(
  * Used when symbol content is provided (no DB/git dependencies needed)
  */
 export async function detectMovedBlocksFromContent(
-  deletedSymbols: Array<{ id: string; name: string; filePath?: string; content?: string }>,
-  addedSymbols: Array<{ id: string; name: string; filePath?: string; content?: string }>
+  deletedSymbols: Array<{
+    id: string;
+    name: string;
+    filePath?: string;
+    content?: string;
+  }>,
+  addedSymbols: Array<{
+    id: string;
+    name: string;
+    filePath?: string;
+    content?: string;
+  }>
 ): Promise<MovedBlockMetrics> {
   try {
     // Create content hash map for deleted symbols
@@ -144,7 +165,7 @@ export async function detectMovedBlocksFromContent(
           movedBlocks.push({
             deleted: deletedMatch.symbol,
             added: addedSymbol,
-            similarity: 1.0 // Exact content match
+            similarity: 1.0, // Exact content match
           });
           deletedHashes.delete(hash); // Remove to prevent duplicate matches
         }
@@ -156,17 +177,18 @@ export async function detectMovedBlocksFromContent(
       isFileRename(block.deleted.filePath, block.added.filePath)
     ).length;
 
-    const blockMoves = movedBlocks.filter(block =>
-      !isFileRename(block.deleted.filePath, block.added.filePath)
+    const blockMoves = movedBlocks.filter(
+      block => !isFileRename(block.deleted.filePath, block.added.filePath)
     ).length;
 
-    const symbolRenames = movedBlocks.filter(block =>
-      block.deleted.name !== block.added.name
+    const symbolRenames = movedBlocks.filter(
+      block => block.deleted.name !== block.added.name
     ).length;
 
-    const averageSimilarity = movedBlocks.length > 0
-      ? movedBlocks.reduce((sum, block) => sum + block.similarity, 0) / movedBlocks.length
-      : 0;
+    const averageSimilarity =
+      movedBlocks.length > 0
+        ? movedBlocks.reduce((sum, block) => sum + block.similarity, 0) / movedBlocks.length
+        : 0;
 
     const movedLines = movedBlocks.reduce((sum, block) => {
       const deletedLines = block.deleted.content?.split('\n').length || 0;
@@ -180,10 +202,10 @@ export async function detectMovedBlocksFromContent(
       symbolRenames,
       averageSimilarity,
       movedSymbols: movedBlocks.length,
-      movedLines
+      movedLines,
     };
   } catch (error) {
-    console.warn('Content-based moved block detection failed:', error);
+    logWarn(`Content-based moved block detection failed: ${error}`);
     return {
       totalMovedBlocks: 0,
       fileRenames: 0,
@@ -191,7 +213,7 @@ export async function detectMovedBlocksFromContent(
       symbolRenames: 0,
       averageSimilarity: 0,
       movedSymbols: 0,
-      movedLines: 0
+      movedLines: 0,
     };
   }
 }
@@ -203,7 +225,7 @@ function hashSymbolContent(content: string): string {
   let hash = 0;
   for (let i = 0; i < content.length; i++) {
     const char = content.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32-bit integer
   }
   return hash.toString();
@@ -235,16 +257,17 @@ export function detectMovedBlocksSimple(
 
   // Find symbols with same name but different file paths
   const movedByRename = addedSymbols.filter(added =>
-    deletedSymbols.some(deleted =>
-      deleted.name === added.name && deleted.filePath !== added.filePath
+    deletedSymbols.some(
+      deleted => deleted.name === added.name && deleted.filePath !== added.filePath
     )
   );
 
   // Find symbols with similar names (potential renames)
   const potentialRenames = addedSymbols.filter(added =>
-    deletedSymbols.some(deleted =>
-      deleted.name.toLowerCase().includes(added.name.toLowerCase().slice(0, 3)) &&
-      deleted.name !== added.name
+    deletedSymbols.some(
+      deleted =>
+        deleted.name.toLowerCase().includes(added.name.toLowerCase().slice(0, 3)) &&
+        deleted.name !== added.name
     )
   );
 
@@ -255,6 +278,6 @@ export function detectMovedBlocksSimple(
     symbolRenames: potentialRenames.length,
     averageSimilarity: movedByRename.length > 0 ? 0.8 : 0, // High similarity for exact name matches
     movedSymbols: movedByRename.length + potentialRenames.length,
-    movedLines: movedByRename.length * 10 // Estimate 10 lines per moved block
+    movedLines: movedByRename.length * 10, // Estimate 10 lines per moved block
   };
 }

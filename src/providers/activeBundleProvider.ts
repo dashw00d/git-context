@@ -1,8 +1,9 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as vscode from 'vscode';
 import { RefactorBundleFacts } from '../facts/types';
 import { getGitRoot } from '../utils/config';
+import { logDebug } from '../utils/logger';
 
 export class ActiveBundleProvider {
   public lastBundleFacts: RefactorBundleFacts | null = null;
@@ -24,7 +25,7 @@ export class ActiveBundleProvider {
         this.lastBundleFacts = JSON.parse(factsContent);
       }
     } catch (error) {
-      console.debug('Failed to load bundle facts:', error);
+      logDebug(`Failed to load bundle facts: ${error}`);
     }
   }
 

@@ -51,8 +51,8 @@ export function countEdges(edges: EdgeInfo[]): EdgeMetrics {
     edgesByConfidence: {
       high: highConfidence,
       medium: mediumConfidence,
-      low: lowConfidence
-    }
+      low: lowConfidence,
+    },
   };
 }
 
@@ -97,7 +97,7 @@ export function compareEdgeSets(parentEdges: EdgeInfo[], currentEdges: EdgeInfo[
     edgesByConfidence: {
       high: highConfidence,
       medium: mediumConfidence,
-      low: lowConfidence
-    }
+      low: lowConfidence,
+    },
   };
 }

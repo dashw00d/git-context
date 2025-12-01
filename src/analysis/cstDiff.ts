@@ -1,10 +1,10 @@
-import { HybridFact, CstFact, DeltaChange, isCstFact } from '../types/cstFacts';
 import { SymbolInfo } from '../types';
+import { HybridFact, CstFact, DeltaChange, isCstFact } from '../types/cstFacts';
+import { detectLanguage } from '../utils/config';
+import { logDebug } from '../utils/logger';
 import { AstSerializer } from './astSerializer';
 import { getDifftasticIntegration, DifftasticResult } from './difftastic';
 import { getTreeSitterParser } from './tree-sitter';
-import { detectLanguage } from '../utils/config';
-import { logDebug } from '../utils/logger';
 
 export interface CstDiffResult {
   changedFacts: Array<{
@@ -39,7 +39,7 @@ export class CstDiffManager {
       return {
         changedFacts: [],
         addedFacts: newFacts,
-        removedFacts: oldFacts
+        removedFacts: oldFacts,
       };
     }
 
@@ -61,13 +61,7 @@ export class CstDiffManager {
         filePath
       );
 
-      return this.mapDifftasticToFacts(
-        difftasticResult,
-        oldFacts,
-        newFacts,
-        oldTree,
-        newTree
-      );
+      return this.mapDifftasticToFacts(difftasticResult, oldFacts, newFacts, oldTree, newTree);
     } catch (error) {
       logDebug(`[CstDiff] Difftastic failed, using tree-sitter diff: ${error}`);
       // Fallback: Tree-sitter query-based diff
@@ -110,8 +104,8 @@ export class CstDiffManager {
             newDna: newFact.dnaId,
             locationDelta: {
               oldLine: oldByDna.location.start.line,
-              newLine: newFact.location.start.line
-            }
+              newLine: newFact.location.start.line,
+            },
           };
           changedFacts.push({ fact: newFact, delta, oldFact: oldByDna });
         } else {
@@ -125,10 +119,13 @@ export class CstDiffManager {
             type: 'modified',
             oldDna: oldFact.dnaId,
             newDna: newFact.dnaId,
-            locationDelta: oldFact.location.start.line !== newFact.location.start.line ? {
-              oldLine: oldFact.location.start.line,
-              newLine: newFact.location.start.line
-            } : undefined
+            locationDelta:
+              oldFact.location.start.line !== newFact.location.start.line
+                ? {
+                    oldLine: oldFact.location.start.line,
+                    newLine: newFact.location.start.line,
+                  }
+                : undefined,
           };
           changedFacts.push({ fact: newFact, delta, oldFact });
         }
@@ -194,10 +191,7 @@ export class CstDiffManager {
   /**
    * Simple fact comparison (fallback when parsing fails)
    */
-  private simpleFactDiff(
-    oldFacts: HybridFact[],
-    newFacts: HybridFact[]
-  ): CstDiffResult {
+  private simpleFactDiff(oldFacts: HybridFact[], newFacts: HybridFact[]): CstDiffResult {
     const changedFacts: Array<{ fact: HybridFact; delta: DeltaChange; oldFact?: HybridFact }> = [];
     const addedFacts: HybridFact[] = [];
     const removedFacts: HybridFact[] = [];
@@ -221,23 +215,28 @@ export class CstDiffManager {
             newDna: newFact.dnaId,
             locationDelta: {
               oldLine: oldByDna.location.start.line,
-              newLine: newFact.location.start.line
-            }
+              newLine: newFact.location.start.line,
+            },
           };
           changedFacts.push({ fact: newFact, delta, oldFact: oldByDna });
         } else {
           addedFacts.push(newFact);
         }
-      } else if (oldFact.dnaId !== newFact.dnaId || 
-                 oldFact.location.start.line !== newFact.location.start.line) {
+      } else if (
+        oldFact.dnaId !== newFact.dnaId ||
+        oldFact.location.start.line !== newFact.location.start.line
+      ) {
         const delta: DeltaChange = {
           type: 'modified',
           oldDna: oldFact.dnaId,
           newDna: newFact.dnaId,
-          locationDelta: oldFact.location.start.line !== newFact.location.start.line ? {
-            oldLine: oldFact.location.start.line,
-            newLine: newFact.location.start.line
-          } : undefined
+          locationDelta:
+            oldFact.location.start.line !== newFact.location.start.line
+              ? {
+                  oldLine: oldFact.location.start.line,
+                  newLine: newFact.location.start.line,
+                }
+              : undefined,
         };
         changedFacts.push({ fact: newFact, delta, oldFact });
       }
@@ -320,4 +319,3 @@ export function getCstDiffManager(): CstDiffManager {
   }
   return cstDiffManagerInstance;
 }
-

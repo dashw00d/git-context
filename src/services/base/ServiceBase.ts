@@ -1,5 +1,5 @@
 import { LRUCache } from 'lru-cache';
-import { getDatabaseManager, ensureDatabaseInitialized } from '../../storage/database';
+import { getDatabaseManager } from '../../storage/database';
 import { logDebug, logWarn } from '../../utils/logger';
 
 export interface ServiceConfig {
@@ -20,7 +20,7 @@ export abstract class ServiceBase {
       cacheSize: 1000,
       cacheTTL: 3600000,
       enableTransactions: true,
-      ...config
+      ...config,
     };
 
     // Ensure required values are set
@@ -32,15 +32,12 @@ export abstract class ServiceBase {
         max: this.config.cacheSize,
         ttl: this.config.cacheTTL,
         ttlAutopurge: true,
-        updateAgeOnGet: true
+        updateAgeOnGet: true,
       });
     }
   }
 
-  protected async queryWithCache<T>(
-    key: string,
-    queryFn: () => Promise<T> | T
-  ): Promise<T> {
+  protected async queryWithCache<T>(key: string, queryFn: () => Promise<T> | T): Promise<T> {
     if (this.cache?.has(key)) {
       return this.cache.get(key)!;
     }
@@ -58,12 +55,11 @@ export abstract class ServiceBase {
       logWarn(`[${context}] Database locked, operation skipped`);
       return;
     }
+    // eslint-disable-next-line no-restricted-syntax
     throw error;
   }
 
-  protected async executeInTransaction<T>(
-    fn: () => Promise<T> | T
-  ): Promise<T> {
+  protected async executeInTransaction<T>(fn: () => Promise<T> | T): Promise<T> {
     if (!this.config.enableTransactions) {
       return Promise.resolve(fn());
     }

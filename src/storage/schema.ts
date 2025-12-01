@@ -1,3 +1,7 @@
+/* eslint-disable no-restricted-syntax */
+
+import { logError, logWarn } from '../utils/logger';
+
 // REFERENCE_ONLY: Original monolithic schema kept for reference
 // This is replaced by MODULE_SCHEMAS below
 /*
@@ -428,8 +432,20 @@ CREATE INDEX IF NOT EXISTS idx_migration_log_version ON migration_log(version);
 
 // Database type is now 'any' to work with the wrapper API
 
+/* eslint-disable no-restricted-syntax, no-restricted-properties */
+
 // Type definitions for modular schema system
-export type ModuleName = 'core' | 'commits' | 'symbols' | 'edges' | 'conventions' | 'structural' | 'hotspots' | 'moved' | 'reports' | 'bundles';
+export type ModuleName =
+  | 'core'
+  | 'commits'
+  | 'symbols'
+  | 'edges'
+  | 'conventions'
+  | 'structural'
+  | 'hotspots'
+  | 'moved'
+  | 'reports'
+  | 'bundles';
 
 export interface Migration {
   name: string;
@@ -462,7 +478,7 @@ export function safeAddColumn(db: any, table: string, column: string, definition
     }
   } catch (error) {
     // Column may already exist, safe to ignore
-    console.warn(`Could not add column ${table}.${column}:`, error);
+    logError(`Could not add column ${table}.${column}`, error);
   }
 }
 
@@ -481,7 +497,7 @@ export const MODULE_SCHEMAS: Record<ModuleName, ModuleSchema> = {
 );
 CREATE INDEX IF NOT EXISTS idx_migration_log_module ON migration_log(module);`,
     migrations: [],
-    currentVersion: 1
+    currentVersion: 1,
   },
 
   // Commits Module: commits_metadata, commits_analysis, files, commit_branches, branches, squash_mappings
@@ -559,7 +575,7 @@ CREATE INDEX IF NOT EXISTS idx_commit_branches_sha ON commit_branches(sha);
 CREATE INDEX IF NOT EXISTS idx_branches_parent ON branches(parent_branch);
 CREATE INDEX IF NOT EXISTS idx_squash_mappings_squash ON squash_mappings(squash_sha);`,
     migrations: [],
-    currentVersion: 2
+    currentVersion: 2,
   },
 
   // Symbols Module: symbols, symbol_dna, symbol_versions, symbol_history, dna_decision_log
@@ -640,12 +656,14 @@ CREATE INDEX IF NOT EXISTS idx_symbol_history_dna ON symbol_history(symbol_dna_i
 CREATE INDEX IF NOT EXISTS idx_symbol_history_sha ON symbol_history(sha);
 CREATE INDEX IF NOT EXISTS idx_symbol_history_dna_sha ON symbol_history(symbol_dna_id, sha);
 CREATE INDEX IF NOT EXISTS idx_dna_decision_log_sha ON dna_decision_log(sha);`,
-    migrations: [{
-      name: 'add_conventions',
-      sql: `ALTER TABLE symbols ADD COLUMN naming_convention TEXT; ALTER TABLE symbols ADD COLUMN convention_confidence REAL;`,
-      safe: true
-    }],
-    currentVersion: 2
+    migrations: [
+      {
+        name: 'add_conventions',
+        sql: `ALTER TABLE symbols ADD COLUMN naming_convention TEXT; ALTER TABLE symbols ADD COLUMN convention_confidence REAL;`,
+        safe: true,
+      },
+    ],
+    currentVersion: 2,
   },
 
   // Edges Module: edges, renames, import_conventions
@@ -694,14 +712,16 @@ CREATE INDEX IF NOT EXISTS idx_renames_new_path ON renames(new_path);
 CREATE INDEX IF NOT EXISTS idx_import_conventions_sha ON import_conventions(sha);
 CREATE INDEX IF NOT EXISTS idx_import_conventions_path ON import_conventions(path);
 CREATE INDEX IF NOT EXISTS idx_import_conventions_style ON import_conventions(import_style);`,
-    migrations: [{
-      name: 'add_edge_type',
-      sql: `ALTER TABLE edges ADD COLUMN edge_type TEXT DEFAULT 'unknown';
+    migrations: [
+      {
+        name: 'add_edge_type',
+        sql: `ALTER TABLE edges ADD COLUMN edge_type TEXT DEFAULT 'unknown';
 UPDATE commits_analysis SET analysis_version = '2.0-legacy_edges' WHERE analysis_version < '2.0';`,
-      safe: true,
-      requiresReindex: true
-    }],
-    currentVersion: 2
+        safe: true,
+        requiresReindex: true,
+      },
+    ],
+    currentVersion: 2,
   },
 
   // Conventions Module: file_conventions
@@ -720,7 +740,7 @@ UPDATE commits_analysis SET analysis_version = '2.0-legacy_edges' WHERE analysis
 CREATE INDEX IF NOT EXISTS idx_file_conventions_sha ON file_conventions(sha);
 CREATE INDEX IF NOT EXISTS idx_file_conventions_path ON file_conventions(path);`,
     migrations: [],
-    currentVersion: 1
+    currentVersion: 1,
   },
 
   // Structural Module: file_snapshots, structural_diffs, workspace_analysis
@@ -787,13 +807,15 @@ CREATE INDEX IF NOT EXISTS idx_workspace_head ON workspace_analysis(head_sha);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version ON hybrid_facts(file_path, version);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_dna ON hybrid_facts(dna_id);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash);`,
-    migrations: [{
-      name: 'add_body_hash_edges',
-      sql: `ALTER TABLE file_snapshots ADD COLUMN body_hash TEXT; ALTER TABLE workspace_analysis ADD COLUMN edges_added INTEGER DEFAULT 0; ALTER TABLE workspace_analysis ADD COLUMN edges_removed INTEGER DEFAULT 0;`,
-      safe: true
-    }, {
-      name: 'add_hybrid_facts_table',
-      sql: `CREATE TABLE IF NOT EXISTS hybrid_facts (
+    migrations: [
+      {
+        name: 'add_body_hash_edges',
+        sql: `ALTER TABLE file_snapshots ADD COLUMN body_hash TEXT; ALTER TABLE workspace_analysis ADD COLUMN edges_added INTEGER DEFAULT 0; ALTER TABLE workspace_analysis ADD COLUMN edges_removed INTEGER DEFAULT 0;`,
+        safe: true,
+      },
+      {
+        name: 'add_hybrid_facts_table',
+        sql: `CREATE TABLE IF NOT EXISTS hybrid_facts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   file_path TEXT NOT NULL,
   version TEXT NOT NULL,
@@ -808,13 +830,15 @@ CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version ON hybrid_facts(file_path, version);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_dna ON hybrid_facts(dna_id);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash);`,
-      safe: true
-    }, {
-      name: 'rename_workspace_to_unstaged',
-      sql: `UPDATE hybrid_facts SET version='workspace-unstaged' WHERE version='workspace'`,
-      safe: true  // UPDATE is safe
-    }],
-    currentVersion: 4
+        safe: true,
+      },
+      {
+        name: 'rename_workspace_to_unstaged',
+        sql: `UPDATE hybrid_facts SET version='workspace-unstaged' WHERE version='workspace'`,
+        safe: true, // UPDATE is safe
+      },
+    ],
+    currentVersion: 4,
   },
 
   // Bundles Module: bundles, bundle_files
@@ -834,7 +858,7 @@ CREATE TABLE IF NOT EXISTS bundle_files (
 );
 CREATE INDEX IF NOT EXISTS idx_bundles_updated ON bundles(updated_at DESC);`,
     migrations: [],
-    currentVersion: 1
+    currentVersion: 1,
   },
 
   // Hotspots Module: file_hotspots, symbol_hotspots, hotspot_snapshots
@@ -885,7 +909,7 @@ CREATE INDEX IF NOT EXISTS idx_hotspot_snapshots_entity ON hotspot_snapshots(ent
 CREATE INDEX IF NOT EXISTS idx_hotspot_snapshots_date ON hotspot_snapshots(snapshot_date);
 CREATE INDEX IF NOT EXISTS idx_hotspot_cache_expires ON hotspot_cache(expires_at);`,
     migrations: [],
-    currentVersion: 1
+    currentVersion: 1,
   },
 
   // Moved Module: moved_blocks, symbol_lineage
@@ -924,7 +948,7 @@ CREATE INDEX IF NOT EXISTS idx_moved_blocks_hash ON moved_blocks(source_content_
 CREATE INDEX IF NOT EXISTS idx_symbol_lineage_current ON symbol_lineage(symbol_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_lineage_previous ON symbol_lineage(previous_symbol_id);`,
     migrations: [],
-    currentVersion: 1
+    currentVersion: 1,
   },
 
   // Reports Module: reports
@@ -953,8 +977,8 @@ CREATE INDEX IF NOT EXISTS idx_reports_is_pinned ON reports(is_pinned);
 CREATE INDEX IF NOT EXISTS idx_reports_mode ON reports(mode);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_fingerprint ON reports(fingerprint);`,
     migrations: [],
-    currentVersion: 1
-  }
+    currentVersion: 1,
+  },
 };
 
 // Legacy constant for backward compatibility
@@ -997,19 +1021,32 @@ export function migrateDatabase(db: any): string[] {
   } catch (error: any) {
     // Ignore if already migrated
     if (!error.message?.includes('already exists')) {
-      console.warn('[MIGRATION] Legacy migration_log migration warning:', truncateError(error.message));
+      logError('[MIGRATION] Legacy migration_log migration warning', error);
     }
   }
 
   // Module execution order (dependencies matter)
-  const moduleOrder: ModuleName[] = ['core', 'commits', 'symbols', 'edges', 'conventions', 'structural', 'hotspots', 'moved', 'reports', 'bundles'];
+  const moduleOrder: ModuleName[] = [
+    'core',
+    'commits',
+    'symbols',
+    'edges',
+    'conventions',
+    'structural',
+    'hotspots',
+    'moved',
+    'reports',
+    'bundles',
+  ];
 
   for (const modName of moduleOrder) {
     const mod = MODULE_SCHEMAS[modName];
 
     try {
       // Get current version for this module
-      const maxVerResult = db.prepare('SELECT MAX(version) as maxVer FROM migration_log WHERE module = ?').get(modName) as any;
+      const maxVerResult = db
+        .prepare('SELECT MAX(version) as maxVer FROM migration_log WHERE module = ?')
+        .get(modName) as any;
       let currentVer = 0;
       if (maxVerResult) {
         currentVer = Number(maxVerResult.maxVer || 0);
@@ -1025,7 +1062,9 @@ export function migrateDatabase(db: any): string[] {
           const migIndex = v - 1;
           if (migIndex >= mod.migrations.length) {
             // No migration for this version, just mark as applied
-            db.prepare('INSERT INTO migration_log (module, version, name, applied_at, success) VALUES (?, ?, ?, datetime("now"), 1)').run([modName, v, `schema_v${v}`]);
+            db.prepare(
+              'INSERT INTO migration_log (module, version, name, applied_at, success) VALUES (?, ?, ?, datetime("now"), 1)'
+            ).run([modName, v, `schema_v${v}`]);
             continue;
           }
 
@@ -1054,13 +1093,17 @@ export function migrateDatabase(db: any): string[] {
             }
 
             // Log migration success
-            db.prepare('INSERT INTO migration_log (module, version, name, applied_at, success) VALUES (?, ?, ?, datetime("now"), 1)').run([modName, v, mig.name]);
+            db.prepare(
+              'INSERT INTO migration_log (module, version, name, applied_at, success) VALUES (?, ?, ?, datetime("now"), 1)'
+            ).run([modName, v, mig.name]);
 
             // If requires reindex, mark commits and warn
             if (mig.requiresReindex) {
               try {
-                db.exec(`UPDATE commits_analysis SET analysis_version = REPLACE(analysis_version, '1.0', '2.0-legacy') WHERE analysis_version LIKE '1.%';`);
-                console.warn(`[MIGRATION] ${modName} v${v} requires reindex: run 'ct index --reindex'`);
+                db.exec(
+                  `UPDATE commits_analysis SET analysis_version = REPLACE(analysis_version, '1.0', '2.0-legacy') WHERE analysis_version LIKE '1.%';`
+                );
+                logWarn(`[MIGRATION] ${modName} v${v} requires reindex: run 'ct index --reindex'`);
               } catch (e) {
                 // Ignore if commits_analysis doesn't exist yet
               }
@@ -1068,14 +1111,16 @@ export function migrateDatabase(db: any): string[] {
           } catch (e: any) {
             // Log migration failure
             try {
-              db.prepare('INSERT INTO migration_log (module, version, name, applied_at, success) VALUES (?, ?, ?, datetime("now"), 0)').run([modName, v, mig.name]);
+              db.prepare(
+                'INSERT INTO migration_log (module, version, name, applied_at, success) VALUES (?, ?, ?, datetime("now"), 0)'
+              ).run([modName, v, mig.name]);
             } catch {
               // Silently ignore logging failures
             }
 
             // If error is about duplicate/already exists, that's okay
             if (e.message?.includes('already exists') || e.message?.includes('duplicate')) {
-              console.warn(`[MIGRATION] Skipped ${modName} v${v}: ${truncateError(e.message)}`);
+              logError(`[MIGRATION] Skipped ${modName} v${v}`, e);
             } else {
               throw e; // Re-throw unexpected errors
             }
@@ -1100,18 +1145,18 @@ export function auditAllModules(db: any): string[] {
   // Expected columns per module/table
   const expected: Record<string, Record<string, string[]>> = {
     core: {
-      migration_log: ['module']
+      migration_log: ['module'],
     },
     commits: {
-      commits_analysis: ['status', 'structural_change_score', 'files_changed', 'hotspots_json']
+      commits_analysis: ['status', 'structural_change_score', 'files_changed', 'hotspots_json'],
     },
     edges: {
-      edges: ['edge_type']
+      edges: ['edge_type'],
     },
     structural: {
       file_snapshots: ['body_hash'],
-      workspace_analysis: ['edges_added', 'edges_removed']
-    }
+      workspace_analysis: ['edges_added', 'edges_removed'],
+    },
   };
 
   // Check expected columns
@@ -1133,7 +1178,9 @@ export function auditAllModules(db: any): string[] {
 
   // Check for legacy edges (no edge_type)
   try {
-    const legacyResult = db.prepare('SELECT COUNT(*) as cnt FROM edges WHERE edge_type IS NULL OR edge_type = ""').get() as any;
+    const legacyResult = db
+      .prepare('SELECT COUNT(*) as cnt FROM edges WHERE edge_type IS NULL OR edge_type = ""')
+      .get() as any;
     const legacyCount = Number(legacyResult?.cnt || 0);
 
     if (legacyCount > 0) {

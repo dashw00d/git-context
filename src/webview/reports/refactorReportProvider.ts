@@ -1,11 +1,10 @@
-import * as vscode from 'vscode';
 import * as path from 'path';
-import { logDebug, logError } from '../../utils/logger';
-import { LlmAnalysis } from '../../analysis/llmAnalyst/blocks';
-import { RefactorBundleFacts } from '../../facts/types';
-import { EvidenceLink } from '../../analysis/llmAnalyst/blocks';
+import * as vscode from 'vscode';
+import { LlmAnalysis, EvidenceLink } from '../../analysis/llmAnalyst/blocks';
 import { resolveEvidencePath } from '../../analysis/llmAnalyst/renderer';
+import { RefactorBundleFacts } from '../../facts/types';
 import { getGitRoot } from '../../utils/config';
+import { logDebug, logError } from '../../utils/logger';
 
 /**
  * Webview provider for the refactor report
@@ -16,7 +15,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
   private _analysis: LlmAnalysis | undefined;
   private _facts: RefactorBundleFacts | undefined;
 
-  constructor(private readonly _extensionUri: vscode.Uri) { }
+  constructor(private readonly _extensionUri: vscode.Uri) {}
 
   /**
    * Set the analysis data and show the webview
@@ -38,7 +37,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       } else {
         // Focus the sidebar view using the view ID
         vscode.commands.executeCommand('gitContext.refactorReport.focus');
-        // Data will be updated via _update called implicitly or explicitly? 
+        // Data will be updated via _update called implicitly or explicitly?
         // resolveWebviewView posts initial data, but if already resolved but hidden, we need to update
         this._update();
       }
@@ -55,7 +54,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
-    _token: vscode.CancellationToken,
+    _token: vscode.CancellationToken
   ): void {
     this._panel = webviewView as any; // Maintaining internal property name for now to minimize changes
 
@@ -64,7 +63,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [this._extensionUri]
+      localResourceRoots: [this._extensionUri],
     };
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
@@ -80,22 +79,20 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     });
 
     // Setup message handling
-    webviewView.webview.onDidReceiveMessage(
-      async (message) => {
-        if (message.type === 'evidenceClick') {
-          await this._handleEvidenceClick(message.evidence);
-        } else if (message.type === 'action') {
-          if (message.action === 'delete') {
-            await vscode.commands.executeCommand('git-context.applyRefactor', {
-              action: 'delete',
-              symbolId: message.data.symbolId,
-              filePath: message.data.filePath,
-              range: message.data.range
-            });
-          }
+    webviewView.webview.onDidReceiveMessage(async message => {
+      if (message.type === 'evidenceClick') {
+        await this._handleEvidenceClick(message.evidence);
+      } else if (message.type === 'action') {
+        if (message.action === 'delete') {
+          await vscode.commands.executeCommand('git-context.applyRefactor', {
+            action: 'delete',
+            symbolId: message.data.symbolId,
+            filePath: message.data.filePath,
+            range: message.data.range,
+          });
         }
       }
-    );
+    });
   }
 
   /**
@@ -110,39 +107,48 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    logDebug(`[WEBVIEW] Posting message to webview - hasAnalysis: ${!!this._analysis}, hasFacts: ${!!this._facts}`);
+    logDebug(
+      `[WEBVIEW] Posting message to webview - hasAnalysis: ${!!this._analysis}, hasFacts: ${!!this._facts}`
+    );
 
     // Create slim payload to avoid VS Code message size limits (approx 1MB)
-    const slimAnalysis = this._analysis ? {
-      ...this._analysis,
-      // Truncate markdown if too large (8000 chars ~ 2-3KB)
-      markdown: this._analysis.markdown?.length > 8000
-        ? this._analysis.markdown.slice(0, 8000) + '... [truncated]'
-        : this._analysis.markdown,
-      // Limit block items
-      blocks: this._analysis.blocks.map(b => ({
-        ...b,
-        claims: b.claims.slice(0, 20),
-        actions: b.actions.slice(0, 20)
-      }))
-    } : undefined;
+    const slimAnalysis = this._analysis
+      ? {
+          ...this._analysis,
+          // Truncate markdown if too large (8000 chars ~ 2-3KB)
+          markdown:
+            this._analysis.markdown?.length > 8000
+              ? this._analysis.markdown.slice(0, 8000) + '... [truncated]'
+              : this._analysis.markdown,
+          // Limit block items
+          blocks: this._analysis.blocks.map(b => ({
+            ...b,
+            claims: b.claims.slice(0, 20),
+            actions: b.actions.slice(0, 20),
+          })),
+        }
+      : undefined;
 
-    const slimFacts = this._facts ? {
-      ...this._facts,
-      // Remove large hybridFacts object - UI uses summaries anyway
-      hybridFacts: undefined,
-      evidence: {
-        ...this._facts.evidence,
-        // Truncate large evidence arrays if they exist in evidence object
-        "findings.incompleteness": this._truncateEvidenceArray(this._facts.evidence["findings.incompleteness"]),
-        "scope.files": this._facts.evidence["scope.files"]?.slice(0, 100)
-      }
-    } : undefined;
+    const slimFacts = this._facts
+      ? {
+          ...this._facts,
+          // Remove large hybridFacts object - UI uses summaries anyway
+          hybridFacts: undefined,
+          evidence: {
+            ...this._facts.evidence,
+            // Truncate large evidence arrays if they exist in evidence object
+            'findings.incompleteness': this._truncateEvidenceArray(
+              this._facts.evidence['findings.incompleteness']
+            ),
+            'scope.files': this._facts.evidence['scope.files']?.slice(0, 100),
+          },
+        }
+      : undefined;
 
     const message = {
       type: 'setData',
       analysis: slimAnalysis,
-      facts: slimFacts
+      facts: slimFacts,
     };
 
     // Check size and warn/slim further if needed
@@ -188,7 +194,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     // Send scroll message to webview
     webview.postMessage({
       type: 'scrollToSection',
-      sectionId: `commit-${commitSha.substring(0, 8)}`
+      sectionId: `commit-${commitSha.substring(0, 8)}`,
     });
   }
 
@@ -204,7 +210,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     // Send scroll message to webview
     webview.postMessage({
       type: 'scrollToSection',
-      sectionId
+      sectionId,
     });
   }
 
@@ -233,13 +239,15 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
         const doc = await vscode.workspace.openTextDocument(uri);
 
         const options: vscode.TextDocumentShowOptions = {
-          preview: false
+          preview: false,
         };
 
         if (resolved.lineNumber !== undefined) {
           options.selection = new vscode.Range(
-            resolved.lineNumber - 1, 0,
-            resolved.lineNumber - 1, 1000
+            resolved.lineNumber - 1,
+            0,
+            resolved.lineNumber - 1,
+            1000
           );
         }
 
@@ -252,7 +260,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
           preview: false,
           selection: evidence.lineNumber
             ? new vscode.Range(evidence.lineNumber - 1, 0, evidence.lineNumber - 1, 0)
-            : undefined
+            : undefined,
         });
       } else if (evidence.symbolId) {
         // Symbol-based navigation
@@ -279,11 +287,13 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
             preview: false,
             selection: resolved.lineNumber
               ? new vscode.Range(resolved.lineNumber - 1, 0, resolved.lineNumber - 1, 1000)
-              : undefined
+              : undefined,
           });
         } else {
           // Fallback: show a notification
-          vscode.window.showInformationMessage(`Evidence: ${evidence.description}\nPath: ${evidence.path}`);
+          vscode.window.showInformationMessage(
+            `Evidence: ${evidence.description}\nPath: ${evidence.path}`
+          );
         }
       }
     } catch (error) {
@@ -305,7 +315,10 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
   /**
    * Resolve evidence path to file location
    */
-  private _resolveEvidencePath(pathParts: string[], facts?: RefactorBundleFacts): { filePath?: string; lineNumber?: number } | null {
+  private _resolveEvidencePath(
+    pathParts: string[],
+    facts?: RefactorBundleFacts
+  ): { filePath?: string; lineNumber?: number } | null {
     if (!facts) return null;
 
     try {
@@ -350,8 +363,12 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
    * Generate HTML for the webview
    */
   private _getHtmlForWebview(webview: vscode.Webview): string {
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'main.js'));
-    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'styles.css'));
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'main.js')
+    );
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'styles.css')
+    );
 
     // Use a nonce to only allow specific scripts to run
     const nonce = getNonce();

@@ -18,13 +18,13 @@ export interface FileChange {
 
 // Symbol information extracted from code
 export interface SymbolInfo {
-  id: string;  // MUST be stable DNA-based ID
-  dnaId: string;  // Explicit DNA hash for tracking across renames
-  semanticId?: string;  // Path-independent ID (e.g., class:MyClass)
+  id: string; // MUST be stable DNA-based ID
+  dnaId: string; // Explicit DNA hash for tracking across renames
+  semanticId?: string; // Path-independent ID (e.g., class:MyClass)
   name: string;
   kind: 'function' | 'class' | 'method' | 'const' | 'interface' | 'type' | 'variable';
   signature: string;
-  bodyHash?: string;  // NEW: Hash of function body for change detection
+  bodyHash?: string; // NEW: Hash of function body for change detection
   location: {
     start: { line: number; column: number };
     end: { line: number; column: number };
@@ -33,7 +33,12 @@ export interface SymbolInfo {
 }
 
 // Symbol change types
-export type SymbolChangeType = 'added' | 'removed' | 'modified' | 'signature_changed' | 'body_changed';
+export type SymbolChangeType =
+  | 'added'
+  | 'removed'
+  | 'modified'
+  | 'signature_changed'
+  | 'body_changed';
 
 // Symbol delta between commits
 export interface SymbolDelta {
@@ -48,7 +53,7 @@ export interface SymbolDelta {
 // Dependency edge types
 export interface EdgeInfo {
   from: string; // symbol ID
-  to: string;   // symbol ID
+  to: string; // symbol ID
   type: 'imports' | 'calls' | 'extends' | 'implements' | 'uses';
   confidence?: number; // 0.0 to 1.0
   isResolved?: boolean;
@@ -117,7 +122,7 @@ export interface CommitSummary {
 }
 
 // Tree node types for discriminated union
-export type NodeType = "commit" | "file" | "category" | "symbol" | "risk";
+export type NodeType = 'commit' | 'file' | 'category' | 'symbol' | 'risk';
 
 // Tree view item for VS Code UI
 export interface TreeItem extends TreeNodeBase {
@@ -137,8 +142,19 @@ export interface TreeNodeBase {
 }
 
 // Configuration interface
-export type ChangeType = "added" | "modified" | "signature_changed" | "removed" | "renamed" | "moved";
-export type ModReason = "body_changed" | "signature_changed" | "doc_changed" | "visibility_changed" | "annotation_changed";
+export type ChangeType =
+  | 'added'
+  | 'modified'
+  | 'signature_changed'
+  | 'removed'
+  | 'renamed'
+  | 'moved';
+export type ModReason =
+  | 'body_changed'
+  | 'signature_changed'
+  | 'doc_changed'
+  | 'visibility_changed'
+  | 'annotation_changed';
 
 // Analysis Pipeline Types
 export interface CommitMetadata {
@@ -147,8 +163,8 @@ export interface CommitMetadata {
   date: string;
   message: string;
   parent?: string;
-  filesChanged: FileChange[];  // Basic file list from git
-  loadedAt?: string;  // ISO timestamp when loaded
+  filesChanged: FileChange[]; // Basic file list from git
+  loadedAt?: string; // ISO timestamp when loaded
 }
 
 export interface CommitAnalysis {
@@ -166,7 +182,7 @@ export interface CommitAnalysis {
   difftasticHighlights: DifftasticResult[];
   llmSummary?: LLMResponse;
   blastRadius: number;
-  analyzedAt: string;  // ISO timestamp
+  analyzedAt: string; // ISO timestamp
   pipelineVersion?: string;
   promptVersion?: string;
   model?: string;
@@ -176,7 +192,7 @@ export interface AnalysisOptions {
   skipDifftastic?: boolean;
   skipLLM?: boolean;
   skipQdrant?: boolean;
-  forceReanalyze?: boolean;  // Re-analyze even if already analyzed
+  forceReanalyze?: boolean; // Re-analyze even if already analyzed
   promptVersion?: string;
   model?: string;
 }
@@ -225,27 +241,27 @@ export interface ExtensionConfig {
   allowedExtensions?: string[];
   maxFileSize?: number;
   perProjectQdrantCollections?: boolean;
-  
+
   // CST tracking config
   enableCstTracking?: boolean;
   enableCstAugmentation?: boolean;
   cstLanguages?: string[];
-  
+
   // Snapshot cache config
   snapshotCacheEnabled?: boolean;
   snapshotCacheSize?: number;
   snapshotCacheTTL?: number;
-  
+
   // Path filtering config
-  excludedPrefixes?: string[];  // Hardcoded path prefixes to exclude (defaults: out/, dist/, node_modules/, .git/, build/, coverage/)
-  
+  excludedPrefixes?: string[]; // Hardcoded path prefixes to exclude (defaults: out/, dist/, node_modules/, .git/, build/, coverage/)
+
   // Detector thresholds config
   detectorThresholds?: {
-    similarityMin?: number;      // Minimum similarity score (0.0-1.0)
-    confidenceMin?: number;      // Minimum confidence score (0.0-1.0)
-    changeThreshold?: number;    // Minimum change count for significance
-    maxGroupSize?: number;       // Maximum size of groups to process
-    scoreWeight?: number;        // Weight multiplier for scoring
+    similarityMin?: number; // Minimum similarity score (0.0-1.0)
+    confidenceMin?: number; // Minimum confidence score (0.0-1.0)
+    changeThreshold?: number; // Minimum change count for significance
+    maxGroupSize?: number; // Maximum size of groups to process
+    scoreWeight?: number; // Weight multiplier for scoring
   };
 }
 
@@ -299,16 +315,11 @@ export const ContextValues = {
   INITIALIZE_PLACEHOLDER: 'initialize-placeholder',
   ACTIVE_BUNDLE: 'activeBundle',
   SELECTED_COMMITS_GROUP: 'selected-commits-group',
-  RECENT_COMMITS_GROUP: 'recent-commits-group'
+  RECENT_COMMITS_GROUP: 'recent-commits-group',
 } as const;
 
-export type ContextValue = typeof ContextValues[keyof typeof ContextValues];
+export type ContextValue = (typeof ContextValues)[keyof typeof ContextValues];
 
 // Re-export CST fact types
-export type {
-  CstFact,
-  CstFactKind,
-  DeltaChange,
-  HybridFact
-} from './cstFacts';
+export type { CstFact, CstFactKind, DeltaChange, HybridFact } from './cstFacts';
 export { isCstFact, isSymbolInfo } from './cstFacts';

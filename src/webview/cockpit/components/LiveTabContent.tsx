@@ -114,11 +114,12 @@ export const LiveTabContent: React.FC<LiveTabContentProps> = ({ state, vscode })
           </div>
         )}
 
-        {liveAnalysis.isTracking && liveAnalysis.status === 'idle' && liveAnalysis.pendingChanges > 0 && !liveAnalysis.summary && (
-          <div className="cockpit__dim">
-            Edit threshold not yet reached for auto-analysis.
-          </div>
-        )}
+        {liveAnalysis.isTracking &&
+          liveAnalysis.status === 'idle' &&
+          liveAnalysis.pendingChanges > 0 &&
+          !liveAnalysis.summary && (
+            <div className="cockpit__dim">Edit threshold not yet reached for auto-analysis.</div>
+          )}
       </div>
     </div>
   );

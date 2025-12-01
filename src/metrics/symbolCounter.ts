@@ -17,11 +17,13 @@ export interface SymbolMetrics {
 /**
  * Count symbols from a list of symbol objects with status information
  */
-export function countSymbols(symbols: Array<{
-  id: string;
-  type: string;
-  status: 'added' | 'modified' | 'removed';
-}>): SymbolMetrics {
+export function countSymbols(
+  symbols: Array<{
+    id: string;
+    type: string;
+    status: 'added' | 'modified' | 'removed';
+  }>
+): SymbolMetrics {
   const symbolsAdded = symbols.filter(s => s.status === 'added').length;
   const symbolsModified = symbols.filter(s => s.status === 'modified').length;
   const symbolsRemoved = symbols.filter(s => s.status === 'removed').length;
@@ -37,7 +39,7 @@ export function countSymbols(symbols: Array<{
   const symbolsByStatus: Record<string, number> = {
     added: symbolsAdded,
     modified: symbolsModified,
-    removed: symbolsRemoved
+    removed: symbolsRemoved,
   };
 
   return {
@@ -46,7 +48,7 @@ export function countSymbols(symbols: Array<{
     symbolsRemoved,
     totalSymbols,
     symbolsByType,
-    symbolsByStatus
+    symbolsByStatus,
   };
 }
 
@@ -74,7 +76,7 @@ export function countSymbolsFromDiff(diff: {
   const symbolsByStatus: Record<string, number> = {
     added: symbolsAdded,
     modified: symbolsModified,
-    removed: symbolsRemoved
+    removed: symbolsRemoved,
   };
 
   return {
@@ -83,6 +85,6 @@ export function countSymbolsFromDiff(diff: {
     symbolsRemoved,
     totalSymbols,
     symbolsByType,
-    symbolsByStatus
+    symbolsByStatus,
   };
 }

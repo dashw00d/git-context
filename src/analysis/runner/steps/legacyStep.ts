@@ -1,9 +1,10 @@
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+/* eslint-disable no-restricted-syntax */
 import { LegacyDetector } from '../../../facts/legacyAudit';
-import { getCstTimelineManager } from '../../cstTimeline';
-import { getExtensionConfig, isCstOnlyLanguage, detectLanguage } from '../../../utils/config';
 import { isCstFact } from '../../../types/cstFacts';
+import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../../../utils/config';
 import { logDebug } from '../../../utils/logger';
+import { getCstTimelineManager } from '../../cstTimeline';
+import { PipelineState, PipelineStep } from '../pipelineTypes';
 
 export function createLegacyStep(): PipelineStep {
   return {
@@ -21,21 +22,23 @@ export function createLegacyStep(): PipelineStep {
       const legacy = await detector.detect({
         intended: state.intended,
         working: state.working,
-        scope: state.scope
+        scope: state.scope,
       });
 
       // Enhance legacy audit results with timeline context from drift data
       if (state.drift && state.explicitTimeline && legacy.dead.length > 0) {
         for (const deadSym of legacy.dead) {
           // Find corresponding entry in drift.missing
-          const driftEntry = state.drift.missing_symbols.find(d => d.symbol_id === deadSym.symbol_id);
-          
+          const driftEntry = state.drift.missing_symbols.find(
+            d => d.symbol_id === deadSym.symbol_id
+          );
+
           if (driftEntry) {
             // Check for timelineDelta in hybrid drifts (if present)
             const hybridDrift = state.drift.hybridDrifts?.find(
               hd => hd.fact.id === deadSym.symbol_id && hd.timelineDelta
             );
-            
+
             if (hybridDrift?.timelineDelta && hybridDrift.timelineDelta.length > 0) {
               // Find last version where symbol appeared
               const lastDelta = hybridDrift.timelineDelta[hybridDrift.timelineDelta.length - 1];
@@ -46,7 +49,7 @@ export function createLegacyStep(): PipelineStep {
             }
           }
         }
-        
+
         logDebug(`[LegacyStep] Enhanced ${legacy.dead.length} dead symbols with timeline context`);
       }
 
@@ -61,10 +64,14 @@ export function createLegacyStep(): PipelineStep {
 
         // Verify that index_commits and workspace_overlay have completed (hybrid facts should be available)
         if (!state.completedSteps.has('index_commits')) {
-          logDebug(`[LegacyStep] WARNING: index_commits not completed, hybrid facts may be missing`);
+          logDebug(
+            `[LegacyStep] WARNING: index_commits not completed, hybrid facts may be missing`
+          );
         }
         if (state.includeWorkspace && !state.completedSteps.has('workspace_overlay')) {
-          logDebug(`[LegacyStep] WARNING: workspace_overlay not completed, workspace hybrid facts may be missing`);
+          logDebug(
+            `[LegacyStep] WARNING: workspace_overlay not completed, workspace hybrid facts may be missing`
+          );
         }
 
         for (const filePath of scopeFiles) {
@@ -84,19 +91,23 @@ export function createLegacyStep(): PipelineStep {
             } else {
               versionToCheck = state.selectedCommitShas?.[0] || 'HEAD';
             }
-            const facts = await timelineManager.getPriorFacts(filePath, versionToCheck) || [];
-            
+            const facts = (await timelineManager.getPriorFacts(filePath, versionToCheck)) || [];
+
             if (facts.length > 0) {
-              logDebug(`[LegacyStep] Retrieved ${facts.length} hybrid facts for ${filePath}@${versionToCheck}`);
+              logDebug(
+                `[LegacyStep] Retrieved ${facts.length} hybrid facts for ${filePath}@${versionToCheck}`
+              );
             }
-            
+
             // Check for CST facts with long timelines (unchanged = legacy)
             for (const fact of facts) {
               if (isCstFact(fact) && fact.timeline.length > 5) {
                 // Fact has been unchanged for many versions - could be legacy
                 // Note: This is informational, not added to legacy.dead since CST facts
                 // don't have the same "dead code" concept as semantic symbols
-                logDebug(`[LegacyStep] CST fact ${fact.name} has long timeline (${fact.timeline.length} versions)`);
+                logDebug(
+                  `[LegacyStep] CST fact ${fact.name} has long timeline (${fact.timeline.length} versions)`
+                );
               }
             }
           } catch (error) {
@@ -106,6 +117,6 @@ export function createLegacyStep(): PipelineStep {
       }
 
       state.legacy = legacy;
-    }
+    },
   };
 }

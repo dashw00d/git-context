@@ -1,9 +1,8 @@
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+/* eslint-disable no-restricted-syntax */
 import { WorkspaceIndexer } from '../../workspaceIndexer';
+import { PipelineStep, PipelineState } from '../pipelineTypes';
 
-export function createWorkspaceOverlayStep(
-  workspaceIndexer: WorkspaceIndexer
-): PipelineStep {
+export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): PipelineStep {
   return {
     id: 'workspace_overlay',
     label: 'Analyze workspace changes',
@@ -45,8 +44,8 @@ export function createWorkspaceOverlayStep(
 
       state.workspaceFacts = {
         staged: stagedFacts,
-        unstaged: unstagedFacts
+        unstaged: unstagedFacts,
       };
-    }
+    },
   };
 }

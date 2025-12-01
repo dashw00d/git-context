@@ -11,31 +11,27 @@ export const ExpandableSection: React.FC<ExpandableSectionProps> = ({
   title,
   count,
   variant = 'default',
-  children
+  children,
 }) => {
   const [expanded, setExpanded] = React.useState(false);
 
   if (count === 0) return null;
 
-  const variantClass = variant === 'critical' ? 'cockpit__expandable--critical'
-    : variant === 'warning' ? 'cockpit__expandable--warning'
-    : '';
+  const variantClass =
+    variant === 'critical'
+      ? 'cockpit__expandable--critical'
+      : variant === 'warning'
+        ? 'cockpit__expandable--warning'
+        : '';
 
   return (
     <div className={`cockpit__expandable ${variantClass}`}>
-      <button
-        className="cockpit__expandable-header"
-        onClick={() => setExpanded(!expanded)}
-      >
+      <button className="cockpit__expandable-header" onClick={() => setExpanded(!expanded)}>
         <span>{expanded ? '▼' : '▶'}</span>
         <span>{title}</span>
         <span className="cockpit__badge">{count}</span>
       </button>
-      {expanded && (
-        <div className="cockpit__expandable-body">
-          {children}
-        </div>
-      )}
+      {expanded && <div className="cockpit__expandable-body">{children}</div>}
     </div>
   );
 };

@@ -13,7 +13,7 @@ export interface RefactorBundleFacts {
     oldestSha: string;
     newestSha?: string;
     shas: string[];
-    timeline?: string[];  // Explicit timeline chain: newest → oldest
+    timeline?: string[]; // Explicit timeline chain: newest → oldest
     movedLineage?: Array<{
       symbolId: string;
       previousSymbolId: string;

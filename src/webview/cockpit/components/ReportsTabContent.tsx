@@ -15,9 +15,11 @@ export const ReportsTabContent: React.FC<ReportsTabContentProps> = ({
   vscode,
   updateReportsFilterText,
   updateReportsBranchFilter,
-  updateReportsPinned
+  updateReportsPinned,
 }) => {
-  const reportBranches = Array.from(new Set(state.reports.map((r) => r.branch).filter(Boolean))) as string[];
+  const reportBranches = Array.from(
+    new Set(state.reports.map(r => r.branch).filter(Boolean))
+  ) as string[];
 
   return (
     <div className="cockpit__tab-body">
@@ -26,15 +28,15 @@ export const ReportsTabContent: React.FC<ReportsTabContentProps> = ({
           className="cockpit__input"
           placeholder="Filter reports..."
           value={state.reportsFilterText}
-          onChange={(e) => updateReportsFilterText(e.target.value)}
+          onChange={e => updateReportsFilterText(e.target.value)}
         />
         <select
           className="cockpit__input"
           value={state.reportsBranchFilter}
-          onChange={(e) => updateReportsBranchFilter(e.target.value)}
+          onChange={e => updateReportsBranchFilter(e.target.value)}
         >
           <option value="all">All branches</option>
-          {reportBranches.map((branch) => (
+          {reportBranches.map(branch => (
             <option key={branch} value={branch}>
               {branch}
             </option>
@@ -44,7 +46,7 @@ export const ReportsTabContent: React.FC<ReportsTabContentProps> = ({
           <input
             type="checkbox"
             checked={state.reportsShowPinnedOnly}
-            onChange={(e) => updateReportsPinned(e.target.checked)}
+            onChange={e => updateReportsPinned(e.target.checked)}
           />
           <span className="cockpit__dim">Pinned only</span>
         </label>

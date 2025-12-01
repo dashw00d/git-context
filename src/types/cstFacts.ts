@@ -24,12 +24,12 @@ export interface DeltaChange {
  */
 export interface CstFact extends Omit<SymbolInfo, 'kind'> {
   kind: CstFactKind;
-  nodeType: string;  // Tree-sitter node type (e.g., 'heading', 'pair', 'comment')
-  level?: number;   // For headings: depth (1-6)
+  nodeType: string; // Tree-sitter node type (e.g., 'heading', 'pair', 'comment')
+  level?: number; // For headings: depth (1-6)
   bodyShape: string; // Hash of structural shape
   timeline: Array<{
-    version: string;  // Commit SHA or 'workspace'
-    dna: string;      // DNA hash for this version
+    version: string; // Commit SHA or 'workspace'
+    dna: string; // DNA hash for this version
     delta: DeltaChange;
   }>;
 }
@@ -43,7 +43,12 @@ export type HybridFact = SymbolInfo | CstFact;
  * Type guard to check if a fact is a CST fact
  */
 export function isCstFact(fact: HybridFact): fact is CstFact {
-  return fact.kind === 'cst_node' || fact.kind === 'heading' || fact.kind === 'property' || fact.kind === 'doc_comment';
+  return (
+    fact.kind === 'cst_node' ||
+    fact.kind === 'heading' ||
+    fact.kind === 'property' ||
+    fact.kind === 'doc_comment'
+  );
 }
 
 /**
@@ -52,4 +57,3 @@ export function isCstFact(fact: HybridFact): fact is CstFact {
 export function isSymbolInfo(fact: HybridFact): fact is SymbolInfo {
   return !isCstFact(fact);
 }
-

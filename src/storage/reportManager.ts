@@ -1,10 +1,12 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getDatabase } from './database';
-import { RefactorBundleFacts } from '../facts/types';
 import { GitOperations } from '../analysis/git';
+import { RefactorBundleFacts } from '../facts/types';
 import { getGitRoot } from '../utils/config';
+import { logError } from '../utils/logger';
+import { getDatabase } from './database';
+import { prepare } from './statement-wrapper';
 
 export interface SavedReport {
   id: string;
@@ -34,10 +36,11 @@ export class ReportManager {
   save(report: SavedReport): void {
     const db = getDatabase();
     if (!db) {
-      throw new Error('Database not initialized');
+      logError('Database not initialized');
+      return; // Return early instead of throwing
     }
 
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       INSERT OR REPLACE INTO reports (
         id, title, commit_shas, selected_files, workspace_scope,
         created_at, workspace_hash, facts_json, analysis_json,
@@ -76,7 +79,7 @@ export class ReportManager {
       return null;
     }
 
-    const stmt = db.prepare('SELECT * FROM reports WHERE id = ?');
+    const stmt = prepare('SELECT * FROM reports WHERE id = ?');
     const row = stmt.get(id);
 
     if (!row) {
@@ -95,7 +98,7 @@ export class ReportManager {
       return null;
     }
 
-    const stmt = db.prepare('SELECT * FROM reports WHERE fingerprint = ?');
+    const stmt = prepare('SELECT * FROM reports WHERE fingerprint = ?');
     const row = stmt.get(fingerprint);
 
     if (!row) {
@@ -114,8 +117,8 @@ export class ReportManager {
       return [];
     }
 
-    const stmt = db.prepare(`
-      SELECT * FROM reports 
+    const stmt = prepare(`
+      SELECT * FROM reports
       ORDER BY is_pinned DESC, created_at DESC
     `);
     const rows = stmt.all();
@@ -129,10 +132,11 @@ export class ReportManager {
   delete(id: string): void {
     const db = getDatabase();
     if (!db) {
-      throw new Error('Database not initialized');
+      logError('Database not initialized');
+      return; // Return early instead of throwing
     }
 
-    const stmt = db.prepare('DELETE FROM reports WHERE id = ?');
+    const stmt = prepare('DELETE FROM reports WHERE id = ?');
     stmt.run(id);
   }
 
@@ -142,15 +146,17 @@ export class ReportManager {
   togglePin(id: string): void {
     const db = getDatabase();
     if (!db) {
-      throw new Error('Database not initialized');
+      logError('Database not initialized');
+      return; // Return early instead of throwing
     }
 
     const report = this.load(id);
     if (!report) {
-      throw new Error(`Report ${id} not found`);
+      logError(`Report ${id} not found`);
+      return; // Return early instead of throwing
     }
 
-    const stmt = db.prepare('UPDATE reports SET is_pinned = ? WHERE id = ?');
+    const stmt = prepare('UPDATE reports SET is_pinned = ? WHERE id = ?');
     stmt.run(report.isPinned ? 0 : 1, id);
   }
 
@@ -166,7 +172,8 @@ export class ReportManager {
     const git = new GitOperations();
     const gitRoot = getGitRoot();
     if (!gitRoot) {
-      throw new Error('Not in a git repository');
+      logError('Not in a git repository');
+      return ''; // Return empty string instead of throwing
     }
 
     // Get git status output by using getWorkingDirectoryChanges
@@ -177,9 +184,14 @@ export class ReportManager {
 
     for (const change of changes) {
       // Reconstruct status line format: "XY path"
-      const statusCode = change.status === 'A' ? 'A ' :
-        change.status === 'M' ? ' M' :
-          change.status === 'D' ? 'D ' : '??';
+      const statusCode =
+        change.status === 'A'
+          ? 'A '
+          : change.status === 'M'
+            ? ' M'
+            : change.status === 'D'
+              ? 'D '
+              : '??';
       statusLines.push(`${statusCode} ${change.path}`);
 
       const fullPath = path.join(gitRoot, change.path);
@@ -190,7 +202,7 @@ export class ReportManager {
         }
       } catch (error) {
         // Skip files that can't be accessed
-        console.warn(`Failed to stat ${change.path}:`, error);
+        logError(`Failed to stat ${change.path}`, error);
       }
     }
 
@@ -209,9 +221,7 @@ export class ReportManager {
     }
 
     const changes = await git.getWorkingDirectoryChanges();
-    const currentFiles = new Set(
-      changes.map(f => f.path)
-    );
+    const currentFiles = new Set(changes.map(f => f.path));
     const reportFiles = new Set(report.selectedFiles);
 
     // Count files that changed since report creation
@@ -231,7 +241,7 @@ export class ReportManager {
           }
         } catch (error) {
           // Skip files that can't be accessed
-          console.warn(`Failed to check ${filePath}:`, error);
+          logError(`Failed to check ${filePath}`, error);
         }
       }
     }
@@ -261,7 +271,7 @@ export class ReportManager {
       fingerprint: row.fingerprint || undefined,
       pipelineVersion: row.pipeline_version || undefined,
       promptVersion: row.prompt_version || undefined,
-      mode: row.mode || undefined
+      mode: row.mode || undefined,
     };
   }
 }
@@ -275,4 +285,3 @@ export function getReportManager(): ReportManager {
   }
   return reportManager;
 }
-

@@ -1,10 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { SymbolExtractor } from '../analysis/symbols';
 import { DependencyExtractor } from '../analysis/dependencies';
 import { GitOperations } from '../analysis/git';
-import { getGitRoot } from '../utils/config';
+import { SymbolExtractor } from '../analysis/symbols';
 import { SymbolContext, EdgeContext } from '../contracts/llmContext';
+import { getGitRoot } from '../utils/config';
+import { logInfo, logWarn, logError } from '../utils/logger';
 
 export interface WorkingSnapshot {
   symbolsById: Map<string, SymbolContext>;
@@ -22,7 +23,13 @@ export async function getWorkingSnapshot(
 ): Promise<WorkingSnapshot> {
   const gitRoot = getGitRoot();
   if (!gitRoot) {
-    throw new Error('Not in a git repository');
+    logError('Not in a git repository');
+    return {
+      symbolsById: new Map(),
+      symbolsByFile: new Map(),
+      edges: [],
+      analyzedPaths: new Set(),
+    }; // Return empty snapshot instead of throwing
   }
 
   const symbolsById = new Map<string, SymbolContext>();
@@ -42,14 +49,14 @@ export async function getWorkingSnapshot(
 
       // Check if file exists
       if (!fs.existsSync(fullPath)) {
-        console.log(`[WORKING-SNAPSHOT] Skipping non-existent path: ${filePath}`);
+        logInfo(`Skipping non-existent path: ${filePath}`);
         continue;
       }
 
       // Check if it's a file (not a directory)
       const stat = fs.statSync(fullPath);
       if (!stat.isFile()) {
-        console.log(`[WORKING-SNAPSHOT] Skipping non-file (directory or link): ${filePath}`);
+        logInfo(`Skipping non-file (directory or link): ${filePath}`);
         continue;
       }
 
@@ -58,7 +65,7 @@ export async function getWorkingSnapshot(
       let content: string;
       if (liveOverrides && liveOverrides.has(fullPath)) {
         content = liveOverrides.get(fullPath)!;
-        console.log(`[WORKING-SNAPSHOT] Using live content for: ${filePath}`);
+        logInfo(`Using live content for: ${filePath}`);
       } else {
         content = fs.readFileSync(fullPath, 'utf8');
       }
@@ -71,7 +78,9 @@ export async function getWorkingSnapshot(
       for (const symbol of symbols) {
         // Verify symbol ID format matches commit analysis format
         if (!symbol.id || !symbol.id.includes(':')) {
-          console.warn(`Invalid symbol ID format in ${filePath}: ${symbol.id}. Expected format: path:semanticId`);
+          logWarn(
+            `Invalid symbol ID format in ${filePath}: ${symbol.id}. Expected format: path:semanticId`
+          );
           continue;
         }
 
@@ -81,10 +90,12 @@ export async function getWorkingSnapshot(
           name: symbol.name,
           kind: symbol.kind,
           signature: symbol.signature,
-          loc_pre: symbol.location ? {
-            start: { line: symbol.location.start.line, column: symbol.location.start.column },
-            end: { line: symbol.location.end.line, column: symbol.location.end.column }
-          } : undefined
+          loc_pre: symbol.location
+            ? {
+                start: { line: symbol.location.start.line, column: symbol.location.start.column },
+                end: { line: symbol.location.end.line, column: symbol.location.end.column },
+              }
+            : undefined,
         };
 
         symbolsById.set(symbol.id, symbolContext);
@@ -97,18 +108,19 @@ export async function getWorkingSnapshot(
 
       // Extract edges from current file
       const fileEdges = dependencyExtractor.extractDependencies(content, filePath, symbols);
-      edges.push(...fileEdges.map(edge => ({
-        from_symbol_id: edge.from,
-        to_symbol_id: edge.to,
-        edge_type: edge.type,
-        change_type: 'added' as any,
-        confidence: edge.confidence || 1.0,
-        is_resolved: edge.isResolved || true
-      })));
-
+      edges.push(
+        ...fileEdges.map(edge => ({
+          from_symbol_id: edge.from,
+          to_symbol_id: edge.to,
+          edge_type: edge.type,
+          change_type: 'added' as any,
+          confidence: edge.confidence || 1.0,
+          is_resolved: edge.isResolved || true,
+        }))
+      );
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.warn(`[WORKING-SNAPSHOT] Skipped ${filePath}: ${errorMsg}`);
+      logWarn(`Skipped ${filePath}: ${errorMsg}`);
     }
   }
 

@@ -1,11 +1,11 @@
-import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { debounce } from 'lodash';
-import { getGitRoot } from '../utils/config';
+import * as vscode from 'vscode';
+import { GitOperations } from '../analysis/git';
 import { RefactorPipeline } from '../analysis/refactorPipeline';
 import { CockpitOrchestrator } from '../state/cockpitOrchestrator';
-import { GitOperations } from '../analysis/git';
+import { getGitRoot } from '../utils/config';
 import { logError, logDebug } from '../utils/logger';
 
 export class GitCommitWatcher implements vscode.Disposable {
@@ -15,7 +15,7 @@ export class GitCommitWatcher implements vscode.Disposable {
     private pipeline: RefactorPipeline,
     private orchestrator: CockpitOrchestrator,
     private onCommit?: (sha: string) => Promise<void>
-  ) { }
+  ) {}
 
   async start(): Promise<void> {
     const gitRoot = getGitRoot();

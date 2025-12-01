@@ -8,10 +8,10 @@
  * This adapter uses V2 detector for consistency with the pipeline.
  */
 
+import { SymbolContext, EdgeContext } from '../contracts/llmContext';
 import { DriftDetector } from '../facts/driftDetector';
 import { IntendedState } from '../facts/intendedMap';
 import { WorkingSnapshot } from '../facts/workingSnapshot';
-import { SymbolContext, EdgeContext } from '../contracts/llmContext';
 
 export interface IncompletenessMetrics {
   missingSymbols: number;
@@ -28,7 +28,14 @@ export interface IncompletenessMetrics {
  * This calls the same detector used by driftStep.ts in the runner
  */
 export async function detectIncompletenessFromFacts(
-  symbols: Array<{ id: string; zombie?: boolean; status: string; filePath?: string; type?: string; lineNumber?: number }>,
+  symbols: Array<{
+    id: string;
+    zombie?: boolean;
+    status: string;
+    filePath?: string;
+    type?: string;
+    lineNumber?: number;
+  }>,
   edges: Array<{ from: string; to: string; type?: string; confidence?: number }>
 ): Promise<IncompletenessMetrics> {
   // Transform test data to IntendedState and WorkingSnapshot format
@@ -47,13 +54,16 @@ export async function detectIncompletenessFromFacts(
       name: key.split('.').pop() || key,
       kind: (symbol.type as any) || 'function',
       signature: '',
-      loc_post: { start: { line: symbol.lineNumber || 0, column: 0 }, end: { line: symbol.lineNumber || 0, column: 0 } }
+      loc_post: {
+        start: { line: symbol.lineNumber || 0, column: 0 },
+        end: { line: symbol.lineNumber || 0, column: 0 },
+      },
     };
 
     if (symbol.status === 'added' || symbol.status === 'modified') {
       intended.set(key, {
         expect: 'present',
-        lastSha: 'test-sha'
+        lastSha: 'test-sha',
       });
       workingSymbols.set(key, symbolContext);
 
@@ -64,7 +74,7 @@ export async function detectIncompletenessFromFacts(
     } else if (symbol.status === 'removed') {
       intended.set(key, {
         expect: 'absent',
-        lastSha: 'test-sha'
+        lastSha: 'test-sha',
       });
     }
 
@@ -72,7 +82,7 @@ export async function detectIncompletenessFromFacts(
     if (symbol.zombie === true) {
       intended.set(key, {
         expect: 'absent',
-        lastSha: 'test-sha'
+        lastSha: 'test-sha',
       });
       workingSymbols.set(key, symbolContext);
 
@@ -93,9 +103,9 @@ export async function detectIncompletenessFromFacts(
       edge_type: (e.type || 'calls') as any,
       confidence: e.confidence || 1.0,
       change_type: 'added' as const,
-      is_resolved: true
+      is_resolved: true,
     })) as EdgeContext[],
-    analyzedPaths: new Set(Array.from(workingSymbolsByFile.keys()))
+    analyzedPaths: new Set(Array.from(workingSymbolsByFile.keys())),
   };
 
   // Use V2 detector with BaseDetector enhancements (same as driftStep.ts)
@@ -103,7 +113,7 @@ export async function detectIncompletenessFromFacts(
   const driftFindings = await driftDetector.detect({
     intended,
     working,
-    commitShas: undefined // Test data doesn't have commit SHAs
+    commitShas: undefined, // Test data doesn't have commit SHAs
   });
 
   // Transform drift findings to test metrics
@@ -124,7 +134,8 @@ export async function detectIncompletenessFromFacts(
   const incompleteMigrations = detectIncompleteMigrations(symbols, edges);
 
   // Calculate migration progress
-  const migrationProgress = symbols.filter(s => s.status === 'added').length / Math.max(1, symbols.length);
+  const migrationProgress =
+    symbols.filter(s => s.status === 'added').length / Math.max(1, symbols.length);
 
   // Detect dead symbols (defined but never referenced)
   const referencedSymbols = new Set<string>();
@@ -143,7 +154,7 @@ export async function detectIncompletenessFromFacts(
     incompleteMigrations,
     migrationProgress,
     deadSymbols,
-    suggestedConsolidations
+    suggestedConsolidations,
   };
 }
 
@@ -159,24 +170,18 @@ function detectIncompleteMigrations(
   const migrationPatterns = [
     { old: 'V1', new: 'V2' },
     { old: 'Legacy', new: 'New' },
-    { old: 'Old', new: 'New' }
+    { old: 'Old', new: 'New' },
   ];
 
   let incompleteCount = 0;
 
   for (const pattern of migrationPatterns) {
-    const oldSymbols = symbols.filter(s =>
-      s.id.includes(pattern.old) && s.status === 'modified'
-    );
-    const newSymbols = symbols.filter(s =>
-      s.id.includes(pattern.new) && s.status === 'added'
-    );
+    const oldSymbols = symbols.filter(s => s.id.includes(pattern.old) && s.status === 'modified');
+    const newSymbols = symbols.filter(s => s.id.includes(pattern.new) && s.status === 'added');
 
     if (oldSymbols.length > 0 && newSymbols.length > 0) {
       // Check if old symbols are still being used
-      const stillUsed = oldSymbols.some(oldSym =>
-        edges.some((edge: any) => edge.to === oldSym.id)
-      );
+      const stillUsed = oldSymbols.some(oldSym => edges.some((edge: any) => edge.to === oldSym.id));
 
       if (stillUsed) {
         incompleteCount++;
@@ -191,7 +196,9 @@ function detectIncompleteMigrations(
  * Test-specific helper: Detect suggested consolidations
  * NOTE: This is a simplified heuristic for test metrics.
  */
-function detectSuggestedConsolidations(symbols: Array<{ id: string; zombie?: boolean; status: string }>): number {
+function detectSuggestedConsolidations(
+  symbols: Array<{ id: string; zombie?: boolean; status: string }>
+): number {
   // Count divergent symbol groups that could be consolidated
   const nameGroups = new Map<string, any[]>();
 
@@ -213,6 +220,3 @@ function detectSuggestedConsolidations(symbols: Array<{ id: string; zombie?: boo
 
   return consolidationCount;
 }
-
-
-

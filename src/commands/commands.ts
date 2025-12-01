@@ -1,18 +1,19 @@
-import * as path from 'path';
 import { spawn } from 'child_process';
+import * as path from 'path';
 import * as vscode from 'vscode';
-import { logInfo, logError } from '../utils/logger';
-import { CommitsProvider } from '../providers/commitsProvider';
+import { ContextExporter } from '../analysis/contextExporter';
+import { GitOperations } from '../analysis/git';
+import { refreshCockpitState, updateContexts } from '../core/stateUpdaters';
 import { ActiveBundleProvider } from '../providers/activeBundleProvider';
+import { CommitsProvider } from '../providers/commitsProvider';
 import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
 import { getReportService } from '../services/reportService';
-import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
-import { updateContexts, refreshCockpitState } from '../core/stateUpdaters';
 import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
-import { makeWorkspaceSha, parseWorkspaceSha, isWorkspaceSha } from '../utils/workspace';
-import { GitOperations } from '../analysis/git';
-import { ContextExporter } from '../analysis/contextExporter';
 import { getStore } from '../state/store';
+import { prepare } from '../storage/statement-wrapper';
+import { logError, logInfo } from '../utils/logger';
+import { isWorkspaceSha, makeWorkspaceSha, parseWorkspaceSha } from '../utils/workspace';
+import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
 
 export async function registerCommands(
   context: vscode.ExtensionContext,
@@ -31,70 +32,90 @@ export async function registerCommands(
       async (countArg?: string) => {
         const { getExtensionConfig } = await import('../utils/config');
         const config = getExtensionConfig();
-        const count = countArg || await vscode.window.showInputBox({
-          prompt: 'Number of commits to analyze',
-          value: config.defaultCommitCount.toString(),
-          validateInput: (value) => {
-            const num = parseInt(value);
-            if (isNaN(num) || num <= 0) {
-              return 'Please enter a positive number';
-            }
-            return undefined;
-          }
-        });
+        const count =
+          countArg ||
+          (await vscode.window.showInputBox({
+            prompt: 'Number of commits to analyze',
+            value: config.defaultCommitCount.toString(),
+            validateInput: value => {
+              const num = parseInt(value);
+              if (isNaN(num) || num <= 0) {
+                return 'Please enter a positive number';
+              }
+              return undefined;
+            },
+          }));
 
         if (count) {
-          vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'Analyzing commits...',
-            cancellable: true
-          }, async (progress, token) => {
-            try {
-              await commitsProvider.initializeDatabase();
-              const { getRefactorPipeline } = await import('../services/pipelineFactory');
-              const pipeline = await getRefactorPipeline();
-              const git = new GitOperations();
-              const commits = await git.getRecentCommits(parseInt(count));
-              const shas = commits.map(c => c.sha);
+          vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: 'Analyzing commits...',
+              cancellable: true,
+            },
+            async (progress, token) => {
+              try {
+                await commitsProvider.initializeDatabase();
+                const { getRefactorPipeline } = await import('../services/pipelineFactory');
+                const pipeline = await getRefactorPipeline();
+                const git = new GitOperations();
+                const commits = await git.getRecentCommits(parseInt(count));
+                const shas = commits.map(c => c.sha);
 
-              // Report progress
-              progress.report({ increment: 0, message: `Analyzing ${shas.length} commits...` });
+                // Report progress
+                progress.report({
+                  increment: 0,
+                  message: `Analyzing ${shas.length} commits...`,
+                });
 
-              // Check for cancellation
-              if (token.isCancellationRequested) {
-                return;
+                // Check for cancellation
+                if (token.isCancellationRequested) {
+                  return;
+                }
+
+                // Just index commits (quick metadata load)
+                progress.report({
+                  increment: 25,
+                  message: 'Indexing commits...',
+                });
+                if (token.isCancellationRequested) return;
+
+                await pipeline.indexCommits(shas);
+
+                // Refresh UI to show indexed commits
+                progress.report({ increment: 50, message: 'Refreshing UI...' });
+                if (token.isCancellationRequested) return;
+
+                // Auto-select the indexed commits
+                store.dispatch({ type: 'SELECTION_SET', payload: { shas } });
+                await updateContexts();
+
+                await commitsProvider.refresh();
+                await refreshCockpitState(
+                  orchestrator,
+                  {
+                    commitsProvider,
+                    activeBundleProvider,
+                    symbolHistoryProvider: symbolHistory,
+                  },
+                  'command:analyzeLastCommits'
+                );
+
+                progress.report({
+                  increment: 100,
+                  message: 'Starting analysis...',
+                });
+                vscode.window.showInformationMessage(
+                  `Indexed ${shas.length} commits. Starting analysis...`
+                );
+
+                // Trigger analysis
+                await vscode.commands.executeCommand('git-context.analyze');
+              } catch (error) {
+                vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
               }
-
-              // Just index commits (quick metadata load)
-              progress.report({ increment: 25, message: 'Indexing commits...' });
-              if (token.isCancellationRequested) return;
-
-              await pipeline.indexCommits(shas);
-
-              // Refresh UI to show indexed commits
-              progress.report({ increment: 50, message: 'Refreshing UI...' });
-              if (token.isCancellationRequested) return;
-
-              // Auto-select the indexed commits
-              store.dispatch({ type: 'SELECTION_SET', payload: { shas } });
-              await updateContexts();
-
-              await commitsProvider.refresh();
-              await refreshCockpitState(orchestrator, {
-                commitsProvider,
-                activeBundleProvider,
-                symbolHistoryProvider: symbolHistory
-              }, 'command:analyzeLastCommits');
-
-              progress.report({ increment: 100, message: 'Starting analysis...' });
-              vscode.window.showInformationMessage(`Indexed ${shas.length} commits. Starting analysis...`);
-
-              // Trigger analysis
-              await vscode.commands.executeCommand('git-context.analyze');
-            } catch (error) {
-              vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
             }
-          });
+          );
         }
       }
     );
@@ -115,7 +136,10 @@ export async function registerCommands(
           }
 
           // Select all staged files
-          store.dispatch({ type: 'STAGED_SELECTION_UPDATED', payload: { paths: stagedPaths } });
+          store.dispatch({
+            type: 'STAGED_SELECTION_UPDATED',
+            payload: { paths: stagedPaths },
+          });
           await updateContexts();
 
           // Trigger full analysis
@@ -141,7 +165,10 @@ export async function registerCommands(
           }
 
           // Select all unstaged files
-          store.dispatch({ type: 'UNSTAGED_SELECTION_UPDATED', payload: { paths: unstagedPaths } });
+          store.dispatch({
+            type: 'UNSTAGED_SELECTION_UPDATED',
+            payload: { paths: unstagedPaths },
+          });
           await updateContexts();
 
           // Trigger full analysis
@@ -180,7 +207,7 @@ export async function registerCommands(
     const toggleCommitSelectionCmd = vscode.commands.registerCommand(
       'git-context.toggleCommitSelection',
       async (shaOrItem: string | any) => {
-        const sha = typeof shaOrItem === 'string' ? shaOrItem : (shaOrItem?.id || shaOrItem?.sha);
+        const sha = typeof shaOrItem === 'string' ? shaOrItem : shaOrItem?.id || shaOrItem?.sha;
         if (sha) {
           // Update store state instead of provider
           const state = store.getState();
@@ -190,16 +217,19 @@ export async function registerCommands(
           } else {
             selected.add(sha);
           }
-          store.dispatch({ type: 'SELECTION_SET', payload: { shas: Array.from(selected) } });
+          store.dispatch({
+            type: 'SELECTION_SET',
+            payload: { shas: Array.from(selected) },
+          });
           await updateContexts();
         }
       }
     );
 
-      // Clear selection (Cockpit)
-      const clearSelectionCmd = vscode.commands.registerCommand(
-        'git-context.clearSelection',
-        async () => {
+    // Clear selection (Cockpit)
+    const clearSelectionCmd = vscode.commands.registerCommand(
+      'git-context.clearSelection',
+      async () => {
         store.dispatch({ type: 'SELECTION_CLEARED' });
         await updateContexts();
       }
@@ -234,7 +264,9 @@ export async function registerCommands(
                 editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
               }
             } else {
-              vscode.window.showInformationMessage(`Evidence refers to ${filePath} (not found on disk)`);
+              vscode.window.showInformationMessage(
+                `Evidence refers to ${filePath} (not found on disk)`
+              );
             }
           } else {
             const uri = vscode.Uri.parse(`evidence:${jsonPath}`);
@@ -255,7 +287,6 @@ export async function registerCommands(
         vscode.window.showInformationMessage(`Copied SHA: ${sha.substring(0, 8)}`);
       }
     );
-
 
     // Main analyze command (Cockpit)
     const analyzeCmd = vscode.commands.registerCommand(
@@ -286,17 +317,29 @@ export async function registerCommands(
           const workspaceRequests = new Map<'staged' | 'unstaged', WorkspaceRequest>();
 
           if (state.selectedStagedPaths.length > 0) {
-            workspaceRequests.set('staged', { sha: undefined, fromPaths: true });
+            workspaceRequests.set('staged', {
+              sha: undefined,
+              fromPaths: true,
+            });
           }
           if (state.selectedUnstagedPaths.length > 0) {
-            workspaceRequests.set('unstaged', { sha: undefined, fromPaths: true });
+            workspaceRequests.set('unstaged', {
+              sha: undefined,
+              fromPaths: true,
+            });
           }
 
           for (const sha of Array.from(selected).filter(isWorkspaceSha)) {
             const parsed = parseWorkspaceSha(sha);
             if (parsed) {
-              const existing = workspaceRequests.get(parsed.mode) || { sha: undefined, fromPaths: false };
-              workspaceRequests.set(parsed.mode, { sha, fromPaths: existing.fromPaths });
+              const existing = workspaceRequests.get(parsed.mode) || {
+                sha: undefined,
+                fromPaths: false,
+              };
+              workspaceRequests.set(parsed.mode, {
+                sha,
+                fromPaths: existing.fromPaths,
+              });
             }
           }
 
@@ -317,9 +360,8 @@ export async function registerCommands(
             // Check if there are actually files to analyze for this workspace mode
             const { GitOperations } = await import('../analysis/git');
             const git = new GitOperations();
-            const files = mode === 'staged'
-              ? await git.getStagedFiles()
-              : await git.getUnstagedFiles();
+            const files =
+              mode === 'staged' ? await git.getStagedFiles() : await git.getUnstagedFiles();
 
             if (files.length > 0) {
               selected.add(request.sha!);
@@ -330,7 +372,9 @@ export async function registerCommands(
 
           const shas = Array.from(selected);
           if (shas.length === 0) {
-            vscode.window.showWarningMessage('Please select commits or workspace changes to analyze.');
+            vscode.window.showWarningMessage(
+              'Please select commits or workspace changes to analyze.'
+            );
             return;
           }
 
@@ -351,7 +395,12 @@ export async function registerCommands(
               try {
                 const headSha = await git.getHeadSha();
                 if (!shas.includes(headSha)) {
-                  logInfo(`[Auto-include] Adding HEAD (${headSha.substring(0, 8)}) to selection (${estFiles} files < 10 threshold)`);
+                  logInfo(
+                    `[Auto-include] Adding HEAD (${headSha.substring(
+                      0,
+                      8
+                    )}) to selection (${estFiles} files < 10 threshold)`
+                  );
                   shas.push(headSha);
                 }
               } catch (error) {
@@ -363,27 +412,44 @@ export async function registerCommands(
           const cancellationTokenSource = new vscode.CancellationTokenSource();
           try {
             const reportService = await getReportService();
-            await reportService.generateReport(
-              shas,
-              'full',
-              { force: forceReanalyze, cancellationToken: cancellationTokenSource.token }
-            );
+            await reportService.generateReport(shas, 'full', {
+              force: forceReanalyze,
+              cancellationToken: cancellationTokenSource.token,
+            });
             await updateContexts();
-            await refreshCockpitState(orchestrator, {
-              commitsProvider,
-              activeBundleProvider,
-              symbolHistoryProvider: symbolHistory
-            }, 'command:analyze');
+            await refreshCockpitState(
+              orchestrator,
+              {
+                commitsProvider,
+                activeBundleProvider,
+                symbolHistoryProvider: symbolHistory,
+              },
+              'command:analyze'
+            );
           } finally {
             await commitsProvider.refresh();
           }
         } catch (error) {
           // Update UI state on error
-          store.dispatch({ type: 'ANALYSIS_FAILED', payload: { error: error instanceof Error ? error.message : String(error) } });
-          vscode.window.showErrorMessage(`Failed to analyze selection: ${error instanceof Error ? error.message : String(error)}`);
+          store.dispatch({
+            type: 'ANALYSIS_FAILED',
+            payload: {
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
+          vscode.window.showErrorMessage(
+            `Failed to analyze selection: ${error instanceof Error ? error.message : String(error)}`
+          );
         } finally {
           // Ensure UI state is reset
-          store.dispatch({ type: 'ANALYSIS_PROGRESS_UPDATED', payload: { isAnalyzing: false, step: undefined, progress: undefined } });
+          store.dispatch({
+            type: 'ANALYSIS_PROGRESS_UPDATED',
+            payload: {
+              isAnalyzing: false,
+              step: undefined,
+              progress: undefined,
+            },
+          });
         }
       }
     );
@@ -434,7 +500,7 @@ export async function registerCommands(
           await refreshCockpitState(orchestrator, {
             commitsProvider,
             activeBundleProvider,
-            symbolHistoryProvider: symbolHistory
+            symbolHistoryProvider: symbolHistory,
           });
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to delete report: ${error}`);
@@ -456,7 +522,7 @@ export async function registerCommands(
             await refreshCockpitState(orchestrator, {
               commitsProvider,
               activeBundleProvider,
-              symbolHistoryProvider: symbolHistory
+              symbolHistoryProvider: symbolHistory,
             });
           }
         } catch (error) {
@@ -490,7 +556,10 @@ export async function registerCommands(
             const state = store.getState();
             const selected = new Set(state.selectedCommitShas);
             selected.add(sha);
-            store.dispatch({ type: 'SELECTION_SET', payload: { shas: Array.from(selected) } });
+            store.dispatch({
+              type: 'SELECTION_SET',
+              payload: { shas: Array.from(selected) },
+            });
             await updateContexts();
           }
         } catch (error) {
@@ -505,7 +574,10 @@ export async function registerCommands(
       async () => {
         const state = store.getState();
         const stagedPaths = state.stagedFiles.map(f => f.path);
-        store.dispatch({ type: 'STAGED_SELECTION_UPDATED', payload: { paths: stagedPaths } });
+        store.dispatch({
+          type: 'STAGED_SELECTION_UPDATED',
+          payload: { paths: stagedPaths },
+        });
       }
     );
 
@@ -515,7 +587,10 @@ export async function registerCommands(
       async () => {
         const state = store.getState();
         const unstagedPaths = state.unstagedFiles.map(f => f.path);
-        store.dispatch({ type: 'UNSTAGED_SELECTION_UPDATED', payload: { paths: unstagedPaths } });
+        store.dispatch({
+          type: 'UNSTAGED_SELECTION_UPDATED',
+          payload: { paths: unstagedPaths },
+        });
       }
     );
 
@@ -529,7 +604,7 @@ export async function registerCommands(
           await refreshCockpitState(orchestrator, {
             commitsProvider,
             activeBundleProvider,
-            symbolHistoryProvider: symbolHistory
+            symbolHistoryProvider: symbolHistory,
           });
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to load more commits: ${error}`);
@@ -538,20 +613,17 @@ export async function registerCommands(
     );
 
     // Reset all (Cockpit)
-    const resetAllCmd = vscode.commands.registerCommand(
-      'git-context.resetAll',
-      async () => {
-        store.dispatch({ type: 'SELECTION_CLEARED' });
-        store.dispatch({ type: 'BUNDLE_CLEARED' });
-        commitsProvider.loadMoreOffset = 0;
-        await updateContexts();
-        await refreshCockpitState(orchestrator, {
-          commitsProvider,
-          activeBundleProvider,
-          symbolHistoryProvider: symbolHistory
-        });
-      }
-    );
+    const resetAllCmd = vscode.commands.registerCommand('git-context.resetAll', async () => {
+      store.dispatch({ type: 'SELECTION_CLEARED' });
+      store.dispatch({ type: 'BUNDLE_CLEARED' });
+      commitsProvider.loadMoreOffset = 0;
+      await updateContexts();
+      await refreshCockpitState(orchestrator, {
+        commitsProvider,
+        activeBundleProvider,
+        symbolHistoryProvider: symbolHistory,
+      });
+    });
 
     // Bundle regenerate (Cockpit)
     const bundleRegenerateCmd = vscode.commands.registerCommand(
@@ -562,14 +634,11 @@ export async function registerCommands(
     );
 
     // Bundle clear (Cockpit)
-    const bundleClearCmd = vscode.commands.registerCommand(
-      'git-context.bundle.clear',
-      async () => {
-        store.dispatch({ type: 'BUNDLE_CLEARED' });
-        // Clear bundle state (provider method may not exist, that's ok)
-        await updateContexts();
-      }
-    );
+    const bundleClearCmd = vscode.commands.registerCommand('git-context.bundle.clear', async () => {
+      store.dispatch({ type: 'BUNDLE_CLEARED' });
+      // Clear bundle state (provider method may not exist, that's ok)
+      await updateContexts();
+    });
 
     // Bundle cancel (Cockpit)
     const bundleCancelCmd = vscode.commands.registerCommand(
@@ -592,7 +661,7 @@ export async function registerCommands(
         try {
           const filePath = await vscode.window.showSaveDialog({
             defaultUri: vscode.Uri.file('bundle-facts.json'),
-            filters: { 'JSON files': ['json'], 'All files': ['*'] }
+            filters: { 'JSON files': ['json'], 'All files': ['*'] },
           });
           if (filePath) {
             const fs = await import('fs');
@@ -613,7 +682,9 @@ export async function registerCommands(
         const shas = state.bundleFacts?.bundle.shas || state.selectedCommitShas;
 
         if (!shas || shas.length === 0) {
-          vscode.window.showWarningMessage('Select commits or generate a bundle before exporting context.');
+          vscode.window.showWarningMessage(
+            'Select commits or generate a bundle before exporting context.'
+          );
           return;
         }
 
@@ -625,12 +696,14 @@ export async function registerCommands(
             return;
           }
 
-          const defaultUri = vscode.Uri.file(path.join(gitRoot, '.git', 'commit-tracker', 'commit-context.json'));
+          const defaultUri = vscode.Uri.file(
+            path.join(gitRoot, '.git', 'commit-tracker', 'commit-context.json')
+          );
 
           const target = await vscode.window.showSaveDialog({
             defaultUri,
             filters: { 'JSON files': ['json'], 'All files': ['*'] },
-            saveLabel: 'Export Context'
+            saveLabel: 'Export Context',
           });
 
           if (!target) {
@@ -640,7 +713,9 @@ export async function registerCommands(
           const outputPath = await exporter.exportToFile(shas, target.fsPath);
           vscode.window.showInformationMessage(`Context exported to ${outputPath}`);
         } catch (error) {
-          vscode.window.showErrorMessage(`Failed to export context: ${error instanceof Error ? error.message : String(error)}`);
+          vscode.window.showErrorMessage(
+            `Failed to export context: ${error instanceof Error ? error.message : String(error)}`
+          );
         }
       }
     );
@@ -661,8 +736,7 @@ export async function registerCommands(
         try {
           // Show symbol history in a new document
           const { getDatabaseManager } = await import('../storage/database');
-          const db = getDatabaseManager().getDatabase();
-          const history = db.prepare(`
+          const history = prepare(`
             SELECT sha, name, path, change_type, diff_snippet_post
             FROM symbols
             WHERE symbol_id = ?
@@ -670,11 +744,19 @@ export async function registerCommands(
             LIMIT 20
           `).all(symbolId);
 
-          const content = `# Symbol History: ${symbolId}\n\n${history.map((h: any) =>
-            `## ${h.sha.substring(0, 8)} - ${h.change_type}\n\`\`\`\n${h.diff_snippet_post || 'N/A'}\n\`\`\`\n`
-          ).join('\n')}`;
+          const content = `# Symbol History: ${symbolId}\n\n${history
+            .map(
+              (h: any) =>
+                `## ${h.sha.substring(0, 8)} - ${h.change_type}\n\`\`\`\n${
+                  h.diff_snippet_post || 'N/A'
+                }\n\`\`\`\n`
+            )
+            .join('\n')}`;
 
-          const doc = await vscode.workspace.openTextDocument({ content, language: 'markdown' });
+          const doc = await vscode.workspace.openTextDocument({
+            content,
+            language: 'markdown',
+          });
           await vscode.window.showTextDocument(doc);
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to show symbol history: ${error}`);
@@ -687,44 +769,54 @@ export async function registerCommands(
       'git-context.downloadWasmFiles',
       async () => {
         try {
-          await vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'Downloading required WASM files...',
-            cancellable: false
-          }, async (progress) => {
-            return new Promise<void>((resolve, reject) => {
-              const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'download-wasm.js');
-              const nodeProcess = spawn('node', [scriptPath], {
-                cwd: path.join(__dirname, '..', '..'),
-                stdio: 'pipe'
-              });
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: 'Downloading required WASM files...',
+              cancellable: false,
+            },
+            async progress => {
+              return new Promise<void>((resolve, reject) => {
+                const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'download-wasm.js');
+                const nodeProcess = spawn('node', [scriptPath], {
+                  cwd: path.join(__dirname, '..', '..'),
+                  stdio: 'pipe',
+                });
 
-              let output = '';
-              nodeProcess.stdout.on('data', (data: Buffer) => {
-                output += data.toString();
-                const lines = data.toString().split('\n').filter((l: string) => l.trim());
-                lines.forEach((line: string) => {
-                  if (line.includes('Downloading') || line.includes('Downloaded') || line.includes('%')) {
-                    progress.report({ message: line });
+                let output = '';
+                nodeProcess.stdout.on('data', (data: Buffer) => {
+                  output += data.toString();
+                  const lines = data
+                    .toString()
+                    .split('\n')
+                    .filter((l: string) => l.trim());
+                  lines.forEach((line: string) => {
+                    if (
+                      line.includes('Downloading') ||
+                      line.includes('Downloaded') ||
+                      line.includes('%')
+                    ) {
+                      progress.report({ message: line });
+                    }
+                  });
+                });
+
+                nodeProcess.stderr.on('data', (data: Buffer) => {
+                  output += data.toString();
+                });
+
+                nodeProcess.on('close', (code: number) => {
+                  if (code === 0) {
+                    vscode.window.showInformationMessage('WASM files downloaded successfully!');
+                    resolve();
+                  } else {
+                    vscode.window.showErrorMessage(`Failed to download WASM files: ${output}`);
+                    reject(new Error(`Process exited with code ${code}`));
                   }
                 });
               });
-
-              nodeProcess.stderr.on('data', (data: Buffer) => {
-                output += data.toString();
-              });
-
-              nodeProcess.on('close', (code: number) => {
-                if (code === 0) {
-                  vscode.window.showInformationMessage('WASM files downloaded successfully!');
-                  resolve();
-                } else {
-                  vscode.window.showErrorMessage(`Failed to download WASM files: ${output}`);
-                  reject(new Error(`Process exited with code ${code}`));
-                }
-              });
-            });
-          });
+            }
+          );
         } catch (error) {
           logError('Failed to download WASM files:', error);
           vscode.window.showErrorMessage(`Failed to download WASM files: ${error}`);
@@ -739,20 +831,29 @@ export async function registerCommands(
         try {
           const liveEngine = (orchestrator as any).liveEngine;
           if (!liveEngine) {
-            vscode.window.showWarningMessage('Live analysis engine not available. Please reload the window.');
+            vscode.window.showWarningMessage(
+              'Live analysis engine not available. Please reload the window.'
+            );
             return;
           }
 
-          await vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'Generating live analysis report...',
-            cancellable: false
-          }, async () => {
-            await liveEngine.analyze();
-          });
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: 'Generating live analysis report...',
+              cancellable: false,
+            },
+            async () => {
+              await liveEngine.analyze();
+            }
+          );
         } catch (error) {
           logError('Failed to generate live report', error);
-          vscode.window.showErrorMessage(`Failed to generate live report: ${error instanceof Error ? error.message : String(error)}`);
+          vscode.window.showErrorMessage(
+            `Failed to generate live report: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
         }
       }
     );

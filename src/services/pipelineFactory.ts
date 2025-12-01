@@ -1,17 +1,17 @@
-import { RefactorPipeline } from '../analysis/refactorPipeline';
-import { CommitIndexer } from '../analysis/commitIndexer';
-import { WorkspaceIndexer } from '../analysis/workspaceIndexer';
-import { EmbeddingIndexer } from '../analysis/embeddingIndexer';
 import { BundleStoryEngine } from '../analysis/bundleStoryEngine';
+import { CommitIndexer } from '../analysis/commitIndexer';
+import { DependencyExtractor } from '../analysis/dependencies';
+import { EmbeddingIndexer } from '../analysis/embeddingIndexer';
+import { GitOperations } from '../analysis/git';
+import { RiskDetector } from '../analysis/heuristics';
+import { HotspotDetectorV2 } from '../analysis/hotspotDetector';
+import { LlmAnalyst } from '../analysis/llmAnalyst/runner';
+import { MovedBlockDetectorV2 } from '../analysis/movedBlockDetector';
+import { RefactorPipeline } from '../analysis/refactorPipeline';
 import { SnapshotManager } from '../analysis/snapshotManager';
 import { StructuralDiffManager } from '../analysis/structuralDiffManager';
 import { SymbolExtractor } from '../analysis/symbols';
-import { DependencyExtractor } from '../analysis/dependencies';
-import { RiskDetector } from '../analysis/heuristics';
-import { HotspotDetectorV2 } from '../analysis/hotspotDetector';
-import { MovedBlockDetectorV2 } from '../analysis/movedBlockDetector';
-import { LlmAnalyst } from '../analysis/llmAnalyst/runner';
-import { GitOperations } from '../analysis/git';
+import { WorkspaceIndexer } from '../analysis/workspaceIndexer';
 import { getDatabaseManager } from '../storage/database';
 
 export class PipelineFactory {

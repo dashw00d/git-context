@@ -8,11 +8,15 @@ export class MermaidGenerator {
   /**
    * Generate Mermaid graph from edges and symbols
    */
-  generateGraph(edges: EdgeInfo[], symbols: SymbolInfo[], options: {
-    maxNodes?: number;
-    showConfidence?: boolean;
-    highlightChanged?: string[];
-  } = {}): string {
+  generateGraph(
+    edges: EdgeInfo[],
+    symbols: SymbolInfo[],
+    options: {
+      maxNodes?: number;
+      showConfidence?: boolean;
+      highlightChanged?: string[];
+    } = {}
+  ): string {
     const { maxNodes = 50, showConfidence = false, highlightChanged = [] } = options;
 
     // Filter to most relevant edges
@@ -28,7 +32,9 @@ export class MermaidGenerator {
 
       const label = this.getEdgeLabel(edge, showConfidence);
 
-      edgeDefinitions.push(`${this.formatNodeId(edge.from)} -->|"${label}"| ${this.formatNodeId(edge.to)}`);
+      edgeDefinitions.push(
+        `${this.formatNodeId(edge.from)} -->|"${label}"| ${this.formatNodeId(edge.to)}`
+      );
     }
 
     // Generate Mermaid code

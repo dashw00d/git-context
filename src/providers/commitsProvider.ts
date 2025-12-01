@@ -1,32 +1,36 @@
 import * as vscode from 'vscode';
-import { ActiveBundleProvider } from './activeBundleProvider';
 import { GitOperations } from '../analysis/git';
-import { BranchManager } from '../storage/branchManager';
-import { makeWorkspaceSha, isWorkspaceSha } from '../utils/workspace';
 import { getStore } from '../state/store';
-
+import { BranchManager } from '../storage/branchManager';
+import { logError, logInfo, logWarn } from '../utils/logger';
+import { isWorkspaceSha, makeWorkspaceSha } from '../utils/workspace';
+import { ActiveBundleProvider } from './activeBundleProvider';
 
 export class CommitsProvider {
   private git: GitOperations | null = null;
   private branchManager: BranchManager;
   private currentBranch: string | null = null;
 
-
-
   public workspaceScope: 'workspace' | 'staged' | 'unstaged' = 'workspace';
   public loadMoreOffset = 0;
   public manualCommits: Set<string>;
-  public runningTask: { cancel: () => void; token: vscode.CancellationToken } | null = null;
+  public runningTask: {
+    cancel: () => void;
+    token: vscode.CancellationToken;
+  } | null = null;
   public PAGE_SIZE = 50;
 
-  constructor(private context: vscode.ExtensionContext, private activeBundleProvider: ActiveBundleProvider) {
+  constructor(
+    private context: vscode.ExtensionContext,
+    private activeBundleProvider: ActiveBundleProvider
+  ) {
     this.branchManager = new BranchManager();
     // Initialize git lazily in async methods
     this.git = null;
     this.currentBranch = null;
-    this.manualCommits = new Set(context.workspaceState.get<string[]>('commit-tracker.manualCommits', []));
-
-
+    this.manualCommits = new Set(
+      context.workspaceState.get<string[]>('commit-tracker.manualCommits', [])
+    );
 
     this.workspaceScope = context.workspaceState.get('workspaceScope', 'workspace');
     this.loadMoreOffset = context.workspaceState.get('loadMoreOffset', 0);
@@ -37,7 +41,6 @@ export class CommitsProvider {
     // TreeView removed - no event firing needed
   }
 
-
   private async updateBranchCursor() {
     if (this.git) {
       try {
@@ -47,11 +50,6 @@ export class CommitsProvider {
       }
     }
   }
-
-
-
-
-
 
   // Methods for compatibility with commands.ts
   async initializeDatabase(): Promise<void> {
@@ -74,7 +72,10 @@ export class CommitsProvider {
       selected.add(sha);
     }
 
-    store.dispatch({ type: 'SELECTION_SET', payload: { shas: Array.from(selected) } });
+    store.dispatch({
+      type: 'SELECTION_SET',
+      payload: { shas: Array.from(selected) },
+    });
     this.refresh();
   }
 
@@ -85,7 +86,7 @@ export class CommitsProvider {
   }
 
   async toggleFileSelection(file: any): Promise<void> {
-    const filePath = typeof file === 'string' ? file : (file.path || file.id);
+    const filePath = typeof file === 'string' ? file : file.path || file.id;
     const store = getStore();
     const state = store.getState();
     const selectedStaged = new Set(state.selectedStagedPaths);
@@ -117,7 +118,7 @@ export class CommitsProvider {
         updatedUnstaged = Array.from(selectedUnstaged);
       }
     } catch (error) {
-      console.error('Failed to determine file status for toggle:', error);
+      logError('Failed to determine file status for toggle:', error);
       // Fallback: if we can't determine, just toggle in both sets (less efficient but safe)
       if (selectedStaged.has(filePath)) {
         selectedStaged.delete(filePath);
@@ -134,10 +135,16 @@ export class CommitsProvider {
     }
 
     if (updatedStaged) {
-      store.dispatch({ type: 'STAGED_SELECTION_UPDATED', payload: { paths: updatedStaged } });
+      store.dispatch({
+        type: 'STAGED_SELECTION_UPDATED',
+        payload: { paths: updatedStaged },
+      });
     }
     if (updatedUnstaged) {
-      store.dispatch({ type: 'UNSTAGED_SELECTION_UPDATED', payload: { paths: updatedUnstaged } });
+      store.dispatch({
+        type: 'UNSTAGED_SELECTION_UPDATED',
+        payload: { paths: updatedUnstaged },
+      });
     }
     this.refresh();
   }
@@ -150,10 +157,13 @@ export class CommitsProvider {
       const stagedPaths = staged.map((file: { path: string; status: any }) => file.path);
 
       const store = getStore();
-      store.dispatch({ type: 'STAGED_SELECTION_UPDATED', payload: { paths: stagedPaths } });
+      store.dispatch({
+        type: 'STAGED_SELECTION_UPDATED',
+        payload: { paths: stagedPaths },
+      });
       this.refresh();
     } catch (error) {
-      console.error('Failed to select all staged files:', error);
+      logError('Failed to select all staged files:', error);
     }
   }
 
@@ -165,10 +175,13 @@ export class CommitsProvider {
       const unstagedPaths = unstaged.map((file: { path: string; status: any }) => file.path);
 
       const store = getStore();
-      store.dispatch({ type: 'UNSTAGED_SELECTION_UPDATED', payload: { paths: unstagedPaths } });
+      store.dispatch({
+        type: 'UNSTAGED_SELECTION_UPDATED',
+        payload: { paths: unstagedPaths },
+      });
       this.refresh();
     } catch (error) {
-      console.error('Failed to select all unstaged files:', error);
+      logError('Failed to select all unstaged files:', error);
     }
   }
 
@@ -176,15 +189,20 @@ export class CommitsProvider {
     this.manualCommits.add(sha);
   }
 
-
-
-
-
   async exportCommitsDto(
     limit = 20,
     filterText?: string,
     filterScopes?: { staged?: boolean; unstaged?: boolean; history?: boolean }
-  ): Promise<Array<{ sha: string; message: string; author?: string; date?: string; changes?: number; files?: Array<{ path: string; status: any }> }>> {
+  ): Promise<
+    Array<{
+      sha: string;
+      message: string;
+      author?: string;
+      date?: string;
+      changes?: number;
+      files?: Array<{ path: string; status: any }>;
+    }>
+  > {
     try {
       const { getDatabaseService } = await import('../services/databaseService');
       const commitService = getDatabaseService();
@@ -194,14 +212,25 @@ export class CommitsProvider {
       const git = new GitOperations();
       const branch = this.currentBranch || git.getCurrentBranch();
 
-      const result: Array<{ sha: string; message: string; author?: string; date?: string; changes?: number; files?: Array<{ path: string; status: any }> }> = [];
+      const result: Array<{
+        sha: string;
+        message: string;
+        author?: string;
+        date?: string;
+        changes?: number;
+        files?: Array<{ path: string; status: any }>;
+      }> = [];
 
       // 1. Inject Virtual Commits (Staged/Unstaged)
       // Only if not filtering text (or if text matches "staged"/"unstaged")
-      if (!filterText || 'staged changes'.includes(filterText.toLowerCase()) || 'unstaged changes'.includes(filterText.toLowerCase())) {
+      if (
+        !filterText ||
+        'staged changes'.includes(filterText.toLowerCase()) ||
+        'unstaged changes'.includes(filterText.toLowerCase())
+      ) {
         try {
           const stagedFiles = await git.getStagedFiles();
-          console.log(`[CommitsProvider] Staged files: ${stagedFiles.length}`);
+          logInfo(`Staged files: ${stagedFiles.length}`);
           if (stagedFiles.length > 0) {
             result.push({
               sha: makeWorkspaceSha('staged', branch),
@@ -209,7 +238,10 @@ export class CommitsProvider {
               author: 'You',
               date: new Date().toISOString(),
               changes: stagedFiles.length,
-              files: stagedFiles.map((f: any) => ({ path: f.path, status: f.status }))
+              files: stagedFiles.map((f: any) => ({
+                path: f.path,
+                status: f.status,
+              })),
             });
           }
 
@@ -221,11 +253,14 @@ export class CommitsProvider {
               author: 'You',
               date: new Date().toISOString(),
               changes: unstagedFiles.length,
-              files: unstagedFiles.map((f: any) => ({ path: f.path, status: f.status }))
+              files: unstagedFiles.map((f: any) => ({
+                path: f.path,
+                status: f.status,
+              })),
             });
           }
         } catch (e) {
-          console.error('Failed to load virtual commits:', e);
+          logError('Failed to load virtual commits:', e);
         }
       }
 
@@ -247,7 +282,7 @@ export class CommitsProvider {
             author: headInfo.author,
             date: headInfo.date,
             changes: 0, // Virtual - will be populated if analyzed
-            files: [] // Will be populated from git.getFileChanges if needed
+            files: [], // Will be populated from git.getFileChanges if needed
           });
         } catch {
           // HEAD not accessible, skip
@@ -258,85 +293,100 @@ export class CommitsProvider {
       const searchOptions = {
         limit: this.loadMoreOffset + limitValue,
         offset: 0,
-        filterText: filterText?.trim()
+        filterText: filterText?.trim(),
       };
 
       const commits = await commitService.searchCommits(searchOptions);
 
       // 5. Map History Commits (exclude HEAD since we added it explicitly)
-      const historyCommits = await Promise.all(commits
-        .filter((commit) => commit.sha && !isWorkspaceSha(commit.sha) && commit.sha !== headSha)
-        .map(async (commit) => {
-          let files: Array<{ path: string; status: any }> = [];
-          try {
-            // Only fetch files if we have a valid non-workspace SHA
-            if (commit.sha && !isWorkspaceSha(commit.sha)) {
-              const changes = await git.getFileChanges(commit.sha);
-              if (Array.isArray(changes)) {
-                files = changes.map((f: any) => ({
-                  path: f.path,
-                  status: f.status
-                }));
-              } else {
-                console.warn(`getFileChanges returned non-array for ${commit.sha}:`, changes);
+      const historyCommits = await Promise.all(
+        commits
+          .filter(commit => commit.sha && !isWorkspaceSha(commit.sha) && commit.sha !== headSha)
+          .map(async commit => {
+            let files: Array<{ path: string; status: any }> = [];
+            try {
+              // Only fetch files if we have a valid non-workspace SHA
+              if (commit.sha && !isWorkspaceSha(commit.sha)) {
+                const changes = await git.getFileChanges(commit.sha);
+                if (Array.isArray(changes)) {
+                  files = changes.map((f: any) => ({
+                    path: f.path,
+                    status: f.status,
+                  }));
+                } else {
+                  logWarn(`getFileChanges returned non-array for ${commit.sha}: ${changes}`);
+                }
               }
+            } catch (e) {
+              logWarn(`Failed to fetch files for commit ${commit.sha}: ${e}`);
+              // If we failed to load files, but DB says there are changes,
+              // we shouldn't return empty array if possible.
+              // However, we can't invent files. The UI will show 0 files but maybe 'changes' count from DB.
             }
-          } catch (e) {
-            console.warn(`Failed to fetch files for commit ${commit.sha}:`, e);
-            // If we failed to load files, but DB says there are changes,
-            // we shouldn't return empty array if possible.
-            // However, we can't invent files. The UI will show 0 files but maybe 'changes' count from DB.
-          }
 
-          return {
-            sha: commit.sha,
-            message: commit.message,
-            author: commit.author,
-            date: commit.date.toISOString(),
-            files,
-            stats: {
-              files: commit.changes || 0,
-              insertions: 0, // Not available in metadata
-              deletions: 0   // Not available in metadata
-            },
-            isHead: false,
-            isStaged: false,
-            isUnstaged: false
-          };
-        }));
+            return {
+              sha: commit.sha,
+              message: commit.message,
+              author: commit.author,
+              date: commit.date.toISOString(),
+              files,
+              stats: {
+                files: commit.changes || 0,
+                insertions: 0, // Not available in metadata
+                deletions: 0, // Not available in metadata
+              },
+              isHead: false,
+              isStaged: false,
+              isUnstaged: false,
+            };
+          })
+      );
 
       return [...result, ...historyCommits];
     } catch (error) {
-      console.error('Failed to export commits for cockpit:', error);
+      logError('Failed to export commits for cockpit:', error);
       return [];
     }
   }
 
-  exportSelectionDto(): { selectedCommitShas: string[]; selectedFiles: string[]; workspaceScope: 'workspace' | 'staged' | 'unstaged' } {
+  exportSelectionDto(): {
+    selectedCommitShas: string[];
+    selectedFiles: string[];
+    workspaceScope: 'workspace' | 'staged' | 'unstaged';
+  } {
     const store = getStore();
     const state = store.getState();
 
     return {
       selectedCommitShas: state.selectedCommitShas,
       selectedFiles: [...state.selectedStagedPaths, ...state.selectedUnstagedPaths],
-      workspaceScope: this.workspaceScope
+      workspaceScope: this.workspaceScope,
     };
   }
 
   async exportWorkspaceFilesDto(): Promise<{
     staged: Array<{ path: string; status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' }>;
-    unstaged: Array<{ path: string; status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U' }>;
+    unstaged: Array<{
+      path: string;
+      status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U';
+    }>;
   }> {
     try {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
       const stagedList = await git.getStagedFiles();
       const unstagedList = await git.getUnstagedFiles();
-      const staged = stagedList.map((f: { path: string; status: any }) => ({ path: f.path, status: f.status }));
-      const unstaged = unstagedList.map((f: { path: string; status: any }) => ({ path: f.path, status: f.status }));
+      const staged = stagedList.map((f: { path: string; status: any }) => ({
+        path: f.path,
+        status: f.status,
+      }));
+      const unstaged = unstagedList.map((f: { path: string; status: any }) => ({
+        path: f.path,
+        status: f.status,
+      }));
       return { staged, unstaged };
     } catch (error) {
-      console.error('Failed to export workspace files for cockpit:', error);
+      logError('Failed to export workspace files for cockpit:', error);
       return { staged: [], unstaged: [] };
     }
   }

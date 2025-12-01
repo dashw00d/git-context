@@ -1,12 +1,19 @@
 import * as vscode from 'vscode';
-import { CockpitOrchestrator, getCockpitOrchestrator, CockpitStateChange } from '../state/cockpitOrchestrator';
-import { PipelineFactory } from '../services/pipelineFactory';
 import { RefactorPipeline } from '../analysis/refactorPipeline';
+import { PipelineFactory } from '../services/pipelineFactory';
+import {
+  CockpitOrchestrator,
+  getCockpitOrchestrator,
+  CockpitStateChange,
+} from '../state/cockpitOrchestrator';
 import { logError } from '../utils/logger';
 import type { CockpitState } from '../types/cockpit';
 
 export type CommandHandler = (context: vscode.ExtensionContext, ...args: any[]) => any;
-export type WatcherFactory = (orchestrator: CockpitOrchestrator, pipeline: RefactorPipeline) => vscode.Disposable;
+export type WatcherFactory = (
+  orchestrator: CockpitOrchestrator,
+  pipeline: RefactorPipeline
+) => vscode.Disposable;
 
 export interface FeatureRegistration {
   commands?: Array<{
@@ -57,9 +64,8 @@ export class AppShell {
     // Register commands
     if (feature.commands) {
       for (const cmd of feature.commands) {
-        const disposable = vscode.commands.registerCommand(
-          cmd.command,
-          (...args) => cmd.handler(this.context, ...args)
+        const disposable = vscode.commands.registerCommand(cmd.command, (...args) =>
+          cmd.handler(this.context, ...args)
         );
         this.registeredCommands.push(disposable);
         this.context.subscriptions.push(disposable);
@@ -83,7 +89,7 @@ export class AppShell {
         const unsubscribe = this.orchestrator.registerEffect({
           key: effect.key,
           handler: effect.handler,
-          priority: effect.priority
+          priority: effect.priority,
         });
         this.registeredEffects.push(unsubscribe);
       }

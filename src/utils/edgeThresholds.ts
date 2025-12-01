@@ -17,4 +17,3 @@ export function getDynamicThreshold(edgeCount: number): number {
 export function getDefaultThreshold(): number {
   return 0.5;
 }
-

@@ -1,5 +1,6 @@
-import { PipelineStep, PipelineState, PipelineEventHandler } from './pipelineTypes';
-import { logInfo, logDebug } from '../../utils/logger';
+/* eslint-disable no-restricted-syntax */
+import { logDebug, logInfo } from '../../utils/logger';
+import { PipelineEventHandler, PipelineState, PipelineStep } from './pipelineTypes';
 
 /**
  * Build dependency graph from pipeline steps
@@ -83,7 +84,7 @@ export async function runPipeline(
   const state: PipelineState = {
     ...initialState,
     completedSteps: new Set<string>(),
-    errors: []
+    errors: [],
   };
 
   const pipelineStartTime = Date.now();
@@ -93,7 +94,9 @@ export async function runPipeline(
   const depGraph = buildDepGraph(steps);
   const levels = topologicalSort(depGraph);
 
-  logInfo(`[Pipeline] Starting pipeline execution with ${levels.length} levels and ${steps.length} steps`);
+  logInfo(
+    `[Pipeline] Starting pipeline execution with ${levels.length} levels and ${steps.length} steps`
+  );
 
   // Execute steps level by level (parallel within levels)
   for (const level of levels) {
@@ -129,7 +132,15 @@ export async function runPipeline(
           }
 
           const timestamp = new Date().toISOString();
-          onEvent?.({ type: 'complete', step, state, duration, cacheHits, cacheMisses, timestamp });
+          onEvent?.({
+            type: 'complete',
+            step,
+            state,
+            duration,
+            cacheHits,
+            cacheMisses,
+            timestamp,
+          });
           logDebug(`[Pipeline] Completed step: ${step.label} (${duration}ms)`);
         })
         .catch(error => {
@@ -143,11 +154,18 @@ export async function runPipeline(
           // Extract detailed error information
           const stepError = {
             message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined
+            stack: error instanceof Error ? error.stack : undefined,
           };
 
           const timestamp = new Date().toISOString();
-          onEvent?.({ type: 'error', step, error, state, stepError, timestamp });
+          onEvent?.({
+            type: 'error',
+            step,
+            error,
+            state,
+            stepError,
+            timestamp,
+          });
           logDebug(`[Pipeline] Failed step: ${step.label} (${duration}ms): ${stepError.message}`);
           // Continue with other steps in level (best-effort mode)
         });

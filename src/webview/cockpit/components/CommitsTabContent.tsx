@@ -15,12 +15,15 @@ export const CommitsTabContent: React.FC<CommitsTabContentProps> = ({
   vscode,
   updateCommitsFilterText,
   toggleCommitsScope,
-      formatDate
+  formatDate,
 }) => {
   return (
     <div className="cockpit__tab-body">
       <div className="cockpit__actions">
-        <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'clearSelection' })}>
+        <button
+          className="cockpit__button ghost"
+          onClick={() => vscode.postMessage({ type: 'clearSelection' })}
+        >
           Clear selection
         </button>
         <button
@@ -40,7 +43,7 @@ export const CommitsTabContent: React.FC<CommitsTabContentProps> = ({
           className="cockpit__input"
           placeholder="Filter commits..."
           value={state.commitsFilterText}
-          onChange={(e) => updateCommitsFilterText(e.target.value)}
+          onChange={e => updateCommitsFilterText(e.target.value)}
         />
         <button
           className="cockpit__button ghost small"
@@ -66,7 +69,10 @@ export const CommitsTabContent: React.FC<CommitsTabContentProps> = ({
       </div>
       <div className="cockpit__actions">
         {state.hasMoreCommits ? (
-          <button className="cockpit__button ghost" onClick={() => vscode.postMessage({ type: 'loadMoreCommits' })}>
+          <button
+            className="cockpit__button ghost"
+            onClick={() => vscode.postMessage({ type: 'loadMoreCommits' })}
+          >
             Load more
           </button>
         ) : (

@@ -6,8 +6,8 @@
  */
 
 import { DriftFindings } from '../facts/driftDetector';
-import { WorkingSnapshot } from '../facts/workingSnapshot';
 import { IntendedState } from '../facts/intendedMap';
+import { WorkingSnapshot } from '../facts/workingSnapshot';
 
 export interface PatternDriftMetrics {
   mixedTargets: number;
@@ -48,7 +48,7 @@ export function detectPatternDriftFromFacts(
 
   const result: PatternDriftMetrics = {
     mixedTargets,
-    oldNamespaces
+    oldNamespaces,
   };
 
   // Include convention drift if available
@@ -57,16 +57,20 @@ export function detectPatternDriftFromFacts(
       dominantConvention: drift.conventionDrift.dominantConvention,
       driftPercent: drift.conventionDrift.driftPercent,
       driftSymbolCount: drift.conventionDrift.driftSymbols.length,
-      importDrift: drift.conventionDrift.importDrift ? {
-        dominantStyle: drift.conventionDrift.importDrift.dominantStyle,
-        driftPercent: drift.conventionDrift.importDrift.driftPercent,
-        driftImportCount: drift.conventionDrift.importDrift.driftImports.length
-      } : undefined,
-      fileNamingDrift: drift.conventionDrift.fileNamingDrift ? {
-        dominantStyle: drift.conventionDrift.fileNamingDrift.dominantStyle,
-        driftPercent: drift.conventionDrift.fileNamingDrift.driftPercent,
-        driftFileCount: drift.conventionDrift.fileNamingDrift.driftFiles.length
-      } : undefined
+      importDrift: drift.conventionDrift.importDrift
+        ? {
+            dominantStyle: drift.conventionDrift.importDrift.dominantStyle,
+            driftPercent: drift.conventionDrift.importDrift.driftPercent,
+            driftImportCount: drift.conventionDrift.importDrift.driftImports.length,
+          }
+        : undefined,
+      fileNamingDrift: drift.conventionDrift.fileNamingDrift
+        ? {
+            dominantStyle: drift.conventionDrift.fileNamingDrift.dominantStyle,
+            driftPercent: drift.conventionDrift.fileNamingDrift.driftPercent,
+            driftFileCount: drift.conventionDrift.fileNamingDrift.driftFiles.length,
+          }
+        : undefined,
     };
   }
 
@@ -100,14 +104,14 @@ export function detectPatternDriftSimple(
     nameGroups.get(baseName)!.push(symbol.name);
   }
 
-  const mixedTargets = Array.from(nameGroups.values())
-    .filter(names => names.length > 1 && new Set(names.map(n => n.toLowerCase())).size > 1)
-    .length;
+  const mixedTargets = Array.from(nameGroups.values()).filter(
+    names => names.length > 1 && new Set(names.map(n => n.toLowerCase())).size > 1
+  ).length;
 
   // Detect old namespaces
   const oldNamespacePatterns = [
     /^(old|legacy|deprecated|v1|v2|old_|legacy_|deprecated_)/i,
-    /(Old|Legacy|Deprecated)([A-Z]|$)/
+    /(Old|Legacy|Deprecated)([A-Z]|$)/,
   ];
 
   const oldNamespaces = workingSymbols.filter(symbol =>
@@ -124,9 +128,10 @@ export function detectPatternDriftSimple(
     }
   }
 
-  const driftPercent = intendedSymbols.length > 0
-    ? driftCount / intendedSymbols.length
-    : oldNamespaces / Math.max(workingSymbols.length, 1);
+  const driftPercent =
+    intendedSymbols.length > 0
+      ? driftCount / intendedSymbols.length
+      : oldNamespaces / Math.max(workingSymbols.length, 1);
 
   return {
     mixedTargets,
@@ -134,7 +139,7 @@ export function detectPatternDriftSimple(
     conventionDrift: {
       dominantConvention: 'camelCase', // Simplified
       driftPercent,
-      driftSymbolCount: driftCount || oldNamespaces
-    }
+      driftSymbolCount: driftCount || oldNamespaces,
+    },
   };
 }

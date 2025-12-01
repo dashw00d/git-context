@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { AppShell } from '../core/appShell';
-import { GitCommitWatcher } from '../watchers/gitCommitWatcher';
 import { refreshCockpitState } from '../core/stateUpdaters';
-import { CommitsProvider } from '../providers/commitsProvider';
 import { ActiveBundleProvider } from '../providers/activeBundleProvider';
+import { CommitsProvider } from '../providers/commitsProvider';
 import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
+import { GitCommitWatcher } from '../watchers/gitCommitWatcher';
 
 // Store providers globally for the git watcher callback
 let globalProviders: {
@@ -28,17 +28,13 @@ export async function registerGitWatcherFeature(
   const orchestrator = shell.getOrchestrator();
   const pipeline = await shell.getPipeline();
 
-  const watcher = new GitCommitWatcher(
-    pipeline,
-    orchestrator,
-    async (sha) => {
-      if (globalProviders) {
-        await refreshCockpitState(orchestrator, globalProviders, 'git:commit');
-      }
+  const watcher = new GitCommitWatcher(pipeline, orchestrator, async sha => {
+    if (globalProviders) {
+      await refreshCockpitState(orchestrator, globalProviders, 'git:commit');
     }
-  );
+  });
   await watcher.start();
-  
+
   // Register the watcher directly as a disposable
   context.subscriptions.push(watcher);
 }

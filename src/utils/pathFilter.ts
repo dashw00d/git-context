@@ -1,25 +1,32 @@
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
+import { LRUCache } from 'lru-cache';
 import { GitOperations } from '../analysis/git';
 import { getExtensionConfig, getSupportedExtensions, createCustomIgnoreMatcher } from './config';
 import { logDebug } from './logger';
-import { LRUCache } from 'lru-cache';
 
 export interface PathFilterOptions {
   git?: GitOperations;
   gitRoot?: string;
-  status?: 'A' | 'M' | 'D' | 'R' | 'C' | 'U';  // File status for size checks (matches FileChange status)
-  commitSha?: string;  // For historical gitignore + blob size
-  skipSizeCheck?: boolean;  // Skip file size check (e.g., for deleted files)
+  status?: 'A' | 'M' | 'D' | 'R' | 'C' | 'U'; // File status for size checks (matches FileChange status)
+  commitSha?: string; // For historical gitignore + blob size
+  skipSizeCheck?: boolean; // Skip file size check (e.g., for deleted files)
 }
 
 export interface PathFilterResult {
   shouldProcess: boolean;
-  reason?: string;  // Why it was filtered out
+  reason?: string; // Why it was filtered out
 }
 
 // Default excluded prefixes (can be overridden by config)
-const DEFAULT_EXCLUDED_PREFIXES = ['out/', 'dist/', 'node_modules/', '.git/', 'build/', 'coverage/'];
+const DEFAULT_EXCLUDED_PREFIXES = [
+  'out/',
+  'dist/',
+  'node_modules/',
+  '.git/',
+  'build/',
+  'coverage/',
+];
 
 // LRU cache for size/ignore checks to avoid repeated git/filesystem calls
 // Key format: `${path}:${commitSha || 'workspace'}:${checkType}`
@@ -27,7 +34,7 @@ const DEFAULT_EXCLUDED_PREFIXES = ['out/', 'dist/', 'node_modules/', '.git/', 'b
 const filterCache = new LRUCache<string, boolean>({
   max: 1000,
   ttl: 3600000, // 1 hour
-  updateAgeOnGet: true
+  updateAgeOnGet: true,
 });
 
 /**
@@ -100,7 +107,10 @@ export async function shouldProcessPath(
     }
 
     if (isIgnored) {
-      return { shouldProcess: false, reason: `ignored by git at commit ${options.commitSha.substring(0, 8)}` };
+      return {
+        shouldProcess: false,
+        reason: `ignored by git at commit ${options.commitSha.substring(0, 8)}`,
+      };
     }
   }
 
@@ -182,7 +192,10 @@ export async function shouldProcessPath(
 /**
  * Convenience wrapper that returns boolean (for filter() usage)
  */
-export async function filterPath(filePath: string, options: PathFilterOptions = {}): Promise<boolean> {
+export async function filterPath(
+  filePath: string,
+  options: PathFilterOptions = {}
+): Promise<boolean> {
   const result = await shouldProcessPath(filePath, options);
   return result.shouldProcess;
 }
@@ -193,7 +206,7 @@ export async function filterPath(filePath: string, options: PathFilterOptions = 
 export async function shouldProcessPathWithLog(
   filePath: string,
   options: PathFilterOptions = {},
-  context?: string  // e.g., 'CommitIndexer', 'WorkspaceIndexer'
+  context?: string // e.g., 'CommitIndexer', 'WorkspaceIndexer'
 ): Promise<PathFilterResult> {
   const result = await shouldProcessPath(filePath, options);
   if (!result.shouldProcess && result.reason) {
@@ -201,4 +214,3 @@ export async function shouldProcessPathWithLog(
   }
   return result;
 }
-

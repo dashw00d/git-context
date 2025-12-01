@@ -1,7 +1,7 @@
-import { HybridFact, CstFact, isCstFact } from '../types/cstFacts';
 import { IntendedState } from '../facts/intendedMap';
-import { getCstTimelineManager, getPriorVersionInChain } from './cstTimeline';
+import { HybridFact, CstFact, isCstFact } from '../types/cstFacts';
 import { logDebug } from '../utils/logger';
+import { getCstTimelineManager, getPriorVersionInChain } from './cstTimeline';
 import type { ScopeSet } from '../facts/scope';
 
 export interface HybridDrift {
@@ -28,23 +28,22 @@ export async function detectHybridDrift(
   const timelineManager = getCstTimelineManager();
 
   // Validate version is in expected timeline chain
-  const validVersions = new Set([
-    'workspace-unstaged',
-    'workspace-staged',
-    'HEAD',
-    ...commitShas
-  ]);
+  const validVersions = new Set(['workspace-unstaged', 'workspace-staged', 'HEAD', ...commitShas]);
 
   if (!validVersions.has(currentVersion)) {
     throw new Error(
       `[HybridDrift] Invalid version '${currentVersion}' for timeline chain. ` +
-      `File: ${filePath}, Expected one of: [${Array.from(validVersions).map(v => v.substring(0, 12)).join(', ')}]`
+        `File: ${filePath}, Expected one of: [${Array.from(validVersions)
+          .map(v => v.substring(0, 12))
+          .join(', ')}]`
     );
   }
 
   // Determine prior version in timeline chain
   const priorVersion = getPriorVersionInChain(currentVersion, scope, filePath, commitShas);
-  const priorFacts = priorVersion ? await timelineManager.getPriorFacts(filePath, priorVersion) : null;
+  const priorFacts = priorVersion
+    ? await timelineManager.getPriorFacts(filePath, priorVersion)
+    : null;
 
   // Check for missing facts (in intended but not in current)
   // Use priorVersionSha (from IntendedState.lastSha) to retrieve the missing fact
@@ -66,12 +65,14 @@ export async function detectHybridDrift(
                 drifts.push({
                   fact: missingFact,
                   type: 'missing',
-                  expected
+                  expected,
                 });
               }
             }
           } catch (error) {
-            logDebug(`[HybridDrift] Error retrieving missing fact ${factKey} from ${priorSha}: ${error}`);
+            logDebug(
+              `[HybridDrift] Error retrieving missing fact ${factKey} from ${priorSha}: ${error}`
+            );
           }
         }
       }
@@ -88,7 +89,7 @@ export async function detectHybridDrift(
       drifts.push({
         fact,
         type: 'zombie',
-        expected
+        expected,
       });
       continue;
     }
@@ -99,7 +100,7 @@ export async function detectHybridDrift(
         drifts.push({
           fact,
           type: 'divergent',
-          expected
+          expected,
         });
         continue;
       }
@@ -112,15 +113,15 @@ export async function detectHybridDrift(
 
     if (isCstFact(fact) && fact.timeline.length > 0) {
       const recentDeltas = fact.timeline.slice(-3); // Last 3 changes
-      const hasModifications = recentDeltas.some(entry => 
-        entry.delta.type === 'modified' || entry.delta.type === 'added'
+      const hasModifications = recentDeltas.some(
+        entry => entry.delta.type === 'modified' || entry.delta.type === 'added'
       );
 
       if (hasModifications) {
         isModified = true;
         timelineDelta = recentDeltas.map(e => ({
           version: e.version,
-          delta: e.delta
+          delta: e.delta,
         }));
       }
     }
@@ -130,13 +131,17 @@ export async function detectHybridDrift(
       const priorFact = priorFacts.find(p => p.dnaId === fact.dnaId || p.id === fact.id);
       if (priorFact) {
         // Check if modified (DNA changed or location changed)
-        if (priorFact.dnaId !== fact.dnaId ||
-            (priorFact.location.start.line !== fact.location.start.line)) {
+        if (
+          priorFact.dnaId !== fact.dnaId ||
+          priorFact.location.start.line !== fact.location.start.line
+        ) {
           isModified = true;
-          timelineDelta = isCstFact(fact) ? fact.timeline.map(e => ({
-            version: e.version,
-            delta: e.delta
-          })) : undefined;
+          timelineDelta = isCstFact(fact)
+            ? fact.timeline.map(e => ({
+                version: e.version,
+                delta: e.delta,
+              }))
+            : undefined;
         }
       }
     }
@@ -146,7 +151,7 @@ export async function detectHybridDrift(
       drifts.push({
         fact,
         type: 'modified',
-        timelineDelta
+        timelineDelta,
       });
     }
   }
@@ -160,9 +165,8 @@ export async function detectHybridDrift(
  */
 export async function getHybridFactsForFile(
   filePath: string,
-  version: string  // Caller must determine correct version from scope
+  version: string // Caller must determine correct version from scope
 ): Promise<HybridFact[]> {
   const timelineManager = getCstTimelineManager();
-  return await timelineManager.getPriorFacts(filePath, version) || [];
+  return (await timelineManager.getPriorFacts(filePath, version)) || [];
 }
-

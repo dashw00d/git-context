@@ -1,9 +1,10 @@
-import * as path from 'path';
 import * as fs from 'fs';
-import { Worker } from 'worker_threads';
 import * as os from 'os';
-import { SymbolInfo, HybridFact } from '../types';
-import { getSupportedLanguages, LANGUAGES } from '../utils/config';
+import * as path from 'path';
+import { Worker } from 'worker_threads';
+import { HybridFact, SymbolInfo } from '../types';
+import { getSupportedLanguages } from '../utils/config';
+import { logError, logInfo, logWarn } from '../utils/logger';
 
 export class TreeSitterParser {
   private workers: Worker[] = [];
@@ -13,7 +14,10 @@ export class TreeSitterParser {
     resolve: (value: any) => void;
     reject: (reason?: any) => void;
   }> = [];
-  private activeTasks = new Map<number, { resolve: (value: any) => void; reject: (reason?: any) => void }>();
+  private activeTasks = new Map<
+    number,
+    { resolve: (value: any) => void; reject: (reason?: any) => void }
+  >();
   private nextTaskId = 1;
   private initialized = false;
 
@@ -23,7 +27,7 @@ export class TreeSitterParser {
     const wasmDir = path.join(__dirname, '..', '..', 'out', 'wasm');
     const languages = getSupportedLanguages();
 
-    console.log(`[TreeSitter] Initializing ${this.workerPoolSize} workers...`);
+    logInfo(`Initializing ${this.workerPoolSize} workers...`);
 
     // Resolve worker path - handle both production (JS) and dev (TS/ts-node) environments
     let workerPath = path.join(__dirname, 'parserWorker.js');
@@ -33,7 +37,9 @@ export class TreeSitterParser {
       if (fs.existsSync(outWorkerPath)) {
         workerPath = outWorkerPath;
       } else {
-        console.warn(`[TreeSitter] Warning: parserWorker.js not found. Looked at: ${workerPath} and ${outWorkerPath}`);
+        logWarn(
+          `Warning: parserWorker.js not found. Looked at: ${workerPath} and ${outWorkerPath}`
+        );
       }
     }
 
@@ -43,7 +49,7 @@ export class TreeSitterParser {
       const worker = new Worker(workerPath);
       this.workers.push(worker);
 
-      worker.on('message', (msg) => {
+      worker.on('message', msg => {
         if (msg.type === 'initialized') {
           // Worker ready
         } else if (msg.type === 'result') {
@@ -60,21 +66,21 @@ export class TreeSitterParser {
         }
       });
 
-      worker.on('error', (err) => {
-        console.error(`[TreeSitter] Worker error: ${err}`);
-        // Fail all active tasks for this worker? 
+      worker.on('error', err => {
+        logError(`Worker error: ${err}`);
+        // Fail all active tasks for this worker?
         // Ideally restart worker
       });
 
       // Send init message
       worker.postMessage({ type: 'init', wasmDir, languages });
-      
+
       // Wait for init confirmation (simplified here)
     }
 
     // Give workers a moment to initialize
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     this.initialized = true;
   }
 
@@ -99,16 +105,19 @@ export class TreeSitterParser {
     // This method is problematic because it returns a Tree object which is not transferrable
     // from worker to main thread (it contains C++ pointers).
     // We must change the contract to return extracted data (symbols/facts) directly.
-    throw new Error('Direct parse() not supported with worker threads. Use extractHybridFacts() or extractSymbols().');
+    logError(
+      'Direct parse() not supported with worker threads. Use extractHybridFacts() or extractSymbols().'
+    );
+    return undefined; // Return undefined instead of throwing
   }
 
   /**
    * Extract hybrid facts (symbols + CST facts) using worker pool
    */
   async extractHybridFacts(
-    content: string, 
-    filePath: string, 
-    languageId: string, 
+    content: string,
+    filePath: string,
+    languageId: string,
     existingSymbols?: SymbolInfo[]
   ): Promise<HybridFact[]> {
     if (!this.initialized) await this.initializeParsers();
@@ -120,10 +129,14 @@ export class TreeSitterParser {
         languageId,
         filePath,
         extractHybrid: true,
-        existingSymbols
+        existingSymbols,
       };
 
-      this.taskQueue.push({ message, resolve: (data) => resolve(data.hybridFacts), reject });
+      this.taskQueue.push({
+        message,
+        resolve: data => resolve(data.hybridFacts),
+        reject,
+      });
       this.dispatch();
     });
   }
@@ -131,11 +144,7 @@ export class TreeSitterParser {
   /**
    * Serialize file AST for LLM context using worker pool
    */
-  async serializeFile(
-    content: string,
-    languageId: string,
-    maxDepth: number = 5
-  ): Promise<any> {
+  async serializeFile(content: string, languageId: string, maxDepth: number = 5): Promise<any> {
     if (!this.initialized) await this.initializeParsers();
 
     return new Promise((resolve, reject) => {
@@ -143,7 +152,7 @@ export class TreeSitterParser {
         type: 'serialize',
         content,
         languageId,
-        maxDepth
+        maxDepth,
       };
 
       this.taskQueue.push({ message, resolve, reject });
@@ -156,7 +165,7 @@ export class TreeSitterParser {
     // Or just simple: iterate workers, if one is "free" (we'd need to track load), assign.
     // For now, since we want parallelism, just round-robin assign even if busy?
     // Node workers have their own message queue.
-    
+
     const worker = this.workers[Math.floor(Math.random() * this.workers.length)];
     if (worker && this.taskQueue.length > 0) {
       // This is naive; it doesn't guarantee load balancing but distributes work

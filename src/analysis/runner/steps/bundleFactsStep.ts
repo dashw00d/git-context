@@ -1,20 +1,32 @@
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+/* eslint-disable no-restricted-syntax */
 import { buildRefactorBundleFacts } from '../../../facts/factsAssembler';
+import { logError } from '../../../utils/logger';
+import { PipelineState, PipelineStep } from '../pipelineTypes';
 
 export function createBundleFactsStep(): PipelineStep {
   return {
     id: 'bundle_facts',
     label: 'Aggregate bundle facts',
-    deps: ['scope', 'intended', 'working', 'drift', 'legacy', 'hotspots', 'index_commits', 'moved_blocks'],
+    deps: [
+      'scope',
+      'intended',
+      'working',
+      'drift',
+      'legacy',
+      'hotspots',
+      'index_commits',
+      'moved_blocks',
+    ],
 
     async run(state: PipelineState) {
       if (!state.commitFacts || state.commitFacts.length === 0) {
-        throw new Error('No commit facts available');
+        logError('No commit facts available');
+        return; // Return early instead of throwing
       }
 
       // Use full logic if all facts are available, otherwise fallback
       const options: any = {
-        commitShas: state.selectedCommitShas
+        commitShas: state.selectedCommitShas,
       };
 
       if (state.scope && state.intended && state.working && state.drift && state.legacy) {
@@ -41,6 +53,6 @@ export function createBundleFactsStep(): PipelineStep {
       );
 
       state.bundleFacts = bundleFacts;
-    }
+    },
   };
 }

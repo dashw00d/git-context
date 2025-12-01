@@ -25,20 +25,22 @@ export function detectRisksFromFacts(
   const risks: string[] = [];
 
   // Check for auth-related changes
-  const authSymbols = symbols.filter(s =>
-    s.id.toLowerCase().includes('auth') ||
-    s.id.toLowerCase().includes('login') ||
-    s.id.toLowerCase().includes('password')
+  const authSymbols = symbols.filter(
+    s =>
+      s.id.toLowerCase().includes('auth') ||
+      s.id.toLowerCase().includes('login') ||
+      s.id.toLowerCase().includes('password')
   );
   if (authSymbols.length > 0) {
     risks.push('auth');
   }
 
   // Check for payment-related changes
-  const paymentSymbols = symbols.filter(s =>
-    s.id.toLowerCase().includes('payment') ||
-    s.id.toLowerCase().includes('charge') ||
-    s.id.toLowerCase().includes('billing')
+  const paymentSymbols = symbols.filter(
+    s =>
+      s.id.toLowerCase().includes('payment') ||
+      s.id.toLowerCase().includes('charge') ||
+      s.id.toLowerCase().includes('billing')
   );
   if (paymentSymbols.length > 0) {
     risks.push('payment');
@@ -46,37 +48,41 @@ export function detectRisksFromFacts(
 
   // Check for breaking API changes (simplified)
   const breakingChanges = symbols.filter(s => s.status === 'removed');
-  if (breakingChanges.length > 3) { // Arbitrary threshold
+  if (breakingChanges.length > 3) {
+    // Arbitrary threshold
     risks.push('breaking-api');
   }
 
   // Check for security-related changes
-  const securitySymbols = symbols.filter(s =>
-    s.id.toLowerCase().includes('encrypt') ||
-    s.id.toLowerCase().includes('decrypt') ||
-    s.id.toLowerCase().includes('security') ||
-    s.id.toLowerCase().includes('token')
+  const securitySymbols = symbols.filter(
+    s =>
+      s.id.toLowerCase().includes('encrypt') ||
+      s.id.toLowerCase().includes('decrypt') ||
+      s.id.toLowerCase().includes('security') ||
+      s.id.toLowerCase().includes('token')
   );
   if (securitySymbols.length > 0) {
     risks.push('security');
   }
 
   // Check for database changes
-  const dbSymbols = symbols.filter(s =>
-    s.id.toLowerCase().includes('database') ||
-    s.id.toLowerCase().includes('db') ||
-    s.id.toLowerCase().includes('sql') ||
-    s.id.toLowerCase().includes('migration')
+  const dbSymbols = symbols.filter(
+    s =>
+      s.id.toLowerCase().includes('database') ||
+      s.id.toLowerCase().includes('db') ||
+      s.id.toLowerCase().includes('sql') ||
+      s.id.toLowerCase().includes('migration')
   );
   if (dbSymbols.length > 0) {
     risks.push('database');
   }
 
   // Check for refactors
-  const refactorIndicators = symbols.filter(s =>
-    s.id.toLowerCase().includes('extract') ||
-    s.id.toLowerCase().includes('refactor') ||
-    s.id.toLowerCase().includes('migrate')
+  const refactorIndicators = symbols.filter(
+    s =>
+      s.id.toLowerCase().includes('extract') ||
+      s.id.toLowerCase().includes('refactor') ||
+      s.id.toLowerCase().includes('migrate')
   );
   if (refactorIndicators.length > 0) {
     risks.push('refactor');
@@ -109,7 +115,7 @@ export function detectRisksFromFacts(
     highRiskSymbols,
     criticalRiskSymbols,
     riskScore,
-    riskFactors: risks
+    riskFactors: risks,
   };
 }
 
@@ -125,7 +131,7 @@ function calculateRiskScore(risks: string[], totalSymbols: number): number {
     'breaking-api': 6,
     'schema-migration': 7,
     refactor: 3,
-    performance: 4
+    performance: 4,
   };
 
   let totalWeight = 0;
@@ -134,5 +140,5 @@ function calculateRiskScore(risks: string[], totalSymbols: number): number {
   }
 
   // Normalize by symbol count (more symbols = potentially higher risk)
-  return Math.min(10, (totalWeight / Math.max(1, totalSymbols / 5)));
+  return Math.min(10, totalWeight / Math.max(1, totalSymbols / 5));
 }

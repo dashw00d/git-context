@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
+import { prepare } from '../storage/statement-wrapper';
+import { logError } from '../utils/logger';
 
 export class SymbolHistoryProvider {
   private searchQuery: string = '';
 
-  constructor(private context: vscode.ExtensionContext) { }
+  constructor(private context: vscode.ExtensionContext) {}
 
   refresh(): void {
     // TreeView removed - no event firing needed
@@ -14,11 +16,19 @@ export class SymbolHistoryProvider {
     filterText?: string,
     filterKind?: string | 'all',
     filterChange?: 'all' | 'added' | 'modified' | 'removed'
-  ): Promise<Array<{ path: string; name: string; kind: string; changeType: string; sha: string; date: string }>> {
+  ): Promise<
+    Array<{
+      path: string;
+      name: string;
+      kind: string;
+      changeType: string;
+      sha: string;
+      date: string;
+    }>
+  > {
     try {
-      const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+      const { ensureDatabaseInitialized } = await import('../storage/database');
       await ensureDatabaseInitialized();
-      const db = getDatabaseManager().getDatabase();
       const safeLimit = Math.max(1, Number(limit) || 20);
 
       let query = `
@@ -54,20 +64,20 @@ export class SymbolHistoryProvider {
 
       query += ` ORDER BY c.date DESC LIMIT ${safeLimit}`;
 
-      const stmt = db.prepare(query);
+      const stmt = prepare(query);
       const rows = stmt.all(...params) as any[];
       stmt.free?.();
 
-      return rows.map((row) => ({
+      return rows.map(row => ({
         path: row.path,
         name: row.name,
         kind: row.kind,
         changeType: row.change_type,
         sha: row.sha,
-        date: row.date
+        date: row.date,
       }));
     } catch (error) {
-      console.error('Failed to export symbols for cockpit:', error);
+      logError('Failed to export symbols for cockpit:', error);
       return [];
     }
   }

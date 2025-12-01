@@ -3,7 +3,7 @@
  *
  * Adapter for StructuralDiffManager.getOrCreateStructuralDiff()
  * Provides structural change metrics for tests
- * 
+ *
  * NOTE: This intentionally uses simplified calculation for test adapters.
  * In production, use StructuralDiffManager.getOrCreateStructuralDiff() directly
  * which requires database access and difftastic integration.
@@ -64,13 +64,15 @@ export function calculateStructuralChangeSimple(
   }
 
   // Detect control-flow changes from line content analysis
-  const controlFlowKeywords = /\b(if|while|for|switch|return|throw|catch|try|else|do|break|continue)\b/;
+  const controlFlowKeywords =
+    /\b(if|while|for|switch|return|throw|catch|try|else|do|break|continue)\b/;
   const prevControlFlowLines = prevLines.filter(line => controlFlowKeywords.test(line)).length;
   const currControlFlowLines = currLines.filter(line => controlFlowKeywords.test(line)).length;
   const controlFlowChanged = prevControlFlowLines !== currControlFlowLines;
 
   // Detect interface changes from line content analysis
-  const interfaceKeywords = /\b(function|class|interface|type|export|import|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\b/;
+  const interfaceKeywords =
+    /\b(function|class|interface|type|export|import|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\b/;
   const prevInterfaceLines = prevLines.filter(line => interfaceKeywords.test(line)).length;
   const currInterfaceLines = currLines.filter(line => interfaceKeywords.test(line)).length;
   const interfaceChanged = prevInterfaceLines !== currInterfaceLines;
@@ -85,6 +87,6 @@ export function calculateStructuralChangeSimple(
     interfaceChanged,
     movedBlocks: 0, // Simplified - can't detect without difftastic
     linesAdded,
-    linesRemoved
+    linesRemoved,
   };
 }

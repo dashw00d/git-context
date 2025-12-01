@@ -157,6 +157,6 @@ export function setupFileWatchers(
       if (factsWatcher) {
         factsWatcher.dispose();
       }
-    }
+    },
   };
 }

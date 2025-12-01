@@ -1,6 +1,8 @@
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+/* eslint-disable no-restricted-syntax */
 import { buildIntendedMap } from '../../../facts/intendedMap';
+import { logInfo, logWarn } from '../../../utils/logger';
 import { HotspotDetectorV2 } from '../../hotspotDetector';
+import { PipelineState, PipelineStep } from '../pipelineTypes';
 
 export function createIntendedStep(): PipelineStep {
   return {
@@ -11,17 +13,19 @@ export function createIntendedStep(): PipelineStep {
     async run(state: PipelineState) {
       const intended = await buildIntendedMap(state.selectedCommitShas);
       state.intended = intended;
-      
+
       // Log validation for empty results
       if (intended.size === 0) {
-        console.warn(`[IntendedStep] WARNING: Intended map is empty. No symbols found in ${state.selectedCommitShas.length} commits.`);
-        console.warn(`[IntendedStep] Attempting fallback: seeding from hotspots...`);
-        
+        logWarn(
+          `WARNING: Intended map is empty. No symbols found in ${state.selectedCommitShas.length} commits.`
+        );
+        logWarn(`Attempting fallback: seeding from hotspots...`);
+
         // Fallback: seed from hotspots if empty
         try {
           const hotspotDetector = new HotspotDetectorV2();
           const hotspots = await hotspotDetector.getTopSymbolHotspots(50);
-          
+
           for (const hotspot of hotspots) {
             if (hotspot.hotspotScore > 60) {
               intended.set(hotspot.symbolId, {
@@ -30,28 +34,32 @@ export function createIntendedStep(): PipelineStep {
                 lastPath: hotspot.filePath,
                 lastSig: '',
                 lastSha: hotspot.lastChangedSha || '',
-                isRenamed: false
+                isRenamed: false,
               });
             }
           }
-          
+
           if (intended.size > 0) {
-            console.log(`[IntendedStep] Fallback: Seeded ${intended.size} symbols from hotspots (score >60)`);
+            logInfo(`Fallback: Seeded ${intended.size} symbols from hotspots (score >60)`);
             state.intended = intended;
           } else {
-            console.warn(`[IntendedStep] Fallback failed: No hotspots with score >60 found.`);
+            logWarn(`Fallback failed: No hotspots with score >60 found.`);
           }
         } catch (error) {
-          console.warn(`[IntendedStep] Fallback error: ${error}`);
+          logWarn(`Fallback error: ${error}`);
         }
       }
-      
+
       if (intended.size > 0) {
-        const presentCount = Array.from(intended.values()).filter(s => s.expect === 'present').length;
+        const presentCount = Array.from(intended.values()).filter(
+          s => s.expect === 'present'
+        ).length;
         const absentCount = Array.from(intended.values()).filter(s => s.expect === 'absent').length;
         const renamedCount = Array.from(intended.values()).filter(s => s.isRenamed).length;
-        console.log(`[IntendedStep] Intended map: ${intended.size} total (${presentCount} present, ${absentCount} absent, ${renamedCount} renamed)`);
+        logInfo(
+          `Intended map: ${intended.size} total (${presentCount} present, ${absentCount} absent, ${renamedCount} renamed)`
+        );
       }
-    }
+    },
   };
 }

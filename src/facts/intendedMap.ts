@@ -1,4 +1,6 @@
 import { getDatabaseManager } from '../storage/database';
+import { prepare } from '../storage/statement-wrapper';
+import { logInfo, logWarn } from '../utils/logger';
 
 export interface IntendedState {
   expect: 'present' | 'absent';
@@ -14,10 +16,9 @@ export interface IntendedState {
  */
 export async function buildIntendedMap(commitShas: string[]): Promise<Map<string, IntendedState>> {
   const db = getDatabaseManager().getDatabase();
-
   // Sort SHAs oldest → newest (reverse chronological order)
   const placeholders = commitShas.map(() => '?').join(',');
-  const shaOrderStmt = db.prepare(`
+  const shaOrderStmt = prepare(`
     SELECT sha FROM commits_metadata
     WHERE sha IN (${placeholders})
     ORDER BY date ASC
@@ -28,14 +29,14 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
 
   for (const sha of orderedShas) {
     // Load symbol deltas for this commit
-    const symbolsStmt = db.prepare(`
+    const symbolsStmt = prepare(`
       SELECT symbol_id, name, path, signature, change_type, mod_reason
       FROM symbols WHERE sha = ?
     `);
     const symbols = symbolsStmt.all(sha) as any[];
 
     // Load renames from renames table
-    const renamesStmt = db.prepare(`
+    const renamesStmt = prepare(`
       SELECT old_symbol_id, new_symbol_id, old_name, new_name, confidence
       FROM renames WHERE sha = ?
     `);
@@ -51,7 +52,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
           lastName: symbol.name,
           lastPath: symbol.path,
           lastSig: symbol.signature,
-          lastSha: sha
+          lastSha: sha,
         });
       } else if (symbol.change_type === 'modified') {
         const prev = intended.get(key);
@@ -60,7 +61,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
           lastName: symbol.name,
           lastPath: symbol.path,
           lastSig: symbol.signature,
-          lastSha: sha
+          lastSha: sha,
         });
       }
     }
@@ -86,7 +87,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
           lastPath: rename.new_symbol_id.split(':')[0], // Extract path from symbol ID
           lastSig: oldState.lastSig, // Preserve signature from old state
           lastSha: sha,
-          isRenamed: true // Mark as renamed
+          isRenamed: true, // Mark as renamed
         });
       } else {
         // Old symbol wasn't in intended map yet, just add the new one
@@ -95,7 +96,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
           lastName: rename.new_name,
           lastPath: rename.new_symbol_id.split(':')[0],
           lastSha: sha,
-          isRenamed: true
+          isRenamed: true,
         });
       }
     }
@@ -112,7 +113,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
 
         intended.set(key, {
           expect: 'absent',
-          lastSha: sha
+          lastSha: sha,
         });
       }
     }
@@ -120,20 +121,20 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
 
   // Log rename continuity summary
   const renamedCount = Array.from(intended.values()).filter(s => s.isRenamed).length;
-  console.log(`Intended map: ${intended.size} symbols, ${renamedCount} renamed`);
+  logInfo(`Intended map: ${intended.size} symbols, ${renamedCount} renamed`);
 
   // Fallback: if intended is empty, use hotspots and moved blocks to infer baseline
   if (intended.size === 0 && commitShas.length > 0) {
-    console.log(`[IntendedMap] Intended map is empty, using fallback heuristics from hotspots and moved blocks`);
+    logInfo(`Intended map is empty, using fallback heuristics from hotspots and moved blocks`);
     const fallbackIntended = await buildIntendedMapFallback(commitShas, db);
     for (const [key, state] of fallbackIntended) {
       intended.set(key, state);
     }
-    console.log(`[IntendedMap] Fallback added ${fallbackIntended.size} symbols from hotspots/moved blocks`);
+    logInfo(`Fallback added ${fallbackIntended.size} symbols from hotspots/moved blocks`);
   }
 
   if (intended.size === 0) {
-    console.warn(`[IntendedMap] WARNING: Intended map is still empty after fallback. No symbols found in commits.`);
+    logWarn(`WARNING: Intended map is still empty after fallback. No symbols found in commits.`);
   }
 
   return intended;
@@ -150,7 +151,7 @@ async function buildIntendedMapFallback(
   const churnThreshold = 40; // Hotspot score threshold for high churn
 
   // Get hotspot symbols with high churn (likely divergent/refactored)
-  const hotspotStmt = db.prepare(`
+  const hotspotStmt = prepare(`
     SELECT DISTINCT sh.symbol_id, sh.file_path, sh.symbol_name, sh.hotspot_score
     FROM symbol_hotspots sh
     WHERE sh.hotspot_score >= ?
@@ -166,13 +167,13 @@ async function buildIntendedMapFallback(
         expect: 'present',
         lastName: hotspot.symbol_name,
         lastPath: hotspot.file_path,
-        lastSha: commitShas[commitShas.length - 1] || 'unknown'
+        lastSha: commitShas[commitShas.length - 1] || 'unknown',
       });
     }
   }
 
   // Get moved blocks to infer DNA continuity (symbols that moved = present)
-  const movedStmt = db.prepare(`
+  const movedStmt = prepare(`
     SELECT DISTINCT dest_symbol_id, dest_file
     FROM moved_blocks
     WHERE commit_sha IN (${commitShas.map(() => '?').join(',')})
@@ -187,7 +188,7 @@ async function buildIntendedMapFallback(
         expect: 'present',
         lastPath: move.dest_file,
         lastSha: commitShas[commitShas.length - 1] || 'unknown',
-        isRenamed: true // Moved blocks indicate continuity/rename
+        isRenamed: true, // Moved blocks indicate continuity/rename
       });
     }
   }
@@ -198,34 +199,40 @@ async function buildIntendedMapFallback(
 /**
  * Reconstruct IntendedState from evidence arrays when database unavailable
  */
-export function reconstructIntendedFromEvidence(evidence: Record<string, any>): Map<string, IntendedState> {
+export function reconstructIntendedFromEvidence(
+  evidence: Record<string, any>
+): Map<string, IntendedState> {
   const intended = new Map<string, IntendedState>();
 
   if (!evidence) {
     return intended;
   }
 
-  const present = evidence["intended.present"] as string[] || [];
-  const absent = evidence["intended.absent"] as string[] || [];
-  const renamed = evidence["intended.renamed"] as string[] || [];
+  const present = (evidence['intended.present'] as string[]) || [];
+  const absent = (evidence['intended.absent'] as string[]) || [];
+  const renamed = (evidence['intended.renamed'] as string[]) || [];
   const renamedSet = new Set(renamed);
 
   // Parse symbol IDs: path:kind:name
-  function parseSymbolId(id: string): { path: string; kind: string; name: string } {
+  function parseSymbolId(id: string): {
+    path: string;
+    kind: string;
+    name: string;
+  } {
     const parts = id.split(':');
     if (parts.length >= 3) {
       return {
         path: parts[0],
         kind: parts[1],
         // Handle names with colons (e.g., "namespace:ClassName")
-        name: parts.slice(2).join(':')
+        name: parts.slice(2).join(':'),
       };
     }
     // Fallback for malformed IDs
     return {
       path: parts[0] || '',
       kind: parts[1] || 'unknown',
-      name: parts[parts.length - 1] || ''
+      name: parts[parts.length - 1] || '',
     };
   }
 
@@ -237,7 +244,7 @@ export function reconstructIntendedFromEvidence(evidence: Record<string, any>): 
       lastSha: 'bundle',
       lastName: parsed.name,
       lastPath: parsed.path,
-      isRenamed: renamedSet.has(id)
+      isRenamed: renamedSet.has(id),
     });
   });
 
@@ -248,7 +255,7 @@ export function reconstructIntendedFromEvidence(evidence: Record<string, any>): 
       expect: 'absent',
       lastSha: 'bundle',
       lastName: parsed.name,
-      lastPath: parsed.path
+      lastPath: parsed.path,
     });
   });
 

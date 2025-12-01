@@ -1,9 +1,8 @@
-import { Database } from 'sql.js';
-import { getDifftasticIntegration } from './difftastic';
-import { getCstDiffManager } from './cstDiff';
+import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
+import { getCstDiffManager } from './cstDiff';
+import { getDifftasticIntegration } from './difftastic';
 import type { CstDiffResult } from './cstDiff';
-import { getDatabaseManager } from '../storage/database';
 
 export interface StructuralDiffMetrics {
   structuralChangeScore: number; // 0-1
@@ -28,7 +27,7 @@ export class StructuralDiffManager {
   private writeQueue: QueuedDiff[] = [];
   private readonly BATCH_SIZE = 50;
 
-  constructor(private db: Database) {}
+  constructor(private db: any) {}
 
   /**
    * Get or create structural diff (content-addressed caching)
@@ -49,7 +48,7 @@ export class StructuralDiffManager {
         interfaceChanged: false,
         movedBlocks: 0,
         linesAdded: 0,
-        linesRemoved: 0
+        linesRemoved: 0,
       };
       // Cache the empty diff to avoid future checks
       this.storeDiff(parentBlobSha, currentBlobSha, filePath, emptyDiff);
@@ -59,7 +58,12 @@ export class StructuralDiffManager {
     // Check cache
     const cached = this.getCachedDiff(parentBlobSha, currentBlobSha, filePath);
     if (cached) {
-      logDebug(`[StructDiff] Cache hit for ${filePath} ${parentBlobSha.substring(0, 8)}→${currentBlobSha.substring(0, 8)}`);
+      logDebug(
+        `[StructDiff] Cache hit for ${filePath} ${parentBlobSha.substring(
+          0,
+          8
+        )}→${currentBlobSha.substring(0, 8)}`
+      );
       return cached;
     }
 
@@ -94,7 +98,7 @@ export class StructuralDiffManager {
     currentBlobSha: string,
     filePath: string
   ): StructuralDiffMetrics | null {
-    const stmt = this.db.prepare(`
+    const stmt = prepare(`
       SELECT * FROM structural_diffs
       WHERE parent_blob_sha = ? AND current_blob_sha = ? AND file_path = ?
     `);
@@ -108,7 +112,7 @@ export class StructuralDiffManager {
       movedBlocks: row.moved_blocks,
       linesAdded: row.lines_added,
       linesRemoved: row.lines_removed,
-      rawData: row.data_json ? JSON.parse(row.data_json) : undefined
+      rawData: row.data_json ? JSON.parse(row.data_json) : undefined,
     };
   }
 
@@ -127,10 +131,9 @@ export class StructuralDiffManager {
   private flushDiffQueueInternal(): void {
     if (this.writeQueue.length === 0) return;
     const batch = this.writeQueue.splice(0, this.BATCH_SIZE);
-    
+
     // Get wrapped database with transaction support
-    const db = getDatabaseManager().getDatabase();
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       INSERT OR REPLACE INTO structural_diffs
       (parent_blob_sha, current_blob_sha, file_path, structural_change_score,
        control_flow_changed, interface_changed, moved_blocks, lines_added,
@@ -139,9 +142,9 @@ export class StructuralDiffManager {
     `);
 
     const now = new Date().toISOString();
-    
+
     // Use transaction wrapper instead of manual BEGIN/COMMIT
-    db.transaction(() => {
+    this.db.transaction(() => {
       for (const diff of batch) {
         stmt.run([
           diff.parentBlobSha,
@@ -154,7 +157,7 @@ export class StructuralDiffManager {
           diff.metrics.linesAdded,
           diff.metrics.linesRemoved,
           diff.metrics.rawData ? JSON.stringify(diff.metrics.rawData) : null,
-          now
+          now,
         ]);
       }
     })();
@@ -190,9 +193,10 @@ export class StructuralDiffManager {
 
     // Fallback: if hunks not available, parse raw difftastic output text
     if (hunks.length === 0 && difftasticOutput.rawData) {
-      const rawOutput = typeof difftasticOutput.rawData === 'string'
-        ? difftasticOutput.rawData
-        : JSON.stringify(difftasticOutput.rawData);
+      const rawOutput =
+        typeof difftasticOutput.rawData === 'string'
+          ? difftasticOutput.rawData
+          : JSON.stringify(difftasticOutput.rawData);
 
       // Parse @@ hunk headers with regex
       const hunkRegex = /^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/gm;
@@ -240,7 +244,7 @@ export class StructuralDiffManager {
       movedBlocks,
       linesAdded,
       linesRemoved,
-      rawData: difftasticOutput
+      rawData: difftasticOutput,
     };
   }
 

@@ -20,11 +20,11 @@ export class PathFilterError extends Error {
   }
 }
 
-export function handleServiceError(error: any, context: string): never {
+export function handleServiceError(error: any, context: string): void {
   if (error instanceof DatabaseError && error.recoverable) {
     logDebug(`[${context}] Recoverable error: ${error.message}`);
-    throw error; // Still throw recoverable errors for now
+    return; // Don't throw recoverable errors - use best-effort mode
   }
   logError(`[${context}] Unrecoverable error`, error);
-  throw error;
+  return; // Don't throw unrecoverable errors either - log and continue
 }

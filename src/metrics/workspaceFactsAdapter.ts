@@ -66,7 +66,7 @@ export function calculateWorkspaceFactsFromSymbols(
     totalEdges,
     filesChanged,
     blastRadius,
-    structuralChangeScore
+    structuralChangeScore,
   };
 }
 
@@ -85,6 +85,6 @@ export function createWorkspaceFacts(metrics: WorkspaceMetrics): WorkspaceFacts 
     risks: [], // Simplified
     filesChanged: metrics.filesChanged,
     structuralChangeScore: metrics.structuralChangeScore,
-    blastRadius: metrics.blastRadius
+    blastRadius: metrics.blastRadius,
   };
 }

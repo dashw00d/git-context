@@ -1,24 +1,21 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
-// Analysis functions moved to RefactorPipeline service
-import { showCommit, searchSymbol, showLastCommits } from './queries';
-import { installHooks } from './hooks';
 import chalk from 'chalk';
-import { logInfo, logError } from '../utils/logger';
+import { Command } from 'commander';
+import { prepare } from '../storage/statement-wrapper';
+import { logError, logInfo } from '../utils/logger';
+import { installHooks } from './hooks';
+import { searchSymbol, showCommit, showLastCommits } from './queries';
 
 const program = new Command();
 
-program
-  .name('ct')
-  .description('Commit Tracker CLI')
-  .version('0.1.0');
+program.name('ct').description('Commit Tracker CLI').version('0.1.0');
 
 program
   .command('analyze')
   .description('Analyze commits')
   .option('-c, --count <number>', 'number of commits to analyze', '5')
-  .action(async (options) => {
+  .action(async options => {
     const count = parseInt(options.count);
     logInfo(chalk.blue(`Analyzing last ${count} commits...`));
 
@@ -79,7 +76,7 @@ program
 program
   .command('analyze-commit <sha>')
   .description('Analyze a specific commit')
-  .action(async (sha) => {
+  .action(async sha => {
     logInfo(chalk.blue(`Analyzing commit ${sha}...`));
 
     try {
@@ -100,7 +97,7 @@ program
 program
   .command('show <sha>')
   .description('Show commit analysis')
-  .action(async (sha) => {
+  .action(async sha => {
     try {
       await showCommit(sha);
     } catch (error) {
@@ -112,7 +109,7 @@ program
 program
   .command('symbol <name>')
   .description('Search symbol history')
-  .action(async (name) => {
+  .action(async name => {
     try {
       await searchSymbol(name);
     } catch (error) {
@@ -125,7 +122,7 @@ program
   .command('last [count]')
   .description('Show last analyzed commits')
   .option('-n, --count <number>', 'number of commits to show', '5')
-  .action(async (options) => {
+  .action(async options => {
     try {
       await showLastCommits(parseInt(options.count));
     } catch (error) {
@@ -139,7 +136,7 @@ program
   .description('Index commits into database')
   .option('-r, --reindex', 'force reindex all commits or legacy modules')
   .option('-m, --modules <list>', 'comma-separated list of modules to reindex (e.g., "edges")')
-  .action(async (options) => {
+  .action(async options => {
     logInfo(chalk.blue('Indexing commits...'));
 
     try {
@@ -152,8 +149,8 @@ program
       const { HotspotDetectorV2 } = await import('../analysis/hotspotDetector');
       const { MovedBlockDetectorV2 } = await import('../analysis/movedBlockDetector');
       const { getDatabaseManager } = await import('../storage/database');
-
       const db = getDatabaseManager().getDatabase();
+
       const git = new GitOperations();
       const { SymbolExtractor } = await import('../analysis/symbols');
       const symbolExtractor = new SymbolExtractor(git);
@@ -179,16 +176,24 @@ program
 
       if (options.reindex) {
         // Force reindex all commits
-        const allShas = db.prepare('SELECT sha FROM commits_metadata').all().map((r: any) => r.sha);
+        const allShas = prepare('SELECT sha FROM commits_metadata')
+          .all()
+          .map((r: any) => r.sha);
         shas = allShas;
         logInfo(chalk.blue(`Reindexing ${shas.length} commits...`));
       } else if (options.modules) {
         // Reindex commits for specific modules
         const modules = options.modules.split(',').map((m: string) => m.trim());
-        const modulePattern = modules.map((m: string) => `%legacy_${m}%`).join(' OR analysis_version LIKE ');
-        const stmt = db.prepare(`SELECT sha FROM commits_analysis WHERE analysis_version LIKE ${modulePattern}`);
+        const modulePattern = modules
+          .map((m: string) => `%legacy_${m}%`)
+          .join(' OR analysis_version LIKE ');
+        const stmt = prepare(
+          `SELECT sha FROM commits_analysis WHERE analysis_version LIKE ${modulePattern}`
+        );
         shas = stmt.all().map((r: any) => r.sha);
-        logInfo(chalk.blue(`Reindexing ${shas.length} commits for modules: ${modules.join(', ')}...`));
+        logInfo(
+          chalk.blue(`Reindexing ${shas.length} commits for modules: ${modules.join(', ')}...`)
+        );
       } else {
         // Index recent commits
         const recentCommits = await git.getRecentCommits(10);
@@ -198,7 +203,9 @@ program
 
       await commitIndexer.ensureCommitsIndexed(shas, 8, {
         force: options.reindex,
-        modules: options.modules ? options.modules.split(',').map((m: string) => m.trim()) : undefined
+        modules: options.modules
+          ? options.modules.split(',').map((m: string) => m.trim())
+          : undefined,
       });
 
       logInfo(chalk.green('Indexing complete!'));

@@ -1,12 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getGitRoot } from '../utils/config';
-import { logInfo } from '../utils/logger';
+import { logError, logInfo } from '../utils/logger';
 
 export async function installHooks(): Promise<void> {
   const gitRoot = getGitRoot();
   if (!gitRoot) {
-    throw new Error('Not in a git repository');
+    logError('Not in a git repository');
+    return; // Return early instead of throwing
   }
 
   const hooksDir = path.join(gitRoot, '.git', 'hooks');
@@ -68,7 +69,8 @@ fi
 export async function uninstallHooks(): Promise<void> {
   const gitRoot = getGitRoot();
   if (!gitRoot) {
-    throw new Error('Not in a git repository');
+    logError('Not in a git repository');
+    return; // Return early instead of throwing
   }
 
   const hooksDir = path.join(gitRoot, '.git', 'hooks');

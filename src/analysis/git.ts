@@ -3,7 +3,7 @@ import * as path from 'path';
 import simpleGit, { SimpleGit } from 'simple-git';
 import { CommitInfo, FileChange } from '../types';
 import { getGitRoot } from '../utils/config';
-import { logDebug, logWarn, logError } from '../utils/logger';
+import { logDebug, logError, logWarn } from '../utils/logger';
 
 export class GitOperations {
   private gitRoot: string;
@@ -13,6 +13,7 @@ export class GitOperations {
   constructor() {
     const root = getGitRoot();
     if (!root) {
+      // eslint-disable-next-line no-restricted-syntax
       throw new Error('Not in a git repository');
     }
     this.gitRoot = root;
@@ -33,7 +34,8 @@ export class GitOperations {
 
       const lines = output.split('\n');
       if (lines.length < 4) {
-        throw new Error(`Invalid commit format for SHA: ${sha}`);
+        logError(`Invalid commit format for SHA: ${sha}`);
+        return { sha, author: '', date: '', message: '', parent: undefined };
       }
 
       return {
@@ -41,10 +43,11 @@ export class GitOperations {
         author: lines[1] || '',
         date: lines[2] || '',
         message: lines[3] || '',
-        parent: lines[4] || undefined
+        parent: lines[4] || undefined,
       };
     } catch (error: any) {
-      throw new Error(`Failed to get commit info for ${sha}: ${error.message}`);
+      logError(`Failed to get commit info for ${sha}: ${error.message}`);
+      return { sha, author: '', date: '', message: '', parent: undefined };
     }
   }
 
@@ -68,13 +71,14 @@ export class GitOperations {
           author: lines[i + 1] || '',
           date: lines[i + 2] || '',
           message: lines[i + 3] || '',
-          parent: lines[i + 4] || undefined
+          parent: lines[i + 4] || undefined,
         });
       }
 
       return commits;
     } catch (error: any) {
-      throw new Error(`Failed to get recent commits: ${error.message}`);
+      logError(`Failed to get recent commits: ${error.message}`);
+      return [];
     }
   }
 
@@ -90,9 +94,18 @@ export class GitOperations {
         // Fallback for root commits - compare with empty tree
         try {
           // 4b825dc642cb6eb9a060e54bf8d69288fbee4904 is the hash of an empty tree in git
-          output = await this.git.raw(['diff-tree', '-r', '--no-commit-id', '--name-status', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', sha]);
+          output = await this.git.raw([
+            'diff-tree',
+            '-r',
+            '--no-commit-id',
+            '--name-status',
+            '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+            sha,
+          ]);
         } catch (innerError) {
-          logWarn(`Failed to get file changes for ${sha} (even with empty tree fallback): ${innerError}`);
+          logWarn(
+            `Failed to get file changes for ${sha} (even with empty tree fallback): ${innerError}`
+          );
           return [];
         }
       }
@@ -114,8 +127,8 @@ export class GitOperations {
 
           changes.push({
             path: filePath,
-            status: status.charAt(0) as FileChange['status'],  // A/M/D/R/C
-            oldPath
+            status: status.charAt(0) as FileChange['status'], // A/M/D/R/C
+            oldPath,
           });
         }
       }
@@ -134,7 +147,8 @@ export class GitOperations {
     try {
       return await this.git.show([sha, '--pretty=format:']);
     } catch (error: any) {
-      throw new Error(`Failed to get commit diff for ${sha}: ${error.message}`);
+      logError(`Failed to get commit diff for ${sha}: ${error.message}`);
+      return '';
     }
   }
 
@@ -145,7 +159,8 @@ export class GitOperations {
     try {
       return await this.git.show([sha, '--pretty=format:', '--patch', '--', filePath]);
     } catch (error: any) {
-      throw new Error(`Failed to get file diff for ${filePath} at ${sha}: ${error.message}`);
+      logError(`Failed to get file diff for ${filePath} at ${sha}: ${error.message}`);
+      return '';
     }
   }
 
@@ -160,7 +175,8 @@ export class GitOperations {
       try {
         return await this.git.diff([`${startSha}..${endSha}`, '--', filePath]);
       } catch (error: any) {
-        throw new Error(`Failed to get bundle diff for ${filePath}: ${error.message}`);
+        logError(`Failed to get bundle diff for ${filePath}: ${error.message}`);
+        return '';
       }
     }
   }
@@ -172,7 +188,8 @@ export class GitOperations {
     try {
       return await this.git.diff(['--cached']);
     } catch (error: any) {
-      throw new Error(`Failed to get staged diff: ${error.message}`);
+      logError(`Failed to get staged diff: ${error.message}`);
+      return '';
     }
   }
 
@@ -183,7 +200,8 @@ export class GitOperations {
     try {
       return await this.git.show([`${sha}:${filePath}`]);
     } catch (error: any) {
-      throw new Error(`Failed to get file content for ${filePath} at ${sha}: ${error.message}`);
+      logError(`Failed to get file content for ${filePath} at ${sha}: ${error.message}`);
+      return '';
     }
   }
 
@@ -197,7 +215,8 @@ export class GitOperations {
       if (this.isGitPathMissing(error)) {
         return '';
       }
-      throw error;
+      logError(`Failed to get file content for ${sha}:${filePath}: ${error.message}`);
+      return ''; // Return empty string instead of throwing
     }
   }
 
@@ -208,7 +227,8 @@ export class GitOperations {
     try {
       return await this.git.show([`:${filePath}`]);
     } catch (error: any) {
-      throw new Error(`Failed to get staged content for ${filePath}: ${error.message}`);
+      logError(`Failed to get staged content for ${filePath}: ${error.message}`);
+      return '';
     }
   }
 
@@ -222,7 +242,8 @@ export class GitOperations {
       if (this.isGitPathMissing(error)) {
         return '';
       }
-      throw error;
+      logError(`Failed to get staged content for ${filePath}: ${error.message}`);
+      return ''; // Return empty string instead of throwing
     }
   }
 
@@ -253,7 +274,7 @@ export class GitOperations {
     try {
       const result = await this.git.checkIgnore([filePath]);
       if (result.length > 0) {
-        console.log(`[GitDebug] ${filePath} IS IGNORED. Result: ${JSON.stringify(result)}`);
+        logDebug(`${filePath} IS IGNORED. Result: ${JSON.stringify(result)}`);
       }
       return result.length > 0;
     } catch (error) {
@@ -282,7 +303,8 @@ export class GitOperations {
     try {
       return await this.git.revparse(['HEAD']);
     } catch (error: any) {
-      throw new Error(`Failed to get HEAD SHA: ${error.message}`);
+      logError(`Failed to get HEAD SHA: ${error.message}`);
+      return '';
     }
   }
 
@@ -293,7 +315,10 @@ export class GitOperations {
   async getBlobSha(sha: string, filePath: string): Promise<string> {
     try {
       const output = await this.git.raw(['ls-tree', '-r', sha, '--', filePath]);
-      const lines = output.trim().split('\n').filter(l => l.trim());
+      const lines = output
+        .trim()
+        .split('\n')
+        .filter(l => l.trim());
 
       for (const line of lines) {
         const parsed = this.parseLsTreeLine(line);
@@ -303,9 +328,10 @@ export class GitOperations {
       }
 
       logWarn(`No matching ls-tree entry for ${filePath} at ${sha}`);
-      throw new Error(`File ${filePath} not found at commit ${sha}`);
+      return ''; // Return empty string instead of throwing
     } catch (error: any) {
-      throw new Error(`Failed to get blob SHA for ${filePath} at ${sha}: ${error.message}`);
+      logError(`Failed to get blob SHA for ${filePath} at ${sha}: ${error.message}`);
+      return '';
     }
   }
 
@@ -347,8 +373,8 @@ export class GitOperations {
         from: branch,
         maxCount: limit,
         format: {
-          hash: '%H'
-        }
+          hash: '%H',
+        },
       });
       return log.all.map(commit => commit.hash);
     } catch {
@@ -368,7 +394,6 @@ export class GitOperations {
       return false;
     }
   }
-
 
   /**
    * Get list of changed files in working directory
@@ -404,7 +429,7 @@ export class GitOperations {
 
         changes.push({
           path: filePath,
-          status: changeStatus
+          status: changeStatus,
         });
       }
 
@@ -425,9 +450,9 @@ export class GitOperations {
       // Remove quotes and decode escape sequences
       const unquoted = rawPath.slice(1, -1);
       // Replace octal escapes (e.g., \141 -> 'a')
-      return unquoted.replace(/\\(\d{3})/g, (_, oct) =>
-        String.fromCharCode(parseInt(oct, 8))
-      ).replace(/\\\\/g, '\\'); // Replace \\\\ with \\
+      return unquoted
+        .replace(/\\(\d{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
+        .replace(/\\\\/g, '\\'); // Replace \\\\ with \\
     }
     return rawPath;
   }
@@ -436,13 +461,15 @@ export class GitOperations {
    * Parse a single line from git ls-tree output (mode<TAB>type<TAB>sha<TAB>path)
    * Handles paths with spaces correctly using TAB separation.
    */
-  private parseLsTreeLine(rawLine: string): { mode: string, type: string, sha: string, path: string } | null {
+  private parseLsTreeLine(
+    rawLine: string
+  ): { mode: string; type: string; sha: string; path: string } | null {
     const tabIdx = rawLine.lastIndexOf('\t');
     if (tabIdx === -1 || tabIdx < 1) return null;
 
     const path = rawLine.slice(tabIdx + 1);
     const preSha = rawLine.slice(0, tabIdx).trim();
-    const preParts = preSha.split(/\s+/);  // split on whitespace
+    const preParts = preSha.split(/\s+/); // split on whitespace
 
     if (preParts.length < 3) return null;
 
@@ -463,13 +490,16 @@ export class GitOperations {
     );
   }
 
-
   /**
    * Parse git file list output (one file per line)
    * Normalizes whitespace and filters empty lines.
    */
   private parseFileList(raw: string): string[] {
-    return raw.trim().split('\n').map(l => l.trim()).filter(Boolean);
+    return raw
+      .trim()
+      .split('\n')
+      .map(l => l.trim())
+      .filter(Boolean);
   }
 
   /**
@@ -503,7 +533,7 @@ export class GitOperations {
 
           staged.push({
             path: filePath,
-            status: changeStatus
+            status: changeStatus,
           });
         }
       }
@@ -550,7 +580,7 @@ export class GitOperations {
 
           unstaged.push({
             path: filePath,
-            status: changeStatus
+            status: changeStatus,
           });
         }
       }
@@ -564,7 +594,7 @@ export class GitOperations {
           if (!unstaged.some(f => f.path === filePath)) {
             unstaged.push({
               path: filePath,
-              status: 'U' // U = untracked
+              status: 'U', // U = untracked
             });
           }
         }
@@ -582,9 +612,14 @@ export class GitOperations {
   /**
    * Get diff stats for a specific file (added/removed lines)
    */
-  async getFileDiffStats(filePath: string, staged: boolean = false): Promise<{ added: number; removed: number }> {
+  async getFileDiffStats(
+    filePath: string,
+    staged: boolean = false
+  ): Promise<{ added: number; removed: number }> {
     try {
-      const args = staged ? ['diff', '--cached', '--numstat', '--', filePath] : ['diff', '--numstat', '--', filePath];
+      const args = staged
+        ? ['diff', '--cached', '--numstat', '--', filePath]
+        : ['diff', '--numstat', '--', filePath];
       const output = await this.git.raw(args);
 
       if (!output.trim()) {
@@ -630,13 +665,17 @@ export class GitOperations {
         `-${limit}`,
         '--format=%h|%an|%aI|%s',
         '--',
-        filePath
+        filePath,
       ]);
 
-      return stdout.trim().split('\n').filter(Boolean).map(line => {
-        const [hash, author, date, message] = line.split('|');
-        return { hash, author, date, message, virtual: false };
-      });
+      return stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map(line => {
+          const [hash, author, date, message] = line.split('|');
+          return { hash, author, date, message, virtual: false };
+        });
     } catch (error: any) {
       logError(`Failed to get file history for ${filePath}: ${error.message}`);
       return [];
@@ -655,7 +694,7 @@ export class GitOperations {
         '--format=%H|%an|%aI|%s',
         '--numstat',
         '--',
-        filePath
+        filePath,
       ]);
 
       const lines = stdout.trim().split('\n');
@@ -666,7 +705,13 @@ export class GitOperations {
         if (line.includes('|') && line.split('|').length >= 4) {
           const [hash, author, date, message] = line.split('|');
           if (current) entries.push(current);
-          current = { hash, author, date, message, stats: { additions: 0, deletions: 0 } };
+          current = {
+            hash,
+            author,
+            date,
+            message,
+            stats: { additions: 0, deletions: 0 },
+          };
         } else if (current) {
           const parts = line.split('\t');
           if (parts.length === 3) {
@@ -704,7 +749,7 @@ export class GitOperations {
           '--pretty=format:%H',
           '--numstat',
           '--no-merges',
-          '--since="3 months ago"' // Configurable?
+          '--since="3 months ago"', // Configurable?
         ]);
 
         const fileCounts = new Map<string, { count: number; added: number; removed: number }>();
@@ -728,10 +773,19 @@ export class GitOperations {
         const sizes = await this.getFileSizes(Array.from(fileCounts.keys()));
 
         const data: HotspotStat[] = Array.from(fileCounts.entries())
-          .map(([path, stats]) => ({ path, count: stats.count, added: stats.added, removed: stats.removed, size: sizes.get(path) }))
+          .map(([path, stats]) => ({
+            path,
+            count: stats.count,
+            added: stats.added,
+            removed: stats.removed,
+            size: sizes.get(path),
+          }))
           .sort((a, b) => b.count - a.count);
 
-        GitOperations.hotspotCache.set(key, { expires: now + 5 * 60 * 1000, data });
+        GitOperations.hotspotCache.set(key, {
+          expires: now + 5 * 60 * 1000,
+          data,
+        });
         return data.slice(0, limit);
       } catch (cacheError) {
         logWarn(`Hotspot caching failed, falling back: ${cacheError}`);
@@ -743,7 +797,7 @@ export class GitOperations {
         '--pretty=format:%H',
         '--numstat',
         '--no-merges',
-        '--since="3 months ago"' // Configurable?
+        '--since="3 months ago"', // Configurable?
       ]);
 
       const fileCounts = new Map<string, { count: number; added: number; removed: number }>();
@@ -764,11 +818,15 @@ export class GitOperations {
       }
 
       const data: HotspotStat[] = Array.from(fileCounts.entries())
-        .map(([path, stats]) => ({ path, count: stats.count, added: stats.added, removed: stats.removed }))
+        .map(([path, stats]) => ({
+          path,
+          count: stats.count,
+          added: stats.added,
+          removed: stats.removed,
+        }))
         .sort((a, b) => b.count - a.count)
         .slice(0, limit);
       return data;
-
     } catch (error: any) {
       logError(`Failed to get hotspots: ${error.message}`);
       return [];

@@ -1,10 +1,10 @@
+import { RefactorBundleFacts } from '../facts/types';
+import { generateEmbedding } from '../storage/embeddings';
+import { getQdrantClient } from '../storage/qdrantClient';
+import { getProjectId } from '../utils/config';
+import { logInfo, logWarn } from '../utils/logger';
 import { CommitFacts } from './commitIndexer';
 import { LlmAnalyst } from './llmAnalyst/runner';
-import { getQdrantClient } from '../storage/qdrantClient';
-import { generateEmbedding } from '../storage/embeddings';
-import { RefactorBundleFacts } from '../facts/types';
-import { logInfo, logWarn } from '../utils/logger';
-import { getProjectId } from '../utils/config';
 import type { HistoryMetrics } from './runner/pipelineMetrics';
 
 export interface RetrievedHistory {
@@ -32,16 +32,19 @@ export interface RetrievedHistory {
     structuralChangeScore: number;
     similarity: number;
   }>;
-  symbolEvolution: Map<string, Array<{
-    sha: string;
-    changeType: string;
-    date: string;
-    impactScore: number;
-  }>>;
+  symbolEvolution: Map<
+    string,
+    Array<{
+      sha: string;
+      changeType: string;
+      date: string;
+      impactScore: number;
+    }>
+  >;
 }
 
 export class BundleStoryEngine {
-  constructor(private llmAnalyst: LlmAnalyst) { }
+  constructor(private llmAnalyst: LlmAnalyst) {}
 
   /**
    * Generate narrative story from bundle facts + historical context
@@ -77,14 +80,11 @@ export class BundleStoryEngine {
 
     return {
       llmAnalysis,
-      history  // Include history for UI display
+      history, // Include history for UI display
     };
   }
 
-  private buildBundleShard(
-    facts: RefactorBundleFacts,
-    commitFacts: CommitFacts[]
-  ): string {
+  private buildBundleShard(facts: RefactorBundleFacts, commitFacts: CommitFacts[]): string {
     const totalSymbols = facts.working?.symbols || 0;
     const issues = facts.findings?.incompleteness?.missing || 0;
     const blastRadius = facts.scope?.blastRadius || 0;
@@ -95,13 +95,15 @@ export class BundleStoryEngine {
 
     const allRisks = [...new Set(commitFacts.flatMap(f => f.risks))];
 
-    return `Refactor bundle analysis: ${facts.bundle.shas.length} commits, ` +
+    return (
+      `Refactor bundle analysis: ${facts.bundle.shas.length} commits, ` +
       `${totalSymbols} total symbols affected. ` +
       `Changes: ${totalAdded} added, ${totalModified} modified, ${totalRemoved} removed. ` +
       `Issues found: ${issues}. ` +
       `Blast radius: ${blastRadius}. ` +
       `Risks: ${allRisks.join(', ')}. ` +
-      `Scope: ${facts.scope?.files || 0} files`;
+      `Scope: ${facts.scope?.files || 0} files`
+    );
   }
 
   private async retrieveHistory(
@@ -118,8 +120,8 @@ export class BundleStoryEngine {
         similarSymbols: 0,
         relatedRefactors: 0,
         skipped: true,
-        reason
-      }
+        reason,
+      },
     });
 
     const qdrant = getQdrantClient();
@@ -133,9 +135,10 @@ export class BundleStoryEngine {
     }
 
     // Compute embedding if not provided (history step calls directly)
-    const effectiveEmbedding = queryEmbedding && queryEmbedding.length > 0
-      ? queryEmbedding
-      : await generateEmbedding(this.buildBundleShard(bundleFacts, commitFacts));
+    const effectiveEmbedding =
+      queryEmbedding && queryEmbedding.length > 0
+        ? queryEmbedding
+        : await generateEmbedding(this.buildBundleShard(bundleFacts, commitFacts));
 
     // PROJECT ISOLATION: Filter by project ID
     const projectId = await getProjectId();
@@ -168,20 +171,24 @@ export class BundleStoryEngine {
     }
 
     if (commitsEmpty) {
-      logInfo(`[BundleStory] Commits collection is empty (${commitsCount} points), skipping commit search`);
+      logInfo(
+        `[BundleStory] Commits collection is empty (${commitsCount} points), skipping commit search`
+      );
     }
 
     if (symbolsEmpty) {
-      logInfo(`[BundleStory] Symbols collection is empty (${symbolsCount} points), skipping symbol search`);
+      logInfo(
+        `[BundleStory] Symbols collection is empty (${symbolsCount} points), skipping symbol search`
+      );
     }
 
     const projectFilter = {
       must: [
         {
           key: 'project_id',
-          match: { value: projectId }
-        }
-      ]
+          match: { value: projectId },
+        },
+      ],
     };
 
     // Query 1: Similar commits (episodic memory)
@@ -193,10 +200,12 @@ export class BundleStoryEngine {
           limit: 20,
           with_payload: true,
           score_threshold: 0.6,
-          filter: projectFilter  // ONLY CURRENT PROJECT
+          filter: projectFilter, // ONLY CURRENT PROJECT
         });
       } catch (error: any) {
-        logWarn(`[BundleStory] Failed to search commits: ${error?.message || error}. Collection: ${commitsCollection}, Filter: ${JSON.stringify(projectFilter)}`);
+        logWarn(
+          `[BundleStory] Failed to search commits: ${error?.message || error}. Collection: ${commitsCollection}, Filter: ${JSON.stringify(projectFilter)}`
+        );
       }
     }
 
@@ -209,10 +218,12 @@ export class BundleStoryEngine {
           limit: 30,
           with_payload: true,
           score_threshold: 0.65,
-          filter: projectFilter  // ONLY CURRENT PROJECT
+          filter: projectFilter, // ONLY CURRENT PROJECT
         });
       } catch (error: any) {
-        logWarn(`[BundleStory] Failed to search symbols: ${error?.message || error}. Collection: ${symbolsCollection}, Filter: ${JSON.stringify(projectFilter)}`);
+        logWarn(
+          `[BundleStory] Failed to search symbols: ${error?.message || error}. Collection: ${symbolsCollection}, Filter: ${JSON.stringify(projectFilter)}`
+        );
       }
     }
 
@@ -221,15 +232,15 @@ export class BundleStoryEngine {
       must: [
         {
           key: 'project_id',
-          match: { value: projectId }  // PROJECT ISOLATION
+          match: { value: projectId }, // PROJECT ISOLATION
         },
         {
           key: 'structural_change_score',
           range: {
-            gte: 0.1  // Lowered from 0.5 to capture more refactors
-          }
-        }
-      ]
+            gte: 0.1, // Lowered from 0.5 to capture more refactors
+          },
+        },
+      ],
     };
 
     let relatedRefactors: any[] = [];
@@ -239,10 +250,12 @@ export class BundleStoryEngine {
           vector: effectiveEmbedding,
           limit: 10,
           filter: refactorFilter,
-          with_payload: true
+          with_payload: true,
         });
       } catch (error: any) {
-        logWarn(`[BundleStory] Failed to search related refactors: ${error?.message || error}. Collection: ${commitsCollection}, Filter: ${JSON.stringify(refactorFilter)}`);
+        logWarn(
+          `[BundleStory] Failed to search related refactors: ${error?.message || error}. Collection: ${commitsCollection}, Filter: ${JSON.stringify(refactorFilter)}`
+        );
       }
     }
 
@@ -252,17 +265,25 @@ export class BundleStoryEngine {
     // Validate filter isolation: check that all retrieved items match project_id
     const retrievedProjectIds = new Set<string>();
     similarCommits.forEach(c => {
-      if (c.payload?.project_id && typeof c.payload.project_id === 'string') retrievedProjectIds.add(c.payload.project_id);
+      if (c.payload?.project_id && typeof c.payload.project_id === 'string')
+        retrievedProjectIds.add(c.payload.project_id);
     });
     similarSymbols.forEach(s => {
-      if (s.payload?.project_id && typeof s.payload.project_id === 'string') retrievedProjectIds.add(s.payload.project_id);
+      if (s.payload?.project_id && typeof s.payload.project_id === 'string')
+        retrievedProjectIds.add(s.payload.project_id);
     });
     relatedRefactors.forEach(r => {
-      if (r.payload?.project_id && typeof r.payload.project_id === 'string') retrievedProjectIds.add(r.payload.project_id);
+      if (r.payload?.project_id && typeof r.payload.project_id === 'string')
+        retrievedProjectIds.add(r.payload.project_id);
     });
 
-    if (retrievedProjectIds.size > 1 || (retrievedProjectIds.size === 1 && !retrievedProjectIds.has(projectId))) {
-      logWarn(`[BundleStory] Filter leak detected: expected ${projectId}, got ${Array.from(retrievedProjectIds).join(', ')}`);
+    if (
+      retrievedProjectIds.size > 1 ||
+      (retrievedProjectIds.size === 1 && !retrievedProjectIds.has(projectId))
+    ) {
+      logWarn(
+        `[BundleStory] Filter leak detected: expected ${projectId}, got ${Array.from(retrievedProjectIds).join(', ')}`
+      );
     }
 
     const history: RetrievedHistory = {
@@ -272,7 +293,7 @@ export class BundleStoryEngine {
         message: (r.payload?.message as string) || '',
         similarity: r.score,
         risks: (r.payload?.risks as string[]) || [],
-        blastRadius: (r.payload?.blast_radius as number) || 0
+        blastRadius: (r.payload?.blast_radius as number) || 0,
       })),
       similarSymbols: similarSymbols.map(r => ({
         symbolDnaId: (r.payload?.symbol_dna_id as string) || '',
@@ -282,22 +303,22 @@ export class BundleStoryEngine {
         impactScore: (r.payload?.impact_score as number) || 0,
         filePath: (r.payload?.file_path as string) || '',
         similarity: r.score,
-        commitDate: (r.payload?.date as string) || ''
+        commitDate: (r.payload?.date as string) || '',
       })),
       relatedRefactors: relatedRefactors.map(r => ({
         sha: (r.payload?.sha as string) || '',
         message: (r.payload?.message as string) || '',
         structuralChangeScore: (r.payload?.structural_change_score as number) || 0,
-        similarity: r.score
+        similarity: r.score,
       })),
-      symbolEvolution
+      symbolEvolution,
     };
 
     const metrics: HistoryMetrics = {
       durationMs: Date.now() - startTime,
       similarCommits: history.similarCommits.length,
       similarSymbols: history.similarSymbols.length,
-      relatedRefactors: history.relatedRefactors.length
+      relatedRefactors: history.relatedRefactors.length,
     };
 
     return { history, metrics };
@@ -306,9 +327,7 @@ export class BundleStoryEngine {
   /**
    * Build symbol evolution timelines from similar symbols
    */
-  private async buildSymbolEvolution(
-    similarSymbols: any[]
-  ): Promise<Map<string, Array<any>>> {
+  private async buildSymbolEvolution(similarSymbols: any[]): Promise<Map<string, Array<any>>> {
     const evolutionMap = new Map<string, Array<any>>();
 
     for (const result of similarSymbols) {
@@ -323,7 +342,7 @@ export class BundleStoryEngine {
         changeType: result.payload.change_type,
         date: result.payload.date,
         impactScore: result.payload.impact_score || 0,
-        similarity: result.score
+        similarity: result.score,
       });
     }
 
@@ -340,7 +359,7 @@ export class BundleStoryEngine {
       similarCommits: [],
       similarSymbols: [],
       relatedRefactors: [],
-      symbolEvolution: new Map()
+      symbolEvolution: new Map(),
     };
   }
 }

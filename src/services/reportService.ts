@@ -1,774 +1,806 @@
-import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import { getRefactorPipeline } from '../services/pipelineFactory';
-import { getReportManager } from '../storage/reportManager';
-import { getDatabaseManager } from '../storage/database';
-import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
+import * as vscode from 'vscode';
+import { MermaidGenerator } from '../analysis/mermaidGenerator';
 import { RefactorBundleFacts } from '../facts/types';
+import { getRefactorPipeline } from '../services/pipelineFactory';
+import { getStore } from '../state/store';
+import { getReportManager } from '../storage/reportManager';
+import { prepare } from '../storage/statement-wrapper';
 import { CommitAnalysis, EdgeInfo, SymbolInfo } from '../types';
 import { makeBundleFingerprint, PIPELINE_VERSION, PROMPT_VERSION } from '../utils/fingerprint';
-import { logInfo, logError, logDebug } from '../utils/logger';
+import { logDebug, logError, logInfo } from '../utils/logger';
 import { isWorkspaceSha } from '../utils/workspace';
-import { MermaidGenerator } from '../analysis/mermaidGenerator';
-import { getStore } from '../state/store';
 
 export class ReportService {
-    private static instance: ReportService;
-    private readonly mermaid = new MermaidGenerator();
+  private static instance: ReportService;
+  private readonly mermaid = new MermaidGenerator();
+  private readonly store = getStore();
 
-    private constructor() {
-        // Singleton: use getInstance()
+  private constructor() {
+    // Singleton: use getInstance()
+  }
+
+  static getInstance(): ReportService {
+    if (!ReportService.instance) {
+      ReportService.instance = new ReportService();
     }
+    return ReportService.instance;
+  }
 
-    static getInstance(): ReportService {
-        if (!ReportService.instance) {
-            ReportService.instance = new ReportService();
-        }
-        return ReportService.instance;
-    }
+  /**
+   * Generate a refactor bundle report for a set of commits or workspace changes
+   */
+  async generateReport(
+    shas: string[],
+    scope: 'full' | 'staged' | 'unstaged' | 'partial' = 'full',
+    options: {
+      force?: boolean;
+      title?: string;
+      existingReportId?: string;
+      skipLLM?: boolean;
+      cancellationToken?: vscode.CancellationToken;
+      llmCallTracker?: (
+        purpose: string,
+        model?: string,
+        tokens?: number,
+        duration?: number
+      ) => void;
+    } = {}
+  ): Promise<string | null> {
+    const pipeline = await getRefactorPipeline();
+    const reportManager = getReportManager();
+    let serializedHistory: any = undefined;
 
-    /**
-     * Generate a refactor bundle report for a set of commits or workspace changes
-     */
-    async generateReport(
-        shas: string[],
-        scope: 'full' | 'staged' | 'unstaged' | 'partial' = 'full',
-        options: {
-            force?: boolean;
-            title?: string;
-            existingReportId?: string;
-            skipLLM?: boolean;
-            cancellationToken?: vscode.CancellationToken;
-            llmCallTracker?: (purpose: string, model?: string, tokens?: number, duration?: number) => void;
-        } = {}
-    ): Promise<string | null> {
-        const orchestrator = getCockpitOrchestrator();
-        const pipeline = await getRefactorPipeline();
-        const reportManager = getReportManager();
-        const store = getStore();
-        let serializedHistory: any = undefined;
+    // 1. Check Cache (Layer 3)
+    const fingerprint = makeBundleFingerprint(
+      shas,
+      scope as any, // 'selection' | 'staged' | 'unstaged' | 'lastN' | 'full'
+      PIPELINE_VERSION,
+      PROMPT_VERSION
+    );
 
-        // 1. Check Cache (Layer 3)
-        const fingerprint = makeBundleFingerprint(
-            shas,
-            scope as any, // 'selection' | 'staged' | 'unstaged' | 'lastN' | 'full'
-            PIPELINE_VERSION,
-            PROMPT_VERSION
-        );
+    const tempAnalyzed: Set<string> = new Set();
 
-        const tempAnalyzed: Set<string> = new Set();
-
-        if (!options.force && !options.existingReportId) {
-            const cachedReport = reportManager.loadByFingerprint(fingerprint);
-            if (cachedReport) {
-                const facts = cachedReport.facts;
-                const isEmpty = !facts || facts.scope.files === 0 && facts.working.symbols === 0;
-                if (isEmpty) {
-                    logInfo(`[ReportService] Empty cache hit for ${fingerprint}; forcing reanalysis...`);
-                    orchestrator.updateState({ analysisStep: 'Reindexing empty commits...' }, 'report:reindexStart');
-                    const commitShas = shas.filter(s => !isWorkspaceSha(s));
-                    await pipeline.indexCommits(commitShas);
-                    commitShas.forEach(s => tempAnalyzed.add(s));
-                    // Fall through to full generation (cache bypassed)
-                } else {
-                    logInfo(`[ReportService] Cache hit for ${fingerprint}`);
-                    orchestrator.updateState({
-                        bundleFacts: facts,
-                        bundleSummary: cachedReport.analysis,
-                        bundleReportId: cachedReport.id,
-                        isAnalyzing: false,
-                        analysisStep: undefined,
-                        pipelineErrors: [],
-                        retrievedHistory: undefined // Or load if cached, but for now reset
-                    }, 'report:cached');
-                    store.dispatch({
-                        type: 'ANALYSIS_COMPLETED',
-                        payload: {
-                            facts,
-                            summary: cachedReport.analysis,
-                            reportId: cachedReport.id,
-                            history: undefined
-                        }
-                    });
-                    return cachedReport.id;
-                }
-            }
-        }
-
-        orchestrator.updateState({ isAnalyzing: true, analysisStep: 'Analyzing commits...' }, 'report:start');
-        store.dispatch({ type: 'ANALYSIS_STARTED', payload: { step: 'Analyzing commits...' } });
-
-        try {
-            // 2. Run Analysis with new layered pipeline
-            const includeWorkspace = scope === 'staged' || scope === 'unstaged' || scope === 'full';
-            const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
-            const workspaceShas = shas.filter(isWorkspaceSha);
-
-            // Determine workspaceParts based on scope
-            let workspaceParts: Set<'staged' | 'unstaged'> | undefined;
-            if (scope === 'staged') {
-                workspaceParts = new Set(['staged']);
-            } else if (scope === 'unstaged') {
-                workspaceParts = new Set(['unstaged']);
-            } else if (scope === 'full') {
-                workspaceParts = new Set(['staged', 'unstaged']);
-            }
-            // 'partial' or other scopes -> undefined (no workspace)
-
-            // Use the new RefactorPipeline.analyzeBundle method
-            const result = await pipeline.analyzeBundle(
-                commitShas,
-                includeWorkspace,
-                workspaceParts,
-                (event) => {
-                    // Map pipeline events to orchestrator state
-                    switch (event.type) {
-                        case 'start':
-                            orchestrator.updateState({
-                                analysisStep: event.step.label,
-                                analysisProgress: undefined
-                            }, `report:step:${event.step.id}`);
-                            store.dispatch({ type: 'ANALYSIS_STEP_UPDATED', payload: { step: event.step.label } });
-                            break;
-
-                        case 'complete':
-                            orchestrator.updateState({
-                                analysisStep: event.step.label,
-                                analysisProgress: 100
-                            }, `report:step:${event.step.id}:complete`);
-                            store.dispatch({ type: 'ANALYSIS_STEP_UPDATED', payload: { step: event.step.label, progress: 100 } });
-                            break;
-
-                        case 'error':
-                            orchestrator.updateState({
-                                error: String(event.error),
-                                isAnalyzing: false
-                            }, `report:error`);
-                            store.dispatch({ type: 'ANALYSIS_FAILED', payload: { error: String(event.error) } });
-                            break;
-
-                        case 'finished':
-                            if (event.state.errors.length === 0) {
-                                // Serialize symbolEvolution map
-                                const history = event.state.history;
-                                serializedHistory = history ? {
-                                    ...history,
-                                    symbolEvolution: history.symbolEvolution
-                                        ? Object.fromEntries(history.symbolEvolution)
-                                        : {}
-                                } : undefined;
-
-                                orchestrator.updateState({
-                                    bundleFacts: event.state.bundleFacts,
-                                    retrievedHistory: serializedHistory,
-                                    isAnalyzing: false,
-                                    analysisStep: undefined,
-                                    pipelineErrors: []
-                                }, 'report:complete');
-                                store.dispatch({
-                                    type: 'ANALYSIS_COMPLETED',
-                                    payload: {
-                                        facts: event.state.bundleFacts,
-                                        summary: undefined as any,
-                                        reportId: '',
-                                        history: serializedHistory
-                                    }
-                                });
-                            }
-                            break;
-                    }
-                }
-            );
-
-            if (result.errors.length > 0) {
-                throw new Error(`Pipeline failed: ${result.errors[0].error}`);
-            }
-
-            if (options.cancellationToken?.isCancellationRequested) {
-                orchestrator.updateState({ isAnalyzing: false }, 'report:cancelled');
-                return null;
-            }
-
-            // 3. Use facts and analysis from new pipeline
-            const facts = result.bundleFacts;
-            const llmOutputs = result.llmOutputs;
-            const llmAnalysis = llmOutputs?.llmAnalysis;
-
-            // 4. Prepare analysis results
-            let summary: string;
-            let analysis: any = undefined;
-
-            if (llmAnalysis) {
-                summary = llmAnalysis.summary;
-                analysis = {
-                    summary: llmAnalysis.summary,
-                    blocks: llmAnalysis.blocks,
-                    markdown: llmAnalysis.markdown,
-                    metadata: llmAnalysis.metadata
-                };
-
-                if (llmAnalysis.metadata) {
-                    logInfo(`[ReportService] LLM analysis complete: ` +
-                        `health score ${llmAnalysis.metadata.healthScore}/100, ` +
-                        `${llmAnalysis.metadata.totalTokens} tokens`);
-                }
-            } else {
-                logDebug('[ReportService] LLM not available, using fallback summary');
-                summary = this.generateFallbackSummary(facts, shas);
-                analysis = { summary };
-            }
-
-            // 4.0 Always build a facts-driven markdown so the report is useful without LLM
-            const factsMarkdown = this.buildFactsMarkdown(facts);
-
-            // 4.1 Append detailed sections (Legacy/Detailed View)
-            const llmMarkdown = analysis?.markdown || '';
-            const baseMarkdown = [
-                factsMarkdown,
-                llmMarkdown ? `\n\n---\n\n## 🤖 LLM Addendum\n\n${llmMarkdown}` : ''
-            ].filter(Boolean).join('');
-            const visualsMarkdown = this.buildVisualSection(facts);
-            const detailedMarkdown = await this.appendDetailedSections(
-                baseMarkdown + visualsMarkdown,
-                [...commitShas, ...workspaceShas]
-            );
-
-            if (analysis) {
-                analysis.markdown = detailedMarkdown;
-            } else {
-                analysis = { summary, markdown: detailedMarkdown };
-            }
-
-            // 4.5. Compute workspace hash
-            let workspaceHash = '';
-            if (scope === 'staged' || scope === 'unstaged') {
-                // Workspace-based: capture actual file state
-                try {
-                    workspaceHash = await reportManager.computeWorkspaceHash();
-                    logDebug(`[ReportService] Computed workspace hash: ${workspaceHash.substring(0, 8)}...`);
-                } catch (error) {
-                    logError('[ReportService] Failed to compute workspace hash', error);
-                    // Continue with empty hash rather than failing entire report
-                    workspaceHash = '';
-                }
-            } else {
-                // Commit-based: use configuration hash
-                const selectedFiles = (facts.evidence['scope.files'] as string[]) || [];
-                const input = JSON.stringify({
-                    shas: [...shas].sort(),
-                    selectedFiles: [...selectedFiles].sort(),
-                    scope
-                });
-                workspaceHash = crypto.createHash('sha256').update(input).digest('hex');
-                logDebug(`[ReportService] Computed config hash: ${workspaceHash.substring(0, 8)}...`);
-            }
-
-            // 5. Save Report
-            const reportId = options.existingReportId || crypto.randomUUID();
-            const title = options.title || this.generateTitle([...commitShas, ...workspaceShas]);
-
-            const report: any = {
-                id: reportId,
-                title,
-                commitShas: shas,
-                selectedFiles: (facts.evidence['scope.files'] as string[]) || [],
-                workspaceScope: scope,
-                createdAt: new Date(),
-                workspaceHash: workspaceHash,
-                facts,
-                analysis: analysis || { summary },
-                summary,
-                criticalCount: facts.findings.incompleteness.missing + facts.findings.incompleteness.zombies,
-                warningCount: facts.findings.legacyAudit.dead,
-                isPinned: false,
-                fingerprint,
-                pipelineVersion: PIPELINE_VERSION,
-                promptVersion: PROMPT_VERSION,
-                mode: scope
-            };
-
-            // Include treemap/hotspots in persisted report for faster rehydration
-            reportManager.save({
-                ...report,
-                treemap: (facts as any).treemap,
-                hotspots: (facts as any).evidence?.hotspots || (facts as any).findings?.hotspots
-            });
-
-            // 6. Update State
-            orchestrator.updateState({
-                bundleFacts: facts,
-                bundleSummary: {
-                    id: reportId,
-                    commitCount: shas.length,
-                    fileCount: facts.scope.files,
-                    symbolCount: facts.working.symbols,
-                    createdAt: new Date().toISOString(),
-                    debtScore: 0 // Placeholder
-                },
-                bundleReportId: reportId,
-                isAnalyzing: false
-            }, 'report:generated');
-            store.dispatch({
-                type: 'ANALYSIS_COMPLETED',
-                payload: {
-                    facts,
-                    summary: {
-                        id: reportId,
-                        commitCount: shas.length,
-                        fileCount: facts.scope.files,
-                        symbolCount: facts.working.symbols,
-                        createdAt: new Date().toISOString(),
-                        debtScore: 0
-                    },
-                    reportId,
-                    history: serializedHistory
-                }
-            });
-
-            return reportId;
-
-        } catch (error) {
-            logError('[ReportService] Failed to generate report', error);
-            orchestrator.updateState({
-                isAnalyzing: false,
-                error: error instanceof Error ? error.message : String(error)
-            }, 'report:error');
-            store.dispatch({ type: 'ANALYSIS_FAILED', payload: { error: error instanceof Error ? error.message : String(error) } });
-            throw error;
-        }
-    }
-
-    private isEmptyAnalysis(analysis: CommitAnalysis): boolean {
-        const symbolCount = (analysis.symbols?.added?.length || 0) +
-            (analysis.symbols?.modified?.length || 0) +
-            (analysis.symbols?.removed?.length || 0);
-        const edgeCount = (analysis.edges?.added?.length || 0) + (analysis.edges?.removed?.length || 0);
-        return symbolCount === 0 && edgeCount === 0;
-    }
-
-    private aggregateFacts(
-        commits: CommitAnalysis[],
-        shas: string[] = []
-    ): RefactorBundleFacts {
-        // Simple aggregation for now - can be expanded
-        const totalFiles = new Set<string>();
-        let totalBlastRadius = 0;
-        let addedSymbols = 0;
-        let addedEdges = 0;
-
-        const process = (c: CommitAnalysis) => {
-            // Blast radius
-            totalBlastRadius += c.blastRadius;
-
-            // Symbols
-            addedSymbols += c.symbols.added.length;
-
-            // Edges
-            addedEdges += c.edges.added.length;
-        };
-
-        commits.forEach(process);
-
-        // For commit-based analysis, query database to get file lists
-        if (commits.length > 0) {
-            try {
-                const db = getDatabaseManager().getDatabase();
-                if (db && shas.length > 0) {
-                    const placeholders = shas.map(() => '?').join(',');
-                    const filesStmt = db.prepare(`
-                        SELECT DISTINCT path FROM files
-                        WHERE sha IN (${placeholders})
-                    `);
-                    const fileRows = filesStmt.all(...shas) as Array<{ path: string }>;
-                    fileRows.forEach(row => totalFiles.add(row.path));
-                }
-            } catch (error) {
-                logError('[ReportService] Failed to fetch files from database', error);
-                // Continue with whatever files we have
-            }
-        }
-
-        return {
-            version: '2.0',
-            generated_at: new Date().toISOString(),
-            confidence: 0.2, // Low confidence - basic aggregation only
-            bundle: {
-                oldestSha: shas[shas.length - 1] || '',
-                newestSha: shas[0] || '',
-                shas
-            },
-            scope: {
-                files: totalFiles.size,
-                blastRadius: totalBlastRadius
-            },
-            intended: {
-                present: addedSymbols,
-                absent: 0,
-                renamed: 0
-            },
-            working: {
-                symbols: addedSymbols,
-                edges: addedEdges
-            },
-            findings: {
-                incompleteness: {
-                    missing: 0,
-                    zombies: 0,
-                    divergent: 0
-                },
-                patternDrift: {
-                    mixedTargets: 0,
-                    oldNamespaces: 0
-                },
-                legacyAudit: {
-                    dead: 0,
-                    legacyUsed: 0,
-                    replacedLeftovers: []
-                }
-            },
-            evidence: {
-                "scope.files": Array.from(totalFiles)
-            }
-        };
-    }
-
-    private generateTitle(shas: string[]): string {
-        const workspaceCount = shas.filter(isWorkspaceSha).length;
-        const commitCount = shas.length - workspaceCount;
-        const parts: string[] = [];
-        if (commitCount > 0) {
-            parts.push(`${commitCount} commits`);
-        }
-        if (workspaceCount > 0) {
-            parts.push(`${workspaceCount} workspace`);
-        }
-        if (parts.length === 0) {
-            return 'Workspace Analysis';
-        }
-        return `Analysis: ${parts.join(' + ')}`;
-    }
-
-    private generateFallbackSummary(facts: RefactorBundleFacts, shas: string[]): string {
-        const totalIssues = facts.findings.incompleteness.missing +
-            facts.findings.incompleteness.zombies +
-            facts.findings.legacyAudit.dead;
-
-        let summary = `## Refactor Analysis Summary\n\n`;
-        summary += `**Scope**: ${shas.length} commits, ${facts.scope.files} files, `;
-        summary += `${facts.working.symbols} symbols\n\n`;
-
-        if (totalIssues === 0) {
-            summary += '### Status: ✅ Healthy\n\n';
-            summary += 'No critical issues detected. The refactor appears complete and consistent.\n\n';
+    if (!options.force && !options.existingReportId) {
+      const cachedReport = reportManager.loadByFingerprint(fingerprint);
+      if (cachedReport) {
+        const facts = cachedReport.facts;
+        const isEmpty = !facts || (facts.scope.files === 0 && facts.working.symbols === 0);
+        if (isEmpty) {
+          logInfo(`[ReportService] Empty cache hit for ${fingerprint}; forcing reanalysis...`);
+          this.store.dispatch({
+            type: 'ANALYSIS_STEP_UPDATED',
+            payload: { step: 'Reindexing empty commits...' },
+          });
+          const commitShas = shas.filter(s => !isWorkspaceSha(s));
+          await pipeline.indexCommits(commitShas);
+          commitShas.forEach(s => tempAnalyzed.add(s));
+          // Fall through to full generation (cache bypassed)
         } else {
-            summary += `### Status: ⚠️ ${totalIssues} Issues Found\n\n`;
-
-            if (facts.findings.incompleteness.missing > 0) {
-                summary += `- **${facts.findings.incompleteness.missing} Missing Symbols**: `;
-                summary += `Expected symbols not found in working directory\n`;
-            }
-            if (facts.findings.incompleteness.zombies > 0) {
-                summary += `- **${facts.findings.incompleteness.zombies} Zombie Symbols**: `;
-                summary += `Symbols marked for removal but still present\n`;
-            }
-            if (facts.findings.legacyAudit.dead > 0) {
-                summary += `- **${facts.findings.legacyAudit.dead} Dead Code**: `;
-                summary += `Unreferenced symbols that can be removed\n`;
-            }
-
-            summary += `\n### Recommended Actions\n\n`;
-            if (facts.findings.incompleteness.missing > 0) {
-                summary += `1. Complete missing symbol implementations (high priority)\n`;
-            }
-            if (facts.findings.incompleteness.zombies > 0) {
-                summary += `2. Remove zombie symbols to finish cleanup\n`;
-            }
-            if (facts.findings.legacyAudit.dead > 0) {
-                summary += `3. Clean up dead code to improve maintainability\n`;
-            }
+          logInfo(`[ReportService] Cache hit for ${fingerprint}`);
+          this.store.dispatch({
+            type: 'ANALYSIS_COMPLETED',
+            payload: {
+              facts: facts as any,
+              summary: cachedReport.analysis as any,
+              reportId: cachedReport.id,
+            },
+          });
+          getStore().dispatch({
+            type: 'ANALYSIS_COMPLETED',
+            payload: {
+              facts,
+              summary: cachedReport.analysis,
+              reportId: cachedReport.id,
+              history: undefined,
+            },
+          });
+          return cachedReport.id;
         }
-
-        return summary;
+      }
     }
 
-    async exportReportsDto(
-        filterText?: string,
-        filterBranch?: string | 'all',
-        showPinnedOnly?: boolean
-    ): Promise<Array<{ id: string; title: string; summary: string; createdAt: string; pinned?: boolean; branch?: string }>> {
-        const reportManager = getReportManager();
-        let reports = reportManager.list();
+    this.store.dispatch({
+      type: 'ANALYSIS_STARTED',
+      payload: { step: 'Analyzing commits...' },
+    });
+    getStore().dispatch({
+      type: 'ANALYSIS_STARTED',
+      payload: { step: 'Analyzing commits...' },
+    });
 
-        // Apply filters
-        if (filterText && filterText.trim()) {
-            const searchTerm = filterText.trim().toLowerCase();
-            reports = reports.filter((report: any) =>
-                (report.title || '').toLowerCase().includes(searchTerm) ||
-                (report.summary || '').toLowerCase().includes(searchTerm)
-            );
+    try {
+      // 2. Run Analysis with new layered pipeline
+      const includeWorkspace = scope === 'staged' || scope === 'unstaged' || scope === 'full';
+      const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
+      const workspaceShas = shas.filter(isWorkspaceSha);
+
+      // Determine workspaceParts based on scope
+      let workspaceParts: Set<'staged' | 'unstaged'> | undefined;
+      if (scope === 'staged') {
+        workspaceParts = new Set(['staged']);
+      } else if (scope === 'unstaged') {
+        workspaceParts = new Set(['unstaged']);
+      } else if (scope === 'full') {
+        workspaceParts = new Set(['staged', 'unstaged']);
+      }
+      // 'partial' or other scopes -> undefined (no workspace)
+
+      // Use the new RefactorPipeline.analyzeBundle method
+      const result = await pipeline.analyzeBundle(
+        commitShas,
+        includeWorkspace,
+        workspaceParts,
+        event => {
+          // Map pipeline events to orchestrator state
+          switch (event.type) {
+            case 'start':
+              this.store.dispatch({
+                type: 'ANALYSIS_STEP_UPDATED',
+                payload: { step: event.step.label },
+              });
+              getStore().dispatch({
+                type: 'ANALYSIS_STEP_UPDATED',
+                payload: { step: event.step.label },
+              });
+              break;
+
+            case 'complete':
+              this.store.dispatch({
+                type: 'ANALYSIS_STEP_UPDATED',
+                payload: { step: event.step.label, progress: 100 },
+              });
+              getStore().dispatch({
+                type: 'ANALYSIS_STEP_UPDATED',
+                payload: { step: event.step.label, progress: 100 },
+              });
+              break;
+
+            case 'error':
+              this.store.dispatch({
+                type: 'ANALYSIS_FAILED',
+                payload: { error: String(event.error) },
+              });
+              getStore().dispatch({
+                type: 'ANALYSIS_FAILED',
+                payload: { error: String(event.error) },
+              });
+              break;
+
+            case 'finished':
+              if (event.state.errors.length === 0) {
+                // Serialize symbolEvolution map
+                const history = event.state.history;
+                serializedHistory = history
+                  ? {
+                      ...history,
+                      symbolEvolution: history.symbolEvolution
+                        ? Object.fromEntries(history.symbolEvolution)
+                        : {},
+                    }
+                  : undefined;
+
+                this.store.dispatch({
+                  type: 'ANALYSIS_COMPLETED',
+                  payload: {
+                    facts: event.state.bundleFacts as any,
+                    summary: {} as any, // TODO: extract summary
+                    reportId: '', // TODO: get report ID
+                    history: serializedHistory,
+                  },
+                });
+              }
+              break;
+          }
         }
+      );
 
-        if (filterBranch && filterBranch !== 'all') {
-            // reports don't have branch field in SavedReport interface yet, but let's keep it safe
-            reports = reports.filter((report: any) => (report as any).branch === filterBranch);
-        }
+      if (result.errors.length > 0) {
+        logError(`Pipeline failed: ${result.errors[0].error}`);
+        return null; // Return null instead of throwing
+      }
 
-        if (showPinnedOnly) {
-            reports = reports.filter((report: any) => !!report.isPinned);
-        }
+      if (options.cancellationToken?.isCancellationRequested) {
+        this.store.dispatch({ type: 'ANALYSIS_CANCELLED' });
+        return null;
+      }
 
-        return reports.map((report: any) => ({
-            id: report.id,
-            title: report.title,
-            summary: report.summary || '',
-            createdAt: (report.createdAt instanceof Date ? report.createdAt : new Date(report.createdAt)).toISOString(),
-            pinned: !!report.isPinned,
-            branch: (report as any).branch
-        }));
-    }
+      // 3. Use facts and analysis from new pipeline
+      const facts = result.bundleFacts;
+      const llmOutputs = result.llmOutputs;
+      const llmAnalysis = llmOutputs?.llmAnalysis;
 
-    /**
-     * Build a small Mermaid visualization block from working edges if available
-     */
-    private buildVisualSection(facts: RefactorBundleFacts): string {
-        const edgeStrings = (facts.evidence?.['working.edges'] as string[]) || [];
-        if (!edgeStrings.length) {
-            return '';
-        }
+      // 4. Prepare analysis results
+      let summary: string;
+      let analysis: any = undefined;
 
-        const edges: EdgeInfo[] = [];
-        const highlight: string[] = [];
-
-        // Collect drift-related symbol IDs to highlight
-        const missing = (facts.evidence?.['findings.incompleteness.missing'] as any[]) || [];
-        const zombies = (facts.evidence?.['findings.incompleteness.zombies'] as any[]) || [];
-        highlight.push(
-            ...missing.map(m => m.symbol_id).filter(Boolean),
-            ...zombies.map(z => z.symbol_id).filter(Boolean)
-        );
-
-        for (const raw of edgeStrings) {
-            const match = raw.match(/^(.*?) -> (.*?) \((.*?)\)$/);
-            if (!match) {
-                continue;
-            }
-            const [, from, to, type] = match;
-            edges.push({
-                from,
-                to,
-                type: (type as EdgeInfo['type']) || 'imports',
-                confidence: 1,
-                isResolved: true
-            });
-        }
-
-        if (!edges.length) {
-            return '';
-        }
-
-        const symbols: SymbolInfo[] = [];
-        const symbolIds = new Set<string>();
-        for (const edge of edges) {
-            if (!symbolIds.has(edge.from)) {
-                symbolIds.add(edge.from);
-                symbols.push(this.makePlaceholderSymbol(edge.from));
-            }
-            if (!symbolIds.has(edge.to)) {
-                symbolIds.add(edge.to);
-                symbols.push(this.makePlaceholderSymbol(edge.to));
-            }
-        }
-
-        const mermaid = this.mermaid.generateGraph(edges, symbols, {
-            maxNodes: 40,
-            showConfidence: false,
-            highlightChanged: highlight
-        });
-
-        return `\n\n## 🔗 Dependency Graph (working snapshot)\n\n` +
-            '```mermaid\n' +
-            mermaid +
-            '```\n';
-    }
-
-    /**
-     * Build a facts-driven markdown report (no LLM required)
-     */
-    private buildFactsMarkdown(facts: RefactorBundleFacts): string {
-        const lines: string[] = [];
-        const findings = facts.findings;
-
-        lines.push(`# 📑 Analysis Report (Facts)`);
-        lines.push(`Generated: ${facts.generated_at}`);
-        lines.push(`Bundle: ${facts.bundle.shas.length} commits (${facts.bundle.oldestSha.substring(0, 8)}...)\n`);
-
-        lines.push(`## Scope & Totals`);
-        lines.push(`- Commits: ${facts.bundle.shas.length}`);
-        lines.push(`- Files in scope: ${facts.scope.files}`);
-        lines.push(`- Symbols: ${facts.working.symbols}`);
-        lines.push(`- Edges: ${facts.working.edges}\n`);
-
-        // Incompleteness
-        lines.push(`## Incompleteness`);
-        lines.push(`- Missing: ${findings.incompleteness.missing}`);
-        lines.push(`- Zombies: ${findings.incompleteness.zombies}`);
-        lines.push(`- Divergent: ${findings.incompleteness.divergent}\n`);
-        const missing = (facts.evidence?.['findings.incompleteness.missing'] as any[]) || [];
-        const zombies = (facts.evidence?.['findings.incompleteness.zombies'] as any[]) || [];
-        if (missing.length) {
-            lines.push(`**Top Missing (${Math.min(10, missing.length)})**`);
-            missing.slice(0, 10).forEach((m: any) => {
-                lines.push(`- \`${m.symbol_id}\` (expected: ${m.expected?.expect || 'present'})`);
-            });
-            lines.push('');
-        }
-        if (zombies.length) {
-            lines.push(`**Top Zombies (${Math.min(10, zombies.length)})**`);
-            zombies.slice(0, 10).forEach((z: any) => {
-                lines.push(`- \`${z.symbol_id}\` — ${z.found?.name || ''} (${z.found?.kind || ''})`);
-            });
-            lines.push('');
-        }
-
-        // Drift
-        lines.push(`## Pattern Drift`);
-        lines.push(`- Mixed targets: ${findings.patternDrift.mixedTargets}`);
-        lines.push(`- Old namespaces: ${findings.patternDrift.oldNamespaces}`);
-        if (findings.patternDrift.conventionDrift) {
-            const cd = findings.patternDrift.conventionDrift;
-            lines.push(`- Naming drift: ${cd.driftPercent.toFixed(1)}% (dominant: ${cd.dominantConvention})`);
-            if (cd.importDrift) {
-                lines.push(`- Import drift: ${cd.importDrift.driftPercent.toFixed(1)}% (dominant: ${cd.importDrift.dominantStyle})`);
-            }
-            if (cd.fileNamingDrift) {
-                lines.push(`- File naming drift: ${cd.fileNamingDrift.driftPercent.toFixed(1)}% (dominant: ${cd.fileNamingDrift.dominantStyle})`);
-            }
-        }
-        if (findings.patternDrift.mixedConventionFiles) {
-            lines.push(`- Mixed convention files: ${findings.patternDrift.mixedConventionFiles}`);
-        }
-        lines.push('');
-        const driftSymbols = (facts.evidence?.['findings.patternDrift.conventionDrift']?.driftSymbols as any[]) || [];
-        if (driftSymbols.length) {
-            lines.push(`**Convention Drift Symbols (${Math.min(15, driftSymbols.length)})**`);
-            driftSymbols.slice(0, 15).forEach((d: any) => {
-                lines.push(`- \`${d.name}\` → \`${d.suggestedName}\` (${d.convention}) — ${d.path}`);
-            });
-            lines.push('');
-        }
-
-        // Legacy
-        lines.push(`## Legacy Audit`);
-        lines.push(`- Dead: ${findings.legacyAudit.dead}`);
-        lines.push(`- Legacy used: ${findings.legacyAudit.legacyUsed}`);
-        lines.push(`- Replaced leftovers: ${findings.legacyAudit.replacedLeftovers.length}\n`);
-        const dead = (facts.evidence?.['findings.legacyAudit.dead'] as any[]) || [];
-        if (dead.length) {
-            lines.push(`**Dead Symbols (${Math.min(15, dead.length)})**`);
-            dead.slice(0, 15).forEach((d: any) => {
-                lines.push(`- \`${d.symbol_id}\` (${d.kind || ''})`);
-            });
-            lines.push('');
-        }
-        const replaced = findings.legacyAudit.replacedLeftovers || [];
-        if (replaced.length) {
-            lines.push(`**Replaced Leftovers (${Math.min(10, replaced.length)})**`);
-            replaced.slice(0, 10).forEach((r: any) => {
-                lines.push(`- \`${r.old.symbol_id}\` → \`${r.new.symbol_id}\` (conf ${Math.round(r.confidence * 100)}%)`);
-            });
-            lines.push('');
-        }
-
-        // Unresolved callers
-        const unresolved = findings.unresolvedCallers || (facts.findings as any).unresolved_callers?.length || 0;
-        lines.push(`## Unresolved Callers`);
-        lines.push(`- Total: ${unresolved}\n`);
-
-        // Hotspots
-        if (facts.evidence?.hotspots?.length) {
-            lines.push(`## Hotspots`);
-            (facts.evidence.hotspots as any[]).slice(0, 10).forEach((h: any) => {
-                lines.push(`- \`${h.path}\` — ${h.drift_count || h.score || ''}`);
-            });
-            lines.push('');
-        }
-
-        // Timeline
-        lines.push(`## Timeline`);
-        facts.bundle.shas.forEach((sha, idx) => {
-            lines.push(`${idx + 1}. \`${sha.substring(0, 8)}\``);
-        });
-
-        return lines.join('\n');
-    }
-
-    private makePlaceholderSymbol(id: string): SymbolInfo {
-        return {
-            id,
-            dnaId: id,
-            name: id,
-            kind: 'function',
-            signature: id,
-            location: {
-                start: { line: 0, column: 0 },
-                end: { line: 0, column: 0 }
-            }
+      if (llmAnalysis) {
+        summary = llmAnalysis.summary;
+        analysis = {
+          summary: llmAnalysis.summary,
+          blocks: llmAnalysis.blocks,
+          markdown: llmAnalysis.markdown,
+          metadata: llmAnalysis.metadata,
         };
+
+        if (llmAnalysis.metadata) {
+          logInfo(
+            `[ReportService] LLM analysis complete: ` +
+              `health score ${llmAnalysis.metadata.healthScore}/100, ` +
+              `${llmAnalysis.metadata.totalTokens} tokens`
+          );
+        }
+      } else {
+        logDebug('[ReportService] LLM not available, using fallback summary');
+        summary = this.generateFallbackSummary(facts, shas);
+        analysis = { summary };
+      }
+
+      // 4.0 Always build a facts-driven markdown so the report is useful without LLM
+      const factsMarkdown = this.buildFactsMarkdown(facts);
+
+      // 4.1 Append detailed sections (Legacy/Detailed View)
+      const llmMarkdown = analysis?.markdown || '';
+      const baseMarkdown = [
+        factsMarkdown,
+        llmMarkdown ? `\n\n---\n\n## 🤖 LLM Addendum\n\n${llmMarkdown}` : '',
+      ]
+        .filter(Boolean)
+        .join('');
+      const visualsMarkdown = this.buildVisualSection(facts);
+      const detailedMarkdown = await this.appendDetailedSections(baseMarkdown + visualsMarkdown, [
+        ...commitShas,
+        ...workspaceShas,
+      ]);
+
+      if (analysis) {
+        analysis.markdown = detailedMarkdown;
+      } else {
+        analysis = { summary, markdown: detailedMarkdown };
+      }
+
+      // 4.5. Compute workspace hash
+      let workspaceHash = '';
+      if (scope === 'staged' || scope === 'unstaged') {
+        // Workspace-based: capture actual file state
+        try {
+          workspaceHash = await reportManager.computeWorkspaceHash();
+          logDebug(`[ReportService] Computed workspace hash: ${workspaceHash.substring(0, 8)}...`);
+        } catch (error) {
+          logError('[ReportService] Failed to compute workspace hash', error);
+          // Continue with empty hash rather than failing entire report
+          workspaceHash = '';
+        }
+      } else {
+        // Commit-based: use configuration hash
+        const selectedFiles = (facts.evidence['scope.files'] as string[]) || [];
+        const input = JSON.stringify({
+          shas: [...shas].sort(),
+          selectedFiles: [...selectedFiles].sort(),
+          scope,
+        });
+        workspaceHash = crypto.createHash('sha256').update(input).digest('hex');
+        logDebug(`[ReportService] Computed config hash: ${workspaceHash.substring(0, 8)}...`);
+      }
+
+      // 5. Save Report
+      const reportId = options.existingReportId || crypto.randomUUID();
+      const title = options.title || this.generateTitle([...commitShas, ...workspaceShas]);
+
+      const report: any = {
+        id: reportId,
+        title,
+        commitShas: shas,
+        selectedFiles: (facts.evidence['scope.files'] as string[]) || [],
+        workspaceScope: scope,
+        createdAt: new Date(),
+        workspaceHash: workspaceHash,
+        facts,
+        analysis: analysis || { summary },
+        summary,
+        criticalCount:
+          facts.findings.incompleteness.missing + facts.findings.incompleteness.zombies,
+        warningCount: facts.findings.legacyAudit.dead,
+        isPinned: false,
+        fingerprint,
+        pipelineVersion: PIPELINE_VERSION,
+        promptVersion: PROMPT_VERSION,
+        mode: scope,
+      };
+
+      // Include treemap/hotspots in persisted report for faster rehydration
+      reportManager.save({
+        ...report,
+        treemap: (facts as any).treemap,
+        hotspots: (facts as any).evidence?.hotspots || (facts as any).findings?.hotspots,
+      });
+
+      // 6. Update State
+      this.store.dispatch({
+        type: 'ANALYSIS_COMPLETED',
+        payload: {
+          facts,
+          summary: {
+            id: reportId,
+            commitCount: shas.length,
+            fileCount: facts.scope.files,
+            symbolCount: facts.working.symbols,
+            createdAt: new Date().toISOString(),
+            debtScore: 0,
+          },
+          reportId,
+        },
+      });
+
+      return reportId;
+    } catch (error) {
+      logError('[ReportService] Failed to generate report', error);
+      this.store.dispatch({
+        type: 'ANALYSIS_FAILED',
+        payload: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      return null; // Return null instead of throwing
+    }
+  }
+
+  private isEmptyAnalysis(analysis: CommitAnalysis): boolean {
+    const symbolCount =
+      (analysis.symbols?.added?.length || 0) +
+      (analysis.symbols?.modified?.length || 0) +
+      (analysis.symbols?.removed?.length || 0);
+    const edgeCount = (analysis.edges?.added?.length || 0) + (analysis.edges?.removed?.length || 0);
+    return symbolCount === 0 && edgeCount === 0;
+  }
+
+  private aggregateFacts(commits: CommitAnalysis[], shas: string[] = []): RefactorBundleFacts {
+    // Simple aggregation for now - can be expanded
+    const totalFiles = new Set<string>();
+    let totalBlastRadius = 0;
+    let addedSymbols = 0;
+    let addedEdges = 0;
+
+    const process = (c: CommitAnalysis) => {
+      // Blast radius
+      totalBlastRadius += c.blastRadius;
+
+      // Symbols
+      addedSymbols += c.symbols.added.length;
+
+      // Edges
+      addedEdges += c.edges.added.length;
+    };
+
+    commits.forEach(process);
+
+    // For commit-based analysis, query database to get file lists
+    if (commits.length > 0 && shas.length > 0) {
+      try {
+        const placeholders = shas.map(() => '?').join(',');
+        const filesStmt = prepare(`
+                      SELECT DISTINCT path FROM files
+                      WHERE sha IN (${placeholders})
+                  `);
+        const fileRows = filesStmt.all(...shas) as Array<{ path: string }>;
+        fileRows.forEach(row => totalFiles.add(row.path));
+      } catch (error) {
+        logError('[ReportService] Failed to fetch files from database', error);
+        // Continue with whatever files we have
+      }
     }
 
-    private async appendDetailedSections(markdown: string, shas: string[]): Promise<string> {
-        try {
-            const db = getDatabaseManager().getDatabase();
-            if (!db) return markdown;
+    return {
+      version: '2.0',
+      generated_at: new Date().toISOString(),
+      confidence: 0.2, // Low confidence - basic aggregation only
+      bundle: {
+        oldestSha: shas[shas.length - 1] || '',
+        newestSha: shas[0] || '',
+        shas,
+      },
+      scope: {
+        files: totalFiles.size,
+        blastRadius: totalBlastRadius,
+      },
+      intended: {
+        present: addedSymbols,
+        absent: 0,
+        renamed: 0,
+      },
+      working: {
+        symbols: addedSymbols,
+        edges: addedEdges,
+      },
+      findings: {
+        incompleteness: {
+          missing: 0,
+          zombies: 0,
+          divergent: 0,
+        },
+        patternDrift: {
+          mixedTargets: 0,
+          oldNamespaces: 0,
+        },
+        legacyAudit: {
+          dead: 0,
+          legacyUsed: 0,
+          replacedLeftovers: [],
+        },
+      },
+      evidence: {
+        'scope.files': Array.from(totalFiles),
+      },
+    };
+  }
 
-            let detailedMarkdown = markdown + '\n\n---\n\n# 📊 Detailed Analysis\n\n';
+  private generateTitle(shas: string[]): string {
+    const workspaceCount = shas.filter(isWorkspaceSha).length;
+    const commitCount = shas.length - workspaceCount;
+    const parts: string[] = [];
+    if (commitCount > 0) {
+      parts.push(`${commitCount} commits`);
+    }
+    if (workspaceCount > 0) {
+      parts.push(`${workspaceCount} workspace`);
+    }
+    if (parts.length === 0) {
+      return 'Workspace Analysis';
+    }
+    return `Analysis: ${parts.join(' + ')}`;
+  }
 
-            // Filter out workspace SHAs for detailed commit analysis
-            const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
+  private generateFallbackSummary(facts: RefactorBundleFacts, shas: string[]): string {
+    const totalIssues =
+      facts.findings.incompleteness.missing +
+      facts.findings.incompleteness.zombies +
+      facts.findings.legacyAudit.dead;
 
-            for (const sha of commitShas) {
-                const commitInfo = db.prepare('SELECT message, author, date FROM commits_metadata WHERE sha = ?').get(sha) as any;
-                if (!commitInfo) continue;
+    let summary = `## Refactor Analysis Summary\n\n`;
+    summary += `**Scope**: ${shas.length} commits, ${facts.scope.files} files, `;
+    summary += `${facts.working.symbols} symbols\n\n`;
 
-                const shortSha = sha.substring(0, 8);
-                const title = commitInfo.message.split('\n')[0];
-                detailedMarkdown += `## Commit: ${shortSha}\n**${title}**\n\n`;
+    if (totalIssues === 0) {
+      summary += '### Status: ✅ Healthy\n\n';
+      summary += 'No critical issues detected. The refactor appears complete and consistent.\n\n';
+    } else {
+      summary += `### Status: ⚠️ ${totalIssues} Issues Found\n\n`;
 
-                // 1. Symbol Changes
-                const symbolsStmt = db.prepare(`
-                    SELECT name, kind, path, symbol_id, change_type 
-                    FROM symbols 
-                    WHERE sha = ? 
+      if (facts.findings.incompleteness.missing > 0) {
+        summary += `- **${facts.findings.incompleteness.missing} Missing Symbols**: `;
+        summary += `Expected symbols not found in working directory\n`;
+      }
+      if (facts.findings.incompleteness.zombies > 0) {
+        summary += `- **${facts.findings.incompleteness.zombies} Zombie Symbols**: `;
+        summary += `Symbols marked for removal but still present\n`;
+      }
+      if (facts.findings.legacyAudit.dead > 0) {
+        summary += `- **${facts.findings.legacyAudit.dead} Dead Code**: `;
+        summary += `Unreferenced symbols that can be removed\n`;
+      }
+
+      summary += `\n### Recommended Actions\n\n`;
+      if (facts.findings.incompleteness.missing > 0) {
+        summary += `1. Complete missing symbol implementations (high priority)\n`;
+      }
+      if (facts.findings.incompleteness.zombies > 0) {
+        summary += `2. Remove zombie symbols to finish cleanup\n`;
+      }
+      if (facts.findings.legacyAudit.dead > 0) {
+        summary += `3. Clean up dead code to improve maintainability\n`;
+      }
+    }
+
+    return summary;
+  }
+
+  async exportReportsDto(
+    filterText?: string,
+    filterBranch?: string | 'all',
+    showPinnedOnly?: boolean
+  ): Promise<
+    Array<{
+      id: string;
+      title: string;
+      summary: string;
+      createdAt: string;
+      pinned?: boolean;
+      branch?: string;
+    }>
+  > {
+    const reportManager = getReportManager();
+    let reports = reportManager.list();
+
+    // Apply filters
+    if (filterText && filterText.trim()) {
+      const searchTerm = filterText.trim().toLowerCase();
+      reports = reports.filter(
+        (report: any) =>
+          (report.title || '').toLowerCase().includes(searchTerm) ||
+          (report.summary || '').toLowerCase().includes(searchTerm)
+      );
+    }
+
+    if (filterBranch && filterBranch !== 'all') {
+      // reports don't have branch field in SavedReport interface yet, but let's keep it safe
+      reports = reports.filter((report: any) => (report as any).branch === filterBranch);
+    }
+
+    if (showPinnedOnly) {
+      reports = reports.filter((report: any) => !!report.isPinned);
+    }
+
+    return reports.map((report: any) => ({
+      id: report.id,
+      title: report.title,
+      summary: report.summary || '',
+      createdAt: (report.createdAt instanceof Date
+        ? report.createdAt
+        : new Date(report.createdAt)
+      ).toISOString(),
+      pinned: !!report.isPinned,
+      branch: (report as any).branch,
+    }));
+  }
+
+  /**
+   * Build a small Mermaid visualization block from working edges if available
+   */
+  private buildVisualSection(facts: RefactorBundleFacts): string {
+    const edgeStrings = (facts.evidence?.['working.edges'] as string[]) || [];
+    if (!edgeStrings.length) {
+      return '';
+    }
+
+    const edges: EdgeInfo[] = [];
+    const highlight: string[] = [];
+
+    // Collect drift-related symbol IDs to highlight
+    const missing = (facts.evidence?.['findings.incompleteness.missing'] as any[]) || [];
+    const zombies = (facts.evidence?.['findings.incompleteness.zombies'] as any[]) || [];
+    highlight.push(
+      ...missing.map(m => m.symbol_id).filter(Boolean),
+      ...zombies.map(z => z.symbol_id).filter(Boolean)
+    );
+
+    for (const raw of edgeStrings) {
+      const match = raw.match(/^(.*?) -> (.*?) \((.*?)\)$/);
+      if (!match) {
+        continue;
+      }
+      const [, from, to, type] = match;
+      edges.push({
+        from,
+        to,
+        type: (type as EdgeInfo['type']) || 'imports',
+        confidence: 1,
+        isResolved: true,
+      });
+    }
+
+    if (!edges.length) {
+      return '';
+    }
+
+    const symbols: SymbolInfo[] = [];
+    const symbolIds = new Set<string>();
+    for (const edge of edges) {
+      if (!symbolIds.has(edge.from)) {
+        symbolIds.add(edge.from);
+        symbols.push(this.makePlaceholderSymbol(edge.from));
+      }
+      if (!symbolIds.has(edge.to)) {
+        symbolIds.add(edge.to);
+        symbols.push(this.makePlaceholderSymbol(edge.to));
+      }
+    }
+
+    const mermaid = this.mermaid.generateGraph(edges, symbols, {
+      maxNodes: 40,
+      showConfidence: false,
+      highlightChanged: highlight,
+    });
+
+    return `\n\n## 🔗 Dependency Graph (working snapshot)\n\n` + '```mermaid\n' + mermaid + '```\n';
+  }
+
+  /**
+   * Build a facts-driven markdown report (no LLM required)
+   */
+  private buildFactsMarkdown(facts: RefactorBundleFacts): string {
+    const lines: string[] = [];
+    const findings = facts.findings;
+
+    lines.push(`# 📑 Analysis Report (Facts)`);
+    lines.push(`Generated: ${facts.generated_at}`);
+    lines.push(
+      `Bundle: ${facts.bundle.shas.length} commits (${facts.bundle.oldestSha.substring(0, 8)}...)\n`
+    );
+
+    lines.push(`## Scope & Totals`);
+    lines.push(`- Commits: ${facts.bundle.shas.length}`);
+    lines.push(`- Files in scope: ${facts.scope.files}`);
+    lines.push(`- Symbols: ${facts.working.symbols}`);
+    lines.push(`- Edges: ${facts.working.edges}\n`);
+
+    // Incompleteness
+    lines.push(`## Incompleteness`);
+    lines.push(`- Missing: ${findings.incompleteness.missing}`);
+    lines.push(`- Zombies: ${findings.incompleteness.zombies}`);
+    lines.push(`- Divergent: ${findings.incompleteness.divergent}\n`);
+    const missing = (facts.evidence?.['findings.incompleteness.missing'] as any[]) || [];
+    const zombies = (facts.evidence?.['findings.incompleteness.zombies'] as any[]) || [];
+    if (missing.length) {
+      lines.push(`**Top Missing (${Math.min(10, missing.length)})**`);
+      missing.slice(0, 10).forEach((m: any) => {
+        lines.push(`- \`${m.symbol_id}\` (expected: ${m.expected?.expect || 'present'})`);
+      });
+      lines.push('');
+    }
+    if (zombies.length) {
+      lines.push(`**Top Zombies (${Math.min(10, zombies.length)})**`);
+      zombies.slice(0, 10).forEach((z: any) => {
+        lines.push(`- \`${z.symbol_id}\` — ${z.found?.name || ''} (${z.found?.kind || ''})`);
+      });
+      lines.push('');
+    }
+
+    // Drift
+    lines.push(`## Pattern Drift`);
+    lines.push(`- Mixed targets: ${findings.patternDrift.mixedTargets}`);
+    lines.push(`- Old namespaces: ${findings.patternDrift.oldNamespaces}`);
+    if (findings.patternDrift.conventionDrift) {
+      const cd = findings.patternDrift.conventionDrift;
+      lines.push(
+        `- Naming drift: ${cd.driftPercent.toFixed(1)}% (dominant: ${cd.dominantConvention})`
+      );
+      if (cd.importDrift) {
+        lines.push(
+          `- Import drift: ${cd.importDrift.driftPercent.toFixed(
+            1
+          )}% (dominant: ${cd.importDrift.dominantStyle})`
+        );
+      }
+      if (cd.fileNamingDrift) {
+        lines.push(
+          `- File naming drift: ${cd.fileNamingDrift.driftPercent.toFixed(
+            1
+          )}% (dominant: ${cd.fileNamingDrift.dominantStyle})`
+        );
+      }
+    }
+    if (findings.patternDrift.mixedConventionFiles) {
+      lines.push(`- Mixed convention files: ${findings.patternDrift.mixedConventionFiles}`);
+    }
+    lines.push('');
+    const driftSymbols =
+      (facts.evidence?.['findings.patternDrift.conventionDrift']?.driftSymbols as any[]) || [];
+    if (driftSymbols.length) {
+      lines.push(`**Convention Drift Symbols (${Math.min(15, driftSymbols.length)})**`);
+      driftSymbols.slice(0, 15).forEach((d: any) => {
+        lines.push(`- \`${d.name}\` → \`${d.suggestedName}\` (${d.convention}) — ${d.path}`);
+      });
+      lines.push('');
+    }
+
+    // Legacy
+    lines.push(`## Legacy Audit`);
+    lines.push(`- Dead: ${findings.legacyAudit.dead}`);
+    lines.push(`- Legacy used: ${findings.legacyAudit.legacyUsed}`);
+    lines.push(`- Replaced leftovers: ${findings.legacyAudit.replacedLeftovers.length}\n`);
+    const dead = (facts.evidence?.['findings.legacyAudit.dead'] as any[]) || [];
+    if (dead.length) {
+      lines.push(`**Dead Symbols (${Math.min(15, dead.length)})**`);
+      dead.slice(0, 15).forEach((d: any) => {
+        lines.push(`- \`${d.symbol_id}\` (${d.kind || ''})`);
+      });
+      lines.push('');
+    }
+    const replaced = findings.legacyAudit.replacedLeftovers || [];
+    if (replaced.length) {
+      lines.push(`**Replaced Leftovers (${Math.min(10, replaced.length)})**`);
+      replaced.slice(0, 10).forEach((r: any) => {
+        lines.push(
+          `- \`${r.old.symbol_id}\` → \`${r.new.symbol_id}\` (conf ${Math.round(
+            r.confidence * 100
+          )}%)`
+        );
+      });
+      lines.push('');
+    }
+
+    // Unresolved callers
+    const unresolved =
+      findings.unresolvedCallers || (facts.findings as any).unresolved_callers?.length || 0;
+    lines.push(`## Unresolved Callers`);
+    lines.push(`- Total: ${unresolved}\n`);
+
+    // Hotspots
+    if (facts.evidence?.hotspots?.length) {
+      lines.push(`## Hotspots`);
+      (facts.evidence.hotspots as any[]).slice(0, 10).forEach((h: any) => {
+        lines.push(`- \`${h.path}\` — ${h.drift_count || h.score || ''}`);
+      });
+      lines.push('');
+    }
+
+    // Timeline
+    lines.push(`## Timeline`);
+    facts.bundle.shas.forEach((sha, idx) => {
+      lines.push(`${idx + 1}. \`${sha.substring(0, 8)}\``);
+    });
+
+    return lines.join('\n');
+  }
+
+  private makePlaceholderSymbol(id: string): SymbolInfo {
+    return {
+      id,
+      dnaId: id,
+      name: id,
+      kind: 'function',
+      signature: id,
+      location: {
+        start: { line: 0, column: 0 },
+        end: { line: 0, column: 0 },
+      },
+    };
+  }
+
+  private async appendDetailedSections(markdown: string, shas: string[]): Promise<string> {
+    try {
+      let detailedMarkdown = markdown + '\n\n---\n\n# 📊 Detailed Analysis\n\n';
+
+      // Filter out workspace SHAs for detailed commit analysis
+      const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
+
+      for (const sha of commitShas) {
+        const commitInfo = prepare(
+          'SELECT message, author, date FROM commits_metadata WHERE sha = ?'
+        ).get(sha) as any;
+        if (!commitInfo) continue;
+
+        const shortSha = sha.substring(0, 8);
+        const title = commitInfo.message.split('\n')[0];
+        detailedMarkdown += `## Commit: ${shortSha}\n**${title}**\n\n`;
+
+        // 1. Symbol Changes
+        const symbolsStmt = prepare(`
+                    SELECT name, kind, path, symbol_id, change_type
+                    FROM symbols
+                    WHERE sha = ?
                     ORDER BY change_type, kind, name
                 `);
-                const symbols = symbolsStmt.all(sha) as any[];
+        const symbols = symbolsStmt.all(sha) as any[];
 
-                if (symbols.length > 0) {
-                    detailedMarkdown += `### Symbol Changes\n\n`;
-                    const grouped = this.groupByChangeType(symbols);
+        if (symbols.length > 0) {
+          detailedMarkdown += `### Symbol Changes\n\n`;
+          const grouped = this.groupByChangeType(symbols);
 
-                    if (grouped.added?.length) {
-                        detailedMarkdown += `#### ➕ Added (${grouped.added.length})\n`;
-                        detailedMarkdown += this.formatSymbolList(grouped.added, db, sha, 'added');
-                    }
-                    if (grouped.modified?.length) {
-                        detailedMarkdown += `#### ✏️ Modified (${grouped.modified.length})\n`;
-                        detailedMarkdown += this.formatSymbolList(grouped.modified, db, sha, 'modified');
-                    }
-                    if (grouped.removed?.length) {
-                        detailedMarkdown += `#### ➖ Removed (${grouped.removed.length})\n`;
-                        detailedMarkdown += this.formatSymbolList(grouped.removed, db, sha, 'removed');
-                    }
-                    detailedMarkdown += '\n';
-                }
+          if (grouped.added?.length) {
+            detailedMarkdown += `#### ➕ Added (${grouped.added.length})\n`;
+            detailedMarkdown += this.formatSymbolList(grouped.added, sha, 'added');
+          }
+          if (grouped.modified?.length) {
+            detailedMarkdown += `#### ✏️ Modified (${grouped.modified.length})\n`;
+            detailedMarkdown += this.formatSymbolList(grouped.modified, sha, 'modified');
+          }
+          if (grouped.removed?.length) {
+            detailedMarkdown += `#### ➖ Removed (${grouped.removed.length})\n`;
+            detailedMarkdown += this.formatSymbolList(grouped.removed, sha, 'removed');
+          }
+          detailedMarkdown += '\n';
+        }
 
-                // 2. Call Graph
-                const edgesStmt = db.prepare('SELECT COUNT(*) as count FROM edges WHERE sha = ?').get(sha) as any;
-                if (edgesStmt && edgesStmt.count > 0) {
-                    detailedMarkdown += `### 🔗 Call Graph (${edgesStmt.count} connections)\n\n`;
+        // 2. Call Graph
+        const edgesStmt = prepare('SELECT COUNT(*) as count FROM edges WHERE sha = ?').get(
+          sha
+        ) as any;
+        if (edgesStmt && edgesStmt.count > 0) {
+          detailedMarkdown += `### 🔗 Call Graph (${edgesStmt.count} connections)\n\n`;
 
-                    // Top callers
-                    const topCallers = db.prepare(`
+          // Top callers
+          const topCallers = prepare(`
                         SELECT from_symbol_id, COUNT(*) as call_count
                         FROM edges
                         WHERE sha = ? AND change_type = 'added'
@@ -777,64 +809,69 @@ export class ReportService {
                         LIMIT 5
                     `).all(sha) as any[];
 
-                    if (topCallers.length > 0) {
-                        detailedMarkdown += `**Top New Callers:**\n`;
-                        for (const caller of topCallers) {
-                            const name = this.extractSymbolName(caller.from_symbol_id);
-                            detailedMarkdown += `- \`${name}\`: ${caller.call_count} calls\n`;
-                        }
-                        detailedMarkdown += '\n';
-                    }
-                }
-
-                detailedMarkdown += '---\n\n';
+          if (topCallers.length > 0) {
+            detailedMarkdown += `**Top New Callers:**\n`;
+            for (const caller of topCallers) {
+              const name = this.extractSymbolName(caller.from_symbol_id);
+              detailedMarkdown += `- \`${name}\`: ${caller.call_count} calls\n`;
             }
-
-            return detailedMarkdown;
-        } catch (error) {
-            logError('[ReportService] Failed to append detailed sections', error);
-            return markdown; // Return original on error
-        }
-    }
-
-    private groupByChangeType(symbols: any[]): Record<string, any[]> {
-        const grouped: Record<string, any[]> = { added: [], modified: [], removed: [], signature_changed: [] };
-        for (const s of symbols) {
-            if (grouped[s.change_type]) {
-                grouped[s.change_type].push(s);
-            } else {
-                // Fallback for unknown types
-                if (!grouped[s.change_type]) grouped[s.change_type] = [];
-                grouped[s.change_type].push(s);
-            }
-        }
-        return grouped;
-    }
-
-    private formatSymbolList(symbols: any[], db: any, sha: string, type: string): string {
-        let md = '';
-        // Group by kind
-        const byKind: Record<string, any[]> = {};
-        for (const s of symbols) {
-            if (!byKind[s.kind]) byKind[s.kind] = [];
-            byKind[s.kind].push(s);
+            detailedMarkdown += '\n';
+          }
         }
 
-        for (const [kind, items] of Object.entries(byKind)) {
-            md += `* **${kind}**:\n`;
-            for (const item of items) {
-                md += `  - \`${item.name}\` (${item.path})\n`;
-            }
-        }
-        return md;
+        detailedMarkdown += '---\n\n';
+      }
+
+      return detailedMarkdown;
+    } catch (error) {
+      logError('[ReportService] Failed to append detailed sections', error);
+      return markdown; // Return original on error
+    }
+  }
+
+  private groupByChangeType(symbols: any[]): Record<string, any[]> {
+    const grouped: Record<string, any[]> = {
+      added: [],
+      modified: [],
+      removed: [],
+      signature_changed: [],
+    };
+    for (const s of symbols) {
+      if (grouped[s.change_type]) {
+        grouped[s.change_type].push(s);
+      } else {
+        // Fallback for unknown types
+        if (!grouped[s.change_type]) grouped[s.change_type] = [];
+        grouped[s.change_type].push(s);
+      }
+    }
+    return grouped;
+  }
+
+  private formatSymbolList(symbols: any[], sha: string, type: string): string {
+    let md = '';
+    // Group by kind
+    const byKind: Record<string, any[]> = {};
+    for (const s of symbols) {
+      if (!byKind[s.kind]) byKind[s.kind] = [];
+      byKind[s.kind].push(s);
     }
 
-    private extractSymbolName(symbolId: string): string {
-        const parts = symbolId.split(':');
-        return parts.length > 1 ? parts[parts.length - 1] : symbolId;
+    for (const [kind, items] of Object.entries(byKind)) {
+      md += `* **${kind}**:\n`;
+      for (const item of items) {
+        md += `  - \`${item.name}\` (${item.path})\n`;
+      }
     }
+    return md;
+  }
+
+  private extractSymbolName(symbolId: string): string {
+    const parts = symbolId.split(':');
+    return parts.length > 1 ? parts[parts.length - 1] : symbolId;
+  }
 }
 
 export async function getReportService(): Promise<ReportService> {
-    return ReportService.getInstance();
+  return ReportService.getInstance();
 }

@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { LlmAnalysis, AnalysisBlock, Claim, Action, EvidenceLink } from '../analysis/llmAnalyst/blocks';
+import {
+  LlmAnalysis,
+  AnalysisBlock,
+  Claim,
+  Action,
+  EvidenceLink,
+} from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
 import { formatStats } from '../utils/statsFormatter';
 
@@ -16,7 +22,12 @@ interface RefactorReportViewProps {
 /**
  * Main refactor report webview component with three-panel layout
  */
-export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis, facts, onEvidenceClick, onAction }) => {
+export const RefactorReportView: React.FC<RefactorReportViewProps> = ({
+  analysis,
+  facts,
+  onEvidenceClick,
+  onAction,
+}) => {
   const [selectedBlock, setSelectedBlock] = useState<AnalysisBlock | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceLink | null>(null);
   const [activeTab, setActiveTab] = useState<'analysis' | 'facts'>('analysis');
@@ -31,19 +42,26 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis
   return (
     <div className="refactor-report-container">
       {/* Header */}
-          <div className="header">
-            <h1>🤖 Refactor Intelligence Report</h1>
-            <div className="header-meta">
-              <span title={`Bundle: ${facts.bundle.shas.length} commits`}>Bundle: {facts.bundle.shas.length} commits</span>
-              <span title={`Analysis: ${analysis.metadata.model}`} style={{maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis'}}>Analysis: {analysis.metadata.model}</span>
-              <span>Generated: {new Date(analysis.metadata.timestamp).toLocaleString()}</span>
-              <span>Health: {(analysis.metadata.healthScore || 0).toFixed(0)}/100</span>
-              <span>Tokens: {analysis.metadata.totalTokens?.toLocaleString() || 'n/a'}</span>
-              {analysis.metadata.totalCalls !== undefined && (
-                <span>Calls: {analysis.metadata.totalCalls}</span>
-              )}
-            </div>
-          </div>
+      <div className="header">
+        <h1>🤖 Refactor Intelligence Report</h1>
+        <div className="header-meta">
+          <span title={`Bundle: ${facts.bundle.shas.length} commits`}>
+            Bundle: {facts.bundle.shas.length} commits
+          </span>
+          <span
+            title={`Analysis: ${analysis.metadata.model}`}
+            style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}
+          >
+            Analysis: {analysis.metadata.model}
+          </span>
+          <span>Generated: {new Date(analysis.metadata.timestamp).toLocaleString()}</span>
+          <span>Health: {(analysis.metadata.healthScore || 0).toFixed(0)}/100</span>
+          <span>Tokens: {analysis.metadata.totalTokens?.toLocaleString() || 'n/a'}</span>
+          {analysis.metadata.totalCalls !== undefined && (
+            <span>Calls: {analysis.metadata.totalCalls}</span>
+          )}
+        </div>
+      </div>
 
       {/* Three-Panel Layout */}
       <div className="three-panel-layout">
@@ -129,8 +147,8 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis
                             onEvidenceClick(evidence);
                           }}
                         >
-                          {evidence.description.length > 100 
-                            ? `${evidence.description.slice(0, 100)}...` 
+                          {evidence.description.length > 100
+                            ? `${evidence.description.slice(0, 100)}...`
                             : evidence.description}
                         </div>
                       ))}
@@ -149,8 +167,8 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis
                             onEvidenceClick(evidence);
                           }}
                         >
-                          {evidence.description.length > 100 
-                            ? `${evidence.description.slice(0, 100)}...` 
+                          {evidence.description.length > 100
+                            ? `${evidence.description.slice(0, 100)}...`
                             : evidence.description}
                         </div>
                       ))}
@@ -181,16 +199,9 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({ analysis
 
           <div className="content-area">
             {activeTab === 'analysis' ? (
-              <AnalysisContent
-                block={selectedBlock}
-                onEvidenceClick={onEvidenceClick}
-              />
+              <AnalysisContent block={selectedBlock} onEvidenceClick={onEvidenceClick} />
             ) : (
-              <FactsContent
-                facts={facts}
-                onEvidenceClick={onEvidenceClick}
-                onAction={onAction}
-              />
+              <FactsContent facts={facts} onEvidenceClick={onEvidenceClick} onAction={onAction} />
             )}
           </div>
         </div>
@@ -245,7 +256,9 @@ const AnalysisContent: React.FC<{
   return (
     <div className="analysis-content">
       <div className="block-header">
-        <h2>{getBlockIcon(block.type)} {block.title}</h2>
+        <h2>
+          {getBlockIcon(block.type)} {block.title}
+        </h2>
         <div className="block-meta">
           <span>Confidence: {(block.confidence * 100).toFixed(0)}%</span>
           <span>Generated: {new Date(block.timestamp).toLocaleString()}</span>
@@ -340,83 +353,121 @@ const FactsContent: React.FC<{
         <div className="facts-grid">
           <div className="fact-card">
             <h4>Bundle Info</h4>
-            <p><strong>Commits:</strong> {facts.bundle.shas.length}</p>
-            <p><strong>Oldest:</strong> {facts.bundle.oldestSha.substring(0, 8)}</p>
+            <p>
+              <strong>Commits:</strong> {facts.bundle.shas.length}
+            </p>
+            <p>
+              <strong>Oldest:</strong> {facts.bundle.oldestSha.substring(0, 8)}
+            </p>
           </div>
           <div className="fact-card">
             <h4>Analysis Scope</h4>
-            <p><strong>Files:</strong> {facts.scope.files}</p>
-            <p><strong>Blast Radius:</strong> {facts.scope.blastRadius}</p>
+            <p>
+              <strong>Files:</strong> {facts.scope.files}
+            </p>
+            <p>
+              <strong>Blast Radius:</strong> {facts.scope.blastRadius}
+            </p>
           </div>
           <div className="fact-card">
             <h4>Symbols</h4>
-            <p><strong>Intended:</strong> {facts.intended.present + facts.intended.absent}</p>
-            <p><strong>Working:</strong> {facts.working.symbols}</p>
-            <p><strong>Edges:</strong> {facts.working.edges}</p>
+            <p>
+              <strong>Intended:</strong> {facts.intended.present + facts.intended.absent}
+            </p>
+            <p>
+              <strong>Working:</strong> {facts.working.symbols}
+            </p>
+            <p>
+              <strong>Edges:</strong> {facts.working.edges}
+            </p>
           </div>
           {hybridSummary && (
             <div className="fact-card">
               <h4>Hybrid Facts</h4>
-              <p><strong>Total:</strong> {hybridSummary.totalFacts}</p>
-              <p><strong>Files:</strong> {hybridSummary.fileCount}</p>
-              <p><strong>Top Files:</strong> {hybridSummary.topFiles.slice(0, 3).map(f => `${f.file} (${f.count})`).join(', ')}</p>
+              <p>
+                <strong>Total:</strong> {hybridSummary.totalFacts}
+              </p>
+              <p>
+                <strong>Files:</strong> {hybridSummary.fileCount}
+              </p>
+              <p>
+                <strong>Top Files:</strong>{' '}
+                {hybridSummary.topFiles
+                  .slice(0, 3)
+                  .map(f => `${f.file} (${f.count})`)
+                  .join(', ')}
+              </p>
             </div>
           )}
           {caps && (
             <div className="fact-card">
               <h4>LLM Caps</h4>
-              <p><strong>Missing:</strong> {caps.missing}</p>
-              <p><strong>Zombies:</strong> {caps.zombies}</p>
-              <p><strong>Hybrid Drifts:</strong> {caps.hybridDrifts}</p>
+              <p>
+                <strong>Missing:</strong> {caps.missing}
+              </p>
+              <p>
+                <strong>Zombies:</strong> {caps.zombies}
+              </p>
+              <p>
+                <strong>Hybrid Drifts:</strong> {caps.hybridDrifts}
+              </p>
             </div>
           )}
         </div>
       </div>
 
-        <div className="facts-lists">
-          <h3>🚧 Incompleteness</h3>
-          <div className="fact-list">
-            <strong>Missing ({counts.missing ?? missing.length}):</strong>
-            {missing.length === 0 ? <div className="muted">None</div> : (
-              <ul>
-                {missing.map((m: any, idx: number) => (
-                  <li key={`miss-${idx}`}>{formatSymbolRef(m)}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div className="fact-list">
-            <strong>Zombies ({counts.zombies ?? zombies.length}):</strong>
-            {zombies.length === 0 ? <div className="muted">None</div> : (
-              <ul>
-                {zombies.map((z: any, idx: number) => (
-                  <li key={`zomb-${idx}`} className="fact-item-row">
-                    <span>{formatSymbolRef(z)}</span>
-                    {onAction && (
-                      <button
-                        className="action-button small danger"
-                        onClick={() => onAction('delete', {
+      <div className="facts-lists">
+        <h3>🚧 Incompleteness</h3>
+        <div className="fact-list">
+          <strong>Missing ({counts.missing ?? missing.length}):</strong>
+          {missing.length === 0 ? (
+            <div className="muted">None</div>
+          ) : (
+            <ul>
+              {missing.map((m: any, idx: number) => (
+                <li key={`miss-${idx}`}>{formatSymbolRef(m)}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="fact-list">
+          <strong>Zombies ({counts.zombies ?? zombies.length}):</strong>
+          {zombies.length === 0 ? (
+            <div className="muted">None</div>
+          ) : (
+            <ul>
+              {zombies.map((z: any, idx: number) => (
+                <li key={`zomb-${idx}`} className="fact-item-row">
+                  <span>{formatSymbolRef(z)}</span>
+                  {onAction && (
+                    <button
+                      className="action-button small danger"
+                      onClick={() =>
+                        onAction('delete', {
                           symbolId: z.symbol_id,
                           filePath: z.file || (z.symbol_id && z.symbol_id.split(':')[0]),
-                          range: z.loc || z.location // Ensure we have location
-                        })}
-                        title="Remove this symbol"
-                      >
-                        🗑️
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div className="fact-list">
-            <strong>Divergent ({counts.divergent ?? divergent.length}):</strong>
-            {divergent.length === 0 ? <div className="muted">None</div> : (
-              <ul>
-                {divergent.map((d: any, idx: number) => (
-                  <li key={`div-${idx}`}>{formatSymbolRef(d)}</li>
-                ))}
+                          range: z.loc || z.location, // Ensure we have location
+                        })
+                      }
+                      title="Remove this symbol"
+                    >
+                      🗑️
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="fact-list">
+          <strong>Divergent ({counts.divergent ?? divergent.length}):</strong>
+          {divergent.length === 0 ? (
+            <div className="muted">None</div>
+          ) : (
+            <ul>
+              {divergent.map((d: any, idx: number) => (
+                <li key={`div-${idx}`}>{formatSymbolRef(d)}</li>
+              ))}
             </ul>
           )}
         </div>
@@ -441,7 +492,8 @@ const FactsContent: React.FC<{
           <ul>
             {movedLineage.slice(0, 20).map((m, idx) => (
               <li key={`mv-${idx}`}>
-                {(m as any).sourceName || m.previousSymbolId} → {(m as any).destName || m.symbolId} ({m.sourceVersion} → {m.destVersion})
+                {(m as any).sourceName || m.previousSymbolId} → {(m as any).destName || m.symbolId}{' '}
+                ({m.sourceVersion} → {m.destVersion})
               </li>
             ))}
           </ul>
@@ -464,31 +516,46 @@ const FactsContent: React.FC<{
  */
 function getBlockIcon(type: AnalysisBlock['type']): string {
   switch (type) {
-    case 'intent': return '🎯';
-    case 'drift': return '🔍';
-    case 'cleanup': return '🧹';
-    case 'summary': return '📊';
-    default: return '📝';
+    case 'intent':
+      return '🎯';
+    case 'drift':
+      return '🔍';
+    case 'cleanup':
+      return '🧹';
+    case 'summary':
+      return '📊';
+    default:
+      return '📝';
   }
 }
 
 function getSeverityIcon(severity: string): string {
   switch (severity) {
-    case 'critical': return '🚨';
-    case 'high': return '🔴';
-    case 'medium': return '🟡';
-    case 'low': return '🟢';
-    default: return '⚪';
+    case 'critical':
+      return '🚨';
+    case 'high':
+      return '🔴';
+    case 'medium':
+      return '🟡';
+    case 'low':
+      return '🟢';
+    default:
+      return '⚪';
   }
 }
 
 function getPriorityIcon(priority: string): string {
   switch (priority) {
-    case 'urgent': return '🚨';
-    case 'high': return '🔴';
-    case 'medium': return '🟡';
-    case 'low': return '🟢';
-    default: return '⚪';
+    case 'urgent':
+      return '🚨';
+    case 'high':
+      return '🔴';
+    case 'medium':
+      return '🟡';
+    case 'low':
+      return '🟢';
+    default:
+      return '⚪';
   }
 }
 

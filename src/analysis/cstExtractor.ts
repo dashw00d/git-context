@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
-import { CstFact, HybridFact } from '../types/cstFacts';
 import { SymbolInfo } from '../types';
+import { CstFact, HybridFact } from '../types/cstFacts';
 import { LANGUAGES, isCstOnlyLanguage, getExtensionConfig } from '../utils/config';
 
 /**
@@ -86,7 +86,15 @@ export class CstExtractor {
     // Check for heading nodes (atx_heading or setext_heading)
     if (node.type === 'atx_heading') {
       // Extract level from number of # characters
-      const headingMarker = node.namedChildren.find((c: any) => c.type === 'atx_h1_marker' || c.type === 'atx_h2_marker' || c.type === 'atx_h3_marker' || c.type === 'atx_h4_marker' || c.type === 'atx_h5_marker' || c.type === 'atx_h6_marker');
+      const headingMarker = node.namedChildren.find(
+        (c: any) =>
+          c.type === 'atx_h1_marker' ||
+          c.type === 'atx_h2_marker' ||
+          c.type === 'atx_h3_marker' ||
+          c.type === 'atx_h4_marker' ||
+          c.type === 'atx_h5_marker' ||
+          c.type === 'atx_h6_marker'
+      );
       let level = 1;
       if (headingMarker) {
         const markerText = headingMarker.text;
@@ -111,12 +119,12 @@ export class CstExtractor {
         signature: `#${'#'.repeat(level - 1)} ${name}`,
         location: {
           start: { line: node.startPosition.row + 1, column: node.startPosition.column },
-          end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+          end: { line: node.endPosition.row + 1, column: node.endPosition.column },
         },
         nodeType: 'atx_heading',
         level,
         bodyShape,
-        timeline: [] // Will be populated by timeline manager
+        timeline: [], // Will be populated by timeline manager
       };
     }
 
@@ -148,11 +156,11 @@ export class CstExtractor {
         signature: `"${key}": ...`,
         location: {
           start: { line: node.startPosition.row + 1, column: node.startPosition.column },
-          end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+          end: { line: node.endPosition.row + 1, column: node.endPosition.column },
         },
         nodeType: 'pair',
         bodyShape,
-        timeline: []
+        timeline: [],
       };
     }
 
@@ -183,11 +191,11 @@ export class CstExtractor {
         signature: `${key}: ...`,
         location: {
           start: { line: node.startPosition.row + 1, column: node.startPosition.column },
-          end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+          end: { line: node.endPosition.row + 1, column: node.endPosition.column },
         },
         nodeType: 'block_mapping_pair',
         bodyShape,
-        timeline: []
+        timeline: [],
       };
     }
 
@@ -218,11 +226,11 @@ export class CstExtractor {
         signature: `${selector} { ... }`,
         location: {
           start: { line: node.startPosition.row + 1, column: node.startPosition.column },
-          end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+          end: { line: node.endPosition.row + 1, column: node.endPosition.column },
         },
         nodeType: 'rule_set',
         bodyShape,
-        timeline: []
+        timeline: [],
       };
     }
 
@@ -242,10 +250,10 @@ export class CstExtractor {
     if (node.type === 'comment') {
       const text = node.text || '';
       // Filter overlaps: don't extract if symbol with same location exists
-      const overlaps = existingSymbols.some(s => 
+      const overlaps = existingSymbols.some(s =>
         this.locationsOverlap(s.location, {
           start: { line: node.startPosition.row + 1, column: node.startPosition.column },
-          end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+          end: { line: node.endPosition.row + 1, column: node.endPosition.column },
         })
       );
 
@@ -263,11 +271,11 @@ export class CstExtractor {
         signature: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
         location: {
           start: { line: node.startPosition.row + 1, column: node.startPosition.column },
-          end: { line: node.endPosition.row + 1, column: node.endPosition.column }
+          end: { line: node.endPosition.row + 1, column: node.endPosition.column },
         },
         nodeType: 'comment',
         bodyShape,
-        timeline: []
+        timeline: [],
       };
     }
 
@@ -280,10 +288,7 @@ export class CstExtractor {
   private hashCstSubset(node: any, includeChildren: boolean = true): string {
     // Serialize node structure (simplified - exclude trivia)
     const serialized = this.serializeNodeForHash(node, includeChildren);
-    return crypto.createHash('sha256')
-      .update(serialized)
-      .digest('hex')
-      .substring(0, 16);
+    return crypto.createHash('sha256').update(serialized).digest('hex').substring(0, 16);
   }
 
   /**
@@ -312,17 +317,9 @@ export class CstExtractor {
     level: number | undefined,
     bodyShape: string
   ): string {
-    const parts = [
-      kind,
-      name,
-      level !== undefined ? String(level) : '',
-      bodyShape
-    ];
+    const parts = [kind, name, level !== undefined ? String(level) : '', bodyShape];
 
-    return crypto.createHash('sha256')
-      .update(parts.join('::'))
-      .digest('hex')
-      .substring(0, 16);
+    return crypto.createHash('sha256').update(parts.join('::')).digest('hex').substring(0, 16);
   }
 
   /**
@@ -341,4 +338,3 @@ export class CstExtractor {
     );
   }
 }
-

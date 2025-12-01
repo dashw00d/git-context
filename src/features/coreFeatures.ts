@@ -1,17 +1,17 @@
-import * as vscode from 'vscode';
-import { AppShell } from '../core/appShell';
-import { CommitsProvider } from '../providers/commitsProvider';
-import { ActiveBundleProvider } from '../providers/activeBundleProvider';
-import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
-import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
-import { getRefactorPipeline } from '../services/pipelineFactory';
-import { GitOperations } from '../analysis/git';
-import { updateContexts, refreshCockpitState } from '../core/stateUpdaters';
-import { getExtensionConfig } from '../utils/config';
-import { logInfo, logError } from '../utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as vscode from 'vscode';
+import { GitOperations } from '../analysis/git';
+import { AppShell } from '../core/appShell';
+import { refreshCockpitState, updateContexts } from '../core/stateUpdaters';
+import { ActiveBundleProvider } from '../providers/activeBundleProvider';
+import { CommitsProvider } from '../providers/commitsProvider';
+import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
 import { getStore } from '../state/store';
+import { prepare } from '../storage/statement-wrapper';
+import { getExtensionConfig } from '../utils/config';
+import { logError, logInfo } from '../utils/logger';
+import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
 
 export async function registerCoreFeatures(
   shell: AppShell,
@@ -29,17 +29,19 @@ export async function registerCoreFeatures(
   // Analyze last N commits
   shell.registerCommand('git-context.analyzeLastCommits', async (context, countArg) => {
     const config = getExtensionConfig();
-    const count = countArg || await vscode.window.showInputBox({
-      prompt: 'Number of commits to analyze',
-      value: config.defaultCommitCount.toString(),
-      validateInput: (value) => {
-        const num = parseInt(value);
-        if (isNaN(num) || num <= 0) {
-          return 'Please enter a positive number';
-        }
-        return undefined;
-      }
-    });
+    const count =
+      countArg ||
+      (await vscode.window.showInputBox({
+        prompt: 'Number of commits to analyze',
+        value: config.defaultCommitCount.toString(),
+        validateInput: value => {
+          const num = parseInt(value);
+          if (isNaN(num) || num <= 0) {
+            return 'Please enter a positive number';
+          }
+          return undefined;
+        },
+      }));
 
     if (count) {
       try {
@@ -64,8 +66,6 @@ export async function registerCoreFeatures(
     }
   });
 
-
-
   // Open symbol in file
   shell.registerCommand('git-context.openSymbol', async (context, sha, filePath, range) => {
     try {
@@ -89,7 +89,7 @@ export async function registerCoreFeatures(
 
   // Toggle commit selection
   shell.registerCommand('git-context.toggleCommitSelection', async (context, shaOrItem) => {
-    const sha = typeof shaOrItem === 'string' ? shaOrItem : (shaOrItem?.id || shaOrItem?.sha);
+    const sha = typeof shaOrItem === 'string' ? shaOrItem : shaOrItem?.id || shaOrItem?.sha;
     if (sha) {
       // Update orchestrator state instead of provider
       const state = store.getState();
@@ -99,13 +99,16 @@ export async function registerCoreFeatures(
       } else {
         selected.add(sha);
       }
-      store.dispatch({ type: 'SELECTION_SET', payload: { shas: Array.from(selected) } });
+      store.dispatch({
+        type: 'SELECTION_SET',
+        payload: { shas: Array.from(selected) },
+      });
       await updateContexts();
     }
   });
 
   // Clear selection
-  shell.registerCommand('git-context.clearSelection', async (context) => {
+  shell.registerCommand('git-context.clearSelection', async context => {
     store.dispatch({ type: 'SELECTION_CLEARED' });
     await updateContexts();
   });
@@ -139,7 +142,10 @@ export async function registerCoreFeatures(
         const state = store.getState();
         const selected = new Set(state.selectedCommitShas);
         selected.add(sha);
-        store.dispatch({ type: 'SELECTION_SET', payload: { shas: Array.from(selected) } });
+        store.dispatch({
+          type: 'SELECTION_SET',
+          payload: { shas: Array.from(selected) },
+        });
         await updateContexts();
       }
     } catch (error) {
@@ -148,21 +154,27 @@ export async function registerCoreFeatures(
   });
 
   // Select all staged
-  shell.registerCommand('git-context.selectAllStaged', async (context) => {
+  shell.registerCommand('git-context.selectAllStaged', async context => {
     const state = store.getState();
     const stagedPaths = state.stagedFiles.map(f => f.path);
-    store.dispatch({ type: 'STAGED_SELECTION_UPDATED', payload: { paths: stagedPaths } });
+    store.dispatch({
+      type: 'STAGED_SELECTION_UPDATED',
+      payload: { paths: stagedPaths },
+    });
   });
 
   // Select all unstaged
-  shell.registerCommand('git-context.selectAllUnstaged', async (context) => {
+  shell.registerCommand('git-context.selectAllUnstaged', async context => {
     const state = store.getState();
     const unstagedPaths = state.unstagedFiles.map(f => f.path);
-    store.dispatch({ type: 'UNSTAGED_SELECTION_UPDATED', payload: { paths: unstagedPaths } });
+    store.dispatch({
+      type: 'UNSTAGED_SELECTION_UPDATED',
+      payload: { paths: unstagedPaths },
+    });
   });
 
   // Add more commits
-  shell.registerCommand('git-context.addMoreCommits', async (context) => {
+  shell.registerCommand('git-context.addMoreCommits', async context => {
     try {
       providers.commitsProvider.loadMoreOffset += 20;
       await providers.commitsProvider.refresh();
@@ -173,7 +185,7 @@ export async function registerCoreFeatures(
   });
 
   // Reset all
-  shell.registerCommand('git-context.resetAll', async (context) => {
+  shell.registerCommand('git-context.resetAll', async context => {
     // If cockpit features already registered this command, prefer a single path.
     // This registration provides the full reset (vectors + DB + orchestrator).
     const answer = await vscode.window.showWarningMessage(
@@ -226,15 +238,19 @@ export async function registerCoreFeatures(
         'symbol_hotspots',
         'hotspot_snapshots',
         'moved_blocks',
-        'symbol_lineage'
+        'symbol_lineage',
       ];
 
       db.transaction(() => {
         for (const table of tablesToTruncate) {
           try {
-            const exists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table);
+            const exists = prepare(
+              `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
+            ).get(table);
             if (exists) {
+              // eslint-disable-next-line no-restricted-properties
               db.exec(`DELETE FROM ${table}`);
+              // eslint-disable-next-line no-restricted-properties
               db.exec(`DELETE FROM sqlite_sequence WHERE name='${table}'`);
             }
           } catch (err) {
@@ -263,20 +279,20 @@ export async function registerCoreFeatures(
   });
 
   // Bundle clear
-  shell.registerCommand('git-context.bundle.clear', async (context) => {
+  shell.registerCommand('git-context.bundle.clear', async context => {
     store.dispatch({ type: 'BUNDLE_CLEARED' });
     // Clear bundle state (provider method may not exist, that's ok)
     await updateContexts();
   });
 
   // Bundle cancel
-  shell.registerCommand('git-context.bundle.cancel', async (context) => {
+  shell.registerCommand('git-context.bundle.cancel', async context => {
     // Cancel any running analysis
     store.dispatch({ type: 'ANALYSIS_CANCELLED' });
   });
 
   // Bundle export
-  shell.registerCommand('git-context.bundle.export', async (context) => {
+  shell.registerCommand('git-context.bundle.export', async context => {
     const state = orchestrator.getState();
     if (!state.bundleFacts) {
       vscode.window.showWarningMessage('No active bundle to export');
@@ -285,7 +301,7 @@ export async function registerCoreFeatures(
     try {
       const filePath = await vscode.window.showSaveDialog({
         defaultUri: vscode.Uri.file('bundle-facts.json'),
-        filters: { 'JSON files': ['json'], 'All files': ['*'] }
+        filters: { 'JSON files': ['json'], 'All files': ['*'] },
       });
       if (filePath) {
         const fs = await import('fs');
@@ -308,8 +324,7 @@ export async function registerCoreFeatures(
     try {
       // Show symbol history in a new document
       const { getDatabaseManager } = await import('../storage/database');
-      const db = getDatabaseManager().getDatabase();
-      const history = db.prepare(`
+      const history = prepare(`
         SELECT sha, name, path, change_type, diff_snippet_post
         FROM symbols
         WHERE symbol_id = ?
@@ -317,11 +332,19 @@ export async function registerCoreFeatures(
         LIMIT 20
       `).all(symbolId);
 
-      const content = `# Symbol History: ${symbolId}\n\n${history.map((h: any) =>
-        `## ${h.sha.substring(0, 8)} - ${h.change_type}\n\`\`\`\n${h.diff_snippet_post || 'N/A'}\n\`\`\`\n`
-      ).join('\n')}`;
+      const content = `# Symbol History: ${symbolId}\n\n${history
+        .map(
+          (h: any) =>
+            `## ${h.sha.substring(0, 8)} - ${h.change_type}\n\`\`\`\n${
+              h.diff_snippet_post || 'N/A'
+            }\n\`\`\`\n`
+        )
+        .join('\n')}`;
 
-      const doc = await vscode.workspace.openTextDocument({ content, language: 'markdown' });
+      const doc = await vscode.workspace.openTextDocument({
+        content,
+        language: 'markdown',
+      });
       await vscode.window.showTextDocument(doc);
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to show symbol history: ${error}`);
@@ -329,49 +352,59 @@ export async function registerCoreFeatures(
   });
 
   // Download WASM files
-  shell.registerCommand('git-context.downloadWasmFiles', async (context) => {
+  shell.registerCommand('git-context.downloadWasmFiles', async context => {
     try {
       const { spawn } = require('child_process');
       const path = require('path');
 
-      await vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title: 'Downloading required WASM files...',
-        cancellable: false
-      }, async (progress) => {
-        return new Promise<void>((resolve, reject) => {
-          const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'download-wasm.js');
-          const nodeProcess = spawn('node', [scriptPath], {
-            cwd: path.join(__dirname, '..', '..'),
-            stdio: 'pipe'
-          });
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Downloading required WASM files...',
+          cancellable: false,
+        },
+        async progress => {
+          return new Promise<void>((resolve, reject) => {
+            const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'download-wasm.js');
+            const nodeProcess = spawn('node', [scriptPath], {
+              cwd: path.join(__dirname, '..', '..'),
+              stdio: 'pipe',
+            });
 
-          let output = '';
-          nodeProcess.stdout.on('data', (data: Buffer) => {
-            output += data.toString();
-            const lines = data.toString().split('\n').filter((l: string) => l.trim());
-            lines.forEach((line: string) => {
-              if (line.includes('Downloading') || line.includes('Downloaded') || line.includes('%')) {
-                progress.report({ message: line });
+            let output = '';
+            nodeProcess.stdout.on('data', (data: Buffer) => {
+              output += data.toString();
+              const lines = data
+                .toString()
+                .split('\n')
+                .filter((l: string) => l.trim());
+              lines.forEach((line: string) => {
+                if (
+                  line.includes('Downloading') ||
+                  line.includes('Downloaded') ||
+                  line.includes('%')
+                ) {
+                  progress.report({ message: line });
+                }
+              });
+            });
+
+            nodeProcess.stderr.on('data', (data: Buffer) => {
+              output += data.toString();
+            });
+
+            nodeProcess.on('close', (code: number) => {
+              if (code === 0) {
+                vscode.window.showInformationMessage('WASM files downloaded successfully!');
+                resolve();
+              } else {
+                vscode.window.showErrorMessage(`Failed to download WASM files: ${output}`);
+                reject(new Error(`Process exited with code ${code}`));
               }
             });
           });
-
-          nodeProcess.stderr.on('data', (data: Buffer) => {
-            output += data.toString();
-          });
-
-          nodeProcess.on('close', (code: number) => {
-            if (code === 0) {
-              vscode.window.showInformationMessage('WASM files downloaded successfully!');
-              resolve();
-            } else {
-              vscode.window.showErrorMessage(`Failed to download WASM files: ${output}`);
-              reject(new Error(`Process exited with code ${code}`));
-            }
-          });
-        });
-      });
+        }
+      );
     } catch (error) {
       logError('Failed to download WASM files:', error);
       vscode.window.showErrorMessage(`Failed to download WASM files: ${error}`);
@@ -390,7 +423,12 @@ export async function registerCoreFeatures(
         try {
           const gitRoot = (await import('../utils/config')).getGitRoot();
           if (gitRoot) {
-            const factsPath = path.join(gitRoot, '.git', 'commit-tracker', 'last-bundle-facts.json');
+            const factsPath = path.join(
+              gitRoot,
+              '.git',
+              'commit-tracker',
+              'last-bundle-facts.json'
+            );
             if (fs.existsSync(factsPath)) {
               const content = fs.readFileSync(factsPath, 'utf8');
               facts = JSON.parse(content);
@@ -578,7 +616,9 @@ export async function registerCoreFeatures(
         </html>
       `;
     } catch (error) {
-      vscode.window.showErrorMessage('Failed to open super report: ' + (error instanceof Error ? error.message : String(error)));
+      vscode.window.showErrorMessage(
+        'Failed to open super report: ' + (error instanceof Error ? error.message : String(error))
+      );
       logError('[SuperReport] Failed', error);
     }
   });

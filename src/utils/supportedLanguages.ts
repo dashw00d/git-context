@@ -1,5 +1,6 @@
 import { LRUCache } from 'lru-cache';
 import { getExtensionConfig, getPackageJsonDefault } from './config';
+import { logWarn } from './logger';
 
 /**
  * Convert language name to constant name (e.g., 'c_sharp' -> 'C_SHARP')
@@ -12,109 +13,109 @@ function languageToConstantName(lang: string): string {
 const LANGUAGE_CONFIG = {
   bash: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-bash.wasm',
-    extensions: ['sh', 'bash']
+    extensions: ['sh', 'bash'],
   },
   c: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-c.wasm',
-    extensions: ['c', 'h']
+    extensions: ['c', 'h'],
   },
   cpp: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-cpp.wasm',
-    extensions: ['cpp', 'cc', 'cxx', 'hpp', 'hxx']
+    extensions: ['cpp', 'cc', 'cxx', 'hpp', 'hxx'],
   },
   c_sharp: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@0.1.12/out/tree-sitter-c_sharp.wasm',
-    extensions: ['cs']
+    extensions: ['cs'],
   },
   css: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-css.wasm',
-    extensions: ['css']
+    extensions: ['css'],
   },
   go: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-go.wasm',
-    extensions: ['go']
+    extensions: ['go'],
   },
   html: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-html.wasm',
-    extensions: ['html', 'htm']
+    extensions: ['html', 'htm'],
   },
   java: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-java.wasm',
-    extensions: ['java']
+    extensions: ['java'],
   },
   javascript: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-javascript.wasm',
     extensions: ['js', 'jsx', 'mjs'],
-    isJS: true
+    isJS: true,
   },
   json: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-json.wasm',
-    extensions: ['json']
+    extensions: ['json'],
   },
   php: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-php.wasm',
-    extensions: ['php']
+    extensions: ['php'],
   },
   python: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-python.wasm',
-    extensions: ['py', 'pyw']
+    extensions: ['py', 'pyw'],
   },
   ruby: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-ruby.wasm',
-    extensions: ['rb']
+    extensions: ['rb'],
   },
   rust: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-rust.wasm',
-    extensions: ['rs']
+    extensions: ['rs'],
   },
   scala: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-scala.wasm',
-    extensions: ['scala', 'sc']
+    extensions: ['scala', 'sc'],
   },
   tsx: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-tsx.wasm',
     extensions: ['tsx'],
-    isJS: true
+    isJS: true,
   },
   typescript: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-typescript.wasm',
     extensions: ['ts'],
-    isJS: true
+    isJS: true,
   },
   vue: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-vue.wasm',
     extensions: ['vue'],
-    isJS: true
+    isJS: true,
   },
   svelte: {
     wasm: './binaries/tree-sitter-svelte.wasm',
     extensions: ['svelte'],
-    isJS: true
+    isJS: true,
   },
   kotlin: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-kotlin.wasm',
-    extensions: ['kt', 'kts']
+    extensions: ['kt', 'kts'],
   },
   swift: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-swift.wasm',
-    extensions: ['swift']
+    extensions: ['swift'],
   },
   yaml: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-yaml.wasm',
-    extensions: ['yaml', 'yml']
+    extensions: ['yaml', 'yml'],
   },
   toml: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-toml.wasm',
-    extensions: ['toml']
+    extensions: ['toml'],
   },
   markdown: {
     wasm: 'https://github.com/tree-sitter-grammars/tree-sitter-markdown/releases/download/v0.5.1/tree-sitter-markdown.wasm',
-    extensions: ['md', 'markdown']
+    extensions: ['md', 'markdown'],
   },
   dockerfile: {
     wasm: 'https://unpkg.com/tree-sitter-wasms/out/tree-sitter-dockerfile.wasm',
-    extensions: ['dockerfile', 'Dockerfile']
-  }
+    extensions: ['dockerfile', 'Dockerfile'],
+  },
 } as const;
 
 type LanguageConfig = typeof LANGUAGE_CONFIG;
@@ -128,11 +129,14 @@ export const WASM_URLS: Record<Language, string> = Object.fromEntries(
 // Dynamically generate language constants from LANGUAGE_CONFIG
 // Type assertion ensures type safety with mapped uppercase keys
 type LangConstant = { [K in Uppercase<keyof LanguageConfig>]: Language };
-export const LANGUAGES = Object.entries(LANGUAGE_CONFIG).reduce((acc, [lang]) => {
-  const constantName = languageToConstantName(lang);
-  acc[constantName] = lang;
-  return acc;
-}, {} as Record<string, string>) as LangConstant;
+export const LANGUAGES = Object.entries(LANGUAGE_CONFIG).reduce(
+  (acc, [lang]) => {
+    const constantName = languageToConstantName(lang);
+    acc[constantName] = lang;
+    return acc;
+  },
+  {} as Record<string, string>
+) as LangConstant;
 
 // Supported languages array (for build scripts)
 export const SUPPORTED_LANGUAGES = Object.keys(LANGUAGE_CONFIG) as readonly Language[];
@@ -153,7 +157,7 @@ const JSLANGUAGES = Object.entries(LANGUAGE_CONFIG)
 // Cache for expensive operations (TTL: 5 minutes)
 const cache = new LRUCache<string, any>({
   max: 100,
-  ttl: 300 * 1000 // 5 minutes in milliseconds
+  ttl: 300 * 1000, // 5 minutes in milliseconds
 });
 
 /**
@@ -166,18 +170,29 @@ export function getSupportedExtensions(): string[] {
 
   const config = getExtensionConfig();
   // Get defaults from package.json if not in config
-  const defaultExts = getPackageJsonDefault('allowedExtensions') || ['php', 'js', 'ts', 'tsx', 'jsx', 'json', 'md', 'css'];
+  const defaultExts = getPackageJsonDefault('allowedExtensions') || [
+    'php',
+    'js',
+    'ts',
+    'tsx',
+    'jsx',
+    'json',
+    'md',
+    'css',
+  ];
   const exts = config.allowedExtensions || defaultExts;
 
   // Validate: filter out invalid extensions
-  const validExts = exts.filter((ext: any) => {
-    if (typeof ext !== 'string' || !ext.trim()) return false;
-    const lowerExt = ext.toLowerCase().trim();
-    return EXT_TO_LANG_MAP[lowerExt] !== undefined;
-  }).map((ext: string) => ext.toLowerCase().trim());
+  const validExts = exts
+    .filter((ext: any) => {
+      if (typeof ext !== 'string' || !ext.trim()) return false;
+      const lowerExt = ext.toLowerCase().trim();
+      return EXT_TO_LANG_MAP[lowerExt] !== undefined;
+    })
+    .map((ext: string) => ext.toLowerCase().trim());
 
   if (validExts.length === 0) {
-    console.warn('[Config] No valid extensions found, using defaults from package.json');
+    logWarn('No valid extensions found, using defaults from package.json');
     cache.set(cacheKey, defaultExts);
     return defaultExts;
   }
@@ -262,7 +277,7 @@ export function getJSLanguages(): Language[] {
  */
 export function getRequiredLanguagesForExtensions(extensions: string[]): Language[] {
   const requiredLanguages = new Set<Language>();
-  
+
   for (const ext of extensions) {
     const lowerExt = ext.toLowerCase().trim();
     const lang = EXT_TO_LANG_MAP[lowerExt];
@@ -270,7 +285,7 @@ export function getRequiredLanguagesForExtensions(extensions: string[]): Languag
       requiredLanguages.add(lang);
     }
   }
-  
+
   return Array.from(requiredLanguages);
 }
 
@@ -280,7 +295,7 @@ export function getRequiredLanguagesForExtensions(extensions: string[]): Languag
  */
 export function getMissingWasmFiles(extensions: string[]): Language[] {
   const requiredLanguages = getRequiredLanguagesForExtensions(extensions);
-  
+
   // Check which WASM files exist (this would need to be called from Node.js context)
   // For now, return all required languages - the download script will check file existence
   return requiredLanguages;
@@ -301,6 +316,8 @@ export function getAugmentableLanguages(): Language[] {
  */
 export function isCstOnlyLanguage(language: Language | string): boolean {
   const config = getExtensionConfig();
-  const cstLangs = (config.cstLanguages || ['markdown', 'json', 'yaml', 'css']).map(l => l.toLowerCase());
+  const cstLangs = (config.cstLanguages || ['markdown', 'json', 'yaml', 'css']).map(l =>
+    l.toLowerCase()
+  );
   return cstLangs.includes(language.toLowerCase());
 }

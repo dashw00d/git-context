@@ -1,9 +1,8 @@
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+/* eslint-disable no-restricted-syntax */
 import { EmbeddingIndexer } from '../../embeddingIndexer';
+import { PipelineState, PipelineStep } from '../pipelineTypes';
 
-export function createEmbeddingStep(
-  embeddingIndexer: EmbeddingIndexer
-): PipelineStep {
+export function createEmbeddingStep(embeddingIndexer: EmbeddingIndexer): PipelineStep {
   return {
     id: 'embedding_index',
     label: 'Index embeddings',
@@ -23,10 +22,10 @@ export function createEmbeddingStep(
           themeShardCount: 0,
           durationMs: 0,
           skipped: true,
-          reason: error instanceof Error ? error.message : String(error)
+          reason: error instanceof Error ? error.message : String(error),
         };
         throw error;
       }
-    }
+    },
   };
 }

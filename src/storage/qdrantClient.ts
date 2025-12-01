@@ -1,7 +1,7 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { getExtensionConfig } from '../utils/config';
+import { logError, logInfo, logWarn } from '../utils/logger';
 import { getEmbeddingDimension } from './embeddings';
-import { logInfo, logWarn } from '../utils/logger';
 
 export interface QdrantConfig {
   url: string;
@@ -38,21 +38,21 @@ export class QdrantClientWrapper {
     try {
       this.config = {
         url,
-        apiKey: config.qdrantApiKey?.trim() || undefined
+        apiKey: config.qdrantApiKey?.trim() || undefined,
       };
 
       this.client = new QdrantClient({
         url: this.config.url,
         apiKey: this.config.apiKey,
-        checkCompatibility: false  // Suppress version mismatch warnings
+        checkCompatibility: false, // Suppress version mismatch warnings
       });
 
       // Test connection
       await this.client.getCollections();
       this.isAvailable = true;
-      console.log(`[Qdrant] Connected to ${url} (embedding dim: ${this.embeddingDimension}, model: ${model})`);
+      logInfo(`Connected to ${url} (embedding dim: ${this.embeddingDimension}, model: ${model})`);
     } catch (error: any) {
-      console.warn(`[Qdrant] Connection failed to ${url}, falling back to SQLite search:`, error?.message || error);
+      logError('Qdrant client not initialized. Ensure Qdrant server is running and accessible.');
       this.isAvailable = false;
       this.client = null;
     }
@@ -81,7 +81,11 @@ export class QdrantClientWrapper {
   async ensureCollections(): Promise<void> {
     if (!(await this.isEnabled())) return;
 
-    const collections: Array<'symbols' | 'commits' | 'patterns'> = ['symbols', 'commits', 'patterns'];
+    const collections: Array<'symbols' | 'commits' | 'patterns'> = [
+      'symbols',
+      'commits',
+      'patterns',
+    ];
 
     for (const collectionName of collections) {
       await this.ensureCollection(collectionName);
@@ -93,7 +97,10 @@ export class QdrantClientWrapper {
    * @param base - Base collection name ('commits', 'symbols', or 'patterns')
    * @param projectId - Optional project ID for project-specific collections
    */
-  async ensureCollection(base: 'commits' | 'symbols' | 'patterns', projectId?: string): Promise<void> {
+  async ensureCollection(
+    base: 'commits' | 'symbols' | 'patterns',
+    projectId?: string
+  ): Promise<void> {
     if (!(await this.isEnabled())) return;
 
     const collectionName = this.getCollectionName(base, projectId);
@@ -107,13 +114,13 @@ export class QdrantClientWrapper {
       await this.client!.createCollection(collectionName, {
         vectors: {
           size: this.embeddingDimension,
-          distance: 'Cosine'
-        }
+          distance: 'Cosine',
+        },
       });
       logInfo(`[Qdrant] Created collection: ${collectionName} (dim: ${this.embeddingDimension})`);
       collectionCreated = true;
     }
-    
+
     // Always ensure indexes exist (idempotent - safe to call multiple times)
     // This ensures existing collections get new indexes added if they're missing
     await this.ensureCollectionIndexes(collectionName);
@@ -129,21 +136,21 @@ export class QdrantClientWrapper {
       // Add keyword index on project_id for fast filtering (idempotent - will skip if exists)
       await this.client.createPayloadIndex(collectionName, {
         field_name: 'project_id',
-        field_schema: { type: 'keyword' }
+        field_schema: { type: 'keyword' },
       });
 
       // Add indexes for new semantic memory features
       if (collectionName.includes('commits') || collectionName.includes('symbols')) {
         await this.client.createPayloadIndex(collectionName, {
           field_name: 'date',
-          field_schema: { type: 'keyword' } // ISO dates sortable as strings
+          field_schema: { type: 'keyword' }, // ISO dates sortable as strings
         });
-        
+
         // Add numeric index for structural_change_score to enable range queries
         if (collectionName.includes('commits')) {
           await this.client.createPayloadIndex(collectionName, {
             field_name: 'structural_change_score',
-            field_schema: { type: 'float' } // Numeric type for range queries
+            field_schema: { type: 'float' }, // Numeric type for range queries
           });
         }
       }
@@ -151,14 +158,14 @@ export class QdrantClientWrapper {
       if (collectionName.includes('patterns')) {
         await this.client.createPayloadIndex(collectionName, {
           field_name: 'theme_id',
-          field_schema: { type: 'keyword' }
+          field_schema: { type: 'keyword' },
         });
       }
 
       // Tags are useful everywhere
       await this.client.createPayloadIndex(collectionName, {
         field_name: 'tags',
-        field_schema: { type: 'keyword' } // Array of keywords
+        field_schema: { type: 'keyword' }, // Array of keywords
       });
 
       logInfo(`[Qdrant] Indexed fields on ${collectionName}`);
@@ -194,4 +201,3 @@ export function getQdrantClient(): QdrantClientWrapper {
   }
   return qdrantClient;
 }
-

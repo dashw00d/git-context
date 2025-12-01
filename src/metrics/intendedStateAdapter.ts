@@ -59,13 +59,13 @@ export function buildIntendedStateFromCommits(
         intended.set(rename.oldId, {
           expect: 'absent',
           lastSha: commit.sha,
-          isRenamed: true
+          isRenamed: true,
         });
         // Mark new symbol as present (renamed from old)
         intended.set(rename.newId, {
           expect: 'present',
           lastSha: commit.sha,
-          isRenamed: true
+          isRenamed: true,
         });
       }
     }
@@ -75,12 +75,12 @@ export function buildIntendedStateFromCommits(
       if (symbol.status === 'added' || symbol.status === 'modified') {
         intended.set(symbol.id, {
           expect: 'present',
-          lastSha: commit.sha
+          lastSha: commit.sha,
         });
       } else if (symbol.status === 'removed') {
         intended.set(symbol.id, {
           expect: 'absent',
-          lastSha: commit.sha
+          lastSha: commit.sha,
         });
       }
     }
@@ -106,7 +106,7 @@ export function buildIntendedStateFromCommits(
     present,
     absent,
     renamed,
-    totalSymbols: intended.size
+    totalSymbols: intended.size,
   };
 }
 
@@ -121,7 +121,7 @@ export function createIntendedMap(
   for (const symbol of symbols) {
     intended.set(symbol.id, {
       expect: symbol.expect,
-      lastSha: symbol.lastSha || 'test-sha'
+      lastSha: symbol.lastSha || 'test-sha',
     });
   }
 

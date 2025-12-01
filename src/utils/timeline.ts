@@ -12,4 +12,3 @@ export function describeVersionPosition(version: string, timeline: string[]): st
   const distance = timeline.length - index - 1;
   return `${distance} version${distance === 1 ? '' : 's'} ago (${version.substring(0, 7)})`;
 }
-

@@ -1,15 +1,14 @@
 import * as vscode from 'vscode';
 import { AppShell } from '../core/appShell';
-import { CommitsProvider } from '../providers/commitsProvider';
-import { ActiveBundleProvider } from '../providers/activeBundleProvider';
-import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
-import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
-import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { updateContexts } from '../core/stateUpdaters';
-import { logInfo } from '../utils/logger';
-
-import { getStore } from '../state/store';
+import { ActiveBundleProvider } from '../providers/activeBundleProvider';
+import { CommitsProvider } from '../providers/commitsProvider';
+import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
+import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { CockpitEffects } from '../state/effects';
+import { getStore } from '../state/store';
+import { logInfo, logError } from '../utils/logger';
+import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
 
 export async function registerCockpitFeatures(
   shell: AppShell,
@@ -81,7 +80,9 @@ export async function registerCockpitFeatures(
             editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
           }
         } else {
-          vscode.window.showInformationMessage(`Evidence refers to ${filePath} (not found on disk)`);
+          vscode.window.showInformationMessage(
+            `Evidence refers to ${filePath} (not found on disk)`
+          );
         }
       } else {
         const uri = vscode.Uri.parse(`evidence:${jsonPath}`);
@@ -123,8 +124,10 @@ export async function registerCockpitFeatures(
         const edit = new vscode.WorkspaceEdit();
         const uri = vscode.Uri.file(fullPath);
         const deleteRange = new vscode.Range(
-          range.start.line, range.start.column,
-          range.end.line, range.end.column
+          range.start.line,
+          range.start.column,
+          range.end.line,
+          range.end.column
         );
 
         edit.delete(uri, deleteRange);
@@ -141,13 +144,17 @@ export async function registerCockpitFeatures(
       } else if (action === 'rename' && suggestedName && symbolId) {
         // Try a conservative textual rename with user selection if multiple matches exist
         if (!filePath) {
-          vscode.window.showInformationMessage(`Suggested rename for ${symbolId}: ${suggestedName} (no file path to apply)`);
+          vscode.window.showInformationMessage(
+            `Suggested rename for ${symbolId}: ${suggestedName} (no file path to apply)`
+          );
           return;
         }
         const { getGitRoot } = await import('../utils/config');
         const gitRoot = getGitRoot();
         if (!gitRoot) {
-          vscode.window.showInformationMessage(`Suggested rename for ${symbolId}: ${suggestedName} (no git root)`);
+          vscode.window.showInformationMessage(
+            `Suggested rename for ${symbolId}: ${suggestedName} (no git root)`
+          );
           return;
         }
         const fullPath = vscode.Uri.file(`${gitRoot}/${filePath}`);
@@ -156,7 +163,8 @@ export async function registerCockpitFeatures(
         const parts = symbolId.split(':');
         const namePart = parts[parts.length - 1];
         const regex = new RegExp(`\\b${namePart}\\b`, 'g');
-        const matches: Array<{ start: number; end: number; linePreview: string; line: number }> = [];
+        const matches: Array<{ start: number; end: number; linePreview: string; line: number }> =
+          [];
         let m: RegExpExecArray | null;
         while ((m = regex.exec(text)) !== null) {
           const start = m.index;
@@ -166,7 +174,9 @@ export async function registerCockpitFeatures(
           matches.push({ start, end, linePreview: lineText, line });
         }
         if (matches.length === 0) {
-          vscode.window.showInformationMessage(`Suggested rename for ${symbolId}: ${suggestedName} (symbol not found)`);
+          vscode.window.showInformationMessage(
+            `Suggested rename for ${symbolId}: ${suggestedName} (symbol not found)`
+          );
           return;
         }
 
@@ -176,7 +186,7 @@ export async function registerCockpitFeatures(
             matches.map((mtch, idx) => ({
               label: `Line ${mtch.line + 1}`,
               description: mtch.linePreview,
-              idx
+              idx,
             })),
             { placeHolder: 'Select occurrence to rename' }
           );
@@ -210,12 +220,17 @@ export async function registerCockpitFeatures(
       const selection = store.getState().selectedCommitShas || [];
       store.dispatch({
         type: 'ANALYSIS_REQUESTED',
-        payload: { selection, force: !!forceReanalyze }
+        payload: { selection, force: !!forceReanalyze },
       });
     } catch (error) {
-      console.error('[Cockpit] Analysis trigger failed:', error);
-      orchestrator.updateState({ isAnalyzing: false, error: error instanceof Error ? error.message : String(error) }, 'command:analyze:error');
-      vscode.window.showErrorMessage(`Failed to trigger analysis: ${error instanceof Error ? error.message : String(error)}`);
+      logError('Analysis trigger failed:', error);
+      store.dispatch({
+        type: 'ANALYSIS_FAILED',
+        payload: { error: error instanceof Error ? error.message : String(error) },
+      });
+      vscode.window.showErrorMessage(
+        `Failed to trigger analysis: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   });
 
@@ -230,7 +245,7 @@ export async function registerCockpitFeatures(
         // Open as markdown document
         const doc = await vscode.workspace.openTextDocument({
           content: report.analysis.markdown,
-          language: 'markdown'
+          language: 'markdown',
         });
         await vscode.window.showTextDocument(doc, { preview: false });
       } else {
@@ -284,20 +299,22 @@ export async function registerCockpitFeatures(
   });
 
   // Bundle regenerate
-  shell.registerCommand('git-context.bundle.regenerate', async (context) => {
+  shell.registerCommand('git-context.bundle.regenerate', async context => {
     await vscode.commands.executeCommand('git-context.analyze');
   });
 
   // Register state effects
   shell.registerFeature({
-    effects: [{
-      key: 'bundleFacts',
-      handler: async (change) => {
-        // Auto-update context keys when bundle changes
-        await updateContexts();
+    effects: [
+      {
+        key: 'bundleFacts',
+        handler: async change => {
+          // Auto-update context keys when bundle changes
+          await updateContexts();
+        },
+        priority: 50,
       },
-      priority: 50
-    }]
+    ],
   });
 
   logInfo('Cockpit features registered successfully');

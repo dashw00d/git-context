@@ -1,7 +1,8 @@
 import { spawn } from 'child_process';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
 import { getExtensionConfig } from '../utils/config';
+import { logWarn } from '../utils/logger';
 
 export interface DifftasticResult {
   highlights: string[];
@@ -62,7 +63,7 @@ export class DifftasticIntegration {
       '/usr/bin/difftastic',
       '/opt/homebrew/bin/difftastic', // macOS Homebrew
       '/home/linuxbrew/.linuxbrew/bin/difftastic', // Linux Homebrew
-      'difftastic' // In PATH
+      'difftastic', // In PATH
     ];
 
     for (const binPath of commonPaths) {
@@ -72,8 +73,8 @@ export class DifftasticIntegration {
     }
 
     // Return empty string if not found (optional dependency)
-    console.warn('[DIFFTASTIC] Binary not found. Structural diff analysis will be disabled.');
-    console.warn('[DIFFTASTIC] Searched paths:', commonPaths.slice(0, 3).join(', '));
+    logWarn('[DIFFTASTIC] Binary not found. Structural diff analysis will be disabled.');
+    logWarn(`[DIFFTASTIC] Searched paths: ${commonPaths.slice(0, 3).join(', ')}`);
     return '';
   }
 
@@ -110,29 +111,34 @@ export class DifftasticIntegration {
 
         // Run difftastic with fixed width to prevent side-by-side overflow panics
         const width = '200'; // Fixed wide terminal
-        const difft = spawn(this.difftasticPath, [
-          '--color=never', // No ANSI colors for parsing
-          '--exit-code',   // Exit with code based on differences
-          '--width', width, // Prevent panic on wide diffs
-          oldFile,
-          newFile
-        ], {
-          stdio: ['pipe', 'pipe', 'pipe'],
-          env: { ...process.env, COLUMNS: width, DIFT_WIDTH: width }
-        });
+        const difft = spawn(
+          this.difftasticPath,
+          [
+            '--color=never', // No ANSI colors for parsing
+            '--exit-code', // Exit with code based on differences
+            '--width',
+            width, // Prevent panic on wide diffs
+            oldFile,
+            newFile,
+          ],
+          {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: { ...process.env, COLUMNS: width, DIFT_WIDTH: width },
+          }
+        );
 
         let stdout = '';
         let stderr = '';
 
-        difft.stdout.on('data', (data) => {
+        difft.stdout.on('data', data => {
           stdout += data.toString();
         });
 
-        difft.stderr.on('data', (data) => {
+        difft.stderr.on('data', data => {
           stderr += data.toString();
         });
 
-        difft.on('close', (code) => {
+        difft.on('close', code => {
           // Clean up temp files
           try {
             fs.unlinkSync(oldFile);
@@ -141,7 +147,8 @@ export class DifftasticIntegration {
             // Ignore cleanup errors
           }
 
-          if (code !== null && code > 1) { // 1 is success with differences, >1 is error
+          if (code !== null && code > 1) {
+            // 1 is success with differences, >1 is error
             reject(new Error(`Difftastic failed: ${stderr}`));
             return;
           }
@@ -150,7 +157,7 @@ export class DifftasticIntegration {
           resolve(result);
         });
 
-        difft.on('error', (error) => {
+        difft.on('error', error => {
           // Clean up temp files
           try {
             fs.unlinkSync(oldFile);
@@ -160,7 +167,6 @@ export class DifftasticIntegration {
           }
           reject(error);
         });
-
       } catch (error) {
         // Clean up temp files
         try {
@@ -189,7 +195,7 @@ export class DifftasticIntegration {
         morphs: [],
         hasStructuralChanges: false,
         hunks: [],
-        tags
+        tags,
       };
     }
 
@@ -198,8 +204,10 @@ export class DifftasticIntegration {
     let inHunkContext = false;
 
     // Control-flow and interface keywords to tag
-    const controlFlowKeywords = /\b(if|while|for|switch|return|throw|catch|try|else|do|break|continue)\b/;
-    const interfaceKeywords = /\b(function|class|interface|type|export|import|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\b/;
+    const controlFlowKeywords =
+      /\b(if|while|for|switch|return|throw|catch|try|else|do|break|continue)\b/;
+    const interfaceKeywords =
+      /\b(function|class|interface|type|export|import|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\b/;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -227,7 +235,7 @@ export class DifftasticIntegration {
           newCount: parseInt(newCount || '1'),
           lines: [],
           linesAdded: 0,
-          linesRemoved: 0
+          linesRemoved: 0,
         };
         inHunkContext = true;
 
@@ -278,7 +286,7 @@ export class DifftasticIntegration {
       morphs, // Empty for now as we don't want to overfit
       hasStructuralChanges: true,
       hunks,
-      tags
+      tags,
     };
   }
 
@@ -297,7 +305,11 @@ export class DifftasticIntegration {
   /**
    * Run difftastic on a git commit to get structural highlights
    */
-  async getCommitStructuralHighlights(sha: string, filePath: string, oldPath?: string): Promise<DifftasticResult> {
+  async getCommitStructuralHighlights(
+    sha: string,
+    filePath: string,
+    oldPath?: string
+  ): Promise<DifftasticResult> {
     try {
       // Get file content at commit and its parent
       const git = new (require('./git').GitOperations)();
@@ -308,7 +320,7 @@ export class DifftasticIntegration {
         return {
           highlights: [],
           morphs: [],
-          hasStructuralChanges: false
+          hasStructuralChanges: false,
         };
       }
 
@@ -320,20 +332,21 @@ export class DifftasticIntegration {
         return {
           highlights: [],
           morphs: [],
-          hasStructuralChanges: false
+          hasStructuralChanges: false,
         };
       }
 
       return await this.runDifftastic(oldContent, newContent, parentPath, filePath);
     } catch (error: any) {
       const errorMsg = error.message || String(error);
-      const widthRelated = errorMsg.includes('width') || errorMsg.includes('overflow') || errorMsg.includes('panic');
+      const widthRelated =
+        errorMsg.includes('width') || errorMsg.includes('overflow') || errorMsg.includes('panic');
       const diagMsg = widthRelated ? 'width overflow - consider adjusting --width flag' : errorMsg;
-      console.warn(`[DIFFTASTIC] Skipped ${filePath} (${diagMsg})`);
+      logWarn(`[DIFFTASTIC] Skipped ${filePath} (${diagMsg})`);
       return {
         highlights: [],
         morphs: [],
-        hasStructuralChanges: false
+        hasStructuralChanges: false,
       };
     }
   }

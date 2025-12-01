@@ -1,5 +1,6 @@
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+/* eslint-disable no-restricted-syntax */
 import { getWorkingSnapshot } from '../../../facts/workingSnapshot';
+import { PipelineStep, PipelineState } from '../pipelineTypes';
 
 export function createWorkingStep(): PipelineStep {
   return {
@@ -14,6 +15,6 @@ export function createWorkingStep(): PipelineStep {
 
       const working = await getWorkingSnapshot(state.scope.allPaths, state.liveOverrides);
       state.working = working;
-    }
+    },
   };
 }

@@ -1,9 +1,8 @@
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+/* eslint-disable no-restricted-syntax */
 import { BundleStoryEngine } from '../../bundleStoryEngine';
+import { PipelineStep, PipelineState } from '../pipelineTypes';
 
-export function createStoryStep(
-  storyEngine: BundleStoryEngine
-): PipelineStep {
+export function createStoryStep(storyEngine: BundleStoryEngine): PipelineStep {
   return {
     id: 'llm_story',
     label: 'Generate story + drift + plan',
@@ -30,9 +29,9 @@ export function createStoryStep(
           totalCalls: metadata.totalCalls ?? 0,
           healthScore: metadata.healthScore,
           validatedEvidenceCount: metadata.validatedEvidenceCount,
-          skipped: false
+          skipped: false,
         };
       }
-    }
+    },
   };
 }

@@ -1,12 +1,11 @@
-import { Database } from 'sql.js';
-import { SymbolInfo, EdgeInfo } from '../types';
-import { SymbolExtractor } from './symbols';
+import { LRUCache } from 'lru-cache';
+import { prepare } from '../storage/statement-wrapper';
+import { EdgeInfo, SymbolInfo } from '../types';
+import { detectLanguage, getExtensionConfig } from '../utils/config';
+import { logDebug } from '../utils/logger';
 import { DependencyExtractor } from './dependencies';
 import { assignDNAIds } from './symbolDna';
-import { logDebug } from '../utils/logger';
-import { detectLanguage, getExtensionConfig } from '../utils/config';
-import { LRUCache } from 'lru-cache';
-import { getDatabaseManager } from '../storage/database';
+import { SymbolExtractor } from './symbols';
 
 export interface FileSnapshot {
   blobSha: string;
@@ -27,7 +26,7 @@ export class SnapshotManager {
   private readonly BATCH_SIZE = 50;
 
   constructor(
-    private db: Database,
+    private db: any,
     private symbolExtractor: SymbolExtractor,
     private dependencyExtractor: DependencyExtractor
   ) {
@@ -57,7 +56,7 @@ export class SnapshotManager {
           // Use cached size instead of recalculating
           const size = value._cacheSize || 0;
           logDebug(`[Snapshot] Evicted ${key.substring(0, 20)}... (size: ${size}B)`);
-        }
+        },
       });
     }
   }
@@ -79,7 +78,7 @@ export class SnapshotManager {
     return {
       cacheHits: this.cacheHits,
       cacheMisses: this.cacheMisses,
-      hitRate: hitRate
+      hitRate: hitRate,
     };
   }
 
@@ -127,11 +126,7 @@ export class SnapshotManager {
     // Assign DNA IDs
     const symbolsWithDNA = assignDNAIds(symbols, bodyTexts);
 
-    const edges = this.dependencyExtractor.extractDependencies(
-      content,
-      filePath,
-      symbolsWithDNA
-    );
+    const edges = this.dependencyExtractor.extractDependencies(content, filePath, symbolsWithDNA);
 
     const shapeHash = this.computeShapeHash(symbolsWithDNA);
     const bodyHash = this.computeAggregateBodyHash(symbolsWithDNA);
@@ -143,7 +138,7 @@ export class SnapshotManager {
       symbols: symbolsWithDNA,
       edges,
       shapeHash,
-      bodyHash
+      bodyHash,
     };
 
     // Calculate and cache serialized size once (for LRU cache performance)
@@ -169,7 +164,7 @@ export class SnapshotManager {
   }
 
   private getCachedSnapshot(blobSha: string, filePath: string): FileSnapshot | null {
-    const stmt = this.db.prepare(`
+    const stmt = prepare(`
       SELECT * FROM file_snapshots
       WHERE blob_sha = ? AND file_path = ?
     `);
@@ -183,7 +178,7 @@ export class SnapshotManager {
       symbols: JSON.parse(row.symbols_json),
       edges: JSON.parse(row.edges_json),
       shapeHash: row.shape_hash,
-      bodyHash: row.body_hash
+      bodyHash: row.body_hash,
     };
 
     // Calculate and cache serialized size once (for LRU cache performance)
@@ -204,8 +199,7 @@ export class SnapshotManager {
     const batch = this.writeQueue.splice(0, this.BATCH_SIZE);
 
     // Get wrapped database with transaction support
-    const db = getDatabaseManager().getDatabase();
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       INSERT OR REPLACE INTO file_snapshots
       (blob_sha, file_path, language, symbols_json, edges_json, shape_hash, body_hash, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -214,7 +208,7 @@ export class SnapshotManager {
     const now = new Date().toISOString();
 
     // Use transaction wrapper instead of manual BEGIN/COMMIT
-    db.transaction(() => {
+    this.db.transaction(() => {
       for (const snapshot of batch) {
         stmt.run([
           snapshot.blobSha,
@@ -224,7 +218,7 @@ export class SnapshotManager {
           JSON.stringify(snapshot.edges),
           snapshot.shapeHash || '',
           snapshot.bodyHash || '',
-          now
+          now,
         ]);
       }
     })();
@@ -259,10 +253,7 @@ export class SnapshotManager {
       .join('|');
 
     const crypto = require('crypto');
-    return crypto.createHash('sha256')
-      .update(combined)
-      .digest('hex')
-      .substring(0, 16);
+    return crypto.createHash('sha256').update(combined).digest('hex').substring(0, 16);
   }
 
   /**
@@ -274,7 +265,11 @@ export class SnapshotManager {
   ): {
     added: SymbolInfo[];
     removed: SymbolInfo[];
-    modified: Array<{ symbol: SymbolInfo; previousSymbol: SymbolInfo; changeType: 'signature' | 'body' | 'both' }>;
+    modified: Array<{
+      symbol: SymbolInfo;
+      previousSymbol: SymbolInfo;
+      changeType: 'signature' | 'body' | 'both';
+    }>;
     renamed: Array<{ symbol: SymbolInfo; previousSymbol: SymbolInfo }>;
   } {
     const parentSymbols = parentSnapshot?.symbols || [];
@@ -286,7 +281,11 @@ export class SnapshotManager {
 
     const added: SymbolInfo[] = [];
     const removed: SymbolInfo[] = [];
-    const modified: Array<{ symbol: SymbolInfo; previousSymbol: SymbolInfo; changeType: 'signature' | 'body' | 'both' }> = [];
+    const modified: Array<{
+      symbol: SymbolInfo;
+      previousSymbol: SymbolInfo;
+      changeType: 'signature' | 'body' | 'both';
+    }> = [];
     const renamed: Array<{ symbol: SymbolInfo; previousSymbol: SymbolInfo }> = [];
 
     // Find added and modified (by DNA)
@@ -306,9 +305,7 @@ export class SnapshotManager {
           renamed.push({ symbol, previousSymbol: prev });
         } else if (sigChanged || bodyChanged) {
           // Modified
-          const changeType = sigChanged && bodyChanged ? 'both'
-            : sigChanged ? 'signature'
-              : 'body';
+          const changeType = sigChanged && bodyChanged ? 'both' : sigChanged ? 'signature' : 'body';
 
           modified.push({ symbol, previousSymbol: prev, changeType });
         }

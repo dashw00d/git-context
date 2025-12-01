@@ -1,12 +1,13 @@
-import { PipelineStep, PipelineState } from '../pipelineTypes';
-import { HotspotDetectorV2 } from '../../hotspotDetector';
-import { getDatabaseManager } from '../../../storage/database';
+/* eslint-disable no-restricted-syntax */
+import { prepare } from '../../../storage/statement-wrapper';
 import { SymbolInfo } from '../../../types';
-import { getCstTimelineManager } from '../../cstTimeline';
-import { getExtensionConfig, isCstOnlyLanguage, detectLanguage } from '../../../utils/config';
 import { isCstFact } from '../../../types/cstFacts';
+import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../../../utils/config';
 import { logDebug } from '../../../utils/logger';
+import { getCstTimelineManager } from '../../cstTimeline';
 import { GitOperations } from '../../git';
+import { HotspotDetectorV2 } from '../../hotspotDetector';
+import { PipelineState, PipelineStep } from '../pipelineTypes';
 
 function extractFileFromSymbolId(symbolId: string): string | null {
   const parts = symbolId.split(':');
@@ -21,7 +22,6 @@ export function createHotspotStep(): PipelineStep {
 
     async run(state: PipelineState) {
       const detector = new HotspotDetectorV2(); // V2 detector with BaseDetector enhancements
-      const db = getDatabaseManager().getDatabase();
 
       if (state.selectedCommitShas.length === 0) {
         state.hotspots = [];
@@ -30,7 +30,7 @@ export function createHotspotStep(): PipelineStep {
 
       // Batch query all symbols across all commits
       const placeholders = state.selectedCommitShas.map(() => '?').join(',');
-      const symbolsStmt = db.prepare(`
+      const symbolsStmt = prepare(`
         SELECT s.symbol_id, s.name, s.kind, s.path, s.change_type, s.signature,
                sv.dna_id, s.sha
         FROM symbols s
@@ -66,8 +66,8 @@ export function createHotspotStep(): PipelineStep {
           signature: row.signature || '',
           location: {
             start: { line: 0, column: 0 }, // Placeholder - not used by hotspot detector
-            end: { line: 0, column: 0 }
-          }
+            end: { line: 0, column: 0 },
+          },
         }));
 
         // Store symbols for batch update
@@ -114,9 +114,9 @@ export function createHotspotStep(): PipelineStep {
 
       if (enableCst || enableAugment) {
         const timelineManager = getCstTimelineManager();
-        
+
         // Batch query all files across all commits
-        const filesStmt = db.prepare(`
+        const filesStmt = prepare(`
           SELECT DISTINCT path, sha FROM files WHERE sha IN (${placeholders})
         `);
         const allFileRows = filesStmt.all(...state.selectedCommitShas) as any[];
@@ -140,23 +140,25 @@ export function createHotspotStep(): PipelineStep {
             if (!isCstOnly && !enableAugment) continue;
 
             try {
-              const hybridFacts = await timelineManager.getPriorFacts(filePath, sha) || [];
-              
+              const hybridFacts = (await timelineManager.getPriorFacts(filePath, sha)) || [];
+
               if (hybridFacts.length > 0) {
-                logDebug(`[HotspotStep] Retrieved ${hybridFacts.length} hybrid facts for ${filePath}@${sha.substring(0, 8)}`);
+                logDebug(
+                  `[HotspotStep] Retrieved ${
+                    hybridFacts.length
+                  } hybrid facts for ${filePath}@${sha.substring(0, 8)}`
+                );
               }
-              
+
               // Convert CST facts to SymbolInfo-like objects for hotspot scoring
-              const cstSymbols: SymbolInfo[] = hybridFacts
-                .filter(isCstFact)
-                .map(fact => ({
-                  id: fact.id,
-                  dnaId: fact.dnaId,
-                  name: fact.name,
-                  kind: fact.kind as SymbolInfo['kind'],
-                  signature: fact.signature,
-                  location: fact.location
-                }));
+              const cstSymbols: SymbolInfo[] = hybridFacts.filter(isCstFact).map(fact => ({
+                id: fact.id,
+                dnaId: fact.dnaId,
+                name: fact.name,
+                kind: fact.kind as SymbolInfo['kind'],
+                signature: fact.signature,
+                location: fact.location,
+              }));
 
               // Update file hotspot with hybrid facts (frequent heading/property changes = doc/code hotspot)
               if (cstSymbols.length > 0) {
@@ -178,34 +180,36 @@ export function createHotspotStep(): PipelineStep {
       // Enhance file hotspots with timeline version tracking
       if (state.explicitTimeline && state.explicitTimeline.length > 0) {
         const git = new GitOperations();
-        
+
         for (const hotspot of fileHotspots) {
           const touchedVersions: string[] = [];
-          
+
           // Check which timeline versions modified this file
           for (const version of state.explicitTimeline) {
             let wasTouched = false;
-            
+
             if (version === 'workspace-unstaged' || version === 'workspace-staged') {
               // Check if file is in workspace changes
-              const workspaceFiles = version === 'workspace-unstaged'
-                ? await git.getUnstagedFiles()
-                : await git.getStagedFiles();
+              const workspaceFiles =
+                version === 'workspace-unstaged'
+                  ? await git.getUnstagedFiles()
+                  : await git.getStagedFiles();
               wasTouched = workspaceFiles.some(f => f.path === hotspot.filePath);
             } else {
               // Check if file was changed in this commit
-              const sha = version === 'HEAD' 
-                ? (state.selectedCommitShas?.[state.selectedCommitShas.length - 1] || 'HEAD')
-                : version;
+              const sha =
+                version === 'HEAD'
+                  ? state.selectedCommitShas?.[state.selectedCommitShas.length - 1] || 'HEAD'
+                  : version;
               const commitFiles = await git.getFileChanges(sha);
               wasTouched = commitFiles.some(f => f.path === hotspot.filePath);
             }
-            
+
             if (wasTouched) {
               touchedVersions.push(version);
             }
           }
-          
+
           if (touchedVersions.length > 0) {
             hotspot.touchedInVersions = touchedVersions;
             hotspot.touchedInVersionsDescription = `${touchedVersions.length}/${state.explicitTimeline.length} versions`;
@@ -213,10 +217,7 @@ export function createHotspotStep(): PipelineStep {
         }
       }
 
-      state.hotspots = [
-        ...fileHotspots,
-        ...symbolHotspots
-      ];
-    }
+      state.hotspots = [...fileHotspots, ...symbolHotspots];
+    },
   };
 }

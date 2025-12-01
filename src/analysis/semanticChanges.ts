@@ -42,7 +42,7 @@ export class SemanticChangeDetector {
         renames.push({
           oldSymbol: removedSymbol,
           newSymbol: bestMatch,
-          confidence: bestConfidence
+          confidence: bestConfidence,
         });
       }
     }
@@ -64,7 +64,14 @@ export class SemanticChangeDetector {
     }
 
     // Similar signature structure (ignoring name)
-    if (this.signaturesSimilar(oldSymbol.signature, newSymbol.signature, oldSymbol.name, newSymbol.name)) {
+    if (
+      this.signaturesSimilar(
+        oldSymbol.signature,
+        newSymbol.signature,
+        oldSymbol.name,
+        newSymbol.name
+      )
+    ) {
       confidence += 0.4;
     }
 
@@ -129,11 +136,13 @@ export class SemanticChangeDetector {
     if (maxLen === 0) return 1.0;
 
     const distance = this.levenshteinDistance(s1, s2);
-    return 1.0 - (distance / maxLen);
+    return 1.0 - distance / maxLen;
   }
 
   private levenshteinDistance(s1: string, s2: string): number {
-    const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
+    const matrix = Array(s2.length + 1)
+      .fill(null)
+      .map(() => Array(s1.length + 1).fill(null));
 
     for (let i = 0; i <= s1.length; i++) matrix[0][i] = i;
     for (let j = 0; j <= s2.length; j++) matrix[j][0] = j;
@@ -202,7 +211,7 @@ export class SemanticChangeDetector {
                 symbol: currSymbol,
                 oldPath: prevSymbol.id.split(':')[0],
                 newPath: currSymbol.id.split(':')[0],
-                confidence
+                confidence,
               });
             }
           }
@@ -229,7 +238,14 @@ export class SemanticChangeDetector {
     // Similar signature
     if (oldSymbol.signature === newSymbol.signature) {
       confidence += 0.4;
-    } else if (this.signaturesSimilar(oldSymbol.signature, newSymbol.signature, oldSymbol.name, newSymbol.name)) {
+    } else if (
+      this.signaturesSimilar(
+        oldSymbol.signature,
+        newSymbol.signature,
+        oldSymbol.name,
+        newSymbol.name
+      )
+    ) {
       confidence += 0.3;
     }
 
@@ -305,7 +321,10 @@ export class SemanticChangeDetector {
    */
   private normalizeSignature(signature: string): string {
     // Simple normalization - could be enhanced for specific languages
-    return signature.replace(/\b\w+\s+(\w+)/g, '$1').replace(/\s+/g, ' ').trim();
+    return signature
+      .replace(/\b\w+\s+(\w+)/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   /**
@@ -321,18 +340,14 @@ export class SemanticChangeDetector {
       const lines = content.split('\n');
       const startLine = Math.max(0, location.start.line - 3);
       // Respect maxLines parameter to limit snippet size
-      const endLine = Math.min(
-        lines.length,
-        location.end.line + 3,
-        startLine + maxLines
-      );
+      const endLine = Math.min(lines.length, location.end.line + 3, startLine + maxLines);
 
       return lines.slice(startLine, endLine).join('\n');
     };
 
     return {
       pre: extractSnippet(previousContent, symbol.location),
-      post: extractSnippet(currentContent, symbol.location)
+      post: extractSnippet(currentContent, symbol.location),
     };
   }
 }

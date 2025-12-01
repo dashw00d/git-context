@@ -1,20 +1,22 @@
 import * as vscode from 'vscode';
-import { logInfo, logError, logDebug } from '../../utils/logger';
-import { CockpitClientMessage, CockpitSectionKey, CockpitState, ContextFrame, BundleView } from '../../types/cockpit';
-import { CockpitStateChange, getCockpitOrchestrator } from '../../state/cockpitOrchestrator';
-import { getStore } from '../../state/store';
 import { Action } from '../../state/actions';
-import { ExplorerService } from '../../services/explorerService';
-
+import { getStore } from '../../state/store';
+import {
+  BundleView,
+  CockpitClientMessage,
+  CockpitSectionKey,
+  CockpitState,
+  ContextFrame,
+  ExplorerNode,
+} from '../../types/cockpit';
+import { logDebug, logError, logInfo } from '../../utils/logger';
 import { BundleManager } from './services/BundleManager';
 import { ExplorerController } from './services/ExplorerController';
-import { getTreeSitterParser } from '../../analysis/tree-sitter';
 
 export class CockpitProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private state: CockpitState;
   private unsubscribe?: () => void;
-  private readonly orchestrator = getCockpitOrchestrator();
   private hotspotCache: Map<string, any[]> = new Map();
   private skeletonCache: { files: string[]; roots: string[]; mode: string } | null = null;
 
@@ -23,7 +25,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
   private explorerController?: ExplorerController;
 
   constructor(private readonly extensionUri: vscode.Uri) {
-    this.state = this.orchestrator.getState();
+    this.state = getStore().getState(); // Initialize state directly from store
     this.bundleManager = new BundleManager();
   }
 
@@ -33,32 +35,62 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     _token: vscode.CancellationToken
   ): void {
     this.unsubscribe?.();
-    this.unsubscribe = this.orchestrator.subscribe((change) => this.handleStateChange(change));
+    // Subscribe to store changes and pass the relevant cockpit state to handleStateChange
+    let previousCockpitState = getStore().getState();
+    this.unsubscribe = getStore().subscribe(() => {
+      const currentCockpitState = getStore().getState();
+      // Only trigger handleStateChange if the cockpit state itself has changed
+      if (currentCockpitState !== previousCockpitState) {
+        // Construct a CockpitStateChange object for compatibility
+        const change: any = {
+          full: currentCockpitState,
+          partial: {}, // We don't have granular partial changes from direct store subscription
+          reason: 'store_update',
+        };
+        // Attempt to infer partial changes for logging/conditional updates
+        for (const key in currentCockpitState) {
+          if (
+            currentCockpitState.hasOwnProperty(key) &&
+            previousCockpitState.hasOwnProperty(key) &&
+            (currentCockpitState as any)[key] !== (previousCockpitState as any)[key]
+          ) {
+            (change.partial as any)[key] = (currentCockpitState as any)[key];
+          }
+        }
+        this.handleStateChange(change);
+        previousCockpitState = currentCockpitState;
+      }
+    });
 
     this.view = webviewView;
-    this.state = this.orchestrator.getState();
+    this.state = getStore().getState(); // Ensure state is up-to-date
 
     // Initialize ExplorerController with the view
     this.explorerController = new ExplorerController(webviewView, this.bundleManager);
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')]
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')],
     };
     webviewView.webview.html = this.getHtml(webviewView.webview);
-    webviewView.webview.onDidReceiveMessage((msg) => this.handleMessage(msg));
+    webviewView.webview.onDidReceiveMessage(msg => this.handleMessage(msg));
     webviewView.onDidDispose(() => {
       this.unsubscribe?.();
       this.view = undefined;
       this.explorerController = undefined;
     });
     // If we have no bundle facts in state, try to hydrate from last persisted bundle facts
-    this.hydrateFromPersistedFacts().catch(err => logDebug(`[Cockpit] Failed to hydrate persisted facts: ${err}`));
+    this.hydrateFromPersistedFacts().catch(err =>
+      logDebug(`[Cockpit] Failed to hydrate persisted facts: ${err}`)
+    );
 
     // Load bundle config from workspace settings
     const savedConfig = vscode.workspace.getConfiguration('git-context').get('bundleConfig');
     if (savedConfig) {
-      this.orchestrator.updatePartial('bundleConfig', savedConfig as any, 'init:config');
+      getStore().dispatch({
+        type: 'BUNDLE_CONFIG_UPDATED',
+        payload: { config: savedConfig },
+      });
     }
 
     // Ensure explorer tree is initialized even if no facts (for static nodes)
@@ -69,7 +101,8 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     this.sendState();
   }
 
-  private handleStateChange(change: CockpitStateChange) {
+  private handleStateChange(change: any) {
+    // CockpitStateChange type is internal to orchestrator, using any for now
     logDebug(`[Cockpit] Applying state change (${change.reason ?? 'unspecified'})`);
     this.state = change.full;
     this.sendState();
@@ -79,12 +112,17 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     const factsChanged = partialKeys.includes('bundleFacts');
     const configChanged = partialKeys.includes('bundleConfig');
 
-    logInfo(`[Cockpit] handleStateChange: reason=${change.reason ?? 'unspecified'}, factsChanged=${factsChanged}, hasBundleFacts=${!!this.state.bundleFacts}`);
+    logInfo(
+      `[Cockpit] handleStateChange: reason=${change.reason ?? 'unspecified'}, factsChanged=${factsChanged}, hasBundleFacts=${!!this.state.bundleFacts}`
+    );
     if (factsChanged) {
       const hotspotCount = (this.state.bundleFacts?.evidence as any)?.hotspots?.length || 0;
       const scopeFiles = (this.state.bundleFacts?.evidence as any)?.['scope.files']?.length || 0;
-      const workingSymbols = (this.state.bundleFacts?.evidence as any)?.['working.symbols']?.length || 0;
-      logInfo(`[Cockpit] State update: bundleFacts changed (hotspots=${hotspotCount}, scope.files=${scopeFiles}, working.symbols=${workingSymbols})`);
+      const workingSymbols =
+        (this.state.bundleFacts?.evidence as any)?.['working.symbols']?.length || 0;
+      logInfo(
+        `[Cockpit] State update: bundleFacts changed (hotspots=${hotspotCount}, scope.files=${scopeFiles}, working.symbols=${workingSymbols})`
+      );
     }
 
     if (factsChanged || configChanged) {
@@ -105,11 +143,11 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
   }
 
   getState(): CockpitState {
-    return this.orchestrator.getState();
+    return getStore().getState();
   }
 
   updateCommits(commits: CockpitState['commits']) {
-    this.orchestrator.updatePartial('commits', commits, 'host:updateCommits');
+    getStore().dispatch({ type: 'COMMITS_DATA_UPDATED', payload: { commits } });
   }
 
   updateSelection(
@@ -119,42 +157,57 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     workspaceScope: CockpitState['workspaceScope'],
     selectedFiles?: string[]
   ) {
-    this.orchestrator.updateState({
-      selectedCommitShas,
-      selectedStagedPaths,
-      selectedUnstagedPaths,
-      selectedFiles,
-      workspaceScope
-    }, 'host:updateSelection');
+    getStore().dispatch({
+      type: 'SELECTION_UPDATED',
+      payload: {
+        selectedCommitShas,
+        selectedStagedPaths,
+        selectedUnstagedPaths,
+        selectedFiles,
+        workspaceScope,
+      },
+    });
   }
 
-  updateWorkspaceFiles(stagedFiles: CockpitState['stagedFiles'], unstagedFiles: CockpitState['unstagedFiles']) {
-    this.orchestrator.updateState({ stagedFiles, unstagedFiles }, 'host:updateWorkspaceFiles');
+  updateWorkspaceFiles(
+    stagedFiles: CockpitState['stagedFiles'],
+    unstagedFiles: CockpitState['unstagedFiles']
+  ) {
+    getStore().dispatch({
+      type: 'WORKSPACE_FILES_UPDATED',
+      payload: { staged: stagedFiles, unstaged: unstagedFiles },
+    });
   }
 
-  updateBundleFacts(bundleFacts: CockpitState['bundleFacts'], bundleSummary?: CockpitState['bundleSummary']) {
-    this.orchestrator.updateState(
-      { bundleFacts, bundleSummary: bundleSummary ?? this.state.bundleSummary },
-      'host:updateBundleFacts'
-    );
+  updateBundleFacts(
+    bundleFacts: CockpitState['bundleFacts'],
+    bundleSummary?: CockpitState['bundleSummary']
+  ) {
+    getStore().dispatch({
+      type: 'BUNDLE_FACTS_UPDATED',
+      payload: {
+        facts: bundleFacts,
+        summary: bundleSummary ?? this.state.bundleSummary,
+      },
+    });
   }
 
   updateSymbols(symbols: CockpitState['symbols']) {
-    this.orchestrator.updatePartial('symbols', symbols, 'host:updateSymbols');
+    getStore().dispatch({ type: 'SYMBOLS_UPDATED', payload: { symbols } });
   }
 
   updateReports(reports: CockpitState['reports']) {
-    this.orchestrator.updatePartial('reports', reports, 'host:updateReports');
+    getStore().dispatch({ type: 'REPORTS_UPDATED', payload: { reports } });
   }
 
   updateState(partial: Partial<CockpitState>) {
-    this.orchestrator.updateState(partial, 'host:updateState');
+    getStore().dispatch({ type: 'LEGACY_STATE_UPDATED', payload: { partial } });
   }
 
   updateAnalysisProgress(isAnalyzing: boolean, step?: string, progress?: number) {
     getStore().dispatch({
       type: 'ANALYSIS_PROGRESS_UPDATED',
-      payload: { isAnalyzing, step, progress }
+      payload: { isAnalyzing, step, progress },
     });
   }
 
@@ -162,7 +215,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     getStore().dispatch({ type: 'SECTION_CHANGED', payload: { section } });
   }
 
-  private async handleMessage(msg: CockpitClientMessage | { type: 'ready' } | { type: 'clearError' } | { type: 'dispatch'; action: Action }) {
+  private async handleMessage(
+    msg:
+      | CockpitClientMessage
+      | { type: 'ready' }
+      | { type: 'clearError' }
+      | { type: 'dispatch'; action: Action }
+  ) {
     logInfo(`[Cockpit] Received message: ${msg.type}`);
     // console.log('[Cockpit] Message details:', msg); // Reduce noise
     switch (msg.type) {
@@ -173,7 +232,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         getStore().dispatch({ type: 'SECTION_CHANGED', payload: { section: msg.section } });
         break;
       case 'generateLiveReport':
-        this.orchestrator.updateLiveState({ status: 'analyzing' }, 'ui:generateLiveReport');
+        getStore().dispatch({ type: 'LIVE_STATE_UPDATED', payload: { status: 'analyzing' } });
         await vscode.commands.executeCommand('git-context.generateLiveReport');
         break;
       case 'startLiveAnalysis':
@@ -183,7 +242,9 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         const mode = msg.mode as 'selection' | 'lastN' | undefined;
         const force = msg.force as boolean | undefined;
         try {
-          logInfo(`[Cockpit] generateReport message received (mode=${mode || 'selection'}, force=${!!force}, lastN=${msg.lastN ?? this.state.lastNCommits})`);
+          logInfo(
+            `[Cockpit] generateReport message received (mode=${mode || 'selection'}, force=${!!force}, lastN=${msg.lastN ?? this.state.lastNCommits})`
+          );
           // Update depth if passed explicitly (Stage posts LAST_N separately but keep this for safety)
           if (typeof msg.lastN === 'number') {
             getStore().dispatch({ type: 'LAST_N_COMMITS_CHANGED', payload: { n: msg.lastN } });
@@ -198,13 +259,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
             const count = await vscode.window.showInputBox({
               prompt: 'Number of commits to analyze',
               value: defaultValue,
-              validateInput: (value) => {
+              validateInput: value => {
                 const num = parseInt(value);
                 if (isNaN(num) || num <= 0) {
                   return 'Please enter a positive number';
                 }
                 return undefined;
-              }
+              },
             });
 
             if (count) {
@@ -216,26 +277,43 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           // Trigger the new store-based analysis flow (auto-selects depth in effects)
           getStore().dispatch({
             type: 'ANALYSIS_REQUESTED',
-            payload: { selection: this.state.selectedCommitShas, force }
+            payload: { selection: this.state.selectedCommitShas, force },
           });
 
           // Kick off a skeleton so the UI can show progressive context while pipeline runs
-          this.sendSkeletonProgress().catch(err => logDebug(`[Cockpit] Skeleton resolution failed: ${err}`));
+          this.sendSkeletonProgress().catch(err =>
+            logDebug(`[Cockpit] Skeleton resolution failed: ${err}`)
+          );
           // Kick off a hybrid fast update (virtual commits, quick churn) before full pipeline completes
-          this.sendHybridProgress().catch(err => logDebug(`[Cockpit] Hybrid update failed: ${err}`));
+          this.sendHybridProgress().catch(err =>
+            logDebug(`[Cockpit] Hybrid update failed: ${err}`)
+          );
 
-          this.orchestrator.updateState({ isAnalyzing: true, error: null }, 'ui:generateReport:start');
-          logInfo(`[Cockpit] Triggered analysis via store (${mode || 'selection'}), selection=${this.state.selectedCommitShas.length}`);
+          getStore().dispatch({
+            type: 'ANALYSIS_PROGRESS_UPDATED',
+            payload: { isAnalyzing: true },
+          });
+          getStore().dispatch({ type: 'ERROR_CLEARED' });
+          logInfo(
+            `[Cockpit] Triggered analysis via store (${mode || 'selection'}), selection=${this.state.selectedCommitShas.length}`
+          );
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          this.orchestrator.updateState({ isAnalyzing: false, error: errorMessage }, 'ui:generateReport:error');
+          getStore().dispatch({
+            type: 'ANALYSIS_PROGRESS_UPDATED',
+            payload: { isAnalyzing: false },
+          });
+          getStore().dispatch({ type: 'ERROR_SET', payload: { error: errorMessage } });
           logError('[Cockpit] Failed to trigger analysis', error);
         }
         break;
       }
       case 'cancelAnalysis':
         await vscode.commands.executeCommand('git-context.bundle.cancel');
-        this.orchestrator.updatePartial('isAnalyzing', false, 'ui:cancelAnalysis');
+        getStore().dispatch({
+          type: 'ANALYSIS_PROGRESS_UPDATED',
+          payload: { isAnalyzing: false },
+        });
         break;
       case 'toggleCommit':
         if (msg.sha) {
@@ -251,16 +329,22 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         await vscode.commands.executeCommand('git-context.addMoreCommits');
         break;
       case 'setCommitsFilterText':
-        getStore().dispatch({ type: 'COMMITS_FILTER_TEXT_CHANGED', payload: { text: msg.text ?? '' } });
+        getStore().dispatch({
+          type: 'COMMITS_FILTER_TEXT_CHANGED',
+          payload: { text: msg.text ?? '' },
+        });
         break;
       case 'setCommitsFilterScopes':
-        getStore().dispatch({ type: 'COMMITS_FILTER_SCOPES_CHANGED', payload: { scopes: { ...this.state.commitsFilterScopes, ...msg.scopes } } });
+        getStore().dispatch({
+          type: 'COMMITS_FILTER_SCOPES_CHANGED',
+          payload: { scopes: { ...this.state.commitsFilterScopes, ...msg.scopes } },
+        });
         break;
       case 'clearSelection':
         await vscode.commands.executeCommand('git-context.clearSelection');
         break;
       case 'resetAll':
-        this.orchestrator.reset(undefined, 'ui:resetAll');
+        getStore().dispatch({ type: 'RESET_ALL_STATE' });
         await vscode.commands.executeCommand('git-context.resetAll');
         break;
       case 'openActiveReport':
@@ -318,7 +402,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
             action: 'rename',
             symbolId: msg.payload.symbolId,
             suggestedName: msg.payload.suggestedName,
-            filePath: msg.payload.filePath
+            filePath: msg.payload.filePath,
           });
         }
         break;
@@ -327,7 +411,9 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         try {
           const frame = msg.payload?.frame;
           const text = msg.payload?.text || 'Provide a concise summary and next steps.';
-          const symbolName = frame?.data?.symbolId ? (frame.data.symbolId.split(':').pop() || '') : '';
+          const symbolName = frame?.data?.symbolId
+            ? frame.data.symbolId.split(':').pop() || ''
+            : '';
           const snippet = this.extractSnippet(frame?.data?.content, symbolName);
           const context = {
             level: frame?.level,
@@ -337,38 +423,58 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
             drift: frame?.data?.drift,
             timeline: frame?.data?.timeline?.slice(0, 5),
             blastRadius: frame?.data?.blastRadius,
-            snippet
+            snippet,
           };
 
           const messages = [
             {
               role: 'system',
-              content: 'You are a refactor assistant. Use only provided context. Respond concisely with actions and risks. Do not fabricate code.'
+              content:
+                'You are a refactor assistant. Use only provided context. Respond concisely with actions and risks. Do not fabricate code.',
             },
             {
               role: 'user',
-              content: `Context: ${JSON.stringify(context, null, 2)}\n\nQuestion: ${text}`
-            }
+              content: `Context: ${JSON.stringify(context, null, 2)}\n\nQuestion: ${text}`,
+            },
           ];
 
           const { getLLMClient } = await import('../../llm/openrouter');
           const client = getLLMClient();
-          const reply = await client.complete(messages as any, { maxTokens: 600, temperature: 0.2 });
+          const reply = await client.complete(messages as any, {
+            maxTokens: 600,
+            temperature: 0.2,
+          });
 
+          // eslint-disable-next-line no-restricted-syntax
           this.view?.webview.postMessage({ type: 'assistantResponse', payload: { text: reply } });
         } catch (err) {
           logError('[Cockpit] Assistant handling failed', err);
-          this.view?.webview.postMessage({ type: 'assistantResponse', payload: { text: `Assistant error: ${err instanceof Error ? err.message : String(err)}` } });
+          // eslint-disable-next-line no-restricted-syntax
+          this.view?.webview.postMessage({
+            type: 'assistantResponse',
+            payload: {
+              text: `Assistant error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          });
         }
         break;
       case 'setSymbolFilterText':
-        getStore().dispatch({ type: 'SYMBOL_FILTER_TEXT_CHANGED', payload: { text: msg.text ?? '' } });
+        getStore().dispatch({
+          type: 'SYMBOL_FILTER_TEXT_CHANGED',
+          payload: { text: msg.text ?? '' },
+        });
         break;
       case 'setSymbolKindFilter':
-        getStore().dispatch({ type: 'SYMBOL_KIND_FILTER_CHANGED', payload: { kind: msg.kind ?? 'all' } });
+        getStore().dispatch({
+          type: 'SYMBOL_KIND_FILTER_CHANGED',
+          payload: { kind: msg.kind ?? 'all' },
+        });
         break;
       case 'setSymbolChangeFilter':
-        getStore().dispatch({ type: 'SYMBOL_CHANGE_FILTER_CHANGED', payload: { change: msg.change ?? 'all' } });
+        getStore().dispatch({
+          type: 'SYMBOL_CHANGE_FILTER_CHANGED',
+          payload: { change: msg.change ?? 'all' },
+        });
         break;
       case 'setLastNCommits':
         if (typeof msg.value === 'number') {
@@ -381,19 +487,31 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         }
         break;
       case 'setReportsFilterText':
-        getStore().dispatch({ type: 'REPORTS_FILTER_TEXT_CHANGED', payload: { text: msg.text ?? '' } });
+        getStore().dispatch({
+          type: 'REPORTS_FILTER_TEXT_CHANGED',
+          payload: { text: msg.text ?? '' },
+        });
         break;
       case 'setReportsBranchFilter':
-        getStore().dispatch({ type: 'REPORTS_BRANCH_FILTER_CHANGED', payload: { branch: msg.branch ?? 'all' } });
+        getStore().dispatch({
+          type: 'REPORTS_BRANCH_FILTER_CHANGED',
+          payload: { branch: msg.branch ?? 'all' },
+        });
         break;
       case 'setReportsShowPinnedOnly':
-        getStore().dispatch({ type: 'REPORTS_PINNED_FILTER_CHANGED', payload: { showPinnedOnly: msg.value ?? false } });
+        getStore().dispatch({
+          type: 'REPORTS_PINNED_FILTER_CHANGED',
+          payload: { showPinnedOnly: msg.value ?? false },
+        });
         break;
       case 'scrollReportToSection':
         if (msg.sectionId) {
           // First ensure report is open
           if (this.state.bundleReportId) {
-            await vscode.commands.executeCommand('git-context.openReport', this.state.bundleReportId);
+            await vscode.commands.executeCommand(
+              'git-context.openReport',
+              this.state.bundleReportId
+            );
           }
           // Then scroll to the section
           await vscode.commands.executeCommand('git-context.scrollToReportSection', msg.sectionId);
@@ -411,7 +529,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         await this.updateExplorerTree();
         break;
       case 'clearError':
-        this.orchestrator.updatePartial('error', null, 'ui:clearError');
+        getStore().dispatch({ type: 'ERROR_CLEARED' });
         break;
       case 'getExplorerTree':
         await this.updateExplorerTree();
@@ -448,9 +566,14 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         if (msg.id) {
           await this.bundleManager.setActiveBundle(msg.id);
           // TODO: Load bundle config and facts into state
-          const bundle = await this.bundleManager.getBundles().then(bundles => bundles.find(b => b.id === msg.id));
+          const bundle = await this.bundleManager
+            .getBundles()
+            .then(bundles => bundles.find(b => b.id === msg.id));
           if (bundle) {
-            this.orchestrator.updatePartial('bundleConfig', bundle.config, 'ui:switchBundle');
+            getStore().dispatch({
+              type: 'BUNDLE_CONFIG_UPDATED',
+              payload: { config: bundle.config },
+            });
             // Trigger analysis/skeleton update for the new bundle
             await this.updateSkeleton(bundle.config);
             await this.updateBundleData();
@@ -460,15 +583,25 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         break;
       case 'updateBundleConfig':
         if (msg.config) {
-          const currentConfig = this.state.bundleConfig || { mode: 'repo', roots: [], includeConnected: false, exclusions: [] };
+          const currentConfig = this.state.bundleConfig || {
+            mode: 'repo',
+            roots: [],
+            includeConnected: false,
+            exclusions: [],
+          };
           const newConfig = { ...currentConfig, ...msg.config };
-          this.orchestrator.updatePartial('bundleConfig', newConfig, 'ui:updateBundleConfig');
+          getStore().dispatch({
+            type: 'BUNDLE_CONFIG_UPDATED',
+            payload: { config: newConfig },
+          });
 
           // Trigger immediate skeleton update for visual feedback
           await this.updateSkeleton(newConfig);
 
           // Save to workspace settings
-          await vscode.workspace.getConfiguration('git-context').update('bundleConfig', newConfig, vscode.ConfigurationTarget.Workspace);
+          await vscode.workspace
+            .getConfiguration('git-context')
+            .update('bundleConfig', newConfig, vscode.ConfigurationTarget.Workspace);
 
           // Trigger data update with new config
           await this.updateBundleData();
@@ -504,7 +637,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           name: f.split('/').slice(-1)[0] || f,
           type: 'file',
           status: 'scanning', // Visual feedback
-          children: []
+          children: [],
         }));
 
         getStore().dispatch({ type: 'EXPLORER_UPDATED', payload: { nodes } });
@@ -516,7 +649,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           path: f,
           name: f.split('/').slice(-1)[0] || f,
           score: 0,
-          status: 'scanning'
+          status: 'scanning',
         }));
 
         this.pushBundleView({
@@ -525,14 +658,14 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           summary: {
             files: skeleton.files.length,
             commits: 0,
-            symbols: 0
+            symbols: 0,
           },
           skeleton: {
             mode: skeleton.mode,
             roots: skeleton.roots,
-            files: skeleton.files.slice(0, 200)
+            files: skeleton.files.slice(0, 200),
           },
-          isPartial: true
+          isPartial: true,
         });
       }
     } catch (error) {
@@ -549,14 +682,19 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         if (this.hotspotCache.has(cacheKey)) {
           hotspots = this.hotspotCache.get(cacheKey)!;
         } else {
-          hotspots = ((facts.evidence as any)?.hotspots || (facts.findings as any)?.hotspots || (facts as any)?.hotspots || []).map((h: any) => ({
+          hotspots = (
+            (facts.evidence as any)?.hotspots ||
+            (facts.findings as any)?.hotspots ||
+            (facts as any)?.hotspots ||
+            []
+          ).map((h: any) => ({
             name: h.path?.split('/').slice(-1)[0] || h.path,
             path: h.path,
             score: h.drift_count || h.score || h.count || 0,
             count: h.count,
             size: h.size,
             added: h.added,
-            removed: h.removed
+            removed: h.removed,
           }));
           // If hotspots are missing in facts, fetch churn from git as a fallback
           if (!hotspots.length) {
@@ -564,7 +702,15 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
               const { GitOperations } = await import('../../analysis/git');
               const gitOps = new GitOperations();
               const churn = await gitOps.getHotspots(100);
-              hotspots = churn.map((h: any) => ({ path: h.path, name: h.path.split('/').pop(), score: h.count, count: h.count, size: h.size, added: h.added, removed: h.removed }));
+              hotspots = churn.map((h: any) => ({
+                path: h.path,
+                name: h.path.split('/').pop(),
+                score: h.count,
+                count: h.count,
+                size: h.size,
+                added: h.added,
+                removed: h.removed,
+              }));
             } catch (err) {
               logDebug(`[Cockpit] Fallback hotspots failed: ${err}`);
             }
@@ -587,7 +733,15 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
             const { GitOperations } = await import('../../analysis/git');
             const gitOps = new GitOperations();
             const churn = await gitOps.getHotspots(100);
-            hotspots = churn.map((h: any) => ({ path: h.path, name: h.path.split('/').pop(), score: h.count, count: h.count, size: h.size, added: h.added, removed: h.removed }));
+            hotspots = churn.map((h: any) => ({
+              path: h.path,
+              name: h.path.split('/').pop(),
+              score: h.count,
+              count: h.count,
+              size: h.size,
+              added: h.added,
+              removed: h.removed,
+            }));
           } catch (err) {
             logDebug(`[Cockpit] Fallback hotspots (no facts) failed: ${err}`);
           }
@@ -595,25 +749,33 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       }
 
       // Basic risk summary for bundle inspector
-      const driftSymbols = ((facts?.findings as any)?.patternDrift?.conventionDrift?.driftSymbols as any[]) || [];
+      const driftSymbols =
+        ((facts?.findings as any)?.patternDrift?.conventionDrift?.driftSymbols as any[]) || [];
       const topRisks = driftSymbols.slice(0, 5).map((d: any) => ({
         path: d.path,
         name: d.name,
         issue: 'Naming drift',
-        detail: d.suggestedName ? `Suggested: ${d.suggestedName}` : ''
+        detail: d.suggestedName ? `Suggested: ${d.suggestedName}` : '',
       }));
 
       const summary = facts
         ? {
-          commits: facts.bundle?.shas?.length || 0,
-          files: facts.scope?.files || 0,
-          symbols: facts.working?.symbols || 0
-        }
+            commits: facts.bundle?.shas?.length || 0,
+            files: facts.scope?.files || 0,
+            symbols: facts.working?.symbols || 0,
+          }
         : { commits: 0, files: 0, symbols: 0 };
 
       const treemap = this.buildTreemap(hotspots);
 
-      const payload = { hotspots, summary, risks: topRisks, treemap, tier: facts ? 'semantics' : undefined };
+      const tier: 'structure' | 'hybrid' | 'semantics' = facts ? 'semantics' : 'hybrid';
+      const payload: BundleView = {
+        hotspots,
+        summary,
+        risks: topRisks,
+        treemap,
+        tier,
+      };
 
       this.pushBundleView(payload);
       logInfo(`[Cockpit] Sent bundle data (${hotspots.length} hotspots)`);
@@ -624,7 +786,17 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private buildTreemap(hotspots: Array<{ path: string; score: number; name?: string; size?: number; added?: number; removed?: number; count?: number }>) {
+  private buildTreemap(
+    hotspots: Array<{
+      path: string;
+      score: number;
+      name?: string;
+      size?: number;
+      added?: number;
+      removed?: number;
+      count?: number;
+    }>
+  ) {
     // Aggregate churn per folder/file for a simple treemap structure, weight by churn*log(size)
     const root: any = {};
     const scores: number[] = [];
@@ -637,11 +809,18 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         const part = parts[i];
         const isFile = i === parts.length - 1;
         if (!cursor[part]) {
-          cursor[part] = { id: parts.slice(0, i + 1).join('/'), name: part, score: 0, added: 0, removed: 0, children: {} };
+          cursor[part] = {
+            id: parts.slice(0, i + 1).join('/'),
+            name: part,
+            score: 0,
+            added: 0,
+            removed: 0,
+            children: {},
+          };
         }
         if (isFile) {
           const sizeWeight = h.size ? Math.log10(h.size + 1) : 1;
-          const churn = (h.score || h.count || 0);
+          const churn = h.score || h.count || 0;
           const changeWeight = (h.added || 0) + (h.removed || 0);
           cursor[part].score += (churn + changeWeight / 50) * sizeWeight;
           cursor[part].added += h.added || 0;
@@ -656,8 +835,10 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         const children = flatten(node.children);
         const childrenScore = children.reduce((sum: number, c: any) => sum + c.score, 0);
         const totalScore = Math.max(node.score, childrenScore);
-        const totalAdded = (node.added || 0) + children.reduce((sum: number, c: any) => sum + (c.added || 0), 0);
-        const totalRemoved = (node.removed || 0) + children.reduce((sum: number, c: any) => sum + (c.removed || 0), 0);
+        const totalAdded =
+          (node.added || 0) + children.reduce((sum: number, c: any) => sum + (c.added || 0), 0);
+        const totalRemoved =
+          (node.removed || 0) + children.reduce((sum: number, c: any) => sum + (c.removed || 0), 0);
         scores.push(totalScore);
         return {
           id: node.id,
@@ -665,7 +846,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           score: totalScore,
           added: totalAdded,
           removed: totalRemoved,
-          children
+          children,
         };
       });
 
@@ -675,20 +856,24 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       nodes.map(n => ({
         ...n,
         weight: max > 0 ? Math.max(n.score / max, 0.05) : 0.05,
-        children: n.children ? normalize(n.children) : []
+        children: n.children ? normalize(n.children) : [],
       }));
 
     return normalize(tree);
   }
 
   private buildRisk(targetPath: string, hotspot: any, driftForFile: any[], facts: any) {
-    const legacyDead = ((facts?.findings as any)?.legacyAudit?.dead || []).filter((d: any) => (d.symbol_id || '').startsWith(`${targetPath}:`));
-    const legacyReplaced = ((facts?.findings as any)?.legacyAudit?.replacedLeftovers || []).filter((d: any) => (d.old || '').startsWith(`${targetPath}:`));
+    const legacyDead = ((facts?.findings as any)?.legacyAudit?.dead || []).filter((d: any) =>
+      (d.symbol_id || '').startsWith(`${targetPath}:`)
+    );
+    const legacyReplaced = ((facts?.findings as any)?.legacyAudit?.replacedLeftovers || []).filter(
+      (d: any) => (d.old || '').startsWith(`${targetPath}:`)
+    );
     return {
-      hotspotScore: hotspot ? (hotspot.drift_count || hotspot.score || hotspot.count || 0) : 0,
+      hotspotScore: hotspot ? hotspot.drift_count || hotspot.score || hotspot.count || 0 : 0,
       driftCount: driftForFile.length,
       legacyDead: legacyDead.length,
-      legacyReplaced: legacyReplaced.length
+      legacyReplaced: legacyReplaced.length,
     };
   }
 
@@ -720,19 +905,24 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
    * show progress before the full pipeline completes.
    */
   private async sendSkeletonProgress() {
-    const config = this.state.bundleConfig || { mode: 'repo', roots: [], includeConnected: false, exclusions: [] };
+    const config = this.state.bundleConfig || {
+      mode: 'repo',
+      roots: [],
+      includeConnected: false,
+      exclusions: [],
+    };
     try {
       const { ContextSkeletonService } = await import('../../services/contextSkeleton');
       const skeletonService = new ContextSkeletonService();
       const skeleton = await skeletonService.resolveSkeleton(config as any);
       this.skeletonCache = skeleton;
 
-      const nodes = skeleton.files.map((f: string) => ({
+      const nodes: ExplorerNode[] = skeleton.files.map((f: string) => ({
         id: f,
         name: f.split('/').slice(-1)[0] || f,
-        type: 'file',
-        status: 'scanning',
-        children: []
+        type: 'file' as const,
+        status: 'scanning' as const,
+        children: [],
       }));
       getStore().dispatch({ type: 'EXPLORER_UPDATED', payload: { nodes } });
 
@@ -741,20 +931,20 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         summary: {
           commits: this.state.selectedCommitShas.length,
           files: skeleton.files.length,
-          symbols: this.state.bundleSummary?.symbolCount || 0
+          symbols: this.state.bundleSummary?.symbolCount || 0,
         },
         skeleton: {
           mode: skeleton.mode,
           roots: skeleton.roots,
-          files: skeleton.files.slice(0, 200) // cap to avoid huge payloads
+          files: skeleton.files.slice(0, 200), // cap to avoid huge payloads
         },
         hotspots: skeleton.files.slice(0, 200).map((path: string) => ({
           path,
           name: path.split('/').slice(-1)[0] || path,
           score: 0,
-          status: 'scanning'
+          status: 'scanning',
         })),
-        isPartial: true
+        isPartial: true,
       });
 
       logInfo(`[Cockpit] Sent skeleton progress (${skeleton.files.length} files scanning)`);
@@ -774,18 +964,28 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       const staged = await git.getStagedFiles().catch(() => []);
       const unstaged = await git.getUnstagedFiles().catch(() => []);
       const stagedDiff = await git.getDiffStats('staged').catch(() => ({ added: 0, removed: 0 }));
-      const unstagedDiff = await git.getDiffStats('unstaged').catch(() => ({ added: 0, removed: 0 }));
+      const unstagedDiff = await git
+        .getDiffStats('unstaged')
+        .catch(() => ({ added: 0, removed: 0 }));
       const hybridHotspots = await git.getHotspots(50).catch(() => []);
 
       const summary = {
         stagedCount: staged.length,
-        unstagedCount: unstaged.length
+        unstagedCount: unstaged.length,
       };
 
       // Use cached hotspots/treemap if available for quick churn signal, otherwise fallback to fresh git churn
       let hotspots = this.hotspotCache.values().next().value || [];
       if (!hotspots.length) {
-        hotspots = hybridHotspots.map((h: any) => ({ path: h.path, name: h.path.split('/').pop(), score: h.count, count: h.count, size: h.size, added: h.added, removed: h.removed }));
+        hotspots = hybridHotspots.map((h: any) => ({
+          path: h.path,
+          name: h.path.split('/').pop(),
+          score: h.count,
+          count: h.count,
+          size: h.size,
+          added: h.added,
+          removed: h.removed,
+        }));
       }
       // Filter hotspots to skeleton scope if available
       if (this.skeletonCache) {
@@ -798,23 +998,25 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         tier: 'hybrid',
         summary: {
           commits: this.state.selectedCommitShas.length,
-          files: (this.state.bundleSummary?.fileCount || 0),
+          files: this.state.bundleSummary?.fileCount || 0,
           symbols: this.state.bundleSummary?.symbolCount || 0,
           staged: staged.length,
-          unstaged: unstaged.length
+          unstaged: unstaged.length,
         },
         virtualCommits: {
           staged,
           unstaged,
           stats: {
             staged: stagedDiff,
-            unstaged: unstagedDiff
-          }
+            unstaged: unstagedDiff,
+          },
         },
         treemap,
-        hotspots
+        hotspots,
       });
-      logInfo(`[Cockpit] Sent hybrid progress (staged=${staged.length}, unstaged=${unstaged.length})`);
+      logInfo(
+        `[Cockpit] Sent hybrid progress (staged=${staged.length}, unstaged=${unstaged.length})`
+      );
     } catch (error) {
       logDebug(`[Cockpit] Failed to send hybrid progress: ${error}`);
     }
@@ -841,7 +1043,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       name: targetPath.split('/').slice(-1)[0] || targetPath,
       status: 'scanning',
       breadcrumbs: targetPath.split('/'),
-      tier: 'structure'
+      tier: 'structure',
     };
     getStore().dispatch({ type: 'NAVIGATE_TO', payload: { frame: initialFrame } });
 
@@ -854,13 +1056,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       const tier1Data = await analyzer.analyzeTier1(frameId, targetPath, gitRoot);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_1_COMPLETE',
-        payload: { frameId, data: tier1Data }
+        payload: { frameId, data: tier1Data },
       });
     } catch (error) {
       logError(`[Tier 1] Failed for ${frameId}`, error);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_FAILED',
-        payload: { frameId, tier: 1, error: String(error) }
+        payload: { frameId, tier: 1, error: String(error) },
       });
       return;
     }
@@ -870,13 +1072,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       const tier2Data = await analyzer.analyzeTier2(frameId, targetPath, facts);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_2_COMPLETE',
-        payload: { frameId, data: tier2Data }
+        payload: { frameId, data: tier2Data },
       });
     } catch (error) {
       logError(`[Tier 2] Failed for ${frameId}`, error);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_FAILED',
-        payload: { frameId, tier: 2, error: String(error) }
+        payload: { frameId, tier: 2, error: String(error) },
       });
       // Continue to Tier 3 even if Tier 2 fails
     }
@@ -888,14 +1090,14 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       const tier3Data = await analyzer.analyzeTier3(frameId, targetPath, content, facts);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_3_COMPLETE',
-        payload: { frameId, data: tier3Data }
+        payload: { frameId, data: tier3Data },
       });
       logInfo(`[Cockpit] Analyzed frame ${frameId} (${level})`);
     } catch (error) {
       logError(`[Tier 3] Failed for ${frameId}`, error);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_FAILED',
-        payload: { frameId, tier: 3, error: String(error) }
+        payload: { frameId, tier: 3, error: String(error) },
       });
     }
   }
@@ -911,6 +1113,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       return;
     }
     try {
+      // eslint-disable-next-line no-restricted-syntax
       this.view.webview.postMessage({ type: 'updateState', payload: this.state });
       logInfo('[Cockpit] Sent state update to webview');
     } catch (error) {
@@ -970,19 +1173,35 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         commitCount: facts.bundle?.shas?.length || 0,
         fileCount: facts.scope?.files || 0,
         symbolCount: facts.working?.symbols || 0,
-        createdAt: facts.generated_at
+        createdAt: facts.generated_at,
       };
-      this.orchestrator.updateState({
-        bundleFacts: facts,
-        bundleSummary: summary,
-        bundleReportId: null
-      }, 'hydrate:persistedFacts');
-      this.state = this.orchestrator.getState();
+      getStore().dispatch({
+        type: 'BUNDLE_FACTS_UPDATED',
+        payload: {
+          facts,
+          summary: {
+            id: summary.id || 'bundle',
+            commitCount: summary.id ? 1 : 0,
+            fileCount: summary.fileCount || 0,
+            symbolCount: summary.symbolCount || 0,
+          },
+        },
+      });
+      this.state = getStore().getState(); // Update local state after dispatch
       if (persistedHotspots) {
         this.hotspotCache.set(summary.id || 'bundle', persistedHotspots);
       }
       if (persistedTreemap) {
-        this.pushBundleView({ treemap: persistedTreemap, hotspots: persistedHotspots || [], summary, tier: 'semantics' });
+        this.pushBundleView({
+          treemap: persistedTreemap,
+          hotspots: persistedHotspots || [],
+          summary: {
+            commits: summary.id ? 1 : 0,
+            files: summary.fileCount || 0,
+            symbols: summary.symbolCount || 0,
+          },
+          tier: 'semantics',
+        });
       }
       await this.updateBundleData();
       await this.updateExplorerTree();

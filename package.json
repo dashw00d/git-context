@@ -403,11 +403,12 @@
     "test:watch": "vitest --watch",
     "test:pipeline": "npx ts-node benchmarks/pipeline_metric_test.ts --shared-state",
     "test:pipeline:ci": "node -e \"const cp = require('child_process'); const result = cp.spawnSync('npx', ['ts-node', 'benchmarks/pipeline_metric_test.ts', '--shared-state'], { stdio: 'pipe', encoding: 'utf8' }); console.log(result.stdout); const accuracyMatch = result.stdout.match(/Overall Accuracy: ([\\d.]+)%/); if (accuracyMatch && parseFloat(accuracyMatch[1]) < 85) { console.error('❌ Pipeline test accuracy below 85% threshold'); process.exit(1); } else if (accuracyMatch) { console.log('✅ Pipeline test accuracy meets 85% threshold'); } else { console.log('⚠️  Could not parse accuracy from test output'); process.exit(1); }\"",
-    "clean:compiled": "find src -name \"*.js\" -o -name \"*.js.map\" -print -delete && rm -rf out"
+    "clean:compiled": "find src -name \"*.js\" -o -name \"*.js.map\" -print -delete && rm -rf out",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\""
   },
   "devDependencies": {
     "@types/express": "^4.17.0",
-    "@types/node": "16.x",
+    "@types/node": "^20.19.25",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.3.7",
     "@types/sql.js": "^1.4.9",
@@ -416,6 +417,10 @@
     "@typescript-eslint/parser": "^5.62.0",
     "esbuild": "^0.27.0",
     "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-prettier": "^5.5.4",
+    "prettier": "^3.7.3",
     "react": "^18.0.0",
     "react-dom": "^18.3.1",
     "typescript": "^4.9.4",

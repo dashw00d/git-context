@@ -1,10 +1,11 @@
 // Removed unused Database import
+import { DatabaseService, getDatabaseService } from '../services/databaseService';
+import { getDatabaseManager } from '../storage/database';
+import { prepare } from '../storage/statement-wrapper';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
-import { getDatabaseManager } from '../storage/database';
-import { getDatabaseService, DatabaseService } from '../services/databaseService';
-import { GitOperations } from './git';
 import { BaseDetector, DetectorConfig } from './detectors/BaseDetector';
+import { GitOperations } from './git';
 
 export interface CodeBlock {
   file: string;
@@ -68,7 +69,7 @@ export interface CrossVersionSymbolLineage {
   sourceVersion: string;
   destVersion: string;
   moveType: 'rename' | 'relocate' | 'refactor';
-  versionDescription?: string;  // Human-readable description (e.g., "3 versions ago → 1 version ago")
+  versionDescription?: string; // Human-readable description (e.g., "3 versions ago → 1 version ago")
 }
 
 export class MovedBlockDetector {
@@ -124,7 +125,7 @@ export class MovedBlockDetector {
       similarityScore: candidate.similarityScore,
       blockType: this.inferBlockType(candidate.sourceBlock),
       moveReason: this.classifyMoveReason(candidate),
-      lineCount: candidate.sourceBlock.endLine - candidate.sourceBlock.startLine + 1
+      lineCount: candidate.sourceBlock.endLine - candidate.sourceBlock.startLine + 1,
     }));
 
     // Store moved blocks
@@ -134,7 +135,9 @@ export class MovedBlockDetector {
     const symbolLineage = this.generateSymbolLineage(movedBlocks);
     await this.storeSymbolLineage(symbolLineage);
 
-    logInfo(`[MovedBlockDetector] Found ${movedBlocks.length} moved blocks, ${symbolLineage.length} lineage entries`);
+    logInfo(
+      `[MovedBlockDetector] Found ${movedBlocks.length} moved blocks, ${symbolLineage.length} lineage entries`
+    );
 
     return { movedBlocks, symbolLineage };
   }
@@ -172,7 +175,7 @@ export class MovedBlockDetector {
           endLine: symbol.location.end.line,
           content: symbolContent,
           normalizedHash,
-          structureHash
+          structureHash,
         });
       } catch (error) {
         logDebug(`[MovedBlockDetector] Failed to extract block for ${symbol.name}: ${error}`);
@@ -185,12 +188,19 @@ export class MovedBlockDetector {
   /**
    * Match symbols by DNA ID across versions (for cross-version move detection)
    */
-  matchByDna(removedSymbols: SymbolInfo[], addedSymbols: SymbolInfo[]): Array<{
+  matchByDna(
+    removedSymbols: SymbolInfo[],
+    addedSymbols: SymbolInfo[]
+  ): Array<{
     removed: SymbolInfo;
     added: SymbolInfo;
     similarity: number;
   }> {
-    const matches: Array<{ removed: SymbolInfo; added: SymbolInfo; similarity: number }> = [];
+    const matches: Array<{
+      removed: SymbolInfo;
+      added: SymbolInfo;
+      similarity: number;
+    }> = [];
     const matchedAdded = new Set<string>();
 
     for (const removed of removedSymbols) {
@@ -255,7 +265,7 @@ export class MovedBlockDetector {
         candidates.push({
           sourceBlock: deleted,
           destBlock: added,
-          similarityScore
+          similarityScore,
         });
       }
     }
@@ -358,8 +368,8 @@ export class MovedBlockDetector {
         } else {
           matrix[i][j] = Math.min(
             matrix[i - 1][j - 1] + 1, // substitution
-            matrix[i][j - 1] + 1,     // insertion
-            matrix[i - 1][j] + 1      // deletion
+            matrix[i][j - 1] + 1, // insertion
+            matrix[i - 1][j] + 1 // deletion
           );
         }
       }
@@ -416,7 +426,7 @@ export class MovedBlockDetector {
           symbolId: move.destSymbolId,
           previousSymbolId: move.sourceSymbolId,
           commitSha: move.commitSha,
-          moveType
+          moveType,
         });
       }
     }
@@ -428,10 +438,8 @@ export class MovedBlockDetector {
    * Store moved blocks in database
    */
   private async storeMovedBlocks(movedBlocks: MovedBlock[]): Promise<void> {
-    const db = this.dbManager.getDatabase();
-
     for (const block of movedBlocks) {
-      const stmt = db.prepare(`
+      const stmt = prepare(`
         INSERT INTO moved_blocks (
           commit_sha, source_file, source_symbol_id, source_start_line, source_end_line,
           source_content_hash, dest_file, dest_symbol_id, dest_start_line, dest_end_line,
@@ -463,20 +471,13 @@ export class MovedBlockDetector {
    * Store symbol lineage in database
    */
   private async storeSymbolLineage(lineage: SymbolLineage[]): Promise<void> {
-    const db = this.dbManager.getDatabase();
-
     for (const entry of lineage) {
-      const stmt = db.prepare(`
+      const stmt = prepare(`
         INSERT INTO symbol_lineage (symbol_id, previous_symbol_id, commit_sha, move_type)
         VALUES (?, ?, ?, ?)
       `);
 
-      stmt.run(
-        entry.symbolId,
-        entry.previousSymbolId,
-        entry.commitSha,
-        entry.moveType
-      );
+      stmt.run(entry.symbolId, entry.previousSymbolId, entry.commitSha, entry.moveType);
     }
   }
 
@@ -492,7 +493,12 @@ export class MovedBlockDetector {
     try {
       return this.git.safeGetFileContent(commitSha, filePath);
     } catch (error: any) {
-      logDebug(`[MovedBlockDetector] Failed to get file content for ${filePath} at ${commitSha.substring(0, 8)}: ${error.message}`);
+      logDebug(
+        `[MovedBlockDetector] Failed to get file content for ${filePath} at ${commitSha.substring(
+          0,
+          8
+        )}: ${error.message}`
+      );
       return '';
     }
   }
@@ -521,9 +527,9 @@ export class MovedBlockDetector {
    */
   private hashNormalized(content: string): string {
     const normalized = content
-      .replace(/\/\*[\s\S]*?\*\//g, '')  // Remove block comments
-      .replace(/\/\/.*/g, '')            // Remove line comments
-      .replace(/\s+/g, ' ')              // Normalize whitespace
+      .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
+      .replace(/\/\/.*/g, '') // Remove line comments
+      .replace(/\s+/g, ' ') // Normalize whitespace
       .trim();
 
     const crypto = require('crypto');
@@ -536,10 +542,10 @@ export class MovedBlockDetector {
   private hashStructure(content: string): string {
     // Simplified implementation - in production would parse AST
     const tokens = content
-      .replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, 'ID')  // Replace identifiers
-      .replace(/\d+/g, 'NUM')                     // Replace numbers
-      .replace(/["'].*?["']/g, 'STR')             // Replace strings
-      .replace(/\s+/g, '');                       // Remove whitespace
+      .replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, 'ID') // Replace identifiers
+      .replace(/\d+/g, 'NUM') // Replace numbers
+      .replace(/["'].*?["']/g, 'STR') // Replace strings
+      .replace(/\s+/g, ''); // Remove whitespace
 
     const crypto = require('crypto');
     return crypto.createHash('sha256').update(tokens).digest('hex').substring(0, 16);
@@ -595,8 +601,7 @@ export class MovedBlockDetector {
    * Get all moved blocks for a commit
    */
   async getMovedBlocks(commitSha: string): Promise<MovedBlock[]> {
-    const db = this.dbManager.getDatabase();
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       SELECT * FROM moved_blocks
       WHERE commit_sha = ?
       ORDER BY similarity_score DESC
@@ -618,7 +623,7 @@ export class MovedBlockDetector {
       similarityScore: row.similarity_score,
       blockType: row.block_type,
       moveReason: row.move_reason,
-      lineCount: row.line_count
+      lineCount: row.line_count,
     }));
   }
 
@@ -626,8 +631,7 @@ export class MovedBlockDetector {
    * Get symbol lineage (history of moves)
    */
   async getSymbolLineage(symbolId: string): Promise<SymbolLineage[]> {
-    const db = this.dbManager.getDatabase();
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       SELECT * FROM symbol_lineage
       WHERE symbol_id = ? OR previous_symbol_id = ?
       ORDER BY commit_sha DESC
@@ -638,7 +642,7 @@ export class MovedBlockDetector {
       symbolId: row.symbol_id,
       previousSymbolId: row.previous_symbol_id,
       commitSha: row.commit_sha,
-      moveType: row.move_type
+      moveType: row.move_type,
     }));
   }
 
@@ -646,8 +650,7 @@ export class MovedBlockDetector {
    * Find all moves involving a file
    */
   async getFileMoves(filePath: string): Promise<MovedBlock[]> {
-    const db = this.dbManager.getDatabase();
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       SELECT * FROM moved_blocks
       WHERE source_file = ? OR dest_file = ?
       ORDER BY commit_sha DESC, similarity_score DESC
@@ -669,7 +672,7 @@ export class MovedBlockDetector {
       similarityScore: row.similarity_score,
       blockType: row.block_type,
       moveReason: row.move_reason,
-      lineCount: row.line_count
+      lineCount: row.line_count,
     }));
   }
 }
@@ -693,7 +696,7 @@ export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, 
   constructor(config: Partial<DetectorConfig> = {}) {
     super({
       enableCaching: false, // Move detection should always be fresh
-      ...config
+      ...config,
     });
     this.legacyDetector = new MovedBlockDetector();
   }
@@ -732,7 +735,10 @@ export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, 
    * Match symbols by DNA ID across versions (for cross-version move detection)
    * Delegates to legacy detector
    */
-  matchByDna(removedSymbols: SymbolInfo[], addedSymbols: SymbolInfo[]): Array<{
+  matchByDna(
+    removedSymbols: SymbolInfo[],
+    addedSymbols: SymbolInfo[]
+  ): Array<{
     removed: SymbolInfo;
     added: SymbolInfo;
     similarity: number;

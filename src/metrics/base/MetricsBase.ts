@@ -1,4 +1,8 @@
-import { BaseDetector, DetectorConfig, DEFAULT_THRESHOLDS } from '../../analysis/detectors/BaseDetector';
+import {
+  BaseDetector,
+  DetectorConfig,
+  DEFAULT_THRESHOLDS,
+} from '../../analysis/detectors/BaseDetector';
 import { getExtensionConfig } from '../../utils/config';
 
 /**
@@ -18,7 +22,7 @@ export abstract class MetricsBase extends BaseDetector<any, MetricResult> {
   protected rerankingWeights = getExtensionConfig().rerankingWeights || {
     drift: 1.0,
     hotspot: 1.0,
-    theme: 1.0
+    theme: 1.0,
   };
 
   constructor(config: Partial<DetectorConfig> = {}) {
@@ -26,7 +30,7 @@ export abstract class MetricsBase extends BaseDetector<any, MetricResult> {
       thresholds: { ...DEFAULT_THRESHOLDS, ...config.thresholds },
       enableCaching: true, // Metrics are often computed repeatedly
       cacheTTL: 1800000, // 30 minutes for metric results
-      ...config
+      ...config,
     });
   }
 
@@ -65,7 +69,10 @@ export abstract class MetricsBase extends BaseDetector<any, MetricResult> {
   /**
    * Apply reranking weights to a score
    */
-  protected applyRerankingWeights(score: number, metricType: keyof typeof this.rerankingWeights): number {
+  protected applyRerankingWeights(
+    score: number,
+    metricType: keyof typeof this.rerankingWeights
+  ): number {
     const weight = this.rerankingWeights[metricType] || 1.0;
     return score * weight;
   }
@@ -111,8 +118,8 @@ export abstract class MetricsBase extends BaseDetector<any, MetricResult> {
       metadata: {
         computedAt: new Date().toISOString(),
         version: '1.0',
-        ...metadata
-      }
+        ...metadata,
+      },
     };
   }
 }

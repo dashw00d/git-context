@@ -62,22 +62,22 @@ const defaultState: CockpitState = {
     totalEdits: 0,
     status: 'idle',
     summary: null,
-    facts: null
+    facts: null,
   },
   bundleConfig: {
     mode: 'repo',
     roots: [],
     includeConnected: false,
-    exclusions: []
+    exclusions: [],
   },
   activeFrame: {
     level: 'bundle',
     id: 'root',
     name: 'Bundle Overview',
-    status: 'ready'
+    status: 'ready',
   },
   history: [],
-  explorerData: []
+  explorerData: [],
 };
 
 const App: React.FC = () => {
@@ -88,18 +88,22 @@ const App: React.FC = () => {
       const message = event.data;
       if (message?.type === 'updateState' && message.payload) {
         const payload = message.payload as CockpitState;
-        setState((prev) => ({ ...prev, ...payload }));
+        setState(prev => ({ ...prev, ...payload }));
       } else if (message?.type === 'analysisProgress' && message.payload) {
-        const payload = message.payload as { isAnalyzing: boolean; step?: string; progress?: number };
-        setState((prev) => ({
+        const payload = message.payload as {
+          isAnalyzing: boolean;
+          step?: string;
+          progress?: number;
+        };
+        setState(prev => ({
           ...prev,
           isAnalyzing: payload.isAnalyzing,
           analysisStep: payload.step,
-          analysisProgress: payload.progress
+          analysisProgress: payload.progress,
         }));
       } else if (message?.type === 'focusSection' && message.payload) {
         const payload = message.payload as { section: CockpitSectionKey };
-        setState((prev) => ({ ...prev, activeSection: payload.section }));
+        setState(prev => ({ ...prev, activeSection: payload.section }));
       }
     };
     window.addEventListener('message', handler);

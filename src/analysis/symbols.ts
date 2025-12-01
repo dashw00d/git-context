@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
-import { SymbolInfo, SymbolDelta, SymbolChangeType, FileChange } from '../types';
-import { getTreeSitterParser } from './tree-sitter';
+import { FileChange, SymbolChangeType, SymbolDelta, SymbolInfo } from '../types';
 import { detectLanguage, getTestFilePattern } from '../utils/config';
+import { logDebug, logInfo, logWarn } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
 import { GitOperations } from './git';
 import { SemanticChangeDetector } from './semanticChanges';
-import { logDebug } from '../utils/logger';
-
 import { assignDNAIds } from './symbolDna';
+import { getTreeSitterParser } from './tree-sitter';
 
 export class SymbolExtractor {
   private git: GitOperations;
@@ -21,12 +20,24 @@ export class SymbolExtractor {
   /**
    * Extract symbols from all changed files in a commit with semantic enrichment
    */
-  async extractCommitSymbols(sha: string, files: FileChange[]): Promise<{
+  async extractCommitSymbols(
+    sha: string,
+    files: FileChange[]
+  ): Promise<{
     added: SymbolInfo[];
     removed: SymbolInfo[];
     modified: SymbolDelta[];
-    renames: Array<{ oldSymbol: SymbolInfo; newSymbol: SymbolInfo; confidence: number }>;
-    moves: Array<{ symbol: SymbolInfo; oldPath: string; newPath: string; confidence: number }>;
+    renames: Array<{
+      oldSymbol: SymbolInfo;
+      newSymbol: SymbolInfo;
+      confidence: number;
+    }>;
+    moves: Array<{
+      symbol: SymbolInfo;
+      oldPath: string;
+      newPath: string;
+      confidence: number;
+    }>;
   }> {
     const added: SymbolInfo[] = [];
     const removed: SymbolInfo[] = [];
@@ -52,8 +63,7 @@ export class SymbolExtractor {
     }
 
     // Perform semantic analysis for renames and moves
-    const renames = parentSha ?
-      this.semanticDetector.detectRenames(removed, added) : [];
+    const renames = parentSha ? this.semanticDetector.detectRenames(removed, added) : [];
 
     // For moves, we need symbols from previous commit
     let previousSymbols: SymbolInfo[] = [];
@@ -63,7 +73,7 @@ export class SymbolExtractor {
         previousSymbols = [
           ...previousCommitSymbols.added,
           ...previousCommitSymbols.removed,
-          ...previousCommitSymbols.modified.map(m => m.symbol)
+          ...previousCommitSymbols.modified.map(m => m.symbol),
         ];
       } catch (error) {
         // Can't get previous symbols
@@ -79,7 +89,10 @@ export class SymbolExtractor {
   /**
    * Extract symbols from a single file in a commit
    */
-  private async extractFileSymbols(sha: string, file: FileChange): Promise<{
+  private async extractFileSymbols(
+    sha: string,
+    file: FileChange
+  ): Promise<{
     added: SymbolInfo[];
     removed: SymbolInfo[];
     modified: SymbolDelta[];
@@ -95,12 +108,12 @@ export class SymbolExtractor {
       }
 
       // Get current file content (use safe method to handle path mismatches)
-      console.log(`[SYMBOLS] Extracting ${file.path} at ${sha.substring(0, 8)} (status: ${file.status})`);
+      logInfo(`Extracting ${file.path} at ${sha.substring(0, 8)} (status: ${file.status})`);
       const currentContent = await this.git.safeGetFileContent(sha, file.path);
 
       // Skip if file doesn't exist at this SHA (path mismatch, rename, or file added later)
       if (!currentContent) {
-        console.log(`[SYMBOLS] Skipping ${file.path} at ${sha.substring(0, 8)} - not found in commit`);
+        logInfo(`Skipping ${file.path} at ${sha.substring(0, 8)} - not found in commit`);
         return { added, removed, modified };
       }
 
@@ -149,7 +162,11 @@ export class SymbolExtractor {
       }
 
       // Compare and categorize changes using DNA-based symbols for accurate tracking
-      const changes = this.compareSymbolSets(previousSymbolsWithDNA, currentSymbolsWithDNA, file.path);
+      const changes = this.compareSymbolSets(
+        previousSymbolsWithDNA,
+        currentSymbolsWithDNA,
+        file.path
+      );
 
       // Enhance modified symbols with semantic information
       for (const delta of changes.modified) {
@@ -171,9 +188,8 @@ export class SymbolExtractor {
       added.push(...changes.added);
       removed.push(...changes.removed);
       modified.push(...changes.modified);
-
     } catch (error) {
-      console.warn(`Failed to extract symbols from ${file.path}:`, error);
+      logWarn(`Failed to extract symbols from ${file.path}: ${error}`);
     }
 
     return { added, removed, modified };
@@ -182,7 +198,10 @@ export class SymbolExtractor {
   /**
    * Extract symbols from working tree files (staged or unstaged) compared to HEAD
    */
-  async extractWorkingTreeSymbols(files: FileChange[], options: { staged?: boolean } = {}): Promise<{
+  async extractWorkingTreeSymbols(
+    files: FileChange[],
+    options: { staged?: boolean } = {}
+  ): Promise<{
     added: SymbolInfo[];
     removed: SymbolInfo[];
     modified: SymbolDelta[];
@@ -206,7 +225,10 @@ export class SymbolExtractor {
   /**
    * Extract symbols from a single working tree file
    */
-  private async extractWorkingTreeFileSymbols(file: FileChange, options: { staged?: boolean }): Promise<{
+  private async extractWorkingTreeFileSymbols(
+    file: FileChange,
+    options: { staged?: boolean }
+  ): Promise<{
     added: SymbolInfo[];
     removed: SymbolInfo[];
     modified: SymbolDelta[];
@@ -222,7 +244,7 @@ export class SymbolExtractor {
         : this.git.safeGetWorkingContent(file.path);
 
       if (!currentContent) {
-        console.log(`[SYMBOLS] Skipping ${file.path} - no content available`);
+        logInfo(`Skipping ${file.path} - no content available`);
         return { added, removed, modified };
       }
 
@@ -266,9 +288,8 @@ export class SymbolExtractor {
       added.push(...changes.added);
       removed.push(...changes.removed);
       modified.push(...changes.modified);
-
     } catch (error) {
-      console.warn(`Failed to extract working tree symbols from ${file.path}:`, error);
+      logWarn(`Failed to extract working tree symbols from ${file.path}: ${error}`);
     }
 
     return { added, removed, modified };
@@ -296,17 +317,17 @@ export class SymbolExtractor {
   }> {
     // Parse current content to get new symbols
     const newSymbols = await this.extractSymbolsFromContent(content, path);
-    
+
     // Use existing compareSymbolSets for change classification
     const delta = this.compareSymbolSets(prevSymbols, newSymbols, path);
-    
+
     return {
       symbols: newSymbols,
       delta: {
         added: delta.added,
         removed: delta.removed,
-        modified: delta.modified
-      }
+        modified: delta.modified,
+      },
     };
   }
 
@@ -318,17 +339,26 @@ export class SymbolExtractor {
 
     // Use worker to extract all facts, then filter for semantic symbols
     const facts = await this.parser.extractHybridFacts(content, filePath, language);
-    
+
     // Filter for semantic symbols (exclude CST nodes)
     // Note: We strictly filter for known symbol kinds to avoid CST noise
-    const symbolKinds = new Set(['function', 'method', 'class', 'const', 'variable', 'interface', 'enum', 'module']);
+    const symbolKinds = new Set([
+      'function',
+      'method',
+      'class',
+      'const',
+      'variable',
+      'interface',
+      'enum',
+      'module',
+    ]);
     const symbols = facts.filter(f => symbolKinds.has(f.kind)) as SymbolInfo[];
 
     // Add unique IDs and ensure they include file path for uniqueness
     return symbols.map(symbol => ({
       ...symbol,
       semanticId: symbol.id,
-      id: `${filePath}:${symbol.id}`
+      id: `${filePath}:${symbol.id}`,
     }));
   }
 
@@ -400,11 +430,12 @@ export class SymbolExtractor {
       const previousSymbol = previousMap.get(currentSymbol.id);
       if (previousSymbol) {
         const changeType = this.determineSymbolChange(previousSymbol, currentSymbol);
-        if (changeType !== 'body_changed') { // Only report significant changes
+        if (changeType !== 'body_changed') {
+          // Only report significant changes
           modified.push({
             symbol: currentSymbol,
             changeType,
-            previousSymbol
+            previousSymbol,
           });
         }
       }
@@ -429,7 +460,8 @@ export class SymbolExtractor {
     const prevLines = previous.location.end.line - previous.location.start.line;
     const currLines = current.location.end.line - current.location.start.line;
 
-    if (Math.abs(prevLines - currLines) > 10) { // Arbitrary threshold
+    if (Math.abs(prevLines - currLines) > 10) {
+      // Arbitrary threshold
       return 'body_changed';
     }
 
@@ -458,11 +490,7 @@ export class SymbolExtractor {
     }
 
     // Additional skip patterns for workspace-specific exclusions
-    const skipPatterns = [
-      /vendor/,
-      /\.min\./,
-      getTestFilePattern()
-    ];
+    const skipPatterns = [/vendor/, /\.min\./, getTestFilePattern()];
 
     return !skipPatterns.some(pattern => pattern.test(filePath));
   }
@@ -481,7 +509,7 @@ export class SymbolExtractor {
     const modified: SymbolDelta[] = [];
 
     for (const file of stagedChanges) {
-      if (file.status === 'M' && await this.shouldAnalyzeFile(file.path)) {
+      if (file.status === 'M' && (await this.shouldAnalyzeFile(file.path))) {
         try {
           // TODO: Implement staged content extraction
           // This requires parsing git diff output to extract the staged version of the file
@@ -491,7 +519,9 @@ export class SymbolExtractor {
           // 2. Parse diff to extract staged content
           // 3. Extract symbols from staged content
           // 4. Compare with working tree symbols to detect changes
-          logDebug(`[SymbolExtractor] Staged changes in ${file.path} - symbol extraction not yet implemented`);
+          logDebug(
+            `[SymbolExtractor] Staged changes in ${file.path} - symbol extraction not yet implemented`
+          );
         } catch (error) {
           logDebug(`[SymbolExtractor] Failed to process staged changes for ${file.path}: ${error}`);
         }

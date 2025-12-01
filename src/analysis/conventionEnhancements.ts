@@ -10,13 +10,13 @@ import * as path from 'path';
 import { getSupportedExtensions, isJSLanguage, isPHPLanguage } from '../utils/config';
 
 export type ImportPathStyle =
-  | 'absolute'        // /src/components/Button
-  | 'relative'        // ../components/Button
-  | 'alias'           // @/components/Button
-  | 'package'         // react, lodash
-  | 'index'           // ./components/index
-  | 'extension'       // ./Button.js
-  | 'no-extension';   // ./Button
+  | 'absolute' // /src/components/Button
+  | 'relative' // ../components/Button
+  | 'alias' // @/components/Button
+  | 'package' // react, lodash
+  | 'index' // ./components/index
+  | 'extension' // ./Button.js
+  | 'no-extension'; // ./Button
 
 export interface ImportPathConvention {
   style: ImportPathStyle;
@@ -59,14 +59,19 @@ export function detectImportPathStyle(importPath: string): ImportPathStyle {
   // Relative imports (starts with .)
   if (importPath.startsWith('./') || importPath.startsWith('../')) {
     // Check for index file
-    if (importPath.endsWith('/index') || importPath.endsWith('/index.js') || importPath.endsWith('/index.ts')) {
+    if (
+      importPath.endsWith('/index') ||
+      importPath.endsWith('/index.js') ||
+      importPath.endsWith('/index.ts')
+    ) {
       return 'index';
     }
 
     // Check for extension
     const ext = path.extname(importPath);
     const supportedExts = getSupportedExtensions();
-    if (ext && !supportedExts.includes(ext.slice(1))) { // Remove leading dot
+    if (ext && !supportedExts.includes(ext.slice(1))) {
+      // Remove leading dot
       return 'extension';
     }
     if (!ext || supportedExts.includes(ext.slice(1))) {
@@ -96,7 +101,7 @@ export function extractImportPaths(content: string, language: string): ImportPat
         imports.push({
           style: detectImportPathStyle(importMatch[1]),
           path: importMatch[1],
-          line: i + 1
+          line: i + 1,
         });
       }
 
@@ -106,7 +111,7 @@ export function extractImportPaths(content: string, language: string): ImportPat
         imports.push({
           style: detectImportPathStyle(requireMatch[1]),
           path: requireMatch[1],
-          line: i + 1
+          line: i + 1,
         });
       }
     }
@@ -118,7 +123,7 @@ export function extractImportPaths(content: string, language: string): ImportPat
         imports.push({
           style: 'package', // PHP namespaces are like packages
           path: useMatch[1],
-          line: i + 1
+          line: i + 1,
         });
       }
 
@@ -128,7 +133,7 @@ export function extractImportPaths(content: string, language: string): ImportPat
         imports.push({
           style: detectImportPathStyle(requireMatch[3]),
           path: requireMatch[3],
-          line: i + 1
+          line: i + 1,
         });
       }
     }
@@ -147,21 +152,21 @@ export function analyzeImportPathDrift(imports: ImportPathConvention[]): {
   driftPercent: number;
 } {
   const counts: Record<ImportPathStyle, number> = {
-    'absolute': 0,
-    'relative': 0,
-    'alias': 0,
-    'package': 0,
-    'index': 0,
-    'extension': 0,
-    'no-extension': 0
+    absolute: 0,
+    relative: 0,
+    alias: 0,
+    package: 0,
+    index: 0,
+    extension: 0,
+    'no-extension': 0,
   };
 
   for (const imp of imports) {
     counts[imp.style]++;
   }
 
-  const dominant = Object.entries(counts)
-    .sort(([, a], [, b]) => b - a)[0]?.[0] as ImportPathStyle || 'relative';
+  const dominant =
+    (Object.entries(counts).sort(([, a], [, b]) => b - a)[0]?.[0] as ImportPathStyle) || 'relative';
 
   const driftImports = imports.filter(imp => imp.style !== dominant);
   const total = imports.length;
@@ -171,7 +176,7 @@ export function analyzeImportPathDrift(imports: ImportPathConvention[]): {
     dominantStyle: dominant,
     styleCounts: counts,
     driftImports,
-    driftPercent
+    driftPercent,
   };
 }
 
@@ -224,7 +229,7 @@ export function detectFileNamingConvention(filePath: string): FileNamingConventi
   return {
     style,
     filename,
-    path: filePath
+    path: filePath,
   };
 }
 
@@ -285,8 +290,7 @@ export function compareParameterOrders(signatures: string[]): {
   for (let i = 0; i < Math.max(...orders.map(o => o.length)); i++) {
     const counts = positionCounts.get(i);
     if (counts) {
-      const mostCommon = Array.from(counts.entries())
-        .sort(([, a], [, b]) => b - a)[0]?.[0];
+      const mostCommon = Array.from(counts.entries()).sort(([, a], [, b]) => b - a)[0]?.[0];
       if (mostCommon) {
         commonOrder.push(mostCommon);
       }
@@ -314,7 +318,7 @@ export function compareParameterOrders(signatures: string[]): {
       inconsistencies.push({
         signature: signatures[i],
         order,
-        deviation
+        deviation,
       });
     }
   }
@@ -322,14 +326,17 @@ export function compareParameterOrders(signatures: string[]): {
   return {
     consistent: inconsistencies.length === 0,
     commonOrder,
-    inconsistencies
+    inconsistencies,
   };
 }
 
 /**
  * Detect return type convention from signature
  */
-export function detectReturnTypeConvention(signature: string, language: string): {
+export function detectReturnTypeConvention(
+  signature: string,
+  language: string
+): {
   type: 'promise' | 'callback' | 'async' | 'sync' | 'unknown';
   returnType?: string;
 } {
@@ -344,8 +351,11 @@ export function detectReturnTypeConvention(signature: string, language: string):
   }
 
   // Check for callback pattern (function with callback parameter)
-  if (signature.includes('callback') || signature.includes('cb') ||
-    signature.match(/\(.*\)\s*=>/)) {
+  if (
+    signature.includes('callback') ||
+    signature.includes('cb') ||
+    signature.match(/\(.*\)\s*=>/)
+  ) {
     return { type: 'callback', returnType: 'callback' };
   }
 
@@ -357,4 +367,3 @@ export function detectReturnTypeConvention(signature: string, language: string):
 
   return { type: 'unknown' };
 }
-

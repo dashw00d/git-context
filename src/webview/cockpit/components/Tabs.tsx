@@ -15,16 +15,46 @@ interface TabsProps {
 
 export const Tabs: React.FC<TabsProps> = ({ active, onChange, counts }) => {
   const tabs = [
-    { key: 'live' as const, label: 'Live', badge: counts.live > 0 ? counts.live.toString() : null, disabled: false, tooltip: 'Real-time change tracking' },
-    { key: 'commits' as const, label: 'Commits', badge: counts.commits.toString(), disabled: false, tooltip: undefined },
-    { key: 'bundle' as const, label: 'Bundle', badge: counts.bundle, disabled: false, tooltip: undefined },
-    { key: 'symbols' as const, label: 'Symbols', badge: counts.symbols.toString(), disabled: false, tooltip: undefined },
-    { key: 'reports' as const, label: 'Reports', badge: counts.reports.toString(), disabled: false, tooltip: undefined }
+    {
+      key: 'live' as const,
+      label: 'Live',
+      badge: counts.live > 0 ? counts.live.toString() : null,
+      disabled: false,
+      tooltip: 'Real-time change tracking',
+    },
+    {
+      key: 'commits' as const,
+      label: 'Commits',
+      badge: counts.commits.toString(),
+      disabled: false,
+      tooltip: undefined,
+    },
+    {
+      key: 'bundle' as const,
+      label: 'Bundle',
+      badge: counts.bundle,
+      disabled: false,
+      tooltip: undefined,
+    },
+    {
+      key: 'symbols' as const,
+      label: 'Symbols',
+      badge: counts.symbols.toString(),
+      disabled: false,
+      tooltip: undefined,
+    },
+    {
+      key: 'reports' as const,
+      label: 'Reports',
+      badge: counts.reports.toString(),
+      disabled: false,
+      tooltip: undefined,
+    },
   ];
 
   return (
     <div className="cockpit__tabs">
-      {tabs.map((tab) => (
+      {tabs.map(tab => (
         <button
           key={tab.key}
           className={`cockpit__tab${active === tab.key ? ' cockpit__tab--active' : ''}${tab.disabled ? ' cockpit__tab--disabled' : ''}`}

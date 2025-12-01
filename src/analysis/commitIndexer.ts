@@ -1,25 +1,22 @@
 import * as crypto from 'crypto';
-import { GitOperations } from './git';
-import { SnapshotManager } from './snapshotManager';
-import { StructuralDiffManager } from './structuralDiffManager';
-import { RiskDetector } from './heuristics';
+import pLimit = require('p-limit');
+import { ANALYSIS_VERSION } from '../storage/schema';
+import { prepare } from '../storage/statement-wrapper';
+import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
+import { logDebug, logError, logInfo } from '../utils/logger';
+import { shouldProcessPathWithLog } from '../utils/pathFilter';
+import { getCstTimelineManager } from './cstTimeline';
 import { DependencyExtractor } from './dependencies';
+import { GitOperations } from './git';
+import { RiskDetector } from './heuristics';
 import { HotspotDetectorV2 } from './hotspotDetector';
 import { MovedBlockDetectorV2 } from './movedBlockDetector';
-import { Database } from 'sql.js';
-import { ANALYSIS_VERSION } from '../storage/schema';
-import { logDebug, logInfo } from '../utils/logger';
-import { getDatabaseManager } from '../storage/database';
+import { SnapshotManager } from './snapshotManager';
+import { StructuralDiffManager } from './structuralDiffManager';
+import { getTreeSitterParser } from './tree-sitter';
+import type { SymbolInfo } from '../types';
 // p-limit is CommonJS; use require style to avoid default-import issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-import pLimit = require('p-limit');
-import { getExtensionConfig, getSupportedExtensions, detectLanguage, isCstOnlyLanguage, createCustomIgnoreMatcher } from '../utils/config';
-import { shouldProcessPathWithLog } from '../utils/pathFilter';
-import * as pathModule from 'path';
-import { getCstTimelineManager } from './cstTimeline';
-import { getTreeSitterParser } from './tree-sitter';
-import type { HybridFact } from '../types/cstFacts';
-import type { SymbolInfo } from '../types';
 
 export interface CommitFacts {
   sha: string;
@@ -32,7 +29,11 @@ export interface CommitFacts {
   structuralChangeScore: number;
   filesChanged: number;
   blastRadius: number;
-  hotspots: Array<{ symbolId: string; impactScore: number; changeType: string }>;
+  hotspots: Array<{
+    symbolId: string;
+    impactScore: number;
+    changeType: string;
+  }>;
 }
 
 interface FileProcessingResult {
@@ -44,8 +45,20 @@ interface FileProcessingResult {
   maxStructuralChange: number;
   risks: string[];
   changedSymbols: any[];
-  symbolChanges: Array<{ dnaId: string; type: string; symbol: any; filePath: string }>;
-  edgesToInsert: Array<{ from: string; to: string; changeType: string; edgeType: string; confidence: number; isResolved: number }>;
+  symbolChanges: Array<{
+    dnaId: string;
+    type: string;
+    symbol: any;
+    filePath: string;
+  }>;
+  edgesToInsert: Array<{
+    from: string;
+    to: string;
+    changeType: string;
+    edgeType: string;
+    confidence: number;
+    isResolved: number;
+  }>;
   hotspots: Array<{ path: string; symbols: any[] }>;
 }
 
@@ -56,7 +69,7 @@ export class CommitIndexer {
   private parser = getTreeSitterParser();
 
   constructor(
-    private db: Database,
+    private db: any,
     private git: GitOperations,
     private snapshotManager: SnapshotManager,
     private structuralDiffManager: StructuralDiffManager,
@@ -64,7 +77,7 @@ export class CommitIndexer {
     private dependencyExtractor: DependencyExtractor,
     private hotspotDetector: HotspotDetectorV2,
     private movedBlockDetector: MovedBlockDetectorV2
-  ) { }
+  ) {}
 
   /**
    * Get cache statistics for observability
@@ -75,7 +88,7 @@ export class CommitIndexer {
     return {
       cacheHits: this.cacheHits,
       cacheMisses: this.cacheMisses,
-      hitRate: hitRate
+      hitRate: hitRate,
     };
   }
 
@@ -96,7 +109,12 @@ export class CommitIndexer {
         lastError = error as Error;
 
         if (attempt === maxRetries) {
-          break; // Don't retry on final attempt
+          // All retries failed, but fn() should now return partial data instead of throwing
+          logError(
+            `[CommitIndexer] All retry attempts failed, proceeding with best-effort mode`,
+            lastError
+          );
+          return await fn();
         }
 
         // Exponential backoff with jitter: baseDelay * 2^attempt + random jitter
@@ -104,18 +122,27 @@ export class CommitIndexer {
         const jitter = Math.random() * 0.1 * exponentialDelay; // 10% jitter
         const delay = exponentialDelay + jitter;
 
-        logDebug(`[CommitIndexer] Retry attempt ${attempt + 1}/${maxRetries} after ${delay.toFixed(0)}ms: ${lastError.message}`);
+        logDebug(
+          `[CommitIndexer] Retry attempt ${
+            attempt + 1
+          }/${maxRetries} after ${delay.toFixed(0)}ms: ${lastError.message}`
+        );
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
 
-    throw lastError!;
+    // Should not reach here
+    logError('Unexpected: retryWithBackoff reached end without returning');
+    return await fn(); // Fallback
   }
 
   /**
    * Ensure commit is indexed (idempotent, cacheable)
    */
-  async ensureCommitIndexed(sha: string, opts?: { force?: boolean; modules?: string[] }): Promise<CommitFacts> {
+  async ensureCommitIndexed(
+    sha: string,
+    opts?: { force?: boolean; modules?: string[] }
+  ): Promise<CommitFacts> {
     // Check if already indexed with current analysis version (unless force)
     if (!opts?.force && this.isIndexed(sha)) {
       logDebug(`[CommitIndexer] ${sha} already indexed`);
@@ -138,7 +165,21 @@ export class CommitIndexer {
       return facts;
     } catch (error) {
       this.markFailed(sha, error);
-      throw error;
+      logError(`Failed to index commit ${sha}`, error);
+      // Return partial data instead of throwing
+      return {
+        sha,
+        symbolsAdded: 0,
+        symbolsModified: 0,
+        symbolsRemoved: 0,
+        edgesAdded: 0,
+        edgesRemoved: 0,
+        risks: [`Failed to index: ${(error as Error).message}`],
+        structuralChangeScore: 0,
+        filesChanged: 0,
+        blastRadius: 0,
+        hotspots: [],
+      };
     }
   }
 
@@ -151,12 +192,14 @@ export class CommitIndexer {
     opts?: { force?: boolean; modules?: string[] }
   ): Promise<CommitFacts[]> {
     const limit = pLimit(concurrency);
-    const promises = shas.map(sha => limit(async () => {
-      return this.retryWithBackoff(async () => {
-        const facts = await this.ensureCommitIndexed(sha, opts);
-        return facts;
-      });
-    }));
+    const promises = shas.map(sha =>
+      limit(async () => {
+        return this.retryWithBackoff(async () => {
+          const facts = await this.ensureCommitIndexed(sha, opts);
+          return facts;
+        });
+      })
+    );
 
     const results = await Promise.all(promises);
 
@@ -166,12 +209,19 @@ export class CommitIndexer {
 
     // Log cache performance metrics
     const stats = this.getCacheStats();
-    logInfo(`[CommitIndexer] Cache performance: ${stats.cacheHits} hits, ${stats.cacheMisses} misses (${(stats.hitRate * 100).toFixed(1)}% hit rate)`);
+    logInfo(
+      `[CommitIndexer] Cache performance: ${stats.cacheHits} hits, ${
+        stats.cacheMisses
+      } misses (${(stats.hitRate * 100).toFixed(1)}% hit rate)`
+    );
 
     return results;
   }
 
-  private async indexCommit(sha: string, opts?: { force?: boolean; modules?: string[] }): Promise<CommitFacts> {
+  private async indexCommit(
+    sha: string,
+    opts?: { force?: boolean; modules?: string[] }
+  ): Promise<CommitFacts> {
     logInfo(`[CommitIndexer] Indexing commit ${sha}`);
 
     const commitInfo = await this.git.getCommitInfo(sha);
@@ -182,7 +232,9 @@ export class CommitIndexer {
     const CONCURRENCY = 8;
     const limit = pLimit(CONCURRENCY);
 
-    logInfo(`[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY})`);
+    logInfo(
+      `[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY})`
+    );
 
     // Process files in parallel
     const promises = files.map(file => limit(() => this.processFile(file, sha, parentSha)));
@@ -233,8 +285,10 @@ export class CommitIndexer {
       allEdges
     );
 
-    const totalImpact = Array.from(blastRadiusResult.impactScore.values())
-      .reduce((a, b) => a + b, 0);
+    const totalImpact = Array.from(blastRadiusResult.impactScore.values()).reduce(
+      (a, b) => a + b,
+      0
+    );
 
     // Identify hotspots (symbols with highest impact)
     const hotspots = Array.from(blastRadiusResult.impactScore.entries())
@@ -243,7 +297,7 @@ export class CommitIndexer {
       .map(([symbolId, score]) => ({
         symbolId,
         impactScore: score,
-        changeType: symbolChanges.get(symbolId)?.type || 'unknown'
+        changeType: symbolChanges.get(symbolId)?.type || 'unknown',
       }));
 
     // Use RiskDetector for additional heuristics
@@ -254,7 +308,7 @@ export class CommitIndexer {
         removed: changedSymbols.filter(s => symbolChanges.get(s.dnaId)?.type === 'removed'),
         modified: changedSymbols
           .filter(s => symbolChanges.get(s.dnaId)?.type === 'modified')
-          .map(symbol => ({ symbol, changeType: 'modified' as const }))
+          .map(symbol => ({ symbol, changeType: 'modified' as const })),
       },
       { added: allEdges, removed: [] }
     );
@@ -273,7 +327,7 @@ export class CommitIndexer {
       structuralChangeScore: maxStructuralChange,
       filesChanged: files.length,
       blastRadius: totalImpact,
-      hotspots
+      hotspots,
     };
 
     // Store metadata
@@ -299,8 +353,12 @@ export class CommitIndexer {
     // Detect moved blocks
     const { movedBlocks } = await this.movedBlockDetector.detectMovedBlocks(
       sha,
-      Array.from(symbolChanges.values()).filter(s => s.type === 'removed').map(s => s.symbol),
-      Array.from(symbolChanges.values()).filter(s => s.type === 'added').map(s => s.symbol)
+      Array.from(symbolChanges.values())
+        .filter(s => s.type === 'removed')
+        .map(s => s.symbol),
+      Array.from(symbolChanges.values())
+        .filter(s => s.type === 'added')
+        .map(s => s.symbol)
     );
 
     // Update symbol change types based on moves
@@ -308,7 +366,12 @@ export class CommitIndexer {
 
     // Update hotspot metrics
     const commitInfoForAuthor = await this.git.getCommitInfo(sha);
-    await this.updateHotspotsFromBatch(sha, symbolChanges, fileHotspotsToUpdate, commitInfoForAuthor.author);
+    await this.updateHotspotsFromBatch(
+      sha,
+      symbolChanges,
+      fileHotspotsToUpdate,
+      commitInfoForAuthor.author
+    );
 
     return facts;
   }
@@ -330,16 +393,20 @@ export class CommitIndexer {
       changedSymbols: [],
       symbolChanges: [],
       edgesToInsert: [],
-      hotspots: []
+      hotspots: [],
     };
 
     // Use centralized path filter
-    const filterResult = await shouldProcessPathWithLog(path, {
-      git: this.git,
-      status: status as any,
-      commitSha: sha,
-      skipSizeCheck: status === 'D'
-    }, 'CommitIndexer');
+    const filterResult = await shouldProcessPathWithLog(
+      path,
+      {
+        git: this.git,
+        status: status as any,
+        commitSha: sha,
+        skipSizeCheck: status === 'D',
+      },
+      'CommitIndexer'
+    );
 
     if (!filterResult.shouldProcess) {
       return null;
@@ -358,7 +425,12 @@ export class CommitIndexer {
         result.edgesRemoved += parentSnapshot.edges.length;
 
         for (const symbol of parentSnapshot.symbols) {
-          result.symbolChanges.push({ dnaId: symbol.dnaId, type: 'removed', symbol, filePath: path });
+          result.symbolChanges.push({
+            dnaId: symbol.dnaId,
+            type: 'removed',
+            symbol,
+            filePath: path,
+          });
         }
 
         // Add removed edges
@@ -369,7 +441,7 @@ export class CommitIndexer {
             changeType: 'removed',
             edgeType: (edge as any).type || 'unknown',
             confidence: (edge as any).confidence || 1.0,
-            isResolved: (edge as any).isResolved !== false ? 1 : 0
+            isResolved: (edge as any).isResolved !== false ? 1 : 0,
           });
         }
       }
@@ -394,7 +466,12 @@ export class CommitIndexer {
 
       for (const symbol of currentSnapshot.symbols) {
         result.changedSymbols.push(symbol);
-        result.symbolChanges.push({ dnaId: symbol.dnaId, type: 'added', symbol, filePath: path });
+        result.symbolChanges.push({
+          dnaId: symbol.dnaId,
+          type: 'added',
+          symbol,
+          filePath: path,
+        });
       }
 
       for (const edge of currentSnapshot.edges) {
@@ -404,7 +481,7 @@ export class CommitIndexer {
           changeType: 'added',
           edgeType: (edge as any).type || 'unknown',
           confidence: (edge as any).confidence || 1.0,
-          isResolved: (edge as any).isResolved !== false ? 1 : 0
+          isResolved: (edge as any).isResolved !== false ? 1 : 0,
         });
       }
     } else if (status === 'M' && parentSha) {
@@ -423,10 +500,7 @@ export class CommitIndexer {
         parentContent
       );
 
-      const symbolDiff = this.snapshotManager.compareSnapshots(
-        parentSnapshot,
-        currentSnapshot
-      );
+      const symbolDiff = this.snapshotManager.compareSnapshots(parentSnapshot, currentSnapshot);
 
       result.symbolsAdded += symbolDiff.added.length;
       result.symbolsModified += symbolDiff.modified.length;
@@ -434,22 +508,45 @@ export class CommitIndexer {
 
       for (const symbol of symbolDiff.added) {
         result.changedSymbols.push(symbol);
-        result.symbolChanges.push({ dnaId: symbol.dnaId, type: 'added', symbol, filePath: path });
+        result.symbolChanges.push({
+          dnaId: symbol.dnaId,
+          type: 'added',
+          symbol,
+          filePath: path,
+        });
       }
       for (const mod of symbolDiff.modified) {
         result.changedSymbols.push(mod.symbol);
-        result.symbolChanges.push({ dnaId: mod.symbol.dnaId, type: 'modified', symbol: mod.symbol, filePath: path });
+        result.symbolChanges.push({
+          dnaId: mod.symbol.dnaId,
+          type: 'modified',
+          symbol: mod.symbol,
+          filePath: path,
+        });
       }
       for (const symbol of symbolDiff.removed) {
-        result.symbolChanges.push({ dnaId: symbol.dnaId, type: 'removed', symbol, filePath: path });
+        result.symbolChanges.push({
+          dnaId: symbol.dnaId,
+          type: 'removed',
+          symbol,
+          filePath: path,
+        });
       }
 
       // Calculate edge diffs
-      const parentEdgeIds = new Set(parentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`));
-      const currentEdgeIds = new Set(currentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`));
+      const parentEdgeIds = new Set(
+        parentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`)
+      );
+      const currentEdgeIds = new Set(
+        currentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`)
+      );
 
-      result.edgesAdded += currentSnapshot.edges.filter(e => !parentEdgeIds.has(`${e.from}-${e.to}-${(e as any).type || 'unknown'}`)).length;
-      result.edgesRemoved += parentSnapshot.edges.filter(e => !currentEdgeIds.has(`${e.from}-${e.to}-${(e as any).type || 'unknown'}`)).length;
+      result.edgesAdded += currentSnapshot.edges.filter(
+        e => !parentEdgeIds.has(`${e.from}-${e.to}-${(e as any).type || 'unknown'}`)
+      ).length;
+      result.edgesRemoved += parentSnapshot.edges.filter(
+        e => !currentEdgeIds.has(`${e.from}-${e.to}-${(e as any).type || 'unknown'}`)
+      ).length;
 
       for (const edge of currentSnapshot.edges) {
         const edgeKey = `${edge.from}-${edge.to}-${(edge as any).type || 'unknown'}`;
@@ -460,7 +557,7 @@ export class CommitIndexer {
             changeType: 'added',
             edgeType: (edge as any).type || 'unknown',
             confidence: (edge as any).confidence || 1.0,
-            isResolved: (edge as any).isResolved !== false ? 1 : 0
+            isResolved: (edge as any).isResolved !== false ? 1 : 0,
           });
         }
       }
@@ -473,7 +570,7 @@ export class CommitIndexer {
             changeType: 'removed',
             edgeType: (edge as any).type || 'unknown',
             confidence: (edge as any).confidence || 1.0,
-            isResolved: (edge as any).isResolved !== false ? 1 : 0
+            isResolved: (edge as any).isResolved !== false ? 1 : 0,
           });
         }
       }
@@ -494,13 +591,17 @@ export class CommitIndexer {
 
       // Hybrid facts with parent hash
       const parentFileHash = await this.computeFileHashForFacts(path, parentSha, parentContent);
-      await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols, parentFileHash);
+      await this.extractAndSaveHybridFacts(
+        path,
+        sha,
+        currentContent,
+        currentSnapshot.symbols,
+        parentFileHash
+      );
     }
 
     // Collect potential hotspots (symbols changed in this file)
-    const fileSymbols = result.symbolChanges
-      .filter(c => c.filePath === path)
-      .map(c => c.symbol);
+    const fileSymbols = result.symbolChanges.filter(c => c.filePath === path).map(c => c.symbol);
 
     if (fileSymbols.length > 0) {
       result.hotspots.push({ path, symbols: fileSymbols });
@@ -514,16 +615,22 @@ export class CommitIndexer {
    */
   private async storeEdgesBatch(
     sha: string,
-    edges: Array<{ from: string; to: string; changeType: string; edgeType: string; confidence: number; isResolved: number }>
+    edges: Array<{
+      from: string;
+      to: string;
+      changeType: string;
+      edgeType: string;
+      confidence: number;
+      isResolved: number;
+    }>
   ): Promise<void> {
-    const db = getDatabaseManager().getDatabase();
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       INSERT OR REPLACE INTO edges
       (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    db.transaction(() => {
+    this.db.transaction(() => {
       for (const edge of edges) {
         stmt.run([
           sha,
@@ -532,7 +639,7 @@ export class CommitIndexer {
           edge.changeType,
           edge.edgeType,
           edge.confidence,
-          edge.isResolved
+          edge.isResolved,
         ]);
       }
     })();
@@ -588,14 +695,13 @@ export class CommitIndexer {
     sha: string,
     symbolChanges: Map<string, { type: string; symbol: any; filePath: string }>
   ): Promise<void> {
-    const db = getDatabaseManager().getDatabase();
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       INSERT OR REPLACE INTO symbols
       (sha, path, symbol_id, name, kind, signature, change_type, diff_snippet_pre, diff_snippet_post, confidence)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    db.transaction(() => {
+    this.db.transaction(() => {
       for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
         // Map symbol data to table columns
         // Note: signature_pre/post are not in schema, using signature for now
@@ -611,7 +717,7 @@ export class CommitIndexer {
           type,
           '', // diff_snippet_pre (not easily available here without diffing again)
           '', // diff_snippet_post
-          1.0 // confidence
+          1.0, // confidence
         ]);
       }
     })();
@@ -646,14 +752,23 @@ export class CommitIndexer {
     try {
       // Parse file via worker
       // Note: extractHybridFacts in TreeSitterParser handles worker logic
-      // We pass empty string content if not needed by worker logic for pure extraction, 
+      // We pass empty string content if not needed by worker logic for pure extraction,
       // but worker needs content to parse.
-      const hybridFacts = await this.parser.extractHybridFacts(content, filePath, language, existingSymbols);
+      const hybridFacts = await this.parser.extractHybridFacts(
+        content,
+        filePath,
+        language,
+        existingSymbols
+      );
 
       // Save via timeline manager
       await this.cstTimelineManager.saveFacts(filePath, commitSha, hybridFacts, prevHash);
       if (hybridFacts.length > 0) {
-        logDebug(`[CommitIndexer] Saved ${hybridFacts.length} hybrid facts for ${filePath}@${commitSha.substring(0, 8)}`);
+        logDebug(
+          `[CommitIndexer] Saved ${
+            hybridFacts.length
+          } hybrid facts for ${filePath}@${commitSha.substring(0, 8)}`
+        );
       }
     } catch (error) {
       logDebug(`[CommitIndexer] Error extracting hybrid facts for ${filePath}: ${error}`);
@@ -674,16 +789,15 @@ export class CommitIndexer {
     try {
       // Reuse worker to extract facts for hash computation
       const hybridFacts = await this.parser.extractHybridFacts(content, filePath, language);
-      const serialized = JSON.stringify(hybridFacts.map(f => ({
-        id: f.id,
-        dnaId: f.dnaId,
-        name: f.name,
-        kind: f.kind
-      })));
-      return crypto.createHash('sha256')
-        .update(serialized)
-        .digest('hex')
-        .substring(0, 16);
+      const serialized = JSON.stringify(
+        hybridFacts.map(f => ({
+          id: f.id,
+          dnaId: f.dnaId,
+          name: f.name,
+          kind: f.kind,
+        }))
+      );
+      return crypto.createHash('sha256').update(serialized).digest('hex').substring(0, 16);
     } catch (error) {
       logDebug(`[CommitIndexer] Error computing file hash for ${filePath}: ${error}`);
       return undefined;
@@ -716,7 +830,7 @@ export class CommitIndexer {
       structuralChangeScore: row.structural_change_score || 0,
       filesChanged: row.files_changed || 0,
       blastRadius: row.blast_radius || 0,
-      hotspots: row.hotspots_json ? JSON.parse(row.hotspots_json) : []
+      hotspots: row.hotspots_json ? JSON.parse(row.hotspots_json) : [],
     };
   }
 
@@ -750,7 +864,7 @@ export class CommitIndexer {
       facts.structuralChangeScore,
       facts.filesChanged,
       JSON.stringify(facts.hotspots),
-      new Date().toISOString()
+      new Date().toISOString(),
     ]);
   }
 
@@ -763,8 +877,7 @@ export class CommitIndexer {
     impactScores: Map<string, number>
   ): Promise<void> {
     // Get wrapped database with transaction support
-    const db = getDatabaseManager().getDatabase();
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       INSERT INTO symbol_history
       (symbol_dna_id, sha, file_path, name, kind, signature, body_hash,
        change_type, impact_score, created_at)
@@ -772,7 +885,7 @@ export class CommitIndexer {
     `);
 
     // Wrap batch inserts in transaction
-    db.transaction(() => {
+    this.db.transaction(() => {
       for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
         const impactScore = impactScores.get(dnaId) || 0;
 
@@ -786,7 +899,7 @@ export class CommitIndexer {
           symbol.bodyHash || null,
           type,
           impactScore,
-          new Date().toISOString()
+          new Date().toISOString(),
         ]);
       }
     })();
@@ -801,8 +914,7 @@ export class CommitIndexer {
     parentSha: string | null
   ): Promise<void> {
     // Get wrapped database with transaction support
-    const db = getDatabaseManager().getDatabase();
-    const stmt = db.prepare(`
+    const stmt = prepare(`
       INSERT OR REPLACE INTO edges
       (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -823,12 +935,16 @@ export class CommitIndexer {
       const { path, status } = file;
 
       // Use centralized path filter
-      const filterResult = await shouldProcessPathWithLog(path, {
-        git: this.git,
-        status: status as 'A' | 'M' | 'D' | 'R' | 'C' | 'U',
-        commitSha: sha,
-        skipSizeCheck: status === 'D'
-      }, 'CommitIndexer.storeEdges');
+      const filterResult = await shouldProcessPathWithLog(
+        path,
+        {
+          git: this.git,
+          status: status as 'A' | 'M' | 'D' | 'R' | 'C' | 'U',
+          commitSha: sha,
+          skipSizeCheck: status === 'D',
+        },
+        'CommitIndexer.storeEdges'
+      );
 
       if (!filterResult.shouldProcess) {
         continue;
@@ -853,7 +969,7 @@ export class CommitIndexer {
               changeType: 'removed',
               edgeType: (edge as any).type || 'unknown',
               confidence: (edge as any).confidence || 1.0,
-              isResolved: (edge as any).isResolved !== false ? 1 : 0
+              isResolved: (edge as any).isResolved !== false ? 1 : 0,
             });
           }
         }
@@ -879,7 +995,7 @@ export class CommitIndexer {
             changeType: 'added',
             edgeType: (edge as any).type || 'unknown',
             confidence: (edge as any).confidence || 1.0,
-            isResolved: (edge as any).isResolved !== false ? 1 : 0
+            isResolved: (edge as any).isResolved !== false ? 1 : 0,
           });
         }
       } else if (status === 'M' && parentSha) {
@@ -892,8 +1008,12 @@ export class CommitIndexer {
           parentContent
         );
 
-        const parentEdgeIds = new Set(parentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`));
-        const currentEdgeIds = new Set(currentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`));
+        const parentEdgeIds = new Set(
+          parentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`)
+        );
+        const currentEdgeIds = new Set(
+          currentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`)
+        );
 
         // Added edges
         for (const edge of currentSnapshot.edges) {
@@ -906,7 +1026,7 @@ export class CommitIndexer {
               changeType: 'added',
               edgeType: (edge as any).type || 'unknown',
               confidence: (edge as any).confidence || 1.0,
-              isResolved: (edge as any).isResolved !== false ? 1 : 0
+              isResolved: (edge as any).isResolved !== false ? 1 : 0,
             });
           }
         }
@@ -922,7 +1042,7 @@ export class CommitIndexer {
               changeType: 'removed',
               edgeType: (edge as any).type || 'unknown',
               confidence: (edge as any).confidence || 1.0,
-              isResolved: (edge as any).isResolved !== false ? 1 : 0
+              isResolved: (edge as any).isResolved !== false ? 1 : 0,
             });
           }
         }
@@ -931,7 +1051,7 @@ export class CommitIndexer {
 
     // Now insert all edges in a single transaction
     if (edgesToInsert.length > 0) {
-      db.transaction(() => {
+      this.db.transaction(() => {
         for (const edge of edgesToInsert) {
           stmt.run([
             edge.sha,
@@ -940,7 +1060,7 @@ export class CommitIndexer {
             edge.changeType,
             edge.edgeType,
             edge.confidence,
-            edge.isResolved
+            edge.isResolved,
           ]);
         }
       })();
@@ -1011,10 +1131,12 @@ export class CommitIndexer {
     movedBlocks: any[]
   ): void {
     for (const move of movedBlocks) {
-      const sourceSymbol = Array.from(symbolChanges.values())
-        .find(change => change.symbol.dnaId === move.sourceSymbolId);
-      const destSymbol = Array.from(symbolChanges.values())
-        .find(change => change.symbol.dnaId === move.destSymbolId);
+      const sourceSymbol = Array.from(symbolChanges.values()).find(
+        change => change.symbol.dnaId === move.sourceSymbolId
+      );
+      const destSymbol = Array.from(symbolChanges.values()).find(
+        change => change.symbol.dnaId === move.destSymbolId
+      );
 
       if (sourceSymbol && destSymbol) {
         sourceSymbol.type = 'moved';
@@ -1052,7 +1174,7 @@ export class CommitIndexer {
       info.message,
       info.parent || null,
       filesChanged,
-      new Date().toISOString()
+      new Date().toISOString(),
     ]);
   }
 }

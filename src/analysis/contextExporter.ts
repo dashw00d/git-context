@@ -1,17 +1,23 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { LlmContextReport, CommitContext, FileContext, SymbolContext, EdgeContext } from '../contracts/llmContext';
-import { getDatabaseManager } from '../storage/database';
-import { getGitRoot } from '../utils/config';
-import { MermaidGenerator } from './mermaidGenerator';
-import { DependencyExtractor } from './dependencies';
-import { LegacyDetector } from '../facts/legacyAudit';
+import {
+  CommitContext,
+  EdgeContext,
+  FileContext,
+  LegacyAuditReport,
+  LlmContextReport,
+  SymbolContext,
+} from '../contracts/llmContext';
 import { buildIntendedMap } from '../facts/intendedMap';
-import { getWorkingSnapshot } from '../facts/workingSnapshot';
+import { LegacyDetector } from '../facts/legacyAudit';
 import { computeScope } from '../facts/scope';
-import { LegacyAuditReport } from '../contracts/llmContext';
+import { getWorkingSnapshot } from '../facts/workingSnapshot';
+import { prepare } from '../storage/statement-wrapper';
+import { getGitRoot } from '../utils/config';
 import { getDynamicThreshold } from '../utils/edgeThresholds';
-import { logDebug } from '../utils/logger';
+import { logDebug, logError } from '../utils/logger';
+import { DependencyExtractor } from './dependencies';
+import { MermaidGenerator } from './mermaidGenerator';
 
 /**
  * Export LLM context in structured JSON format
@@ -31,7 +37,16 @@ export class ContextExporter {
   async exportContext(shas: string[]): Promise<LlmContextReport> {
     const gitRoot = getGitRoot();
     if (!gitRoot) {
-      throw new Error('Not in a git repository');
+      logError('Not in a git repository - returning partial context report');
+      return {
+        version: '1.0.0',
+        generated_at: new Date().toISOString(),
+        repo: { root: '', head_sha: '', branch: '' },
+        commits: [],
+        global_risks: [
+          { type: 'error', description: 'Not in a git repository', severity: 'medium' },
+        ],
+      };
     }
 
     const commits: CommitContext[] = [];
@@ -45,18 +60,18 @@ export class ContextExporter {
     const auditReport = await this.performLegacyAudit(shas);
 
     const report: LlmContextReport = {
-      version: "1.0.0",
+      version: '1.0.0',
       generated_at: new Date().toISOString(),
       repo: {
         root: gitRoot,
         head_sha: await this.getHeadSha(),
-        branch: await this.getCurrentBranch()
+        branch: await this.getCurrentBranch(),
       },
       commits,
       global_risks: globalRisks,
       rollups: await this.buildRollups(shas, auditReport),
       graphs: await this.generateGraphs(commits, shas),
-      legacy_audit: auditReport
+      legacy_audit: auditReport,
     };
 
     // Apply context budgeting
@@ -93,7 +108,19 @@ export class ContextExporter {
     const commitMetadata = await dbService.getCommitMetadata(sha);
 
     if (!commitMetadata) {
-      throw new Error(`Commit ${sha} not found in database`);
+      logError(`Commit ${sha} not found in database - returning partial context`);
+      return {
+        sha,
+        message: 'Commit not found',
+        author: 'Unknown',
+        date: new Date().toISOString(),
+        stats: { files: 0, added: 0, modified: 0, removed: 0 },
+        files: [],
+        risks: [
+          { type: 'error', description: `Commit ${sha} not found in database`, severity: 'medium' },
+        ],
+        edges: [],
+      };
     }
 
     // Get analysis data using service
@@ -112,10 +139,10 @@ export class ContextExporter {
     const edges: EdgeContext[] = edgeInfos.map(edge => ({
       from_symbol_id: edge.from,
       to_symbol_id: edge.to,
-      edge_type: edge.type || 'unknown' as any,
+      edge_type: edge.type || ('unknown' as any),
       change_type: 'added' as any, // TODO: Add change_type to EdgeInfo interface
       confidence: edge.confidence || 1.0,
-      is_resolved: Boolean(edge.isResolved ?? true)
+      is_resolved: Boolean(edge.isResolved ?? true),
     }));
 
     // Parse risks
@@ -131,12 +158,12 @@ export class ContextExporter {
         files: commitMetadata.filesChanged,
         added: analysisRow?.symbols_added || 0,
         modified: analysisRow?.symbols_modified || 0,
-        removed: analysisRow?.symbols_removed || 0
+        removed: analysisRow?.symbols_removed || 0,
       },
       files,
       risks,
       edges,
-      llm_summary: analysisRow?.summary_md
+      llm_summary: analysisRow?.summary_md,
     };
   }
 
@@ -144,10 +171,8 @@ export class ContextExporter {
    * Build context for a single file
    */
   private async buildFileContext(sha: string, fileRow: any): Promise<FileContext> {
-    const db = getDatabaseManager().getDatabase();
-
     // Get symbols for this file
-    const symbolsStmt = db.prepare(`
+    const symbolsStmt = prepare(`
       SELECT * FROM symbols WHERE sha = ? AND path = ?
     `);
     const symbolRows = symbolsStmt.all(sha, fileRow.path) as any[];
@@ -162,17 +187,22 @@ export class ContextExporter {
       loc_post: row.loc_post ? JSON.parse(row.loc_post) : undefined,
       mod_reason: row.mod_reason as any,
       diff_snippet_pre: row.diff_snippet_pre,
-      diff_snippet_post: row.diff_snippet_post
+      diff_snippet_post: row.diff_snippet_post,
     }));
 
     // Group symbols by change type from database
     const added = symbols.filter(s => symbolRows.find(r => r.id === s.id)?.change_type === 'added');
-    const removed = symbols.filter(s => symbolRows.find(r => r.id === s.id)?.change_type === 'removed');
-    const modified = symbols.filter(s => symbolRows.find(r => r.id === s.id)?.change_type === 'modified' ||
-      symbolRows.find(r => r.id === s.id)?.change_type === 'signature_changed');
+    const removed = symbols.filter(
+      s => symbolRows.find(r => r.id === s.id)?.change_type === 'removed'
+    );
+    const modified = symbols.filter(
+      s =>
+        symbolRows.find(r => r.id === s.id)?.change_type === 'modified' ||
+        symbolRows.find(r => r.id === s.id)?.change_type === 'signature_changed'
+    );
 
     // Handle renames: load from renames table
-    const renamesStmt = db.prepare(`
+    const renamesStmt = prepare(`
       SELECT * FROM renames WHERE sha = ? AND path = ?
     `);
     const renamed = renamesStmt.all(sha, fileRow.path).map((r: any) => ({
@@ -180,7 +210,7 @@ export class ContextExporter {
       new_symbol_id: r.new_symbol_id,
       old_name: r.old_name,
       new_name: r.new_name,
-      confidence: r.confidence
+      confidence: r.confidence,
     }));
 
     return {
@@ -190,26 +220,28 @@ export class ContextExporter {
         added: added.length,
         modified: modified.length,
         removed: removed.length,
-        renamed: renamed.length > 0
+        renamed: renamed.length > 0,
       },
       symbols: {
         added,
         modified,
         removed,
-        renamed
-      }
+        renamed,
+      },
     };
   }
 
   /**
    * Build cross-commit rollups
    */
-  private async buildRollups(shas: string[], auditReport?: LegacyAuditReport): Promise<LlmContextReport['rollups']> {
-    const db = getDatabaseManager().getDatabase();
+  private async buildRollups(
+    shas: string[],
+    auditReport?: LegacyAuditReport
+  ): Promise<LlmContextReport['rollups']> {
     const placeholders = shas.map(() => '?').join(',');
 
     // Hotspots: symbols changed in ≥2 commits
-    const hotspotsStmt = db.prepare(`
+    const hotspotsStmt = prepare(`
       SELECT symbol_id, name, COUNT(DISTINCT sha) as change_count, MAX(date) as last_changed
       FROM symbols s
       JOIN commits_metadata c ON s.sha = c.sha
@@ -222,7 +254,7 @@ export class ContextExporter {
     const hotspots = hotspotsStmt.all(...shas) as any[];
 
     // Top changed files: count of symbol deltas per file across commits
-    const fileRollupsStmt = db.prepare(`
+    const fileRollupsStmt = prepare(`
       SELECT path, COUNT(*) as total_changes, MAX(c.date) as last_commit
       FROM symbols s
       JOIN commits_metadata c ON s.sha = c.sha
@@ -234,7 +266,7 @@ export class ContextExporter {
     const topChangedFiles = fileRollupsStmt.all(...shas) as any[];
 
     // Dependency deltas: individual edge changes
-    const depDeltasStmt = db.prepare(`
+    const depDeltasStmt = prepare(`
       SELECT from_symbol_id, to_symbol_id, change_type, confidence
       FROM edges
       WHERE sha IN (${placeholders}) AND change_type IS NOT NULL
@@ -248,22 +280,22 @@ export class ContextExporter {
         symbol_id: h.symbol_id,
         change_count: h.change_count,
         last_changed: h.last_changed,
-        risk_score: Math.min(h.change_count / 5, 1.0) // Simple risk scoring
+        risk_score: Math.min(h.change_count / 5, 1.0), // Simple risk scoring
       })),
       top_changed_files: topChangedFiles.map(f => ({
         path: f.path,
         total_changes: f.total_changes,
         last_commit: f.last_commit,
-        languages: [] // Would need to detect from files
+        languages: [], // Would need to detect from files
       })),
       dependency_deltas: depDeltas.map(d => ({
         from_symbol_id: d.from_symbol_id,
         to_symbol_id: d.to_symbol_id,
         change_type: d.change_type,
-        confidence: d.confidence || 1.0
+        confidence: d.confidence || 1.0,
       })),
       expected_absent_but_present_count: auditReport?.zombie_symbols.length || 0,
-      expected_present_but_missing_count: auditReport?.missing_symbols.length || 0
+      expected_present_but_missing_count: auditReport?.missing_symbols.length || 0,
     };
   }
 
@@ -282,7 +314,7 @@ export class ContextExporter {
       () => this.truncateDiffHunks(report),
       () => this.truncateLowConfidenceEdges(report),
       () => this.truncateUnchangedCallers(report),
-      () => this.truncateDocChanges(report)
+      () => this.truncateDocChanges(report),
     ];
 
     for (const step of truncationSteps) {
@@ -334,7 +366,8 @@ export class ContextExporter {
 
       commit.edges = commit.edges.filter(edge => {
         // Always keep edges connected to legacy symbols (removed/modified) for dead-code detection
-        const isLegacyEdge = legacySymbols.has(edge.from_symbol_id) || legacySymbols.has(edge.to_symbol_id);
+        const isLegacyEdge =
+          legacySymbols.has(edge.from_symbol_id) || legacySymbols.has(edge.to_symbol_id);
         return isLegacyEdge || (edge.confidence ?? 0) >= threshold;
       });
     }
@@ -348,7 +381,11 @@ export class ContextExporter {
       const changed = new Set<string>();
       for (const file of commit.files) {
         // Handle regular symbols
-        for (const s of [...file.symbols.added, ...file.symbols.modified, ...file.symbols.removed]) {
+        for (const s of [
+          ...file.symbols.added,
+          ...file.symbols.modified,
+          ...file.symbols.removed,
+        ]) {
           changed.add(s.symbol_id || String(s.id));
         }
         // Handle renames (both old and new symbol IDs)
@@ -357,8 +394,8 @@ export class ContextExporter {
           changed.add(r.new_symbol_id);
         }
       }
-      commit.edges = commit.edges.filter(e =>
-        changed.has(e.from_symbol_id) || changed.has(e.to_symbol_id)
+      commit.edges = commit.edges.filter(
+        e => changed.has(e.from_symbol_id) || changed.has(e.to_symbol_id)
       );
     }
   }
@@ -406,11 +443,16 @@ export class ContextExporter {
   /**
    * Generate Mermaid graphs for the report
    */
-  private async generateGraphs(commits: CommitContext[], shas: string[]): Promise<LlmContextReport['graphs']> {
+  private async generateGraphs(
+    commits: CommitContext[],
+    shas: string[]
+  ): Promise<LlmContextReport['graphs']> {
     try {
       // Validate that commits match the requested shas
       if (commits.length !== shas.length) {
-        logDebug(`[ContextExporter] Warning: commit count (${commits.length}) doesn't match sha count (${shas.length})`);
+        logDebug(
+          `[ContextExporter] Warning: commit count (${commits.length}) doesn't match sha count (${shas.length})`
+        );
       }
 
       // Collect all edges and symbols across commits
@@ -430,38 +472,71 @@ export class ContextExporter {
           // But for the graph, we mainly need the nodes to exist
           if (file.symbols.renamed) {
             for (const r of file.symbols.renamed) {
-              allSymbols.push({ id: r.new_symbol_id, name: r.new_name, kind: 'unknown' }); // New
-              allSymbols.push({ id: r.old_symbol_id, name: r.old_name, kind: 'unknown' }); // Old
+              allSymbols.push({
+                id: r.new_symbol_id,
+                name: r.new_name,
+                kind: 'unknown',
+              }); // New
+              allSymbols.push({
+                id: r.old_symbol_id,
+                name: r.old_name,
+                kind: 'unknown',
+              }); // Old
             }
           }
 
           changedSymbols.push(...file.symbols.added);
-          changedSymbols.push(...file.symbols.modified.map((s: any) => ({ id: s.symbol_id || s.id, name: s.name })));
-          changedSymbols.push(...file.symbols.removed.map((s: any) => ({ id: s.symbol_id || s.id, name: s.name })));
+          changedSymbols.push(
+            ...file.symbols.modified.map((s: any) => ({
+              id: s.symbol_id || s.id,
+              name: s.name,
+            }))
+          );
+          changedSymbols.push(
+            ...file.symbols.removed.map((s: any) => ({
+              id: s.symbol_id || s.id,
+              name: s.name,
+            }))
+          );
 
           if (file.symbols.renamed) {
-            changedSymbols.push(...file.symbols.renamed.map((r: any) => ({ id: r.new_symbol_id, name: r.new_name })));
+            changedSymbols.push(
+              ...file.symbols.renamed.map((r: any) => ({
+                id: r.new_symbol_id,
+                name: r.new_name,
+              }))
+            );
           }
         }
       }
 
       // Generate dependency graph
-      const dependencyGraph = this.mermaidGenerator.generateGraph(
-        allEdges,
-        allSymbols,
-        { maxNodes: 30, showConfidence: true }
-      );
+      const dependencyGraph = this.mermaidGenerator.generateGraph(allEdges, allSymbols, {
+        maxNodes: 30,
+        showConfidence: true,
+      });
 
       // Generate blast radius graph using real dependency analysis
       const blastRadius = this.dependencyExtractor.calculateBlastRadius(
-        changedSymbols.map(s => ({ id: s.id || s.symbol_id, name: s.name, kind: s.kind, signature: s.signature } as any)),
+        changedSymbols.map(
+          s =>
+            ({
+              id: s.id || s.symbol_id,
+              name: s.name,
+              kind: s.kind,
+              signature: s.signature,
+            }) as any
+        ),
         allEdges
       );
-      const blastRadiusGraph = this.mermaidGenerator.generateBlastRadiusGraph(changedSymbols, blastRadius);
+      const blastRadiusGraph = this.mermaidGenerator.generateBlastRadiusGraph(
+        changedSymbols,
+        blastRadius
+      );
 
       return {
         dependency_graph: dependencyGraph,
-        blast_radius_graph: blastRadiusGraph
+        blast_radius_graph: blastRadiusGraph,
       };
     } catch (error) {
       const { logError } = await import('../utils/logger');
@@ -486,7 +561,7 @@ export class ContextExporter {
       const result = await legacyDetector.detect({
         intended,
         working,
-        scope
+        scope,
       });
 
       // Convert LegacyAuditResult to LegacyAuditReport format
@@ -496,7 +571,7 @@ export class ContextExporter {
         replaced_leftover: result.replacedLeftovers.map(r => r.old.symbol_id),
         dead_candidates: result.dead.map(s => s.symbol_id),
         drift_edges: [], // Not directly provided by auditLegacy
-        hotspots: [] // Would need to compute from file-level analysis
+        hotspots: [], // Would need to compute from file-level analysis
       };
     } catch (error) {
       const { logError } = await import('../utils/logger');
@@ -507,9 +582,8 @@ export class ContextExporter {
         replaced_leftover: [],
         dead_candidates: [],
         drift_edges: [],
-        hotspots: []
+        hotspots: [],
       };
     }
   }
-
 }

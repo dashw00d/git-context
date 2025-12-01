@@ -33,14 +33,14 @@ export function calculateBlastRadiusFromFacts(
     name: id.split(':').pop() || id,
     kind: 'function',
     signature: '',
-    location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
+    location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
   }));
 
   const allEdges: EdgeInfo[] = edges.map(edge => ({
     from: edge.from,
     to: edge.to,
     type: edge.type as any,
-    confidence: 1.0
+    confidence: 1.0,
   }));
 
   // Use real blast radius calculation
@@ -77,7 +77,7 @@ export function calculateBlastRadiusFromFacts(
     highImpactDeps,
     lowImpactDeps,
     weightedBlastRadius,
-    hasCircularDeps
+    hasCircularDeps,
   };
 }
 
@@ -91,11 +91,11 @@ function calculateEdgeMetrics(
 
   // Weight edges based on their type
   const edgeWeights: Record<string, number> = {
-    implements: 10,  // High impact
-    inherits: 8,     // High impact
-    calls: 5,        // Medium impact
-    references: 2,   // Low impact
-    imports: 1       // Low impact
+    implements: 10, // High impact
+    inherits: 8, // High impact
+    calls: 5, // Medium impact
+    references: 2, // Low impact
+    imports: 1, // Low impact
   };
 
   for (const edge of edges) {
@@ -114,11 +114,13 @@ function calculateEdgeMetrics(
   return {
     highImpactDeps,
     lowImpactDeps,
-    weightedBlastRadius
+    weightedBlastRadius,
   };
 }
 
-function detectCircularDependencies(edges: Array<{ from: string; to: string; type: string }>): boolean {
+function detectCircularDependencies(
+  edges: Array<{ from: string; to: string; type: string }>
+): boolean {
   // Simple cycle detection using DFS
   const graph = buildAdjacencyList(edges);
   const visited = new Set<string>();
@@ -147,7 +149,9 @@ function detectCircularDependencies(edges: Array<{ from: string; to: string; typ
   return false;
 }
 
-function buildAdjacencyList(edges: Array<{ from: string; to: string; type: string }>): Map<string, string[]> {
+function buildAdjacencyList(
+  edges: Array<{ from: string; to: string; type: string }>
+): Map<string, string[]> {
   const graph = new Map<string, string[]>();
 
   for (const edge of edges) {

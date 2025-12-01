@@ -15,12 +15,6 @@
     "declaration": true,
     "declarationMap": true
   },
-  "exclude": [
-    "node_modules",
-    "**/node_modules/*",
-    "out"
-  ],
-  "include": [
-    "src/**/*"
-  ]
+  "exclude": ["node_modules", "**/node_modules/*", "out"],
+  "include": ["src/**/*", ".eslintrc.cjs"]
 }

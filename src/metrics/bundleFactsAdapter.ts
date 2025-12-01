@@ -5,14 +5,14 @@
  * Tests the full bundle facts assembly logic
  */
 
-import { buildRefactorBundleFacts } from '../facts/factsAssembler';
 import { CommitFacts } from '../analysis/commitIndexer';
 import { WorkspaceFacts } from '../analysis/workspaceIndexer';
-import { ScopeSet } from '../facts/scope';
-import { IntendedState } from '../facts/intendedMap';
-import { WorkingSnapshot } from '../facts/workingSnapshot';
 import { DriftFindings } from '../facts/driftDetector';
+import { buildRefactorBundleFacts } from '../facts/factsAssembler';
+import { IntendedState } from '../facts/intendedMap';
 import { LegacyAuditResult } from '../facts/legacyAudit';
+import { ScopeSet } from '../facts/scope';
+import { WorkingSnapshot } from '../facts/workingSnapshot';
 
 export interface BundleFactsMetrics {
   totalSymbols: number;
@@ -39,7 +39,10 @@ export interface BundleFactsMetrics {
  */
 export async function assembleBundleFactsFromTestData(
   commitFacts: CommitFacts[],
-  workspaceFacts: WorkspaceFacts | { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null } | null,
+  workspaceFacts:
+    | WorkspaceFacts
+    | { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null }
+    | null,
   options: {
     commitShas?: string[];
     scope?: ScopeSet;
@@ -55,17 +58,26 @@ export async function assembleBundleFactsFromTestData(
   let workspaceSymbols = 0;
   let workspaceEdges = 0;
   let workspaceFiles = 0;
-  
+
   if (workspaceFacts) {
     if ('staged' in workspaceFacts || 'unstaged' in workspaceFacts) {
-      const structured = workspaceFacts as { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null };
+      const structured = workspaceFacts as {
+        staged: WorkspaceFacts | null;
+        unstaged: WorkspaceFacts | null;
+      };
       if (structured.staged) {
-        workspaceSymbols += structured.staged.symbolsAdded + structured.staged.symbolsModified + structured.staged.symbolsRemoved;
+        workspaceSymbols +=
+          structured.staged.symbolsAdded +
+          structured.staged.symbolsModified +
+          structured.staged.symbolsRemoved;
         workspaceEdges += structured.staged.edgesAdded + structured.staged.edgesRemoved;
         workspaceFiles += structured.staged.filesChanged;
       }
       if (structured.unstaged) {
-        workspaceSymbols += structured.unstaged.symbolsAdded + structured.unstaged.symbolsModified + structured.unstaged.symbolsRemoved;
+        workspaceSymbols +=
+          structured.unstaged.symbolsAdded +
+          structured.unstaged.symbolsModified +
+          structured.unstaged.symbolsRemoved;
         workspaceEdges += structured.unstaged.edgesAdded + structured.unstaged.edgesRemoved;
         workspaceFiles += structured.unstaged.filesChanged;
       }
@@ -78,8 +90,13 @@ export async function assembleBundleFactsFromTestData(
   }
 
   return {
-    totalSymbols: commitFacts.reduce((sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved, 0) + workspaceSymbols,
-    totalEdges: commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0) + workspaceEdges,
+    totalSymbols:
+      commitFacts.reduce(
+        (sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved,
+        0
+      ) + workspaceSymbols,
+    totalEdges:
+      commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0) + workspaceEdges,
     totalFiles: commitFacts.reduce((sum, c) => sum + c.filesChanged, 0) + workspaceFiles,
     intendedPresent: bundleFacts.intended.present,
     intendedAbsent: bundleFacts.intended.absent,
@@ -93,7 +110,7 @@ export async function assembleBundleFactsFromTestData(
     patternDriftOldNamespaces: bundleFacts.findings.patternDrift.oldNamespaces,
     legacyAuditDead: bundleFacts.findings.legacyAudit.dead,
     legacyAuditLegacyUsed: bundleFacts.findings.legacyAudit.legacyUsed,
-    legacyAuditReplacedLeftovers: bundleFacts.findings.legacyAudit.replacedLeftovers.length
+    legacyAuditReplacedLeftovers: bundleFacts.findings.legacyAudit.replacedLeftovers.length,
   };
 }
 
@@ -102,23 +119,35 @@ export async function assembleBundleFactsFromTestData(
  */
 export function assembleBundleFactsSimple(
   commitFacts: CommitFacts[],
-  workspaceFacts: WorkspaceFacts | { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null } | null
+  workspaceFacts:
+    | WorkspaceFacts
+    | { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null }
+    | null
 ): BundleFactsMetrics {
   // Calculate workspace totals (handle both old and new format)
   let workspaceSymbols = 0;
   let workspaceEdges = 0;
   let workspaceFiles = 0;
-  
+
   if (workspaceFacts) {
     if ('staged' in workspaceFacts || 'unstaged' in workspaceFacts) {
-      const structured = workspaceFacts as { staged: WorkspaceFacts | null; unstaged: WorkspaceFacts | null };
+      const structured = workspaceFacts as {
+        staged: WorkspaceFacts | null;
+        unstaged: WorkspaceFacts | null;
+      };
       if (structured.staged) {
-        workspaceSymbols += structured.staged.symbolsAdded + structured.staged.symbolsModified + structured.staged.symbolsRemoved;
+        workspaceSymbols +=
+          structured.staged.symbolsAdded +
+          structured.staged.symbolsModified +
+          structured.staged.symbolsRemoved;
         workspaceEdges += structured.staged.edgesAdded + structured.staged.edgesRemoved;
         workspaceFiles += structured.staged.filesChanged;
       }
       if (structured.unstaged) {
-        workspaceSymbols += structured.unstaged.symbolsAdded + structured.unstaged.symbolsModified + structured.unstaged.symbolsRemoved;
+        workspaceSymbols +=
+          structured.unstaged.symbolsAdded +
+          structured.unstaged.symbolsModified +
+          structured.unstaged.symbolsRemoved;
         workspaceEdges += structured.unstaged.edgesAdded + structured.unstaged.edgesRemoved;
         workspaceFiles += structured.unstaged.filesChanged;
       }
@@ -130,8 +159,11 @@ export function assembleBundleFactsSimple(
     }
   }
 
-  const totalSymbols = commitFacts.reduce((sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved, 0) + workspaceSymbols;
-  const totalEdges = commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0) + workspaceEdges;
+  const totalSymbols =
+    commitFacts.reduce((sum, c) => sum + c.symbolsAdded + c.symbolsModified + c.symbolsRemoved, 0) +
+    workspaceSymbols;
+  const totalEdges =
+    commitFacts.reduce((sum, c) => sum + c.edgesAdded + c.edgesRemoved, 0) + workspaceEdges;
   const totalFiles = commitFacts.reduce((sum, c) => sum + c.filesChanged, 0) + workspaceFiles;
 
   return {
@@ -150,6 +182,6 @@ export function assembleBundleFactsSimple(
     patternDriftOldNamespaces: 0,
     legacyAuditDead: 0,
     legacyAuditLegacyUsed: 0,
-    legacyAuditReplacedLeftovers: 0
+    legacyAuditReplacedLeftovers: 0,
   };
 }

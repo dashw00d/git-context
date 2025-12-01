@@ -10,13 +10,10 @@ export function computeSymbolDNA(symbol: SymbolInfo, bodyText?: string): string 
   const parts = [
     symbol.kind,
     normalizeSignature(symbol.signature),
-    bodyText ? computeBodyShape(bodyText) : ''
+    bodyText ? computeBodyShape(bodyText) : '',
   ];
 
-  return crypto.createHash('sha256')
-    .update(parts.join('::'))
-    .digest('hex')
-    .substring(0, 16);
+  return crypto.createHash('sha256').update(parts.join('::')).digest('hex').substring(0, 16);
 }
 
 /**
@@ -25,15 +22,12 @@ export function computeSymbolDNA(symbol: SymbolInfo, bodyText?: string): string 
 export function computeBodyHash(bodyText: string): string {
   // Normalize whitespace, remove comments
   const normalized = bodyText
-    .replace(/\/\*[\s\S]*?\*\//g, '')  // Block comments
-    .replace(/\/\/.*/g, '')             // Line comments
-    .replace(/\s+/g, ' ')               // Normalize whitespace
+    .replace(/\/\*[\s\S]*?\*\//g, '') // Block comments
+    .replace(/\/\/.*/g, '') // Line comments
+    .replace(/\s+/g, ' ') // Normalize whitespace
     .trim();
 
-  return crypto.createHash('sha256')
-    .update(normalized)
-    .digest('hex')
-    .substring(0, 16);
+  return crypto.createHash('sha256').update(normalized).digest('hex').substring(0, 16);
 }
 
 /**
@@ -43,22 +37,19 @@ function computeBodyShape(bodyText: string): string {
   // Extract AST node types only (no identifiers)
   // This is a simplified version - real implementation would use Tree-sitter
   const tokens = bodyText
-    .replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, 'ID')  // Replace identifiers
-    .replace(/\d+/g, 'NUM')                     // Replace numbers
-    .replace(/["'].*?["']/g, 'STR')             // Replace strings
-    .replace(/\s+/g, '');                       // Remove whitespace
+    .replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, 'ID') // Replace identifiers
+    .replace(/\d+/g, 'NUM') // Replace numbers
+    .replace(/["'].*?["']/g, 'STR') // Replace strings
+    .replace(/\s+/g, ''); // Remove whitespace
 
-  return crypto.createHash('sha256')
-    .update(tokens)
-    .digest('hex')
-    .substring(0, 8);
+  return crypto.createHash('sha256').update(tokens).digest('hex').substring(0, 8);
 }
 
 function normalizeSignature(sig: string): string {
   // Remove parameter names, keep types only
   return sig
-    .replace(/\w+\s*:/g, ':')  // Remove param names in TS
-    .replace(/\s+/g, '')        // Remove whitespace
+    .replace(/\w+\s*:/g, ':') // Remove param names in TS
+    .replace(/\s+/g, '') // Remove whitespace
     .toLowerCase();
 }
 
@@ -73,8 +64,8 @@ export function assignDNAIds(symbols: SymbolInfo[], bodyTexts?: Map<string, stri
 
     return {
       ...symbol,
-      dnaId,  // Add DNA as separate field, don't overwrite id
-      bodyHash
+      dnaId, // Add DNA as separate field, don't overwrite id
+      bodyHash,
     };
   });
 }
@@ -90,12 +81,9 @@ export function computeHybridDna(fact: HybridFact, bodyText?: string): string {
       fact.name,
       fact.level !== undefined ? String(fact.level) : '',
       fact.bodyShape,
-      String(fact.timeline.length)
+      String(fact.timeline.length),
     ];
-    return crypto.createHash('sha256')
-      .update(parts.join('::'))
-      .digest('hex')
-      .substring(0, 16);
+    return crypto.createHash('sha256').update(parts.join('::')).digest('hex').substring(0, 16);
   } else {
     // For semantic symbols: use existing computeSymbolDNA
     return computeSymbolDNA(fact, bodyText);

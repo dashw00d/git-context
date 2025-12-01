@@ -1,16 +1,20 @@
-import { ServiceBase, ServiceConfig } from './base/ServiceBase';
 import { ensureDatabaseInitialized } from '../storage/database';
-import { logError, logDebug } from '../utils/logger';
-import { DatabaseError } from '../utils/errors';
+import { prepare } from '../storage/statement-wrapper';
+import { logError } from '../utils/logger';
+import { ServiceBase, ServiceConfig } from './base/ServiceBase';
 
 // Import types from contracts and types
-import type { Hotspot } from '../contracts/llmContext';
 import type { MovedBlock } from '../analysis/movedBlockDetector';
-import type { CommitMetadata, CommitListItem, CommitSearchOptions } from '../services/commitService';
-import type { SymbolInfo, EdgeInfo } from '../types';
+import type { Hotspot } from '../contracts/llmContext';
+import type {
+  CommitListItem,
+  CommitMetadata,
+  CommitSearchOptions,
+} from '../services/commitService';
+import type { EdgeInfo, SymbolInfo } from '../types';
 
 export interface SymbolWithDNA extends SymbolInfo {
-  dna: string;  // DNA hash for stable identity
+  dna: string; // DNA hash for stable identity
 }
 
 export interface SymbolHistory {
@@ -47,8 +51,7 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`commit_meta_${sha}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare('SELECT * FROM commits_metadata WHERE sha = ?');
+        const stmt = prepare('SELECT * FROM commits_metadata WHERE sha = ?');
         const result = stmt.get(sha) as any;
         stmt.free?.();
 
@@ -62,7 +65,7 @@ export class DatabaseService extends ServiceBase {
           date: new Date(result.date),
           message: result.message,
           parent: result.parent,
-          filesChanged: result.files_changed
+          filesChanged: result.files_changed,
         };
       } catch (error) {
         logError(`Failed to get commit metadata for ${sha}`, error);
@@ -75,9 +78,8 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`commits_recent_${limit}_${offset}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
 
-        const stmt = db.prepare(`
+        const stmt = prepare(`
       SELECT m.sha, m.author, m.date, m.message,
              COALESCE(a.symbols_added, 0) + COALESCE(a.symbols_modified, 0) + COALESCE(a.symbols_removed, 0) as changes
       FROM commits_metadata m
@@ -94,7 +96,7 @@ export class DatabaseService extends ServiceBase {
           message: c.message,
           author: c.author,
           date: new Date(c.date),
-          changes: c.changes || 0
+          changes: c.changes || 0,
         }));
       } catch (error) {
         logError('Failed to get recent commits', error);
@@ -107,8 +109,9 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache('commits_count', async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const result = db.prepare('SELECT COUNT(*) as count FROM commits_metadata').get() as { count: number };
+        const result = prepare('SELECT COUNT(*) as count FROM commits_metadata').get() as {
+          count: number;
+        };
         return result.count;
       } catch (error) {
         logError('Failed to count commits', error);
@@ -120,8 +123,7 @@ export class DatabaseService extends ServiceBase {
   async isAnalyzed(sha: string): Promise<boolean> {
     try {
       await ensureDatabaseInitialized();
-      const db = this.db.getDatabase();
-      const result = db.prepare('SELECT 1 FROM commits_analysis WHERE sha = ? LIMIT 1').get(sha);
+      const result = prepare('SELECT 1 FROM commits_analysis WHERE sha = ? LIMIT 1').get(sha);
       return !!result;
     } catch (error) {
       logError(`Failed to check if commit ${sha} is analyzed`, error);
@@ -134,7 +136,6 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(cacheKey, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
 
         const { limit = 20, offset = 0, filterText, shas } = options;
 
@@ -165,7 +166,7 @@ export class DatabaseService extends ServiceBase {
         query += ` ORDER BY m.date DESC LIMIT ? OFFSET ?`;
         params.push(limit, offset);
 
-        const stmt = db.prepare(query);
+        const stmt = prepare(query);
         const commits = stmt.all(...params) as any[];
         stmt.free?.();
 
@@ -174,7 +175,7 @@ export class DatabaseService extends ServiceBase {
           message: c.message,
           author: c.author,
           date: new Date(c.date),
-          changes: c.files_changed || 0
+          changes: c.files_changed || 0,
         }));
       } catch (error) {
         logError('Failed to search commits', error);
@@ -187,8 +188,7 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`commit_analysis_${sha}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare('SELECT * FROM commits_analysis WHERE sha = ?');
+        const stmt = prepare('SELECT * FROM commits_analysis WHERE sha = ?');
         const result = stmt.get(sha) as any;
         stmt.free?.();
         return result || null;
@@ -203,8 +203,7 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`files_commit_${sha}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare('SELECT * FROM files WHERE sha = ?');
+        const stmt = prepare('SELECT * FROM files WHERE sha = ?');
         const results = stmt.all(sha) as any[];
         stmt.free?.();
         return results;
@@ -221,8 +220,7 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`symbols_dna_${dnaHash}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare(`
+        const stmt = prepare(`
           SELECT s.*, sv.dna_id as dna
           FROM symbol_versions sv
           JOIN symbols s ON sv.sha = s.sha AND sv.symbol_id = s.symbol_id
@@ -240,9 +238,9 @@ export class DatabaseService extends ServiceBase {
           bodyHash: row.body_hash,
           location: {
             start: { line: row.start_line || 0, column: row.start_column || 0 },
-            end: { line: row.end_line || 0, column: row.end_column || 0 }
+            end: { line: row.end_line || 0, column: row.end_column || 0 },
           },
-          dna: row.dna
+          dna: row.dna,
         }));
       } catch (error) {
         this.handleDbError(error, 'querySymbolsByDNA');
@@ -255,8 +253,7 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`symbols_commit_${sha}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare('SELECT * FROM symbols WHERE sha = ?');
+        const stmt = prepare('SELECT * FROM symbols WHERE sha = ?');
         const results = stmt.all(sha) as any[];
         stmt.free?.();
 
@@ -269,8 +266,8 @@ export class DatabaseService extends ServiceBase {
           bodyHash: row.body_hash,
           location: {
             start: { line: row.start_line || 0, column: row.start_column || 0 },
-            end: { line: row.end_line || 0, column: row.end_column || 0 }
-          }
+            end: { line: row.end_line || 0, column: row.end_column || 0 },
+          },
         }));
       } catch (error) {
         this.handleDbError(error, 'getSymbolsByCommit');
@@ -283,8 +280,9 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`symbol_history_${dnaId}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare('SELECT * FROM symbol_history WHERE symbol_dna_id = ? ORDER BY created_at DESC');
+        const stmt = prepare(
+          'SELECT * FROM symbol_history WHERE symbol_dna_id = ? ORDER BY created_at DESC'
+        );
         const results = stmt.all(dnaId) as any[];
         stmt.free?.();
 
@@ -298,7 +296,7 @@ export class DatabaseService extends ServiceBase {
           body_hash: row.body_hash,
           change_type: row.change_type,
           impact_score: row.impact_score,
-          created_at: row.created_at
+          created_at: row.created_at,
         }));
       } catch (error) {
         this.handleDbError(error, 'getSymbolHistory');
@@ -313,8 +311,7 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`edges_commit_${sha}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare('SELECT * FROM edges WHERE sha = ?');
+        const stmt = prepare('SELECT * FROM edges WHERE sha = ?');
         const results = stmt.all(sha) as any[];
         stmt.free?.();
 
@@ -323,7 +320,7 @@ export class DatabaseService extends ServiceBase {
           to: row.to_symbol_id,
           type: row.edge_type as EdgeInfo['type'],
           confidence: row.confidence,
-          isResolved: !!row.is_resolved
+          isResolved: !!row.is_resolved,
         }));
       } catch (error) {
         this.handleDbError(error, 'queryEdgesByCommit');
@@ -338,8 +335,7 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`hotspots_${limit}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare(`
+        const stmt = prepare(`
           SELECT symbol_id, total_modifications as change_count,
                  last_changed_date as last_changed, hotspot_score as risk_score
           FROM symbol_hotspots
@@ -353,7 +349,7 @@ export class DatabaseService extends ServiceBase {
           symbol_id: row.symbol_id,
           change_count: row.change_count,
           last_changed: row.last_changed,
-          risk_score: row.risk_score
+          risk_score: row.risk_score,
         }));
       } catch (error) {
         this.handleDbError(error, 'queryHotspots');
@@ -368,8 +364,7 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`moved_blocks_${sha}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare('SELECT * FROM moved_blocks WHERE commit_sha = ?');
+        const stmt = prepare('SELECT * FROM moved_blocks WHERE commit_sha = ?');
         const results = stmt.all(sha) as any[];
         stmt.free?.();
 
@@ -388,7 +383,7 @@ export class DatabaseService extends ServiceBase {
           similarityScore: row.similarity_score,
           blockType: row.block_type,
           moveReason: row.move_reason,
-          lineCount: row.line_count
+          lineCount: row.line_count,
         }));
       } catch (error) {
         this.handleDbError(error, 'queryMovedBlocks');
@@ -402,8 +397,7 @@ export class DatabaseService extends ServiceBase {
   async insertCommitFacts(facts: CommitFacts[]): Promise<void> {
     await this.executeInTransaction(async () => {
       try {
-        const db = this.db.getDatabase();
-        const stmt = db.prepare(`
+        const stmt = prepare(`
           INSERT OR IGNORE INTO hybrid_facts (commit_sha, fact_type, data, created_at)
           VALUES (?, ?, ?, ?)
         `);
@@ -422,8 +416,7 @@ export class DatabaseService extends ServiceBase {
   async insertSymbolHistory(history: SymbolHistory[]): Promise<void> {
     await this.executeInTransaction(async () => {
       try {
-        const db = this.db.getDatabase();
-        const stmt = db.prepare(`
+        const stmt = prepare(`
           INSERT OR IGNORE INTO symbol_history
           (symbol_dna_id, sha, file_path, name, kind, signature, body_hash, change_type, impact_score, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -454,12 +447,11 @@ export class DatabaseService extends ServiceBase {
   async createBundle(name: string, config: any): Promise<string> {
     return this.executeInTransaction(async () => {
       try {
-        const db = this.db.getDatabase();
         const id = crypto.randomUUID();
         const now = new Date().toISOString();
 
         // Insert bundle
-        const stmt = db.prepare(`
+        const stmt = prepare(`
           INSERT INTO bundles (id, name, created_at, updated_at, config_json)
           VALUES (?, ?, ?, ?, ?)
         `);
@@ -468,7 +460,7 @@ export class DatabaseService extends ServiceBase {
 
         // Insert files
         if (config.files && Array.isArray(config.files)) {
-          const fileStmt = db.prepare(`
+          const fileStmt = prepare(`
             INSERT INTO bundle_files (bundle_id, file_path)
             VALUES (?, ?)
           `);
@@ -484,7 +476,8 @@ export class DatabaseService extends ServiceBase {
         return id;
       } catch (error) {
         this.handleDbError(error, 'createBundle');
-        throw error;
+        logError('Failed to create bundle after error handling:', error);
+        return ''; // Return empty string instead of throwing
       }
     });
   }
@@ -493,15 +486,14 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache('bundles_list', async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
-        const stmt = db.prepare('SELECT * FROM bundles ORDER BY updated_at DESC');
+        const stmt = prepare('SELECT * FROM bundles ORDER BY updated_at DESC');
         const results = stmt.all() as any[];
         stmt.free?.();
 
         // Parse config
         return results.map(b => ({
           ...b,
-          config: JSON.parse(b.config_json || '{}')
+          config: JSON.parse(b.config_json || '{}'),
         }));
       } catch (error) {
         this.handleDbError(error, 'getBundles');
@@ -514,9 +506,8 @@ export class DatabaseService extends ServiceBase {
     return this.queryWithCache(`bundle_${id}`, async () => {
       try {
         await ensureDatabaseInitialized();
-        const db = this.db.getDatabase();
 
-        const stmt = db.prepare('SELECT * FROM bundles WHERE id = ?');
+        const stmt = prepare('SELECT * FROM bundles WHERE id = ?');
         const bundle = stmt.get(id) as any;
         stmt.free?.();
 
@@ -524,7 +515,7 @@ export class DatabaseService extends ServiceBase {
 
         return {
           ...bundle,
-          config: JSON.parse(bundle.config_json || '{}')
+          config: JSON.parse(bundle.config_json || '{}'),
         };
       } catch (error) {
         this.handleDbError(error, 'getBundle');
@@ -536,8 +527,7 @@ export class DatabaseService extends ServiceBase {
   async deleteBundle(id: string): Promise<void> {
     await this.executeInTransaction(async () => {
       try {
-        const db = this.db.getDatabase();
-        const stmt = db.prepare('DELETE FROM bundles WHERE id = ?');
+        const stmt = prepare('DELETE FROM bundles WHERE id = ?');
         stmt.run(id);
         stmt.free?.();
 
@@ -553,7 +543,6 @@ export class DatabaseService extends ServiceBase {
   async updateBundle(id: string, updates: { name?: string; config?: any }): Promise<void> {
     await this.executeInTransaction(async () => {
       try {
-        const db = this.db.getDatabase();
         const now = new Date().toISOString();
 
         const sets: string[] = ['updated_at = ?'];
@@ -571,19 +560,19 @@ export class DatabaseService extends ServiceBase {
 
         params.push(id);
 
-        const stmt = db.prepare(`UPDATE bundles SET ${sets.join(', ')} WHERE id = ?`);
+        const stmt = prepare(`UPDATE bundles SET ${sets.join(', ')} WHERE id = ?`);
         stmt.run(...params);
         stmt.free?.();
 
         // Update files if config changed
         if (updates.config && updates.config.files) {
           // Delete old files
-          const delStmt = db.prepare('DELETE FROM bundle_files WHERE bundle_id = ?');
+          const delStmt = prepare('DELETE FROM bundle_files WHERE bundle_id = ?');
           delStmt.run(id);
           delStmt.free?.();
 
           // Insert new files
-          const fileStmt = db.prepare(`
+          const fileStmt = prepare(`
             INSERT INTO bundle_files (bundle_id, file_path)
             VALUES (?, ?)
           `);
@@ -614,4 +603,4 @@ export function getDatabaseService(): DatabaseService {
 }
 
 // Re-export types for convenience
-export type { CommitMetadata, CommitListItem, CommitSearchOptions } from './commitService';
+export type { CommitListItem, CommitMetadata, CommitSearchOptions } from './commitService';

@@ -1,13 +1,19 @@
-import { SymbolContext, EdgeContext } from '../contracts/llmContext';
-import { IntendedState } from './intendedMap';
-import { WorkingSnapshot } from './workingSnapshot';
-import { ScopeSet } from './scope';
 import { BaseDetector, DetectorConfig } from '../analysis/detectors/BaseDetector';
+import { SymbolContext } from '../contracts/llmContext';
+import { prepare } from '../storage/statement-wrapper';
+import { logInfo } from '../utils/logger';
+import { IntendedState } from './intendedMap';
+import { ScopeSet } from './scope';
+import { WorkingSnapshot } from './workingSnapshot';
 
 export interface LegacyAuditResult {
   dead: SymbolContext[];
   legacyUsed: SymbolContext[];
-  replacedLeftovers: Array<{old: SymbolContext, new: SymbolContext, confidence: number}>;
+  replacedLeftovers: Array<{
+    old: SymbolContext;
+    new: SymbolContext;
+    confidence: number;
+  }>;
 }
 
 /**
@@ -20,9 +26,7 @@ export async function auditLegacy(
 ): Promise<LegacyAuditResult> {
   // Fallback: if intended is empty, use hotspots to infer legacy symbols
   if (intended.size === 0) {
-    const { getDatabaseManager } = await import('../storage/database');
-    const db = getDatabaseManager().getDatabase();
-    const hotspotStmt = db.prepare(`
+    const hotspotStmt = prepare(`
       SELECT DISTINCT sh.symbol_id, sh.file_path, sh.symbol_name, sh.hotspot_score
       FROM symbol_hotspots sh
       WHERE sh.hotspot_score >= 40
@@ -35,7 +39,7 @@ export async function auditLegacy(
       LIMIT 50
     `);
     const hotspotSymbols = hotspotStmt.all() as any[];
-    
+
     // Add hotspot symbols as "absent" (legacy) if they're not in working
     for (const hotspot of hotspotSymbols) {
       const symbolId = hotspot.symbol_id;
@@ -43,13 +47,13 @@ export async function auditLegacy(
         intended.set(symbolId, {
           expect: 'absent',
           lastSha: 'unknown',
-          lastName: hotspot.symbol_name
+          lastName: hotspot.symbol_name,
         });
       }
     }
-    
+
     if (intended.size > 0) {
-      console.log(`[LegacyAudit] Using fallback: inferred ${intended.size} legacy symbols from hotspots`);
+      logInfo(`Using fallback: inferred ${intended.size} legacy symbols from hotspots`);
     }
   }
   // Build inbound graph: Map<symbol_id, Set<caller_symbol_ids>>
@@ -90,9 +94,7 @@ export async function auditLegacy(
       // 1. Not an entry point itself
       // 2. Has some complexity (not just simple getters/setters)
       // 3. Not a generic utility function
-      if (!roots.has(symbolId) &&
-          !isLikelyUtilityFunction(symbol) &&
-          hasSomeComplexity(symbol)) {
+      if (!roots.has(symbolId) && !isLikelyUtilityFunction(symbol) && hasSomeComplexity(symbol)) {
         dead.push(symbol);
       }
     }
@@ -137,10 +139,12 @@ function findEntryPoints(working: WorkingSnapshot, scope: ScopeSet): Set<string>
     const filePathLower = filePath.toLowerCase();
 
     // Prioritize exported + no inbound = root (highest priority)
-    if ((symbol.name.startsWith('export ') ||
-         (symbol.signature && symbol.signature.includes('export')) ||
-         symbol.name.startsWith('public ')) &&
-        (!inboundGraph.has(symbolId) || inboundGraph.get(symbolId)!.size === 0)) {
+    if (
+      (symbol.name.startsWith('export ') ||
+        (symbol.signature && symbol.signature.includes('export')) ||
+        symbol.name.startsWith('public ')) &&
+      (!inboundGraph.has(symbolId) || inboundGraph.get(symbolId)!.size === 0)
+    ) {
       roots.add(symbolId);
       continue;
     }
@@ -150,16 +154,20 @@ function findEntryPoints(working: WorkingSnapshot, scope: ScopeSet): Set<string>
     if (filePathLower.includes('service') && !scope.allPaths.has(filePath)) continue;
 
     // Remove generic getters/setters unless in controller/service
-    if ((/^(get|set|is|has|can)[A-Z]/.test(symbol.name)) &&
-        !filePathLower.includes('controller') &&
-        !filePathLower.includes('service')) {
+    if (
+      /^(get|set|is|has|can)[A-Z]/.test(symbol.name) &&
+      !filePathLower.includes('controller') &&
+      !filePathLower.includes('service')
+    ) {
       continue; // Skip generic getters/setters outside controllers/services
     }
 
     // 1. Exported/public symbols (if not already added above)
-    if (symbol.name.startsWith('export ') ||
-        (symbol.signature && symbol.signature.includes('export')) ||
-        symbol.name.startsWith('public ')) {
+    if (
+      symbol.name.startsWith('export ') ||
+      (symbol.signature && symbol.signature.includes('export')) ||
+      symbol.name.startsWith('public ')
+    ) {
       roots.add(symbolId);
       continue;
     }
@@ -168,10 +176,13 @@ function findEntryPoints(working: WorkingSnapshot, scope: ScopeSet): Set<string>
     // Exclude generic getters/setters (already filtered above)
     if (symbol.kind === 'function' || symbol.kind === 'method') {
       const name = symbol.name.toLowerCase();
-      if (/^(main|run|start|init|setup|bootstrap|create|build)$/.test(name) ||
-          /^on[A-Z]/.test(symbol.name) || // onClick, onLoad, etc.
-          ['handle', 'process', 'execute', 'render', 'mount', 'unmount', 'destroy'].some(pattern =>
-            name.includes(pattern))) {
+      if (
+        /^(main|run|start|init|setup|bootstrap|create|build)$/.test(name) ||
+        /^on[A-Z]/.test(symbol.name) || // onClick, onLoad, etc.
+        ['handle', 'process', 'execute', 'render', 'mount', 'unmount', 'destroy'].some(pattern =>
+          name.includes(pattern)
+        )
+      ) {
         roots.add(symbolId);
         continue;
       }
@@ -180,8 +191,14 @@ function findEntryPoints(working: WorkingSnapshot, scope: ScopeSet): Set<string>
     // 3. Classes that are likely entry points
     if (symbol.kind === 'class') {
       const name = symbol.name.toLowerCase();
-      if (name.includes('controller') || name.includes('service') || name.includes('provider') ||
-          name.includes('component') || name.includes('view') || name.includes('page')) {
+      if (
+        name.includes('controller') ||
+        name.includes('service') ||
+        name.includes('provider') ||
+        name.includes('component') ||
+        name.includes('view') ||
+        name.includes('page')
+      ) {
         roots.add(symbolId);
         continue;
       }
@@ -189,10 +206,15 @@ function findEntryPoints(working: WorkingSnapshot, scope: ScopeSet): Set<string>
 
     // 4. Framework-specific entry points (only if file is in scope)
     if (scope.allPaths.has(filePath)) {
-      if (filePathLower.includes('controller') || filePathLower.includes('route') ||
-          filePathLower.includes('middleware') || filePathLower.includes('bootstrap') ||
-          filePathLower.includes('app.') || filePathLower.includes('main.') ||
-          filePathLower.includes('index.')) {
+      if (
+        filePathLower.includes('controller') ||
+        filePathLower.includes('route') ||
+        filePathLower.includes('middleware') ||
+        filePathLower.includes('bootstrap') ||
+        filePathLower.includes('app.') ||
+        filePathLower.includes('main.') ||
+        filePathLower.includes('index.')
+      ) {
         roots.add(symbolId);
         continue;
       }
@@ -224,7 +246,21 @@ function isInScope(symbolId: string, scope: ScopeSet): boolean {
  */
 function isLikelyUtilityFunction(symbol: SymbolContext): boolean {
   const name = symbol.name.toLowerCase();
-  const genericNames = ['get', 'set', 'is', 'has', 'can', 'should', 'validate', 'format', 'parse', 'convert', 'toString', 'equals', 'hashCode'];
+  const genericNames = [
+    'get',
+    'set',
+    'is',
+    'has',
+    'can',
+    'should',
+    'validate',
+    'format',
+    'parse',
+    'convert',
+    'toString',
+    'equals',
+    'hashCode',
+  ];
 
   // Simple getter/setter patterns
   if (genericNames.some(generic => name.startsWith(generic)) && symbol.kind === 'method') {
@@ -247,15 +283,21 @@ function isEntryPointLike(symbol: SymbolContext): boolean {
   const filePath = symbol.symbol_id.split(':')[0].toLowerCase();
 
   // Framework entry points
-  if (filePath.includes('controller') || filePath.includes('handler') ||
-      filePath.includes('route') || filePath.includes('middleware')) {
+  if (
+    filePath.includes('controller') ||
+    filePath.includes('handler') ||
+    filePath.includes('route') ||
+    filePath.includes('middleware')
+  ) {
     return true;
   }
 
   // Method patterns that suggest entry points
   if (symbol.kind === 'function' || symbol.kind === 'method') {
-    if (/^(handle|process|execute|run|on[A-Z])/.test(symbol.name) ||
-        ['main', 'start', 'init', 'bootstrap', 'mount', 'render'].includes(name)) {
+    if (
+      /^(handle|process|execute|run|on[A-Z])/.test(symbol.name) ||
+      ['main', 'start', 'init', 'bootstrap', 'mount', 'render'].includes(name)
+    ) {
       return true;
     }
   }
@@ -273,13 +315,14 @@ function hasSomeComplexity(symbol: SymbolContext): boolean {
   }
 
   // Check if it contains multiple statements or complex patterns
-  if (symbol.signature && (
-    symbol.signature.includes('{') ||
-    symbol.signature.includes('if') ||
-    symbol.signature.includes('for') ||
-    symbol.signature.includes('while') ||
-    symbol.signature.includes('=>')
-  )) {
+  if (
+    symbol.signature &&
+    (symbol.signature.includes('{') ||
+      symbol.signature.includes('if') ||
+      symbol.signature.includes('for') ||
+      symbol.signature.includes('while') ||
+      symbol.signature.includes('=>'))
+  ) {
     return true;
   }
 
@@ -293,8 +336,12 @@ function findReplacedLeftovers(
   intended: Map<string, IntendedState>,
   working: WorkingSnapshot,
   inboundGraph: Map<string, Set<string>>
-): Array<{old: SymbolContext, new: SymbolContext, confidence: number}> {
-  const leftovers: Array<{old: SymbolContext, new: SymbolContext, confidence: number}> = [];
+): Array<{ old: SymbolContext; new: SymbolContext; confidence: number }> {
+  const leftovers: Array<{
+    old: SymbolContext;
+    new: SymbolContext;
+    confidence: number;
+  }> = [];
 
   // Find symbols intended to be absent
   const absentSymbols = new Map<string, IntendedState>();
@@ -314,19 +361,21 @@ function findReplacedLeftovers(
 
     // Skip if the symbol is still being used by entry points
     const callers = inboundGraph.get(absentId) || new Set();
-    const hasEntryPointCallers = Array.from(callers).some(callerId =>
-      working.symbolsById.has(callerId) && isEntryPointLike(working.symbolsById.get(callerId)!)
+    const hasEntryPointCallers = Array.from(callers).some(
+      callerId =>
+        working.symbolsById.has(callerId) && isEntryPointLike(working.symbolsById.get(callerId)!)
     );
     if (hasEntryPointCallers && inboundCount > 3) continue;
 
     // Find similar symbols in working tree
-    const candidates: Array<{symbol: SymbolContext, similarity: number}> = [];
+    const candidates: Array<{ symbol: SymbolContext; similarity: number }> = [];
 
     for (const [workingId, workingSymbol] of working.symbolsById) {
       if (workingId === absentId) continue;
 
       const similarity = calculateSimilarity(absentSymbol, workingSymbol, expected);
-      if (similarity > 0.6) { // Lower threshold to 0.6 to catch more potential replacements
+      if (similarity > 0.6) {
+        // Lower threshold to 0.6 to catch more potential replacements
         candidates.push({ symbol: workingSymbol, similarity });
       }
     }
@@ -343,7 +392,7 @@ function findReplacedLeftovers(
         leftovers.push({
           old: absentSymbol,
           new: bestMatch.symbol,
-          confidence: bestMatch.similarity
+          confidence: bestMatch.similarity,
         });
       }
     }
@@ -388,7 +437,9 @@ function calculateSimilarity(
   const newPath = newSymbol.symbol_id.split(':')[0];
   if (oldPath === newPath) {
     score += 1; // Same file
-  } else if (oldPath.replace(/\.old|\.bak|\.backup/, '') === newPath.replace(/\.new|\.updated/, '')) {
+  } else if (
+    oldPath.replace(/\.old|\.bak|\.backup/, '') === newPath.replace(/\.new|\.updated/, '')
+  ) {
     score += 0.8; // Likely rename pattern
   } else if (calculatePathSimilarity(oldPath, newPath) > 0.5) {
     score += 0.5; // Similar paths
@@ -443,7 +494,9 @@ function calculateStringSimilarity(a: string, b: string): number {
  * Simple Levenshtein distance
  */
 function levenshteinDistance(a: string, b: string): number {
-  const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
+  const matrix = Array(b.length + 1)
+    .fill(null)
+    .map(() => Array(a.length + 1).fill(null));
 
   for (let i = 0; i <= a.length; i++) matrix[0][i] = i;
   for (let j = 0; j <= b.length; j++) matrix[j][0] = j;
@@ -452,8 +505,8 @@ function levenshteinDistance(a: string, b: string): number {
     for (let i = 1; i <= a.length; i++) {
       const indicator = a[i - 1] === b[j - 1] ? 0 : 1;
       matrix[j][i] = Math.min(
-        matrix[j][i - 1] + 1,     // deletion
-        matrix[j - 1][i] + 1,     // insertion
+        matrix[j][i - 1] + 1, // deletion
+        matrix[j - 1][i] + 1, // insertion
         matrix[j - 1][i - 1] + indicator // substitution
       );
     }
@@ -501,17 +554,21 @@ function normalizeSignature(signature: string): string {
 function extractParameters(signature: string): string[] {
   // Try to match function parameters: (param1: type, param2: type)
   let paramMatch = signature.match(/\(([^)]*)\)/);
-  
+
   // If no parentheses match, try arrow function: param => or (param) =>
   if (!paramMatch) {
     paramMatch = signature.match(/^([^=]+)=>/);
     if (paramMatch) {
       const arrowParams = paramMatch[1].trim();
       // Remove outer parentheses if present
-      const cleaned = arrowParams.startsWith('(') && arrowParams.endsWith(')')
-        ? arrowParams.slice(1, -1)
-        : arrowParams;
-      return cleaned.split(',').map(p => p.trim()).filter(p => p.length > 0);
+      const cleaned =
+        arrowParams.startsWith('(') && arrowParams.endsWith(')')
+          ? arrowParams.slice(1, -1)
+          : arrowParams;
+      return cleaned
+        .split(',')
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
     }
     return [];
   }
@@ -547,7 +604,7 @@ export class LegacyDetector extends BaseDetector<LegacyDetectorInput, LegacyAudi
   constructor(config: Partial<DetectorConfig> = {}) {
     super({
       enableCaching: false, // Legacy detection should always be fresh
-      ...config
+      ...config,
     });
   }
 

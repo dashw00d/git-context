@@ -4,13 +4,13 @@
  */
 
 export type NamingConvention =
-  | 'camelCase'      // getUserData
-  | 'PascalCase'     // GetUserData
-  | 'snake_case'     // get_user_data
+  | 'camelCase' // getUserData
+  | 'PascalCase' // GetUserData
+  | 'snake_case' // get_user_data
   | 'SCREAMING_SNAKE' // GET_USER_DATA
-  | 'kebab-case'     // get-user-data (rare for symbols)
-  | 'hungarian'      // strUserData
-  | 'mixed'          // get_userData
+  | 'kebab-case' // get-user-data (rare for symbols)
+  | 'hungarian' // strUserData
+  | 'mixed' // get_userData
   | 'unknown';
 
 export interface ConventionProfile {
@@ -45,8 +45,8 @@ export function detectNamingConvention(name: string): ConventionProfile {
   const startsLower = /^[a-z]/.test(name);
   const startsUpper = /^[A-Z]/.test(name);
   const allUpper = name === name.toUpperCase() && hasUnderscore;
-  
-  // Single-word lowercase names (e.g., form, table, handle) 
+
+  // Single-word lowercase names (e.g., form, table, handle)
   // Default to camelCase since that's the standard for methods in most languages
   const isSingleLowerWord = startsLower && !/[_A-Z-]/.test(name.slice(1));
   if (isSingleLowerWord) {
@@ -134,17 +134,12 @@ export function detectNamingConvention(name: string): ConventionProfile {
 /**
  * Suggest a name following a target convention
  */
-export function suggestConventionName(
-  name: string,
-  targetConvention: NamingConvention
-): string {
+export function suggestConventionName(name: string, targetConvention: NamingConvention): string {
   const profile = detectNamingConvention(name);
   const parts = profile.parts.length > 0 ? profile.parts : [name];
 
   // Normalize parts (lowercase, remove empty)
-  const normalizedParts = parts
-    .map(p => p.toLowerCase().trim())
-    .filter(p => p.length > 0);
+  const normalizedParts = parts.map(p => p.toLowerCase().trim()).filter(p => p.length > 0);
 
   if (normalizedParts.length === 0) {
     return name; // Can't convert
@@ -152,14 +147,16 @@ export function suggestConventionName(
 
   switch (targetConvention) {
     case 'camelCase':
-      return normalizedParts[0] + normalizedParts.slice(1)
-        .map(p => p.charAt(0).toUpperCase() + p.slice(1))
-        .join('');
+      return (
+        normalizedParts[0] +
+        normalizedParts
+          .slice(1)
+          .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+          .join('')
+      );
 
     case 'PascalCase':
-      return normalizedParts
-        .map(p => p.charAt(0).toUpperCase() + p.slice(1))
-        .join('');
+      return normalizedParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
 
     case 'snake_case':
       return normalizedParts.join('_');
@@ -173,17 +170,26 @@ export function suggestConventionName(
     case 'hungarian':
       // Keep first part as prefix, rest as PascalCase
       if (normalizedParts.length > 1) {
-        return normalizedParts[0] + normalizedParts.slice(1)
-          .map(p => p.charAt(0).toUpperCase() + p.slice(1))
-          .join('');
+        return (
+          normalizedParts[0] +
+          normalizedParts
+            .slice(1)
+            .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+            .join('')
+        );
       }
       return normalizedParts[0];
 
     case 'mixed':
       // Use camelCase with underscores (uncommon, but handle it)
-      return normalizedParts[0] + '_' + normalizedParts.slice(1)
-        .map(p => p.charAt(0).toUpperCase() + p.slice(1))
-        .join('');
+      return (
+        normalizedParts[0] +
+        '_' +
+        normalizedParts
+          .slice(1)
+          .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+          .join('')
+      );
 
     default:
       return name;
@@ -193,25 +199,27 @@ export function suggestConventionName(
 /**
  * Analyze convention drift across a set of symbols
  */
-export function analyzeConventionDrift(symbols: Array<{
-  name: string;
-  kind: string;
-  path: string;
-}>): ConventionDriftResult {
+export function analyzeConventionDrift(
+  symbols: Array<{
+    name: string;
+    kind: string;
+    path: string;
+  }>
+): ConventionDriftResult {
   const counts: Record<NamingConvention, number> = {
-    'camelCase': 0,
-    'PascalCase': 0,
-    'snake_case': 0,
-    'SCREAMING_SNAKE': 0,
+    camelCase: 0,
+    PascalCase: 0,
+    snake_case: 0,
+    SCREAMING_SNAKE: 0,
     'kebab-case': 0,
-    'hungarian': 0,
-    'mixed': 0,
-    'unknown': 0
+    hungarian: 0,
+    mixed: 0,
+    unknown: 0,
   };
 
   const symbolConventions = symbols.map(s => ({
     ...s,
-    profile: detectNamingConvention(s.name)
+    profile: detectNamingConvention(s.name),
   }));
 
   // Count conventions
@@ -233,7 +241,7 @@ export function analyzeConventionDrift(symbols: Array<{
       name: s.name,
       convention: s.profile.convention,
       path: s.path,
-      suggestedName: suggestConventionName(s.name, dominant)
+      suggestedName: suggestConventionName(s.name, dominant),
     }));
 
   const totalRelevant = Object.values(counts).reduce((a, b) => a + b, 0) - counts['unknown'];
@@ -243,7 +251,6 @@ export function analyzeConventionDrift(symbols: Array<{
     dominantConvention: dominant,
     conventionCounts: counts,
     driftSymbols,
-    driftPercent
+    driftPercent,
   };
 }
-

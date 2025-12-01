@@ -1,19 +1,20 @@
-import { GitOperations } from './git';
-import { SnapshotManager } from './snapshotManager';
-import { StructuralDiffManager } from './structuralDiffManager';
-import { Database } from 'sql.js';
-import { logDebug, logInfo } from '../utils/logger';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getExtensionConfig, getSupportedExtensions, detectLanguage, isCstOnlyLanguage, createCustomIgnoreMatcher } from '../utils/config';
+import pLimit = require('p-limit');
+import { Database } from 'sql.js';
+import { prepare } from '../storage/statement-wrapper';
+import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
+import { logDebug, logError, logInfo } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
 import { getCstTimelineManager } from './cstTimeline';
+import { GitOperations } from './git';
+import { SnapshotManager } from './snapshotManager';
+import { StructuralDiffManager } from './structuralDiffManager';
 import { getTreeSitterParser } from './tree-sitter';
+import type { HybridFact } from '../types/cstFacts';
 // p-limit is CommonJS; use require style to avoid default-import issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-import pLimit = require('p-limit');
-import type { HybridFact } from '../types/cstFacts';
 
 export interface WorkspaceFacts {
   workspaceHash: string;
@@ -38,28 +39,29 @@ export class WorkspaceIndexer {
     private git: GitOperations,
     private snapshotManager: SnapshotManager,
     private structuralDiffManager: StructuralDiffManager
-  ) { }
+  ) {}
 
   /**
    * Analyze workspace overlay (staged or unstaged changes)
    */
   async analyzeWorkspace(mode: 'staged' | 'unstaged'): Promise<WorkspaceFacts | null> {
     const headSha = await this.git.getHeadSha();
-    const changedFiles = mode === 'staged'
-      ? await this.git.getStagedFiles()
-      : await this.git.getUnstagedFiles();
+    const changedFiles =
+      mode === 'staged' ? await this.git.getStagedFiles() : await this.git.getUnstagedFiles();
 
     // Filter files using centralized path filter
     const gitRoot = this.git.getRoot();
 
     const filteredFiles = [];
     for (const file of changedFiles) {
-      if (await filterPath(file.path, {
-        git: this.git,
-        gitRoot,
-        status: file.status,
-        skipSizeCheck: file.status === 'D'
-      })) {
+      if (
+        await filterPath(file.path, {
+          git: this.git,
+          gitRoot,
+          status: file.status,
+          skipSizeCheck: file.status === 'D',
+        })
+      ) {
         filteredFiles.push(file);
       }
     }
@@ -120,7 +122,7 @@ export class WorkspaceIndexer {
               symbols: headSnapshot.symbols,
               edges: headSnapshot.edges,
               risks: ['deletion'],
-              structuralChange: 0
+              structuralChange: 0,
             };
           }
 
@@ -131,14 +133,27 @@ export class WorkspaceIndexer {
             workingContent = fs.readFileSync(fullPath, 'utf8');
           } catch (error: any) {
             // Provide detailed error with path information
-            throw new Error(
+            logError(
               `Failed to read workspace file "${filePath}" (resolved to "${fullPath}"): ${error.message}\n` +
-              `This may indicate a git path parsing issue. File exists: ${fs.existsSync(fullPath)}`
+                `This may indicate a git path parsing issue. File exists: ${fs.existsSync(
+                  fullPath
+                )}`
             );
+            // Return empty result instead of throwing
+            return {
+              added: 0,
+              modified: 0,
+              removed: 0,
+              edgesAdded: 0,
+              edgesRemoved: 0,
+              symbols: [],
+              edges: [],
+              risks: ['read_error'],
+              structuralChange: 0,
+            };
           }
-          const workspaceBlobSha = 'WORKSPACE:' + crypto.createHash('sha256')
-            .update(workingContent)
-            .digest('hex');
+          const workspaceBlobSha =
+            'WORKSPACE:' + crypto.createHash('sha256').update(workingContent).digest('hex');
 
           const workspaceSnapshot = await this.snapshotManager.getOrCreateSnapshot(
             filePath,
@@ -147,7 +162,12 @@ export class WorkspaceIndexer {
           );
 
           // Extract and save hybrid facts for workspace with mode-specific version
-          await this.extractAndSaveHybridFacts(filePath, version, workingContent, workspaceSnapshot.symbols);
+          await this.extractAndSaveHybridFacts(
+            filePath,
+            version,
+            workingContent,
+            workspaceSnapshot.symbols
+          );
 
           if (status === 'A' || status === 'U') {
             // FILE ADDED or UNTRACKED (both don't exist at HEAD)
@@ -160,7 +180,7 @@ export class WorkspaceIndexer {
               symbols: workspaceSnapshot.symbols,
               edges: workspaceSnapshot.edges,
               risks: [],
-              structuralChange: 0
+              structuralChange: 0,
             };
           } else {
             // FILE MODIFIED (exists at HEAD)
@@ -177,8 +197,12 @@ export class WorkspaceIndexer {
             // Edge diff
             const headEdgeIds = new Set(headSnapshot.edges.map(e => `${e.from}-${e.to}`));
             const workspaceEdgeIds = new Set(workspaceSnapshot.edges.map(e => `${e.from}-${e.to}`));
-            const edgesAdded = workspaceSnapshot.edges.filter(e => !headEdgeIds.has(`${e.from}-${e.to}`)).length;
-            const edgesRemoved = headSnapshot.edges.filter(e => !workspaceEdgeIds.has(`${e.from}-${e.to}`)).length;
+            const edgesAdded = workspaceSnapshot.edges.filter(
+              e => !headEdgeIds.has(`${e.from}-${e.to}`)
+            ).length;
+            const edgesRemoved = headSnapshot.edges.filter(
+              e => !workspaceEdgeIds.has(`${e.from}-${e.to}`)
+            ).length;
 
             // Structural diff (optional - can be slow for workspace)
             const structDiff = await this.structuralDiffManager.getOrCreateStructuralDiff(
@@ -191,7 +215,13 @@ export class WorkspaceIndexer {
 
             // Extract and save hybrid facts for modified workspace files with mode-specific version
             const headFileHash = await this.computeFileHashForFacts(filePath, headContent);
-            await this.extractAndSaveHybridFacts(filePath, version, workingContent, workspaceSnapshot.symbols, headFileHash);
+            await this.extractAndSaveHybridFacts(
+              filePath,
+              version,
+              workingContent,
+              workspaceSnapshot.symbols,
+              headFileHash
+            );
 
             // Risk detection
             const risks: string[] = [];
@@ -207,7 +237,7 @@ export class WorkspaceIndexer {
               symbols: [...diff.added, ...diff.modified.map(m => m.symbol), ...diff.removed],
               edges: workspaceSnapshot.edges,
               risks,
-              structuralChange: structDiff.structuralChangeScore
+              structuralChange: structDiff.structuralChangeScore,
             };
           }
         } catch (error: any) {
@@ -222,7 +252,7 @@ export class WorkspaceIndexer {
             symbols: [],
             edges: [],
             risks: [],
-            structuralChange: 0
+            structuralChange: 0,
           };
         }
       })
@@ -230,7 +260,12 @@ export class WorkspaceIndexer {
 
     const fileResults = await Promise.all(filePromises);
     const duration = Date.now() - startTime;
-    logInfo(`[WorkspaceIndexer] Processed ${filteredFiles.length} files in ${duration}ms (${(filteredFiles.length / (duration / 1000)).toFixed(1)} files/sec)`);
+    logInfo(
+      `[WorkspaceIndexer] Processed ${filteredFiles.length} files in ${duration}ms (${(
+        filteredFiles.length /
+        (duration / 1000)
+      ).toFixed(1)} files/sec)`
+    );
 
     // Aggregate results
     for (const result of fileResults) {
@@ -247,7 +282,10 @@ export class WorkspaceIndexer {
 
     // Calculate blast radius
     const blastRadiusResult = this.calculateBlastRadius(changedSymbols, allEdges);
-    const totalImpact = Array.from(blastRadiusResult.impactScore.values()).reduce((a, b) => a + b, 0);
+    const totalImpact = Array.from(blastRadiusResult.impactScore.values()).reduce(
+      (a, b) => a + b,
+      0
+    );
 
     // Flush any pending snapshot and diff writes
     this.snapshotManager.flushSnapshotQueue();
@@ -264,7 +302,7 @@ export class WorkspaceIndexer {
       risks: [...new Set(allRisks)],
       filesChanged: changedFiles.length,
       structuralChangeScore: maxStructuralChange,
-      blastRadius: totalImpact
+      blastRadius: totalImpact,
     };
 
     // Cache result
@@ -273,13 +311,12 @@ export class WorkspaceIndexer {
     return facts;
   }
 
-
   /**
    * Content-aware workspace hash (includes file content hashes)
    */
   private async computeWorkspaceHash(files: any[]): Promise<string> {
     const fileHashes = await Promise.all(
-      files.map(async (f) => {
+      files.map(async f => {
         if (f.status === 'D') {
           return `${f.path}:deleted`;
         }
@@ -295,10 +332,7 @@ export class WorkspaceIndexer {
           }
 
           const content = fs.readFileSync(fullPath, 'utf8');
-          const hash = crypto.createHash('sha256')
-            .update(content)
-            .digest('hex')
-            .substring(0, 8);
+          const hash = crypto.createHash('sha256').update(content).digest('hex').substring(0, 8);
           return `${f.path}:${f.status}:${hash}`;
         } catch {
           return `${f.path}:${f.status}:error`;
@@ -307,16 +341,16 @@ export class WorkspaceIndexer {
     );
 
     const combined = fileHashes.sort().join('|');
-    return crypto.createHash('sha256')
-      .update(combined)
-      .digest('hex')
-      .substring(0, 16);
+    return crypto.createHash('sha256').update(combined).digest('hex').substring(0, 16);
   }
 
   /**
    * Calculate blast radius for workspace changes
    */
-  private calculateBlastRadius(changedSymbols: any[], allEdges: any[]): { impactScore: Map<string, number> } {
+  private calculateBlastRadius(
+    changedSymbols: any[],
+    allEdges: any[]
+  ): { impactScore: Map<string, number> } {
     const impactScore = new Map<string, number>();
 
     // Simple blast radius calculation based on edge connectivity
@@ -346,7 +380,7 @@ export class WorkspaceIndexer {
   }
 
   private getCachedWorkspace(headSha: string, workspaceHash: string): WorkspaceFacts | null {
-    const stmt = this.db.prepare(`
+    const stmt = prepare(`
       SELECT * FROM workspace_analysis
       WHERE head_sha = ? AND workspace_hash = ?
     `);
@@ -364,12 +398,12 @@ export class WorkspaceIndexer {
       risks: row.risks ? JSON.parse(row.risks) : [],
       filesChanged: row.files_changed || 0,
       structuralChangeScore: row.structural_change_score || 0,
-      blastRadius: row.blast_radius || 0
+      blastRadius: row.blast_radius || 0,
     };
   }
 
   private cacheWorkspace(facts: WorkspaceFacts): void {
-    const stmt = this.db.prepare(`
+    const stmt = prepare(`
       INSERT OR REPLACE INTO workspace_analysis
       (head_sha, workspace_hash, symbols_added, symbols_modified, symbols_removed,
        edges_added, edges_removed, risks, files_changed, structural_change_score,
@@ -388,7 +422,7 @@ export class WorkspaceIndexer {
       facts.filesChanged,
       facts.structuralChangeScore,
       facts.blastRadius,
-      new Date().toISOString()
+      new Date().toISOString(),
     ]);
   }
 
@@ -420,12 +454,19 @@ export class WorkspaceIndexer {
 
     try {
       // Parse file via worker
-      const hybridFacts: HybridFact[] = await this.parser.extractHybridFacts(content, filePath, language, existingSymbols);
+      const hybridFacts: HybridFact[] = await this.parser.extractHybridFacts(
+        content,
+        filePath,
+        language,
+        existingSymbols
+      );
 
       // Save via timeline manager
       await this.cstTimelineManager.saveFacts(filePath, version, hybridFacts, prevHash);
       if (hybridFacts.length > 0) {
-        logDebug(`[WorkspaceIndexer] Saved ${hybridFacts.length} hybrid facts for ${filePath}@${version}`);
+        logDebug(
+          `[WorkspaceIndexer] Saved ${hybridFacts.length} hybrid facts for ${filePath}@${version}`
+        );
       }
     } catch (error) {
       logDebug(`[WorkspaceIndexer] Error extracting hybrid facts for ${filePath}: ${error}`);
@@ -444,17 +485,20 @@ export class WorkspaceIndexer {
 
     try {
       // Use worker to extract facts for hash computation
-      const hybridFacts: HybridFact[] = await this.parser.extractHybridFacts(content, filePath, language);
-      const serialized = JSON.stringify(hybridFacts.map((f: any) => ({
-        id: f.id,
-        dnaId: f.dnaId,
-        name: f.name,
-        kind: f.kind
-      })));
-      return crypto.createHash('sha256')
-        .update(serialized)
-        .digest('hex')
-        .substring(0, 16);
+      const hybridFacts: HybridFact[] = await this.parser.extractHybridFacts(
+        content,
+        filePath,
+        language
+      );
+      const serialized = JSON.stringify(
+        hybridFacts.map((f: any) => ({
+          id: f.id,
+          dnaId: f.dnaId,
+          name: f.name,
+          kind: f.kind,
+        }))
+      );
+      return crypto.createHash('sha256').update(serialized).digest('hex').substring(0, 16);
     } catch (error) {
       logDebug(`[WorkspaceIndexer] Error computing file hash for ${filePath}: ${error}`);
       return undefined;
@@ -470,12 +514,14 @@ export class WorkspaceIndexer {
     // Filter files
     const filteredFiles: string[] = [];
     for (const file of allFiles) {
-      if (await filterPath(file, {
-        git: this.git,
-        gitRoot,
-        status: 'M', // Dummy status for filtering
-        skipSizeCheck: true
-      })) {
+      if (
+        await filterPath(file, {
+          git: this.git,
+          gitRoot,
+          status: 'M', // Dummy status for filtering
+          skipSizeCheck: true,
+        })
+      ) {
         filteredFiles.push(file);
       }
     }
@@ -501,7 +547,7 @@ export class WorkspaceIndexer {
             name: part,
             type: isFile ? 'file' : 'folder',
             status: 'unknown', // Default status
-            children: isFile ? [] : []
+            children: isFile ? [] : [],
           };
           map.set(currentPath, node);
           currentLevel.push(node);
@@ -563,7 +609,7 @@ export class WorkspaceIndexer {
           date: new Date().toISOString(),
           message: 'Staged Changes',
           virtual: true,
-          stats: { additions: 0, deletions: 0 } // TODO: Calculate stats
+          stats: { additions: 0, deletions: 0 }, // TODO: Calculate stats
         });
       }
 
@@ -577,10 +623,9 @@ export class WorkspaceIndexer {
           date: new Date().toISOString(),
           message: 'Unstaged Changes',
           virtual: true,
-          stats: { additions: 0, deletions: 0 } // TODO: Calculate stats
+          stats: { additions: 0, deletions: 0 }, // TODO: Calculate stats
         });
       }
-
     } catch (e) {
       // Ignore git errors for new files
     }
@@ -612,8 +657,8 @@ export class WorkspaceIndexer {
         name: s.name,
         kind: s.kind,
         range: s.range,
-        signature: s.signature
-      }))
+        signature: s.signature,
+      })),
     };
   }
 
@@ -631,7 +676,7 @@ export class WorkspaceIndexer {
             symbol: symbol.name,
             issue: 'Naming Convention',
             detail: 'Should be camelCase',
-            severity: 'medium'
+            severity: 'medium',
           });
         }
       } else if (symbol.kind === 'class' || symbol.kind === 'interface') {
@@ -641,7 +686,7 @@ export class WorkspaceIndexer {
             symbol: symbol.name,
             issue: 'Naming Convention',
             detail: 'Should be PascalCase',
-            severity: 'medium'
+            severity: 'medium',
           });
         }
       }
@@ -652,13 +697,25 @@ export class WorkspaceIndexer {
   /**
    * Get context for the Bundle Stage (Heatmap)
    */
-  async getBundleContext(config?: { mode: 'repo' | 'module' | 'changes' | 'custom'; roots: string[]; includeConnected: boolean; exclusions: string[] }): Promise<any> {
+  async getBundleContext(config?: {
+    mode: 'repo' | 'module' | 'changes' | 'custom';
+    roots: string[];
+    includeConnected: boolean;
+    exclusions: string[];
+  }): Promise<any> {
     // 1. Resolve Skeleton
     // Use the ContextSkeletonService to determine the exact list of files to analyze
     // based on the provided configuration (mode, roots, exclusions).
     const { ContextSkeletonService } = await import('../services/contextSkeleton');
     const skeletonService = new ContextSkeletonService();
-    const skeleton = await skeletonService.resolveSkeleton(config || { mode: 'repo', roots: [], includeConnected: false, exclusions: [] });
+    const skeleton = await skeletonService.resolveSkeleton(
+      config || {
+        mode: 'repo',
+        roots: [],
+        includeConnected: false,
+        exclusions: [],
+      }
+    );
 
     // 2. Get hotspots for resolved files
     // We need to filter hotspots by the files in the skeleton
@@ -672,7 +729,13 @@ export class WorkspaceIndexer {
     if (config?.mode === 'changes') {
       for (const file of skeleton.files) {
         if (!filteredHotspots.find(h => h.path === file)) {
-          filteredHotspots.push({ path: file, count: 0, added: 0, removed: 0, size: undefined });
+          filteredHotspots.push({
+            path: file,
+            count: 0,
+            added: 0,
+            removed: 0,
+            size: undefined,
+          });
         }
       }
     }
@@ -684,20 +747,25 @@ export class WorkspaceIndexer {
         name: h.path.split('/').pop(),
         added: h.added,
         removed: h.removed,
-        size: h.size
+        size: h.size,
       })),
       scope: {
         files: skeleton.files.length,
         roots: skeleton.roots,
-        mode: skeleton.mode
-      }
+        mode: skeleton.mode,
+      },
     };
   }
 
   /**
    * Get the skeleton of files to be analyzed based on config
    */
-  async getSkeleton(config: { mode: 'repo' | 'module' | 'changes' | 'custom'; roots: string[]; includeConnected: boolean; exclusions: string[] }): Promise<any> {
+  async getSkeleton(config: {
+    mode: 'repo' | 'module' | 'changes' | 'custom';
+    roots: string[];
+    includeConnected: boolean;
+    exclusions: string[];
+  }): Promise<any> {
     const { ContextSkeletonService } = await import('../services/contextSkeleton');
     const skeletonService = new ContextSkeletonService();
     return skeletonService.resolveSkeleton(config);
@@ -735,9 +803,9 @@ export class WorkspaceIndexer {
     return {
       outgoing: Array.from(imports).map(imp => ({
         target: imp,
-        type: 'import'
+        type: 'import',
       })),
-      incoming: [] // TODO: Reverse index needed for incoming
+      incoming: [], // TODO: Reverse index needed for incoming
     };
   }
 
@@ -766,7 +834,9 @@ export class WorkspaceIndexer {
           symbolRange = symbol.range;
           // Extract content based on range (1-based lines)
           const lines = content.split('\n');
-          symbolContent = lines.slice(symbol.range.start.line - 1, symbol.range.end.line).join('\n');
+          symbolContent = lines
+            .slice(symbol.range.start.line - 1, symbol.range.end.line)
+            .join('\n');
         }
       } catch (e) {
         // ignore
@@ -786,13 +856,17 @@ export class WorkspaceIndexer {
           'log',
           '-L',
           `${symbolRange.start.line},${symbolRange.end.line}:${filePath}`,
-          '--format=%h|%an|%aI|%s'
+          '--format=%h|%an|%aI|%s',
         ]);
 
-        history = stdout.trim().split('\n').filter(Boolean).map(line => {
-          const [hash, author, date, message] = line.split('|');
-          return { hash, author, date, message };
-        });
+        history = stdout
+          .trim()
+          .split('\n')
+          .filter(Boolean)
+          .map(line => {
+            const [hash, author, date, message] = line.split('|');
+            return { hash, author, date, message };
+          });
       } catch (e) {
         // git log -L can fail if lines don't match history, fallback to file history?
         // For now, just return empty
@@ -805,7 +879,7 @@ export class WorkspaceIndexer {
       filePath,
       content: symbolContent,
       range: symbolRange,
-      history
+      history,
     };
   }
 }

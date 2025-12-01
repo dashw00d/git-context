@@ -1,9 +1,8 @@
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
-import { RefactorReportView } from './RefactorReportView';
-import { LlmAnalysis } from '../analysis/llmAnalyst/blocks';
+import { LlmAnalysis, EvidenceLink } from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
-import { EvidenceLink } from '../analysis/llmAnalyst/blocks';
+import { RefactorReportView } from './RefactorReportView';
 
 /**
  * Main entry point for the webview
@@ -51,7 +50,7 @@ window.addEventListener('message', event => {
 const handleEvidenceClick = (evidence: EvidenceLink) => {
   vscode.postMessage({
     type: 'evidenceClick',
-    evidence
+    evidence,
   });
 };
 
@@ -62,7 +61,7 @@ const handleAction = (action: string, data: any) => {
   vscode.postMessage({
     type: 'action',
     action,
-    data
+    data,
   });
 };
 
@@ -74,16 +73,17 @@ function renderApp() {
   if (!rootElement || !analysis || !facts) return;
 
   const root = createRoot(rootElement);
-  root.render(React.createElement(RefactorReportView as any, {
-    analysis,
-    facts,
-    onEvidenceClick: handleEvidenceClick,
-    onAction: handleAction
-  }));
+  root.render(
+    React.createElement(RefactorReportView as any, {
+      analysis,
+      facts,
+      onEvidenceClick: handleEvidenceClick,
+      onAction: handleAction,
+    })
+  );
 }
 
 /**
  * Signal that the webview is ready
  */
 vscode.postMessage({ type: 'ready' });
-

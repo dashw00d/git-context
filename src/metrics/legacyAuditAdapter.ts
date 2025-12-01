@@ -5,11 +5,11 @@
  * Transforms test data to call the real legacy audit logic via V2 detector
  */
 
-import { LegacyDetector, LegacyAuditResult } from '../facts/legacyAudit';
 import { IntendedState } from '../facts/intendedMap';
-import { WorkingSnapshot } from '../facts/workingSnapshot';
+import { LegacyDetector } from '../facts/legacyAudit';
 import { ScopeSet } from '../facts/scope';
-import { SymbolContext } from '../contracts/llmContext';
+import { WorkingSnapshot } from '../facts/workingSnapshot';
+import { logWarn } from '../utils/logger';
 
 export interface LegacyAuditMetrics {
   dead: number;
@@ -25,7 +25,12 @@ export interface LegacyAuditMetrics {
  */
 export async function auditLegacyFromFacts(
   intendedSymbols: Array<{ id: string; expect?: 'present' | 'absent' }>,
-  workingSymbols: Array<{ id: string; name: string; kind: string; filePath?: string }>,
+  workingSymbols: Array<{
+    id: string;
+    name: string;
+    kind: string;
+    filePath?: string;
+  }>,
   edges: Array<{ from: string; to: string; type?: string }>
 ): Promise<LegacyAuditMetrics> {
   try {
@@ -48,7 +53,7 @@ export async function auditLegacyFromFacts(
     for (const symbol of intendedSymbols) {
       intended.set(symbol.id, {
         expect: symbol.expect || 'present',
-        lastSha: 'test-sha'
+        lastSha: 'test-sha',
       });
     }
 
@@ -63,8 +68,8 @@ export async function auditLegacyFromFacts(
         edge_type: (e.type as any) || 'calls',
         change_type: 'added' as const,
         confidence: 1.0,
-        is_resolved: true
-      }))
+        is_resolved: true,
+      })),
     };
 
     for (const symbol of workingSymbols) {
@@ -75,8 +80,8 @@ export async function auditLegacyFromFacts(
         kind: symbol.kind as any,
         loc_post: {
           start: { line: 1, column: 0 },
-          end: { line: 1, column: 0 }
-        }
+          end: { line: 1, column: 0 },
+        },
       });
     }
 
@@ -84,10 +89,10 @@ export async function auditLegacyFromFacts(
     const scope: ScopeSet = {
       commitFiles: new Set(allPaths),
       workingChanged: new Set(allPaths),
-      stagedFiles: new Set(),  // Empty for adapter-based scope
-      unstagedFiles: new Set(),  // Empty for adapter-based scope
+      stagedFiles: new Set(), // Empty for adapter-based scope
+      unstagedFiles: new Set(), // Empty for adapter-based scope
       blastRadius: new Set([...allPaths, ...workingSymbols.map(s => s.id)]),
-      allPaths: new Set([...allPaths, ...workingSymbols.map(s => s.id)])
+      allPaths: new Set([...allPaths, ...workingSymbols.map(s => s.id)]),
     };
 
     // Use V2 detector with BaseDetector enhancements
@@ -95,7 +100,7 @@ export async function auditLegacyFromFacts(
     const result = await legacyDetector.detect({
       intended,
       working,
-      scope
+      scope,
     });
 
     // Transform result to test metrics
@@ -105,13 +110,13 @@ export async function auditLegacyFromFacts(
       replacedLeftovers: result.replacedLeftovers.length,
       totalReachable: working.symbolsById.size - result.dead.length,
       totalUnreachable: result.dead.length,
-      reachabilityRatio: working.symbolsById.size > 0
-        ? (working.symbolsById.size - result.dead.length) / working.symbolsById.size
-        : 1.0
+      reachabilityRatio:
+        working.symbolsById.size > 0
+          ? (working.symbolsById.size - result.dead.length) / working.symbolsById.size
+          : 1.0,
     };
-
   } catch (error) {
-    console.warn('Legacy audit failed, returning minimal metrics:', error);
+    logWarn(`Legacy audit failed, returning minimal metrics: ${error}`);
     // Return minimal metrics on failure
     return {
       dead: 0,
@@ -119,7 +124,7 @@ export async function auditLegacyFromFacts(
       replacedLeftovers: 0,
       totalReachable: workingSymbols.length,
       totalUnreachable: 0,
-      reachabilityRatio: 1.0
+      reachabilityRatio: 1.0,
     };
   }
 }
@@ -149,8 +154,9 @@ export function auditLegacySimple(
     replacedLeftovers: 0, // Simplified
     totalReachable: workingSymbols.length - deadSymbols.length,
     totalUnreachable: deadSymbols.length,
-    reachabilityRatio: workingSymbols.length > 0
-      ? (workingSymbols.length - deadSymbols.length) / workingSymbols.length
-      : 1.0
+    reachabilityRatio:
+      workingSymbols.length > 0
+        ? (workingSymbols.length - deadSymbols.length) / workingSymbols.length
+        : 1.0,
   };
 }

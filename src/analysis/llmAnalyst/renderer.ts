@@ -1,5 +1,5 @@
-import { LlmAnalysis, AnalysisBlock, AnalysisBlockUtils, EvidenceLink } from './blocks';
 import { RefactorBundleFacts } from '../../facts/types';
+import { LlmAnalysis, AnalysisBlock, AnalysisBlockUtils, EvidenceLink } from './blocks';
 
 /**
  * Resolve evidence JSON path to file location
@@ -40,7 +40,7 @@ export function resolveEvidencePath(
       return {
         filePath,
         lineNumber,
-        description: evidencePath
+        description: evidencePath,
       };
     }
 
@@ -54,7 +54,7 @@ export function resolveEvidencePath(
           return {
             filePath,
             lineNumber: evidenceItem.loc_pre?.start?.line || evidenceItem.loc_post?.start?.line,
-            description: evidencePath
+            description: evidencePath,
           };
         }
       }
@@ -75,7 +75,7 @@ export function resolveEvidencePath(
   if (current !== undefined && current !== null) {
     return {
       filePath: evidencePath, // Use path as file path for non-symbol evidence
-      description: evidencePath
+      description: evidencePath,
     };
   }
 
@@ -87,7 +87,6 @@ export function resolveEvidencePath(
  * Generates interwoven markdown with clickable evidence links
  */
 export class AnalysisRenderer {
-
   /**
    * Render complete analysis to markdown
    */
@@ -115,17 +114,15 @@ export class AnalysisRenderer {
    * Filter out low-value content from blocks
    */
   private filterLowValueContent(blocks: AnalysisBlock[]): AnalysisBlock[] {
-    return blocks.map(block => ({
-      ...block,
-      claims: block.claims.filter(c => 
-        c.severity !== 'low' || c.confidence >= 0.8
-      ),
-      actions: block.actions.filter(a =>
-        a.priority !== 'low' || (a.effort === 'xs' && a.risk === 'low')
-      )
-    })).filter(block => 
-      block.claims.length > 0 || block.actions.length > 0
-    );
+    return blocks
+      .map(block => ({
+        ...block,
+        claims: block.claims.filter(c => c.severity !== 'low' || c.confidence >= 0.8),
+        actions: block.actions.filter(
+          a => a.priority !== 'low' || (a.effort === 'xs' && a.risk === 'low')
+        ),
+      }))
+      .filter(block => block.claims.length > 0 || block.actions.length > 0);
   }
 
   /**
@@ -139,7 +136,7 @@ export class AnalysisRenderer {
     // Incompleteness section
     if (facts.findings.incompleteness.missing > 0 || facts.findings.incompleteness.zombies > 0) {
       content += `### {#incompleteness} Incompleteness Analysis\n\n`;
-      
+
       if (facts.findings.incompleteness.missing > 0) {
         content += `#### {#incompleteness-missing} Missing Additions (${facts.findings.incompleteness.missing})\n\n`;
         content += `Symbols added in commits but not found in working tree.\n\n`;
@@ -171,9 +168,12 @@ export class AnalysisRenderer {
     }
 
     // Drift section
-    if (facts.findings.patternDrift.mixedTargets > 0 || facts.findings.patternDrift.oldNamespaces > 0) {
+    if (
+      facts.findings.patternDrift.mixedTargets > 0 ||
+      facts.findings.patternDrift.oldNamespaces > 0
+    ) {
       content += `### {#drift} Pattern Drift Analysis\n\n`;
-      
+
       const hotspots = facts.evidence?.['findings.drift.hotspots'] || [];
       if (hotspots.length > 0) {
         content += `#### {#drift-hotspots} Drift Hotspots (${hotspots.length})\n\n`;
@@ -202,9 +202,12 @@ export class AnalysisRenderer {
     }
 
     // Legacy section
-    if (facts.findings.legacyAudit.dead > 0 || facts.findings.legacyAudit.replacedLeftovers.length > 0) {
+    if (
+      facts.findings.legacyAudit.dead > 0 ||
+      facts.findings.legacyAudit.replacedLeftovers.length > 0
+    ) {
       content += `### {#legacy} Legacy Audit\n\n`;
-      
+
       if (facts.findings.legacyAudit.dead > 0) {
         content += `#### {#legacy-dead} Dead Code (${facts.findings.legacyAudit.dead})\n\n`;
         content += `Symbols no longer used.\n\n`;
@@ -247,7 +250,7 @@ export class AnalysisRenderer {
   private renderHeader(analysis: LlmAnalysis, facts: RefactorBundleFacts): string {
     const healthScore = this.calculateHealthScore(facts);
     const healthIndicator = healthScore >= 80 ? '✅' : healthScore >= 60 ? '⚠️' : '🔴';
-    
+
     let header = `# 🤖 LLM Analysis Report\n\n`;
     header += `**Generated:** ${new Date(analysis.metadata.timestamp).toLocaleString()}\n`;
     header += `**Bundle:** ${facts.bundle.shas.length} commits (${facts.bundle.oldestSha.substring(0, 8)}...)\n`;
@@ -270,14 +273,18 @@ export class AnalysisRenderer {
     let footer = `---\n\n`;
     footer += `**Analysis Details:** ${analysis.metadata.totalCalls} LLM calls, `;
     footer += `~${analysis.metadata.totalTokens.toLocaleString()} tokens\n`;
-    
+
     // Include health score in footer if available
     if (analysis.metadata.healthScore !== undefined) {
-      const healthIndicator = analysis.metadata.healthScore >= 80 ? '✅' : 
-                             analysis.metadata.healthScore >= 60 ? '⚠️' : '🔴';
+      const healthIndicator =
+        analysis.metadata.healthScore >= 80
+          ? '✅'
+          : analysis.metadata.healthScore >= 60
+            ? '⚠️'
+            : '🔴';
       footer += `**Refactor Health:** ${analysis.metadata.healthScore.toFixed(0)}/100 ${healthIndicator}\n`;
     }
-    
+
     footer += `*Generated by Git Context v2 LLM Analyst*\n`;
 
     return footer;
@@ -299,7 +306,7 @@ export class AnalysisRenderer {
     // Actions value: priority + impact/effort ratio
     const priorityWeight = { urgent: 10, high: 5, medium: 2, low: 1 };
     const effortWeight = { xs: 5, s: 4, m: 3, l: 2, xl: 1 };
-    
+
     block.actions.forEach(action => {
       const impactScore = priorityWeight[action.priority] * effortWeight[action.effort];
       // Prefer low-risk actions (multiply by 1.5 for low risk)
@@ -322,24 +329,24 @@ export class AnalysisRenderer {
    * Higher score = healthier refactor (fewer issues)
    */
   private calculateHealthScore(facts: RefactorBundleFacts): number {
-    const totalIssues = 
+    const totalIssues =
       facts.findings.incompleteness.missing +
       facts.findings.incompleteness.zombies +
       facts.findings.legacyAudit.dead;
-    
+
     const totalSymbols = facts.working.symbols;
     const issueRate = totalSymbols > 0 ? totalIssues / totalSymbols : 0;
-    
+
     // Base score: 100 = perfect, 0 = terrible
     // Lower issue rate = higher score
-    const baseScore = Math.max(0, 100 - (issueRate * 100));
-    
+    const baseScore = Math.max(0, 100 - issueRate * 100);
+
     // Penalties for critical issues (missing symbols are most critical)
     const criticalPenalty = facts.findings.incompleteness.missing * 2;
-    
+
     // Additional penalty for high zombie count (indicates incomplete cleanup)
     const zombiePenalty = facts.findings.incompleteness.zombies * 0.5;
-    
+
     return Math.max(0, Math.min(100, baseScore - criticalPenalty - zombiePenalty));
   }
 
@@ -351,12 +358,12 @@ export class AnalysisRenderer {
     return blocks.sort((a, b) => {
       const valueA = this.calculateBlockValue(a);
       const valueB = this.calculateBlockValue(b);
-      
+
       // Sort by value score (descending)
       if (valueB !== valueA) {
         return valueB - valueA;
       }
-      
+
       // Fallback to confidence within same value tier
       return b.confidence - a.confidence;
     });
@@ -368,7 +375,7 @@ export class AnalysisRenderer {
   private renderBlock(block: AnalysisBlock, facts: RefactorBundleFacts): string {
     const icon = this.getBlockIcon(block.type);
     const valueScore = this.calculateBlockValue(block);
-    
+
     // Show value indicator for high-value blocks
     let content = `## ${icon} ${block.title}`;
     if (valueScore > 20) {
@@ -377,11 +384,11 @@ export class AnalysisRenderer {
     content += `\n\n`;
 
     // Separate critical/high claims from others
-    const criticalClaims = block.claims.filter(c => 
-      c.severity === 'critical' || c.severity === 'high'
+    const criticalClaims = block.claims.filter(
+      c => c.severity === 'critical' || c.severity === 'high'
     );
-    const otherClaims = block.claims.filter(c => 
-      c.severity !== 'critical' && c.severity !== 'high'
+    const otherClaims = block.claims.filter(
+      c => c.severity !== 'critical' && c.severity !== 'high'
     );
 
     // Render critical findings first
@@ -397,11 +404,11 @@ export class AnalysisRenderer {
     }
 
     // Separate urgent/high actions from others
-    const urgentActions = block.actions.filter(a => 
-      a.priority === 'urgent' || a.priority === 'high'
+    const urgentActions = block.actions.filter(
+      a => a.priority === 'urgent' || a.priority === 'high'
     );
-    const otherActions = block.actions.filter(a => 
-      a.priority !== 'urgent' && a.priority !== 'high'
+    const otherActions = block.actions.filter(
+      a => a.priority !== 'urgent' && a.priority !== 'high'
     );
 
     // Render immediate actions first
@@ -430,12 +437,18 @@ export class AnalysisRenderer {
    */
   private getBlockIcon(type: AnalysisBlock['type']): string {
     switch (type) {
-      case 'intent': return '🎯';
-      case 'discovery': return '💡';
-      case 'drift': return '🔍';
-      case 'cleanup': return '🧹';
-      case 'summary': return '📊';
-      default: return '📝';
+      case 'intent':
+        return '🎯';
+      case 'discovery':
+        return '💡';
+      case 'drift':
+        return '🔍';
+      case 'cleanup':
+        return '🧹';
+      case 'summary':
+        return '📊';
+      default:
+        return '📝';
     }
   }
 
@@ -444,7 +457,12 @@ export class AnalysisRenderer {
    */
   private renderClaims(claims: any[], facts: RefactorBundleFacts): string {
     // Sort by severity (critical > high > medium > low) then confidence
-    const severityOrder: Record<'critical' | 'high' | 'medium' | 'low', number> = { critical: 4, high: 3, medium: 2, low: 1 };
+    const severityOrder: Record<'critical' | 'high' | 'medium' | 'low', number> = {
+      critical: 4,
+      high: 3,
+      medium: 2,
+      low: 1,
+    };
     const sortedClaims = [...claims].sort((a: any, b: any) => {
       const aSeverity = a.severity as 'critical' | 'high' | 'medium' | 'low';
       const bSeverity = b.severity as 'critical' | 'high' | 'medium' | 'low';
@@ -537,7 +555,7 @@ export class AnalysisRenderer {
       filePath: evidence.filePath,
       lineNumber: evidence.lineNumber,
       symbolId: evidence.symbolId,
-      origin: (evidence as any).origin
+      origin: (evidence as any).origin,
     };
 
     // If we have symbolId but no filePath, try to resolve it
@@ -554,10 +572,10 @@ export class AnalysisRenderer {
 
     // VS Code command URIs require arguments to be a JSON array, URI encoded
     const encodedArgs = encodeURIComponent(JSON.stringify([args]));
-    
+
     // Generate smart link text
     let linkText = evidence.description;
-    
+
     // If description looks like a raw path, generate a better one
     if (this.looksLikeRawPath(evidence.description)) {
       linkText = AnalysisBlockUtils.parseEvidencePathToDescription(evidence.path);
@@ -565,7 +583,7 @@ export class AnalysisRenderer {
 
     // Build additional context info
     let extraInfo = '';
-    
+
     // Try to resolve count from facts
     const count = this.resolveEvidenceCount(evidence.path, facts);
     if (count !== null) {
@@ -638,11 +656,16 @@ export class AnalysisRenderer {
    */
   private getSeverityIcon(severity: string): string {
     switch (severity) {
-      case 'critical': return '🚨';
-      case 'high': return '🔴';
-      case 'medium': return '🟡';
-      case 'low': return '🟢';
-      default: return '⚪';
+      case 'critical':
+        return '🚨';
+      case 'high':
+        return '🔴';
+      case 'medium':
+        return '🟡';
+      case 'low':
+        return '🟢';
+      default:
+        return '⚪';
     }
   }
 
@@ -651,11 +674,16 @@ export class AnalysisRenderer {
    */
   private getPriorityIcon(priority: string): string {
     switch (priority) {
-      case 'urgent': return '🚨';
-      case 'high': return '🔴';
-      case 'medium': return '🟡';
-      case 'low': return '🟢';
-      default: return '⚪';
+      case 'urgent':
+        return '🚨';
+      case 'high':
+        return '🔴';
+      case 'medium':
+        return '🟡';
+      case 'low':
+        return '🟢';
+      default:
+        return '⚪';
     }
   }
 
@@ -664,10 +692,14 @@ export class AnalysisRenderer {
    */
   private getRiskIcon(risk: string): string {
     switch (risk) {
-      case 'high': return '⚠️';
-      case 'medium': return '⚡';
-      case 'low': return '✅';
-      default: return '❓';
+      case 'high':
+        return '⚠️';
+      case 'medium':
+        return '⚡';
+      case 'low':
+        return '✅';
+      default:
+        return '❓';
     }
   }
 
@@ -684,8 +716,11 @@ export class AnalysisRenderer {
    */
   static generateQuickStats(analysis: LlmAnalysis, facts: RefactorBundleFacts): string {
     const totalActions = analysis.blocks.reduce((sum, block) => sum + block.actions.length, 0);
-    const highPriorityActions = analysis.blocks.reduce((sum, block) =>
-      sum + block.actions.filter(a => a.priority === 'high' || a.priority === 'urgent').length, 0);
+    const highPriorityActions = analysis.blocks.reduce(
+      (sum, block) =>
+        sum + block.actions.filter(a => a.priority === 'high' || a.priority === 'urgent').length,
+      0
+    );
 
     let stats = `📊 **Analysis Results:** `;
     stats += `${analysis.blocks.length} analysis sections, `;
@@ -708,7 +743,7 @@ export class AnalysisRenderer {
     }
 
     let content = `### {#convention-drift} Naming Convention Analysis\n\n`;
-    
+
     content += `**Dominant Convention:** \`${conventionDrift.dominantConvention}\`\n`;
     content += `**Drift:** ${conventionDrift.driftPercent.toFixed(1)}% of symbols use different conventions\n\n`;
 
@@ -720,11 +755,11 @@ export class AnalysisRenderer {
       content += `#### Symbols to Migrate (${driftSymbols.length})\n\n`;
       content += `| Current Name | Convention | Suggested Name | Path |\n`;
       content += `|-------------|------------|----------------|------|\n`;
-      
+
       for (const ds of driftSymbols.slice(0, 30)) {
         content += `| \`${ds.name}\` | ${ds.convention} | \`${ds.suggestedName}\` | \`${ds.path}\` |\n`;
       }
-      
+
       if (driftSymbols.length > 30) {
         content += `\n*... and ${driftSymbols.length - 30} more symbols*\n`;
       }
@@ -773,12 +808,12 @@ export class AnalysisRenderer {
       const mixedFilesList = facts.evidence?.['findings.patternDrift.mixedConventionFiles'] || [];
       content += `#### Files with Mixed Conventions (${mixedFiles})\n\n`;
       content += `Files containing symbols using multiple naming conventions:\n\n`;
-      
+
       for (const file of (mixedFilesList as any[]).slice(0, 15)) {
         const conventions = file.conventions?.join(', ') || 'unknown';
         content += `- \`${file.path}\` - ${conventions} (${file.symbolCount} symbols, ${file.driftPercent.toFixed(1)}% drift)\n`;
       }
-      
+
       if (mixedFilesList.length > 15) {
         content += `\n*... and ${mixedFilesList.length - 15} more files*\n`;
       }

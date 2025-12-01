@@ -1,20 +1,37 @@
-import { RefactorBundleFacts } from '../../facts/types';
-import { LlmAnalysis, AnalysisBlock, AnalysisBlockUtils, Claim, Action } from './blocks';
-import { PROMPT_INTENT_AND_STORY, PROMPT_DRIFT_VERIFICATION, PROMPT_CLEANUP_PLAN, PROMPT_DISCOVER, PROMPT_QUANTIFY, PROMPT_PLAN, SYSTEM_PROMPT, buildTimelineSummary } from '../../llm/prompts';
-import { getLLMClient } from '../../llm/openrouter';
-import { getExtensionConfig, getGitRoot } from '../../utils/config';
 import * as fs from 'fs';
 import * as path from 'path';
+import { RefactorBundleFacts } from '../../facts/types';
+import { getLLMClient } from '../../llm/openrouter';
+import {
+  PROMPT_CLEANUP_PLAN,
+  PROMPT_DISCOVER,
+  PROMPT_DRIFT_VERIFICATION,
+  PROMPT_INTENT_AND_STORY,
+  PROMPT_PLAN,
+  PROMPT_QUANTIFY,
+  SYSTEM_PROMPT,
+  buildTimelineSummary,
+} from '../../llm/prompts';
+import { getExtensionConfig, getGitRoot } from '../../utils/config';
+import { logError, logInfo, logWarn } from '../../utils/logger';
+import { Action, AnalysisBlock, AnalysisBlockUtils, Claim, LlmAnalysis } from './blocks';
 
 /**
  * LLM Analyst - Runs sequential analysis passes over refactor bundle facts
  */
 export class LlmAnalyst {
   private client = getLLMClient();
-  private llmCallTracker?: (purpose: string, model?: string, tokens?: number, duration?: number) => void;
+  private llmCallTracker?: (
+    purpose: string,
+    model?: string,
+    tokens?: number,
+    duration?: number
+  ) => void;
   private maxInputChars: number = 1000000; // Default 1M chars
 
-  setLLMCallTracker(tracker: (purpose: string, model?: string, tokens?: number, duration?: number) => void) {
+  setLLMCallTracker(
+    tracker: (purpose: string, model?: string, tokens?: number, duration?: number) => void
+  ) {
     this.llmCallTracker = tracker;
   }
 
@@ -32,7 +49,7 @@ export class LlmAnalyst {
       endTime: 0,
       duration: 0,
       totalTokens,
-      totalCalls
+      totalCalls,
     };
 
     // Get config for maxInputChars
@@ -48,34 +65,43 @@ export class LlmAnalyst {
     let processedFacts = slimFacts;
 
     if (factsSize > this.maxInputChars) {
-      console.log(`LLM Analyst: Facts size (${factsSize} chars) exceeds max (${this.maxInputChars}), summarizing...`);
+      logInfo(
+        `LLM Analyst: Facts size (${factsSize} chars) exceeds max (${this.maxInputChars}), summarizing...`
+      );
       processedFacts = this.summarizeFacts(slimFacts);
 
       // Check if still too large, apply deep summarization
       if (JSON.stringify(processedFacts).length > this.maxInputChars * 0.8) {
-        console.log('LLM Analyst: Still too large, applying deep summarization...');
+        logInfo('LLM Analyst: Still too large, applying deep summarization...');
         processedFacts = this.deepSummarize(processedFacts);
       }
 
       const summarizedSize = JSON.stringify(processedFacts).length;
-      console.log(`LLM Analyst: Summarized to ${summarizedSize} chars (${((1 - summarizedSize / factsSize) * 100).toFixed(1)}% reduction)`);
+      logInfo(
+        `LLM Analyst: Summarized to ${summarizedSize} chars (${(
+          (1 - summarizedSize / factsSize) *
+          100
+        ).toFixed(1)}% reduction)`
+      );
     }
 
     try {
       // Pass 1: Intent & Story Analysis (use summarized facts)
-      console.log('LLM Analyst: Running intent analysis...');
+      logInfo('LLM Analyst: Running intent analysis...');
       const intentBlock = await this.analyzeIntent(processedFacts);
       totalCalls++;
       totalTokens += this.estimateTokens(JSON.stringify(processedFacts) + PROMPT_INTENT_AND_STORY);
 
       // Pass 2: Drift Verification (use summarized facts)
-      console.log('LLM Analyst: Running drift verification...');
+      logInfo('LLM Analyst: Running drift verification...');
       const driftBlock = await this.analyzeDrift(processedFacts);
       totalCalls++;
-      totalTokens += this.estimateTokens(JSON.stringify(processedFacts) + PROMPT_DRIFT_VERIFICATION);
+      totalTokens += this.estimateTokens(
+        JSON.stringify(processedFacts) + PROMPT_DRIFT_VERIFICATION
+      );
 
       // Pass 3: Cleanup Plan (use summarized facts)
-      console.log('LLM Analyst: Generating cleanup plan...');
+      logInfo('LLM Analyst: Generating cleanup plan...');
       const cleanupBlock = await this.analyzeCleanup(processedFacts);
       totalCalls++;
       totalTokens += this.estimateTokens(JSON.stringify(processedFacts) + PROMPT_CLEANUP_PLAN);
@@ -83,7 +109,7 @@ export class LlmAnalyst {
       // Pass 4: Pattern Discovery (if raw feed provided)
       let discoveryBlock: AnalysisBlock | undefined;
       if (rawFeed) {
-        console.log('LLM Analyst: Running pattern discovery...');
+        logInfo('LLM Analyst: Running pattern discovery...');
         const discoveryResult = await this.discoverPatterns(rawFeed, processedFacts);
         discoveryBlock = this.createDiscoveryBlock(discoveryResult, facts);
         totalCalls += 3; // Discover, Quantify, Plan
@@ -105,7 +131,9 @@ export class LlmAnalyst {
       performanceMetrics.totalCalls = totalCalls;
 
       // Log performance metrics
-      console.log(`[LLMAnalyst] Analysis completed in ${performanceMetrics.duration}ms (${totalCalls} calls, ~${totalTokens} tokens)`);
+      logInfo(
+        `[LLMAnalyst] Analysis completed in ${performanceMetrics.duration}ms (${totalCalls} calls, ~${totalTokens} tokens)`
+      );
 
       // Calculate health score
       const healthScore = this.calculateHealthScore(facts);
@@ -113,11 +141,20 @@ export class LlmAnalyst {
       // Calculate validated evidence count (evidence with valid filePath in scope.files)
       const knownFiles = new Set((facts.evidence['scope.files'] as string[]) || []);
       const validatedEvidenceCount = blocks.reduce((acc, block) => {
-        return acc + block.claims.reduce((claimAcc, claim) => {
-          return claimAcc + claim.evidence.filter(e => e.filePath && knownFiles.has(e.filePath)).length;
-        }, 0) + block.actions.reduce((actionAcc, action) => {
-          return actionAcc + action.evidence.filter(e => e.filePath && knownFiles.has(e.filePath)).length;
-        }, 0);
+        return (
+          acc +
+          block.claims.reduce((claimAcc, claim) => {
+            return (
+              claimAcc + claim.evidence.filter(e => e.filePath && knownFiles.has(e.filePath)).length
+            );
+          }, 0) +
+          block.actions.reduce((actionAcc, action) => {
+            return (
+              actionAcc +
+              action.evidence.filter(e => e.filePath && knownFiles.has(e.filePath)).length
+            );
+          }, 0)
+        );
       }, 0);
 
       return {
@@ -131,31 +168,34 @@ export class LlmAnalyst {
           model: getExtensionConfig().openRouterModel,
           timestamp: new Date().toISOString(),
           healthScore,
-          validatedEvidenceCount
-        }
+          validatedEvidenceCount,
+        },
       };
-
     } catch (error) {
-      console.error('LLM Analyst failed:', error);
+      logError('LLM Analyst failed:', error);
 
       // Return minimal fallback analysis
       const fallbackBlock = AnalysisBlockUtils.createBlock(
         'error',
         'Analysis Error',
         'summary',
-        [{
-          text: `LLM analysis failed: ${error}`,
-          confidence: 0,
-          evidence: [],
-          severity: 'high'
-        }],
-        [{
-          description: 'Retry analysis or check LLM configuration',
-          priority: 'high',
-          evidence: [],
-          effort: 's',
-          risk: 'low'
-        }]
+        [
+          {
+            text: `LLM analysis failed: ${error}`,
+            confidence: 0,
+            evidence: [],
+            severity: 'high',
+          },
+        ],
+        [
+          {
+            description: 'Retry analysis or check LLM configuration',
+            priority: 'high',
+            evidence: [],
+            effort: 's',
+            risk: 'low',
+          },
+        ]
       );
 
       // Calculate health score even for error case
@@ -171,8 +211,8 @@ export class LlmAnalyst {
           durationMs: Date.now() - startTime,
           model: 'unknown',
           timestamp: new Date().toISOString(),
-          healthScore
-        }
+          healthScore,
+        },
       };
     }
   }
@@ -188,12 +228,13 @@ export class LlmAnalyst {
     try {
       // Get known files from facts for grounding examples
       const knownFiles = (facts.evidence['scope.files'] as string[]) || [];
-      const knownFilesList = knownFiles.length > 0
-        ? `\n\nKNOWN FILES (ONLY use these in examples):\n${JSON.stringify(knownFiles)}\n\n`
-        : '\n\n';
+      const knownFilesList =
+        knownFiles.length > 0
+          ? `\n\nKNOWN FILES (ONLY use these in examples):\n${JSON.stringify(knownFiles)}\n\n`
+          : '\n\n';
 
       // Turn 1: Discover Patterns
-      console.log('LLM Analyst: Discovering emergent patterns...');
+      logInfo('LLM Analyst: Discovering emergent patterns...');
 
       // Use curated discovery feed if available (efficient), otherwise fallback to raw feed (expensive)
       const discoveryInput = (facts as any).discoveryFeed
@@ -206,16 +247,20 @@ export class LlmAnalyst {
       totalTokens += this.estimateTokens(discoverPrompt);
 
       // Turn 2: Quantify Impact
-      console.log('LLM Analyst: Quantifying patterns...');
+      logInfo('LLM Analyst: Quantifying patterns...');
       const quantifyPromptTemplate = this.getPrompt('quantify', PROMPT_QUANTIFY);
-      const quantifyPrompt = `${SYSTEM_PROMPT}\n\nDISCOVERED PATTERNS:\n${JSON.stringify(discovery)}\n\n${quantifyPromptTemplate}`;
+      const quantifyPrompt = `${SYSTEM_PROMPT}\n\nDISCOVERED PATTERNS:\n${JSON.stringify(
+        discovery
+      )}\n\n${quantifyPromptTemplate}`;
       const quantified = await this.callLLM(quantifyPrompt, 'quantify');
       totalTokens += this.estimateTokens(quantifyPrompt);
 
       // Turn 3: Plan Synthesis
-      console.log('LLM Analyst: Synthesizing fix plan...');
+      logInfo('LLM Analyst: Synthesizing fix plan...');
       const planPromptTemplate = this.getPrompt('plan', PROMPT_PLAN);
-      const planPrompt = `${SYSTEM_PROMPT}\n\nQUANTIFIED PATTERNS:\n${JSON.stringify(quantified)}\n\n${planPromptTemplate}`;
+      const planPrompt = `${SYSTEM_PROMPT}\n\nQUANTIFIED PATTERNS:\n${JSON.stringify(
+        quantified
+      )}\n\n${planPromptTemplate}`;
       const plan = await this.callLLM(planPrompt, 'plan');
       totalTokens += this.estimateTokens(planPrompt);
 
@@ -226,12 +271,11 @@ export class LlmAnalyst {
         metadata: {
           totalTokens,
           duration: Date.now() - startTime,
-          model: getExtensionConfig().openRouterModel
-        }
+          model: getExtensionConfig().openRouterModel,
+        },
       };
-
     } catch (error) {
-      console.error('Pattern discovery failed:', error);
+      logError('Pattern discovery failed:', error);
       return { error: String(error) };
     }
   }
@@ -248,11 +292,7 @@ export class LlmAnalyst {
     const prompt = this.buildPrompt(promptWithTimeline, facts);
     const response = await this.callLLM(prompt, 'intent');
 
-    const block = AnalysisBlockUtils.createBlock(
-      'intent',
-      'Refactor Intent & Story',
-      'intent'
-    );
+    const block = AnalysisBlockUtils.createBlock('intent', 'Refactor Intent & Story', 'intent');
 
     // Parse the LLM response and extract claims
     const claims = this.parseIntentResponse(response, facts);
@@ -273,11 +313,7 @@ export class LlmAnalyst {
     const prompt = this.buildPrompt(promptWithTimeline, facts);
     const response = await this.callLLM(prompt, 'drift');
 
-    const block = AnalysisBlockUtils.createBlock(
-      'drift',
-      'Drift Verification',
-      'drift'
-    );
+    const block = AnalysisBlockUtils.createBlock('drift', 'Drift Verification', 'drift');
 
     // Parse drift verification response
     const { claims, actions } = this.parseDriftResponse(response, facts);
@@ -299,11 +335,7 @@ export class LlmAnalyst {
     const prompt = this.buildPrompt(promptWithTimeline, facts);
     const response = await this.callLLM(prompt, 'cleanup');
 
-    const block = AnalysisBlockUtils.createBlock(
-      'cleanup',
-      'Cleanup Plan',
-      'cleanup'
-    );
+    const block = AnalysisBlockUtils.createBlock('cleanup', 'Cleanup Plan', 'cleanup');
 
     // Parse cleanup plan response
     const { claims, actions } = this.parseCleanupResponse(response, facts);
@@ -334,7 +366,7 @@ export class LlmAnalyst {
         severity: p.impact === 'high' ? 'high' : 'medium',
         evidence: (p.examples || []).map((ex: string) =>
           AnalysisBlockUtils.createEvidenceAuto(ex, `${p.name} example`, knownFiles)
-        )
+        ),
       }));
     }
 
@@ -345,13 +377,15 @@ export class LlmAnalyst {
         priority: 'high',
         effort: 'medium',
         risk: 'medium',
-        evidence: (p.fixes || []).slice(0, 3).map((fix: any) =>
-          AnalysisBlockUtils.createEvidenceAuto(
-            fix.file || p.pattern,
-            `${fix.before ? `Change: ${fix.before.substring(0, 30)}...` : p.pattern}`
-          )
-        ),
-        dependsOn: []
+        evidence: (p.fixes || [])
+          .slice(0, 3)
+          .map((fix: any) =>
+            AnalysisBlockUtils.createEvidenceAuto(
+              fix.file || p.pattern,
+              `${fix.before ? `Change: ${fix.before.substring(0, 30)}...` : p.pattern}`
+            )
+          ),
+        dependsOn: [],
       }));
     }
 
@@ -395,8 +429,8 @@ export class LlmAnalyst {
     const messages = [
       {
         role: 'user' as const,
-        content: prompt
-      }
+        content: prompt,
+      },
     ];
 
     const maxTokens = this.getMaxTokens(stepKey);
@@ -408,7 +442,7 @@ export class LlmAnalyst {
 
     const response = await this.client.complete(messages, {
       temperature: 0.1,
-      maxTokens
+      maxTokens,
     });
 
     // Track completion
@@ -434,7 +468,7 @@ export class LlmAnalyst {
       // If no braces found, try parsing the whole string
       return JSON.parse(jsonStr);
     } catch (error) {
-      console.warn('Failed to parse LLM response as JSON, falling back to string parsing:', error);
+      logWarn(`Failed to parse LLM response as JSON, falling back to string parsing: ${error}`);
       return { raw: response };
     }
   }
@@ -453,7 +487,7 @@ export class LlmAnalyst {
         severity: claim.severity || 'medium',
         evidence: (claim.evidence || []).map((path: string) =>
           AnalysisBlockUtils.createEvidenceAuto(path)
-        )
+        ),
       }));
     }
 
@@ -462,17 +496,21 @@ export class LlmAnalyst {
       const rawResponse = response.raw.toLowerCase();
 
       // Look for problem identification
-      if (rawResponse.includes('problem') ||
+      if (
+        rawResponse.includes('problem') ||
         rawResponse.includes('issue') ||
-        rawResponse.includes('trying to solve')) {
+        rawResponse.includes('trying to solve')
+      ) {
         claims.push({
           text: 'Refactor addresses specific architectural problems',
           confidence: 0.9,
-          evidence: [AnalysisBlockUtils.createEvidence(
-            'bundle.shas',
-            'Bundle contains multiple related commits'
-          )],
-          severity: 'medium'
+          evidence: [
+            AnalysisBlockUtils.createEvidence(
+              'bundle.shas',
+              'Bundle contains multiple related commits'
+            ),
+          ],
+          severity: 'medium',
         });
       }
 
@@ -482,11 +520,10 @@ export class LlmAnalyst {
         claims.push({
           text: 'Large-scale refactor affecting many symbols',
           confidence: 0.95,
-          evidence: [AnalysisBlockUtils.createEvidence(
-            'intended',
-            `${totalChanges} symbols affected`
-          )],
-          severity: 'high'
+          evidence: [
+            AnalysisBlockUtils.createEvidence('intended', `${totalChanges} symbols affected`),
+          ],
+          severity: 'high',
         });
       }
     }
@@ -497,33 +534,40 @@ export class LlmAnalyst {
   /**
    * Parse drift verification response
    */
-  private parseDriftResponse(response: any, facts: RefactorBundleFacts): { claims: any[], actions: any[] } {
+  private parseDriftResponse(
+    response: any,
+    facts: RefactorBundleFacts
+  ): { claims: any[]; actions: any[] } {
     const claims = [];
     const actions = [];
 
     // If response is parsed JSON
     if (response.claims && Array.isArray(response.claims)) {
-      claims.push(...response.claims.map((claim: any) => ({
-        text: claim.text,
-        confidence: claim.confidence || 0.8,
-        severity: claim.severity || 'medium',
-        evidence: (claim.evidence || []).map((path: string) =>
-          AnalysisBlockUtils.createEvidenceAuto(path)
-        )
-      })));
+      claims.push(
+        ...response.claims.map((claim: any) => ({
+          text: claim.text,
+          confidence: claim.confidence || 0.8,
+          severity: claim.severity || 'medium',
+          evidence: (claim.evidence || []).map((path: string) =>
+            AnalysisBlockUtils.createEvidenceAuto(path)
+          ),
+        }))
+      );
     }
 
     if (response.actions && Array.isArray(response.actions)) {
-      actions.push(...response.actions.map((action: any) => ({
-        description: action.description,
-        priority: action.priority || 'medium',
-        effort: action.effort || 'medium',
-        risk: action.risk || 'low',
-        evidence: (action.evidence || []).map((path: string) =>
-          AnalysisBlockUtils.createEvidenceAuto(path)
-        ),
-        dependsOn: action.dependsOn || []
-      })));
+      actions.push(
+        ...response.actions.map((action: any) => ({
+          description: action.description,
+          priority: action.priority || 'medium',
+          effort: action.effort || 'medium',
+          risk: action.risk || 'low',
+          evidence: (action.evidence || []).map((path: string) =>
+            AnalysisBlockUtils.createEvidenceAuto(path)
+          ),
+          dependsOn: action.dependsOn || [],
+        }))
+      );
     }
 
     // Fallback to existing logic if no structured data
@@ -532,39 +576,52 @@ export class LlmAnalyst {
 
       // Check for incompleteness validation
       if (facts.findings.incompleteness.missing > 0) {
-        if (rawResponse.includes('real') ||
+        if (
+          rawResponse.includes('real') ||
           rawResponse.includes('valid') ||
-          rawResponse.includes('confirmed')) {
+          rawResponse.includes('confirmed')
+        ) {
           claims.push({
             text: 'Missing symbols are real issues requiring completion',
             confidence: 0.8,
-            evidence: [AnalysisBlockUtils.createEvidence(
-              'findings.incompleteness.missing',
-              `${facts.findings.incompleteness.missing} symbols missing`
-            )],
-            severity: 'high'
+            evidence: [
+              AnalysisBlockUtils.createEvidence(
+                'findings.incompleteness.missing',
+                `${facts.findings.incompleteness.missing} symbols missing`
+              ),
+            ],
+            severity: 'high',
           });
 
           actions.push({
             description: 'Complete missing symbol implementations',
             priority: 'high',
-            evidence: [AnalysisBlockUtils.createEvidence('findings.incompleteness.missing', 'Missing symbols list')],
+            evidence: [
+              AnalysisBlockUtils.createEvidence(
+                'findings.incompleteness.missing',
+                'Missing symbols list'
+              ),
+            ],
             effort: 'l',
-            risk: 'medium'
+            risk: 'medium',
           });
         }
       }
 
       // Check for zombie validation
       if (facts.findings.incompleteness.zombies > 0) {
-        if (rawResponse.includes('should be removed') ||
-          rawResponse.includes('obsolete')) {
+        if (rawResponse.includes('should be removed') || rawResponse.includes('obsolete')) {
           actions.push({
             description: 'Remove zombie symbols that are no longer needed',
             priority: 'medium',
-            evidence: [AnalysisBlockUtils.createEvidence('findings.incompleteness.zombies', 'Zombie symbols list')],
+            evidence: [
+              AnalysisBlockUtils.createEvidence(
+                'findings.incompleteness.zombies',
+                'Zombie symbols list'
+              ),
+            ],
             effort: 'm',
-            risk: 'low'
+            risk: 'low',
           });
         }
       }
@@ -576,22 +633,27 @@ export class LlmAnalyst {
   /**
    * Parse cleanup plan response
    */
-  private parseCleanupResponse(response: any, facts: RefactorBundleFacts): { claims: any[], actions: any[] } {
+  private parseCleanupResponse(
+    response: any,
+    facts: RefactorBundleFacts
+  ): { claims: any[]; actions: any[] } {
     const claims: any[] = [];
     const actions: any[] = [];
 
     // If response is parsed JSON
     if (response.actions && Array.isArray(response.actions)) {
-      actions.push(...response.actions.map((action: any) => ({
-        description: action.description,
-        priority: action.priority || 'medium',
-        effort: action.effort || 'medium',
-        risk: action.risk || 'low',
-        evidence: (action.evidence || []).map((path: string) =>
-          AnalysisBlockUtils.createEvidenceAuto(path)
-        ),
-        dependsOn: action.dependsOn || []
-      })));
+      actions.push(
+        ...response.actions.map((action: any) => ({
+          description: action.description,
+          priority: action.priority || 'medium',
+          effort: action.effort || 'medium',
+          risk: action.risk || 'low',
+          evidence: (action.evidence || []).map((path: string) =>
+            AnalysisBlockUtils.createEvidenceAuto(path)
+          ),
+          dependsOn: action.dependsOn || [],
+        }))
+      );
     }
 
     // Fallback to existing numbered list parsing
@@ -612,7 +674,7 @@ export class LlmAnalyst {
             priority: this.inferPriority(numberedMatch[2]),
             evidence: [],
             effort: this.inferEffort(numberedMatch[2]),
-            risk: this.inferRisk(numberedMatch[2])
+            risk: this.inferRisk(numberedMatch[2]),
           };
         }
         // Look for evidence citations
@@ -621,10 +683,9 @@ export class LlmAnalyst {
           const evidenceMatch = line.match(/findings\.[^.]+(?:\[[^\]]+\])?/g);
           if (evidenceMatch) {
             for (const path of evidenceMatch) {
-              currentAction.evidence.push(AnalysisBlockUtils.createEvidence(
-                path,
-                `Referenced in cleanup plan`
-              ));
+              currentAction.evidence.push(
+                AnalysisBlockUtils.createEvidence(path, `Referenced in cleanup plan`)
+              );
             }
           }
         }
@@ -648,14 +709,17 @@ export class LlmAnalyst {
     });
 
     // Filter to critical/high severity or high confidence (>=0.8)
-    const valuableClaims = allClaims.filter(c =>
-      c.severity === 'critical' ||
-      c.severity === 'high' ||
-      c.confidence >= 0.8
+    const valuableClaims = allClaims.filter(
+      c => c.severity === 'critical' || c.severity === 'high' || c.confidence >= 0.8
     );
 
     // Sort by severity (critical > high > medium > low) then confidence
-    const severityOrder: Record<'critical' | 'high' | 'medium' | 'low', number> = { critical: 4, high: 3, medium: 2, low: 1 };
+    const severityOrder: Record<'critical' | 'high' | 'medium' | 'low', number> = {
+      critical: 4,
+      high: 3,
+      medium: 2,
+      low: 1,
+    };
     valuableClaims.sort((a, b) => {
       const severityDiff = severityOrder[b.severity] - severityOrder[a.severity];
       if (severityDiff !== 0) return severityDiff;
@@ -675,13 +739,26 @@ export class LlmAnalyst {
     });
 
     // Calculate value score for each action
-    const priorityWeight: Record<'urgent' | 'high' | 'medium' | 'low', number> = { urgent: 10, high: 5, medium: 2, low: 1 };
-    const effortWeight: Record<'xs' | 's' | 'm' | 'l' | 'xl', number> = { xs: 5, s: 4, m: 3, l: 2, xl: 1 };
+    const priorityWeight: Record<'urgent' | 'high' | 'medium' | 'low', number> = {
+      urgent: 10,
+      high: 5,
+      medium: 2,
+      low: 1,
+    };
+    const effortWeight: Record<'xs' | 's' | 'm' | 'l' | 'xl', number> = {
+      xs: 5,
+      s: 4,
+      m: 3,
+      l: 2,
+      xl: 1,
+    };
 
     const scoredActions = allActions.map(action => ({
       action,
-      score: priorityWeight[action.priority] * effortWeight[action.effort] *
-        (action.risk === 'low' ? 1.5 : action.risk === 'medium' ? 1.0 : 0.7)
+      score:
+        priorityWeight[action.priority] *
+        effortWeight[action.effort] *
+        (action.risk === 'low' ? 1.5 : action.risk === 'medium' ? 1.0 : 0.7),
     }));
 
     // Sort by score (descending)
@@ -703,7 +780,7 @@ export class LlmAnalyst {
     const issueRate = totalSymbols > 0 ? totalIssues / totalSymbols : 0;
 
     // Base score: 100 = perfect, 0 = terrible
-    const baseScore = Math.max(0, 100 - (issueRate * 100));
+    const baseScore = Math.max(0, 100 - issueRate * 100);
 
     // Penalties for critical issues
     const criticalPenalty = facts.findings.incompleteness.missing * 2;
@@ -716,7 +793,8 @@ export class LlmAnalyst {
    * Generate enhanced executive summary with key insights
    */
   private generateSummary(blocks: AnalysisBlock[], facts: RefactorBundleFacts): string {
-    const totalIssues = facts.findings.incompleteness.missing +
+    const totalIssues =
+      facts.findings.incompleteness.missing +
       facts.findings.incompleteness.zombies +
       facts.findings.incompleteness.divergent +
       facts.findings.legacyAudit.dead;
@@ -727,8 +805,11 @@ export class LlmAnalyst {
     const healthScore = this.calculateHealthScore(facts);
 
     // Calculate high-priority action count
-    const highPriorityActions = blocks.reduce((sum, block) =>
-      sum + block.actions.filter(a => a.priority === 'high' || a.priority === 'urgent').length, 0);
+    const highPriorityActions = blocks.reduce(
+      (sum, block) =>
+        sum + block.actions.filter(a => a.priority === 'high' || a.priority === 'urgent').length,
+      0
+    );
 
     let summary = `## Key Insights\n\n`;
 
@@ -736,7 +817,9 @@ export class LlmAnalyst {
     if (topClaims.length > 0) {
       const criticalClaim = topClaims[0];
       summary += `**Most Critical:** ${criticalClaim.text} `;
-      summary += `(${criticalClaim.severity} severity, ${(criticalClaim.confidence * 100).toFixed(0)}% confidence)\n\n`;
+      summary += `(${criticalClaim.severity} severity, ${(criticalClaim.confidence * 100).toFixed(
+        0
+      )}% confidence)\n\n`;
     }
 
     // Top actionable items
@@ -781,7 +864,9 @@ export class LlmAnalyst {
       if (block.claims.length > 0) {
         markdown += `### Findings\n\n`;
         for (const claim of block.claims) {
-          markdown += `- **${claim.severity.toUpperCase()}:** ${claim.text} (confidence: ${(claim.confidence * 100).toFixed(0)}%)\n`;
+          markdown += `- **${claim.severity.toUpperCase()}:** ${
+            claim.text
+          } (confidence: ${(claim.confidence * 100).toFixed(0)}%)\n`;
           for (const evidence of claim.evidence) {
             markdown += `  - Evidence: \`${evidence.path}\`\n`;
           }
@@ -793,7 +878,9 @@ export class LlmAnalyst {
         markdown += `### Actions\n\n`;
         const sortedActions = AnalysisBlockUtils.sortActions(block.actions);
         for (const action of sortedActions) {
-          markdown += `- **${action.priority.toUpperCase()}** [${action.effort.toUpperCase()}] ${action.description} (risk: ${action.risk})\n`;
+          markdown += `- **${action.priority.toUpperCase()}** [${action.effort.toUpperCase()}] ${
+            action.description
+          } (risk: ${action.risk})\n`;
           for (const evidence of action.evidence) {
             markdown += `  - Evidence: \`${evidence.path}\`\n`;
           }
@@ -868,7 +955,7 @@ export class LlmAnalyst {
       divergent: 50,
       moved: 50,
       hybridFiles: 50,
-      discoveryTotal: 30
+      discoveryTotal: 30,
     };
 
     const clone: any = JSON.parse(JSON.stringify(facts));
@@ -891,7 +978,7 @@ export class LlmAnalyst {
         const full = path.join(root, file);
         const content = fs.readFileSync(full, 'utf8');
         const lines = content.split(/\r?\n/);
-        const start = Math.max(0, (line ? line - 3 : 0));
+        const start = Math.max(0, line ? line - 3 : 0);
         const end = Math.min(lines.length, line ? line + 2 : 8);
         return lines.slice(start, end).join('\n').trim();
       } catch {
@@ -931,7 +1018,7 @@ export class LlmAnalyst {
           symbol: parsed.symbol,
           origin: item.origin || detectOrigin(parsed.file) || item.origin,
           snippet: getSnippet(parsed.file, line),
-          line
+          line,
         });
       }
       normalized.sort((a, b) => {
@@ -946,13 +1033,18 @@ export class LlmAnalyst {
     // Capture hybrid facts summary and drop raw facts (include sample names)
     if (facts.hybridFacts) {
       const hybridFacts = facts.hybridFacts as Record<string, any[]>;
-      const fileCounts = Object.entries(hybridFacts).map(([file, list]) => ({ file, count: list.length }));
+      const fileCounts = Object.entries(hybridFacts).map(([file, list]) => ({
+        file,
+        count: list.length,
+      }));
       fileCounts.sort((a, b) => b.count - a.count);
 
       const topFiles = fileCounts.slice(0, caps.hybridFiles);
       const totalFacts = fileCounts.reduce((sum, f) => sum + f.count, 0);
       const sampleFacts = topFiles.map(({ file }) => {
-        const sample = (hybridFacts[file] || []).slice(0, 3).map((f: any) => f?.name || f?.id || 'unknown');
+        const sample = (hybridFacts[file] || [])
+          .slice(0, 3)
+          .map((f: any) => f?.name || f?.id || 'unknown');
         return { file, sample };
       });
 
@@ -960,7 +1052,7 @@ export class LlmAnalyst {
         totalFacts,
         fileCount: fileCounts.length,
         topFiles,
-        sampleFacts
+        sampleFacts,
       };
       delete clone.hybridFacts;
     }
@@ -993,16 +1085,16 @@ export class LlmAnalyst {
     // Process hybrid drifts with snippets
     const hybridDrifts = Array.isArray(clone.findings?.hybridDrifts)
       ? clone.findings.hybridDrifts.slice(0, caps.hybridDrifts).map((d: any) => {
-        const file = d.fact?.filePath || d.fact?.path || d.file;
-        const line = d.fact?.line || d.line || 0;
-        return {
-          ...d,
-          file,
-          name: d.fact?.name || d.fact?.id || d.name,
-          origin: detectOrigin(file),
-          snippet: getSnippet(file, line)
-        };
-      })
+          const file = d.fact?.filePath || d.fact?.path || d.file;
+          const line = d.fact?.line || d.line || 0;
+          return {
+            ...d,
+            file,
+            name: d.fact?.name || d.fact?.id || d.name,
+            origin: detectOrigin(file),
+            snippet: getSnippet(file, line),
+          };
+        })
       : undefined;
 
     const addDisplayNames = (items?: any[]) =>
@@ -1021,7 +1113,7 @@ export class LlmAnalyst {
       evidenceSummary.movedLineage = clone.bundle.movedLineage.map((m: any) => ({
         ...m,
         sourceName: parseSymbolId(m.previousSymbolId).symbol,
-        destName: parseSymbolId(m.symbolId).symbol
+        destName: parseSymbolId(m.symbolId).symbol,
       }));
     }
     if (clone.hybridSummary) {
@@ -1039,7 +1131,7 @@ export class LlmAnalyst {
           file,
           hotspotScore: h.hotspotScore || h.churnScore || h.score,
           summary: h.summary || h.note,
-          snippet: getSnippet(file, 0)
+          snippet: getSnippet(file, 0),
         };
       });
       evidenceSummary.hotspots = hotspots;
@@ -1052,7 +1144,7 @@ export class LlmAnalyst {
       divergent: divergent?.length || 0,
       hybridDrifts: hybridDrifts?.length || 0,
       hotspots: hotspots?.length || 0,
-      moved: Array.isArray(evidenceSummary.movedLineage) ? evidenceSummary.movedLineage.length : 0
+      moved: Array.isArray(evidenceSummary.movedLineage) ? evidenceSummary.movedLineage.length : 0,
     };
 
     if (Object.keys(evidenceSummary).length > 0) {
@@ -1081,7 +1173,8 @@ export class LlmAnalyst {
     if (divergent?.length) pushLimited(divergent, 'divergent');
     if (hybridDrifts?.length) pushLimited(hybridDrifts, 'hybridDrift');
     if (hotspots?.length) pushLimited(hotspots, 'hotspot');
-    if (Array.isArray(evidenceSummary.movedLineage)) pushLimited(evidenceSummary.movedLineage, 'moved');
+    if (Array.isArray(evidenceSummary.movedLineage))
+      pushLimited(evidenceSummary.movedLineage, 'moved');
 
     clone.discoveryFeed = discoveryFeed.slice(0, caps.discoveryTotal);
 
@@ -1115,7 +1208,9 @@ export class LlmAnalyst {
         const type = match ? match[1] : 'unknown';
         edgeCounts.set(type, (edgeCounts.get(type) || 0) + 1);
       }
-      summarized.evidence['working.edges'] = Array.from(edgeCounts.entries()).map(([type, count]) => `${type}: ${count}`);
+      summarized.evidence['working.edges'] = Array.from(edgeCounts.entries()).map(
+        ([type, count]) => `${type}: ${count}`
+      );
     }
 
     // Prioritize drifts: Sort by type/severity, keep top 5 per category
@@ -1136,7 +1231,7 @@ export class LlmAnalyst {
       const hybridDrifts = drift.hybridDrifts.slice(0, 5).map((d: any) => ({
         type: d.type,
         file: d.file?.slice(-30),
-        description: d.description?.slice(0, 100) + '...'
+        description: d.description?.slice(0, 100) + '...',
       }));
 
       if (!summarized.hybridSummary) {
@@ -1144,7 +1239,7 @@ export class LlmAnalyst {
           totalFacts: 0,
           fileCount: 0,
           topFiles: [],
-          sampleFacts: []
+          sampleFacts: [],
         };
       }
       (summarized.hybridSummary as any).hybridDriftSamples = hybridDrifts;
@@ -1152,16 +1247,29 @@ export class LlmAnalyst {
 
     // Add Semantic Aggregates and Evidence Snippets
     const evidenceSnippets = {
-      drift: this.extractSnippets((facts as any).drift?.unresolved_callers || [], 3, 'caller: {name} in {path}:{line}'),
-      legacy: this.extractSnippets(facts.evidence['findings.legacyAudit']?.dead || [], 3, 'Dead: {name} in {path}'),
-      hotspots: (facts.evidence.hotspots as any[])?.slice(0, 3).map(h => `Hotspot: ${h.path || h.file} (score: ${h.hotspotScore})`)
+      drift: this.extractSnippets(
+        (facts as any).drift?.unresolved_callers || [],
+        3,
+        'caller: {name} in {path}:{line}'
+      ),
+      legacy: this.extractSnippets(
+        facts.evidence['findings.legacyAudit']?.dead || [],
+        3,
+        'Dead: {name} in {path}'
+      ),
+      hotspots: (facts.evidence.hotspots as any[])
+        ?.slice(0, 3)
+        .map(h => `Hotspot: ${h.path || h.file} (score: ${h.hotspotScore})`),
     };
     (summarized as any).evidenceSnippets = evidenceSnippets;
 
     // Truncate large evidence arrays
     const maxEvidenceItems = 50;
     for (const key in summarized.evidence) {
-      if (Array.isArray(summarized.evidence[key]) && summarized.evidence[key].length > maxEvidenceItems) {
+      if (
+        Array.isArray(summarized.evidence[key]) &&
+        summarized.evidence[key].length > maxEvidenceItems
+      ) {
         summarized.evidence[key] = summarized.evidence[key].slice(0, maxEvidenceItems);
       }
     }
@@ -1174,8 +1282,8 @@ export class LlmAnalyst {
     if (!items || !Array.isArray(items)) return [];
     return items.slice(0, max).map(item => {
       let str = template;
-      Object.keys(item).forEach(key => str = str.replace(`{${key}}`, item[key] || ''));
-      return str.slice(0, 80);  // Cap per snippet
+      Object.keys(item).forEach(key => (str = str.replace(`{${key}}`, item[key] || '')));
+      return str.slice(0, 80); // Cap per snippet
     });
   }
 
@@ -1206,8 +1314,10 @@ export class LlmAnalyst {
         risks: deep.evidence.risks,
         structuralChangeScore: deep.evidence.structuralChangeScore,
         // Keep only essential arrays capped very low
-        "findings.incompleteness": deep.evidence["findings.incompleteness"] ? (deep.evidence["findings.incompleteness"] as any).slice(0, 10) : undefined,
-        hotspots: (deep.evidence.hotspots as any[])?.slice(0, 5)
+        'findings.incompleteness': deep.evidence['findings.incompleteness']
+          ? (deep.evidence['findings.incompleteness'] as any).slice(0, 10)
+          : undefined,
+        hotspots: (deep.evidence.hotspots as any[])?.slice(0, 5),
       };
     }
 
