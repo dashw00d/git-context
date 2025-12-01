@@ -1,7 +1,7 @@
 import { LiveDiffTracker } from '../liveTracker';
 import { getRefactorPipeline } from '../services/pipelineFactory';
 import { CockpitOrchestrator } from '../state/cockpitOrchestrator';
-import { logInfo, logDebug, logError } from '../utils/logger';
+import { logDebug, logError, logInfo } from '../utils/logger';
 
 export class LiveAnalysisEngine {
   private tracker: LiveDiffTracker;

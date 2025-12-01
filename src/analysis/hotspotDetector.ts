@@ -486,9 +486,9 @@ export class HotspotDetector {
    */
   private async calculateFileMetrics(
     filePath: string,
-    sha: string,
+    _sha: string,
     symbolChanges: SymbolInfo[],
-    author?: string
+    _author?: string
   ): Promise<{
     hotspotScore: number;
     riskLevel: 'low' | 'medium' | 'high' | 'critical';
@@ -537,7 +537,7 @@ export class HotspotDetector {
    */
   private async calculateSymbolMetrics(
     symbolId: string,
-    sha: string
+    _sha: string
   ): Promise<{
     hotspotScore: number;
     riskLevel: 'low' | 'medium' | 'high' | 'critical';
@@ -670,7 +670,7 @@ export class HotspotDetector {
     return await this.commitService.countCommits();
   }
 
-  private async getFileAuthorCount(filePath: string): Promise<number> {
+  private async getFileAuthorCount(_filePath: string): Promise<number> {
     // This is a simplified implementation
     // In a real system, we'd track authors per file
     return Math.min(5, Math.floor(Math.random() * 10) + 1); // Placeholder

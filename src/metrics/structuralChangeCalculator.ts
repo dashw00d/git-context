@@ -24,7 +24,7 @@ export interface StructuralChangeMetrics {
 export async function calculateStructuralChange(
   prevContent: string,
   currContent: string,
-  filePath: string
+  _filePath: string
 ): Promise<StructuralChangeMetrics> {
   // For test adapters, use simplified calculation
   // In production, this would use the real StructuralDiffManager with proper database access

@@ -52,6 +52,7 @@ export const initialState: CockpitState = {
   },
   history: [],
   explorerData: [],
+  actionHistory: [],
 };
 
 export function cockpitReducer(state: CockpitState = initialState, action: Action): CockpitState {

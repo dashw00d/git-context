@@ -338,7 +338,14 @@ const FactsContent: React.FC<{
 }> = ({ facts, onEvidenceClick, onAction }) => {
   const hybridSummary = facts.hybridSummary;
   const evidenceSummary = facts.evidenceSummary || {};
-  const counts = evidenceSummary.counts || {};
+  const counts = evidenceSummary.counts || {
+    missing: 0,
+    zombies: 0,
+    divergent: 0,
+    hybridDrifts: 0,
+    hotspots: 0,
+    moved: 0,
+  };
   const caps = facts.llmCapsApplied;
   const movedLineage = facts.bundle.movedLineage || [];
 

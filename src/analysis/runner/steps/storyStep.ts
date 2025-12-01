@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { BundleStoryEngine } from '../../bundleStoryEngine';
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+import { PipelineState, PipelineStep } from '../pipelineTypes';
 
 export function createStoryStep(storyEngine: BundleStoryEngine): PipelineStep {
   return {

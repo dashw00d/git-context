@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import { SymbolInfo } from '../types';
-import { CstFact, HybridFact, isCstFact } from '../types/cstFacts';
+import { HybridFact, isCstFact } from '../types/cstFacts';
 
 /**
  * Generate stable DNA hash for symbol (survives renames, moves)

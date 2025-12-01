@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ExplorerService } from '../../../services/explorerService';
 import { getCockpitOrchestrator } from '../../../state/cockpitOrchestrator';
 import { getStore } from '../../../state/store';
-import { logInfo, logError } from '../../../utils/logger';
+import { logError, logInfo } from '../../../utils/logger';
 import { BundleManager } from './BundleManager';
 
 export class ExplorerController {
@@ -19,9 +19,16 @@ export class ExplorerController {
       const facts = state.bundleFacts;
       const bundles = await this.bundleManager.getBundles();
 
+      const activeBundleId = this.bundleManager.getActiveBundleId();
+
       // Pass bundles to ExplorerService (which we'll update next)
       // For now, we'll just pass the current facts/skeleton logic but wrapped
-      const nodes = ExplorerService.getInstance().getExplorerTree(facts, null, bundles);
+      const nodes = ExplorerService.getInstance().getExplorerTree(
+        facts,
+        null,
+        bundles,
+        activeBundleId
+      );
 
       // Sync with store
       getStore().dispatch({ type: 'EXPLORER_UPDATED', payload: { nodes } });

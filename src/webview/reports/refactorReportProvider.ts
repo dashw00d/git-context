@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { LlmAnalysis, EvidenceLink } from '../../analysis/llmAnalyst/blocks';
+import { EvidenceLink, LlmAnalysis } from '../../analysis/llmAnalyst/blocks';
 import { resolveEvidencePath } from '../../analysis/llmAnalyst/renderer';
 import { RefactorBundleFacts } from '../../facts/types';
 import { getGitRoot } from '../../utils/config';

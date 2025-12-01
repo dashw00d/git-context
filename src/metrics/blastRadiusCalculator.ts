@@ -6,7 +6,7 @@
  */
 
 import { DependencyExtractor } from '../analysis/dependencies';
-import { SymbolInfo, EdgeInfo } from '../types';
+import { EdgeInfo, SymbolInfo } from '../types';
 
 export interface BlastRadiusMetrics {
   directImpact: number;

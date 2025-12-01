@@ -2,8 +2,6 @@ import { ensureDatabaseInitialized } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
 import { logError } from '../utils/logger';
 import { ServiceBase, ServiceConfig } from './base/ServiceBase';
-
-// Import types from contracts and types
 import type { MovedBlock } from '../analysis/movedBlockDetector';
 import type { Hotspot } from '../contracts/llmContext';
 import type {
@@ -140,8 +138,10 @@ export class DatabaseService extends ServiceBase {
         const { limit = 20, offset = 0, filterText, shas } = options;
 
         let query = `
-      SELECT m.sha, m.author, m.date, m.message, m.files_changed
+      SELECT m.sha, m.author, m.date, m.message, m.files_changed,
+             a.structural_change_score, a.risks
       FROM commits_metadata m
+      LEFT JOIN commits_analysis a ON m.sha = a.sha
         `;
 
         const conditions: string[] = [];
@@ -176,6 +176,8 @@ export class DatabaseService extends ServiceBase {
           author: c.author,
           date: new Date(c.date),
           changes: c.files_changed || 0,
+          structuralChangeScore: c.structural_change_score || 0,
+          risks: c.risks ? JSON.parse(c.risks) : [],
         }));
       } catch (error) {
         logError('Failed to search commits', error);

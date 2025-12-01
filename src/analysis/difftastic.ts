@@ -293,7 +293,7 @@ export class DifftasticIntegration {
   /**
    * Extract location information from a difftastic output line
    */
-  private extractLocationFromLine(line: string): { file: string; line: number } | undefined {
+  private extractLocationFromLine(_line: string): { file: string; line: number } | undefined {
     // Difftastic doesn't always include location info in basic output
     // This would need enhancement based on actual difftastic output format
     return undefined;

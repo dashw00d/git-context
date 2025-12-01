@@ -1,7 +1,7 @@
 import {
   BaseDetector,
-  DetectorConfig,
   DEFAULT_THRESHOLDS,
+  DetectorConfig,
 } from '../../analysis/detectors/BaseDetector';
 import { getExtensionConfig } from '../../utils/config';
 

@@ -6,7 +6,7 @@ import { GitOperations } from '../analysis/git';
 import { RefactorPipeline } from '../analysis/refactorPipeline';
 import { CockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { getGitRoot } from '../utils/config';
-import { logError, logDebug } from '../utils/logger';
+import { logDebug, logError } from '../utils/logger';
 
 export class GitCommitWatcher implements vscode.Disposable {
   private watcher: fs.FSWatcher | null = null;

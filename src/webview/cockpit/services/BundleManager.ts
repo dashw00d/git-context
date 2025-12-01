@@ -1,6 +1,6 @@
 import { getDatabaseService } from '../../../services/databaseService';
 import { BundleConfig } from '../../../types/cockpit';
-import { logInfo, logError } from '../../../utils/logger';
+import { logError, logInfo } from '../../../utils/logger';
 
 export class BundleManager {
   private readonly db = getDatabaseService();
@@ -19,6 +19,10 @@ export class BundleManager {
 
   async getBundles(): Promise<any[]> {
     return await this.db.getBundles();
+  }
+
+  async getBundle(id: string): Promise<any | null> {
+    return await this.db.getBundle(id);
   }
 
   async deleteBundle(id: string): Promise<void> {

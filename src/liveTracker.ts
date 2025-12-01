@@ -7,12 +7,12 @@ import { SymbolExtractor } from './analysis/symbols';
 import { getTreeSitterParser } from './analysis/tree-sitter';
 import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
 import {
-  getSupportedExtensions,
-  getExtensionConfig,
   detectLanguage,
+  getExtensionConfig,
+  getSupportedExtensions,
   isCstOnlyLanguage,
 } from './utils/config';
-import { logDebug, logInfo, logError } from './utils/logger';
+import { logDebug, logError, logInfo } from './utils/logger';
 import type { SymbolInfo } from './types';
 
 interface ThresholdConfig {

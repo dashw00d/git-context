@@ -3,9 +3,9 @@ import * as path from 'path';
 import { DependencyExtractor } from '../analysis/dependencies';
 import { GitOperations } from '../analysis/git';
 import { SymbolExtractor } from '../analysis/symbols';
-import { SymbolContext, EdgeContext } from '../contracts/llmContext';
+import { EdgeContext, SymbolContext } from '../contracts/llmContext';
 import { getGitRoot } from '../utils/config';
-import { logInfo, logWarn, logError } from '../utils/logger';
+import { logError, logInfo, logWarn } from '../utils/logger';
 
 export interface WorkingSnapshot {
   symbolsById: Map<string, SymbolContext>;

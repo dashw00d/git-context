@@ -1,7 +1,5 @@
-import * as path from 'path';
 import { GitOperations } from '../analysis/git';
-import { getExtensionConfig } from '../utils/config';
-import { logInfo, logDebug } from '../utils/logger';
+import { logDebug, logInfo } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
 
 export interface BundleConfig {

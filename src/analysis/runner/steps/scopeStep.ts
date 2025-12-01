@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { computeScope } from '../../../facts/scope';
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+import { PipelineState, PipelineStep } from '../pipelineTypes';
 
 export function createScopeStep(): PipelineStep {
   return {

@@ -2,9 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { getTreeSitterParser } from '../../../analysis/tree-sitter';
-import { getStore } from '../../../state/store';
 import { BundleFactsDTO } from '../../../types/cockpit';
-import { logInfo, logError, logDebug } from '../../../utils/logger';
+import { logDebug, logError, logInfo } from '../../../utils/logger';
 import { detectLanguage } from '../../../utils/supportedLanguages';
 
 /**

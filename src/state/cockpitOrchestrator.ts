@@ -1,8 +1,7 @@
 import { EventEmitter } from 'events';
 import { CockpitState } from '../types/cockpit';
 import { logDebug } from '../utils/logger';
-import { Action } from './actions';
-import { getStore, CockpitStore } from './store';
+import { CockpitStore, getStore } from './store';
 
 export type CockpitStateChange = {
   full: CockpitState;

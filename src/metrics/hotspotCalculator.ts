@@ -27,7 +27,7 @@ export function calculateHotspotMetrics(
   totalChanges: number,
   uniqueAuthors: number,
   daysSinceLastChange: number,
-  averageChangeSize: number = 1.0,
+  _averageChangeSize: number = 1.0,
   temporalSpread: number = 0.5
 ): HotspotCalculationMetrics {
   // Normalize inputs using exponential/logarithmic curves (no hard caps)

@@ -1,4 +1,4 @@
-import { RiskFlag, SymbolDelta, FileChange, EdgeInfo } from '../types';
+import { EdgeInfo, FileChange, RiskFlag, SymbolDelta } from '../types';
 
 export class RiskDetector {
   /**
@@ -11,7 +11,7 @@ export class RiskDetector {
       removed: any[];
       modified: SymbolDelta[];
     },
-    edges: {
+    _edges: {
       added: EdgeInfo[];
       removed: EdgeInfo[];
     }

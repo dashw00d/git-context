@@ -420,9 +420,11 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-prettier": "^5.5.4",
+    "organize-imports-cli": "^0.10.0",
     "prettier": "^3.7.3",
     "react": "^18.0.0",
     "react-dom": "^18.3.1",
+    "ts-unused-exports": "^11.0.1",
     "typescript": "^4.9.4",
     "vitest": "^4.0.14"
   },
@@ -441,7 +443,8 @@
     "simple-git": "^3.30.0",
     "sql.js": "^1.13.0",
     "undici": "^5.0.0",
-    "web-tree-sitter": "^0.25.10"
+    "web-tree-sitter": "^0.25.10",
+    "zod": "^3.25.76"
   },
   "bin": {
     "ct": "./out/cli/index.js"

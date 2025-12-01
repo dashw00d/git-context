@@ -215,6 +215,9 @@ export interface CockpitState {
   activeFrame: ContextFrame;
   history: ContextFrame[];
   explorerData: ExplorerNode[];
+
+  // Debug
+  actionHistory?: Array<{ type: string; payload?: any; timestamp: string }>;
 }
 
 export type ZoomLevel = 'bundle' | 'blast_radius' | 'file' | 'symbol';

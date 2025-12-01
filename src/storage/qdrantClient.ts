@@ -104,7 +104,7 @@ export class QdrantClientWrapper {
     if (!(await this.isEnabled())) return;
 
     const collectionName = this.getCollectionName(base, projectId);
-    let collectionCreated = false;
+    let _collectionCreated = false;
 
     try {
       await this.client!.getCollection(collectionName);
@@ -118,7 +118,7 @@ export class QdrantClientWrapper {
         },
       });
       logInfo(`[Qdrant] Created collection: ${collectionName} (dim: ${this.embeddingDimension})`);
-      collectionCreated = true;
+      _collectionCreated = true;
     }
 
     // Always ensure indexes exist (idempotent - safe to call multiple times)

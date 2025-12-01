@@ -55,7 +55,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
           lastSha: sha,
         });
       } else if (symbol.change_type === 'modified') {
-        const prev = intended.get(key);
+        const _prev = intended.get(key);
         intended.set(key, {
           expect: 'present',
           lastName: symbol.name,
@@ -145,7 +145,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
  */
 async function buildIntendedMapFallback(
   commitShas: string[],
-  db: any
+  _db: any
 ): Promise<Map<string, IntendedState>> {
   const intended = new Map<string, IntendedState>();
   const churnThreshold = 40; // Hotspot score threshold for high churn

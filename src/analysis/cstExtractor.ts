@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import { SymbolInfo } from '../types';
-import { CstFact, HybridFact } from '../types/cstFacts';
-import { LANGUAGES, isCstOnlyLanguage, getExtensionConfig } from '../utils/config';
+import { CstFact } from '../types/cstFacts';
+import { getExtensionConfig, isCstOnlyLanguage, LANGUAGES } from '../utils/config';
 
 /**
  * Extract CST facts from a tree-sitter tree

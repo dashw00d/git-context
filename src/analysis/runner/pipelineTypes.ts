@@ -1,12 +1,12 @@
-import type { EmbeddingMetrics, HistoryMetrics, LlmMetrics } from './pipelineMetrics';
 import type { DriftFindings } from '../../facts/driftDetector';
 import type { IntendedState } from '../../facts/intendedMap';
 import type { LegacyAuditResult } from '../../facts/legacyAudit';
 import type { ScopeSet } from '../../facts/scope';
 import type { WorkingSnapshot } from '../../facts/workingSnapshot';
-import type { FileHotspot, SymbolHotspot } from '../hotspotDetector';
-import type { MovedBlock, CrossVersionSymbolLineage } from '../movedBlockDetector';
+// import type { FileHotspot, SymbolHotspot } from '../hotspotDetector'; // Removed unused imports
+import type { CrossVersionSymbolLineage, MovedBlock } from '../movedBlockDetector';
 import type { WorkspaceFacts } from '../workspaceIndexer';
+import type { EmbeddingMetrics, HistoryMetrics, LlmMetrics } from './pipelineMetrics';
 
 export interface PipelineState {
   // Inputs
@@ -32,7 +32,16 @@ export interface PipelineState {
   working?: WorkingSnapshot;
   drift?: DriftFindings;
   legacy?: LegacyAuditResult;
-  hotspots?: Array<FileHotspot | SymbolHotspot>;
+  hotspots?: Array<{
+    path: string;
+    score: number;
+    name?: string;
+    added?: number;
+    removed?: number;
+    touchedInVersions?: string[];
+    touchedInVersionsDescription?: string;
+    [key: string]: any; // Allow other props for now
+  }>;
   movedBlocks?: MovedBlock[];
   movedLineage?: CrossVersionSymbolLineage[];
 

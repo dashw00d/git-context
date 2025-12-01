@@ -347,7 +347,7 @@ export class BundleStoryEngine {
     }
 
     // Sort each timeline by date
-    for (const [dnaId, timeline] of evolutionMap) {
+    for (const [_dnaId, timeline] of evolutionMap) {
       timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }
 

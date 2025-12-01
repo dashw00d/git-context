@@ -17,9 +17,43 @@ export class CockpitStore extends EventEmitter {
   }
 
   dispatch(action: Action): void {
-    const prevState = this.state;
+    const _prevState = this.state;
     this.state = cockpitReducer(this.state, action);
 
+    const historyEntry = {
+      type: action.type,
+      payload: (action as any).payload,
+      timestamp: new Date().toISOString(),
+    };
+    // Keep last 50 actions for debugging
+    const newHistory = [
+      { type: action.type, payload: (action as any).payload, timestamp: historyEntry.timestamp },
+      ...(this.state.actionHistory || []),
+    ].slice(0, 50);
+
+    const prevState = this.state;
+    // Create a temporary state with updated history to pass to reducer
+    // This ensures newState has the updated history without mutating prevState
+    const stateWithHistory = { ...this.state, actionHistory: newHistory };
+
+    const newState = cockpitReducer(stateWithHistory, action);
+    this.state = newState;
+
+    // Log state transition
+    try {
+      const { getStateLogger } = require('../services/stateLogger');
+      getStateLogger().log({
+        actionType: action.type,
+        payload: (action as any).payload,
+        stateBefore: prevState,
+        stateAfter: newState,
+      });
+    } catch (e) {
+      // Ignore logging errors to prevent app crash
+    }
+
+    // Calculate partial change for efficient updates
+    const partial: Partial<CockpitState> = {};
     // Log action and state diff (simplified)
     console.log(`[Store] Action: ${action.type}`, 'Payload:', (action as any).payload);
 

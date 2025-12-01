@@ -335,7 +335,7 @@ export function compareParameterOrders(signatures: string[]): {
  */
 export function detectReturnTypeConvention(
   signature: string,
-  language: string
+  _language: string
 ): {
   type: 'promise' | 'callback' | 'async' | 'sync' | 'unknown';
   returnType?: string;

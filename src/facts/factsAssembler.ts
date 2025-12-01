@@ -3,8 +3,9 @@ import * as path from 'path';
 import { CommitFacts } from '../analysis/commitIndexer';
 import { getCstTimelineManager } from '../analysis/cstTimeline';
 import { WorkspaceFacts } from '../analysis/workspaceIndexer';
+import { BundleFactsSchema } from '../state/schemas';
 import { prepare } from '../storage/statement-wrapper';
-import { getGitRoot, detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
+import { detectLanguage, getExtensionConfig, getGitRoot, isCstOnlyLanguage } from '../utils/config';
 import { logDebug, logError, logInfo, logWarn } from '../utils/logger';
 import { DriftFindings } from './driftDetector';
 import { IntendedState } from './intendedMap';
@@ -12,11 +13,8 @@ import { LegacyAuditResult } from './legacyAudit';
 import { ScopeSet } from './scope';
 import { RefactorBundleFacts } from './types';
 import { WorkingSnapshot } from './workingSnapshot';
-
-// Re-export for backward compatibility
-export type { RefactorBundleFacts } from './types';
-
 import type { HybridFact } from '../types/cstFacts';
+export type { RefactorBundleFacts } from './types';
 
 /**
  * Build RefactorBundleFacts from pipeline state (CommitFacts + WorkspaceFacts)
@@ -88,7 +86,14 @@ export async function buildRefactorBundleFacts(
     if (options.movedLineage) {
       facts.bundle.movedLineage = options.movedLineage;
     }
-    return facts;
+
+    // Strict Validation: Ensure facts match the schema
+    try {
+      return BundleFactsSchema.parse(facts) as RefactorBundleFacts;
+    } catch (error) {
+      logError('BundleFactsSchema validation failed', error);
+      throw error;
+    }
   }
 
   // Fallback to simplified logic for backward compatibility
@@ -147,7 +152,7 @@ export async function buildRefactorBundleFacts(
   ];
   const confidence = confidenceInputs.reduce((sum, present) => sum + present * 0.2, 0);
 
-  return {
+  const result = {
     version: '2.0',
     generated_at: new Date().toISOString(),
     confidence,
@@ -306,6 +311,14 @@ export async function buildRefactorBundleFacts(
       }),
     },
   };
+
+  // Strict Validation for fallback path as well
+  try {
+    return BundleFactsSchema.parse(result) as RefactorBundleFacts;
+  } catch (error) {
+    logError('BundleFactsSchema validation failed (fallback path)', error);
+    throw error;
+  }
 }
 
 /**
@@ -368,7 +381,7 @@ export async function assembleFacts(
     }
   }
 
-  const facts: RefactorBundleFacts = {
+  const facts = {
     version: '2.0',
     generated_at: new Date().toISOString(),
     confidence: 1.0, // Full confidence when using complete pipeline data
@@ -400,6 +413,20 @@ export async function assembleFacts(
               dominantConvention: drift.conventionDrift.dominantConvention,
               driftPercent: drift.conventionDrift.driftPercent,
               driftSymbolCount: drift.conventionDrift.driftSymbols.length,
+              importDrift: drift.conventionDrift.importDrift
+                ? {
+                    dominantStyle: drift.conventionDrift.importDrift.dominantStyle,
+                    driftPercent: drift.conventionDrift.importDrift.driftPercent,
+                    driftImportCount: drift.conventionDrift.importDrift.driftImports.length,
+                  }
+                : undefined,
+              fileNamingDrift: drift.conventionDrift.fileNamingDrift
+                ? {
+                    dominantStyle: drift.conventionDrift.fileNamingDrift.dominantStyle,
+                    driftPercent: drift.conventionDrift.fileNamingDrift.driftPercent,
+                    driftFileCount: drift.conventionDrift.fileNamingDrift.driftFiles.length,
+                  }
+                : undefined,
             }
           : undefined,
         mixedConventionFiles: drift.mixedConventionFiles?.length || undefined,
@@ -559,7 +586,7 @@ export async function assembleFacts(
     hybridFacts: Object.keys(hybridFactsMap).length > 0 ? hybridFactsMap : undefined,
   };
 
-  return facts;
+  return facts as RefactorBundleFacts;
 }
 
 /**
@@ -598,7 +625,7 @@ export function calculateIntendedCounts(intended: Map<string, IntendedState>): {
   let absent = 0;
   let renamed = 0;
 
-  for (const [symbolId, state] of intended) {
+  for (const [_symbolId, state] of intended) {
     if (state.expect === 'present') {
       present++;
       if (state.isRenamed) {
@@ -801,7 +828,7 @@ function computeBasicDeadSymbols(
  */
 function detectRenamedFromHotspots(
   intended: Map<string, IntendedState>,
-  working: WorkingSnapshot
+  _working: WorkingSnapshot
 ): number {
   let renamedCount = 0;
 
@@ -882,7 +909,7 @@ async function getHybridFactsCount(scope: ScopeSet, defaultVersion: string): Pro
   }
 
   if (versionMap.size > 0) {
-    const firstEntry = Array.from(versionMap.entries())[0];
+    const _firstEntry = Array.from(versionMap.entries())[0];
   }
 
   // Batch query with per-file versions

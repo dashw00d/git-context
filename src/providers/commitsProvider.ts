@@ -192,7 +192,7 @@ export class CommitsProvider {
   async exportCommitsDto(
     limit = 20,
     filterText?: string,
-    filterScopes?: { staged?: boolean; unstaged?: boolean; history?: boolean }
+    _filterScopes?: { staged?: boolean; unstaged?: boolean; history?: boolean }
   ): Promise<
     Array<{
       sha: string;
@@ -201,6 +201,8 @@ export class CommitsProvider {
       date?: string;
       changes?: number;
       files?: Array<{ path: string; status: any }>;
+      structuralChangeScore?: number;
+      risks?: string[];
     }>
   > {
     try {
@@ -219,6 +221,8 @@ export class CommitsProvider {
         date?: string;
         changes?: number;
         files?: Array<{ path: string; status: any }>;
+        structuralChangeScore?: number;
+        risks?: string[];
       }> = [];
 
       // 1. Inject Virtual Commits (Staged/Unstaged)
@@ -338,6 +342,8 @@ export class CommitsProvider {
               isHead: false,
               isStaged: false,
               isUnstaged: false,
+              structuralChangeScore: (commit as any).structuralChangeScore,
+              risks: (commit as any).risks,
             };
           })
       );

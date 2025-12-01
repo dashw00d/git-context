@@ -1,7 +1,7 @@
 import { LRUCache } from 'lru-cache';
 import { getExtensionConfig } from '../../utils/config';
 import { computeFingerprint } from '../../utils/fingerprint';
-import { logDebug, logWarn, logInfo } from '../../utils/logger';
+import { logDebug, logInfo, logWarn } from '../../utils/logger';
 
 /**
  * Logger interface for dependency injection
@@ -213,7 +213,7 @@ export abstract class BaseDetector<TInput, TOutput> {
    * }
    * ```
    */
-  protected async postProcess(output: TOutput, input: TInput): Promise<TOutput> {
+  protected async postProcess(output: TOutput, _input: TInput): Promise<TOutput> {
     // Default implementation: no transformation
     return output;
   }

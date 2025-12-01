@@ -1,4 +1,4 @@
-import { LlmAnalysis, AnalysisBlock, EvidenceLink } from '../analysis/llmAnalyst/blocks';
+import { AnalysisBlock, EvidenceLink, LlmAnalysis } from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
 
 /**
@@ -385,7 +385,7 @@ export class RefactorReportView {
       claimsTitle.textContent = '🔍 Findings';
       claimsSection.appendChild(claimsTitle);
 
-      this.selectedBlock.claims.forEach((claim, index) => {
+      this.selectedBlock.claims.forEach((claim, _index) => {
         const claimItem = document.createElement('div');
         claimItem.className = `claim-item severity-${claim.severity}`;
 
@@ -436,7 +436,7 @@ export class RefactorReportView {
       actionsTitle.textContent = '🛠️ Recommended Actions';
       actionsSection.appendChild(actionsTitle);
 
-      this.selectedBlock.actions.forEach((action, index) => {
+      this.selectedBlock.actions.forEach((action, _index) => {
         const actionItem = document.createElement('div');
         actionItem.className = 'action-item';
 

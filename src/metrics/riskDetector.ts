@@ -20,7 +20,7 @@ export interface RiskMetrics {
  */
 export function detectRisksFromFacts(
   symbols: Array<{ id: string; status: string }>,
-  edges: Array<{ from: string; to: string }>
+  _edges: Array<{ from: string; to: string }>
 ): RiskMetrics {
   const risks: string[] = [];
 

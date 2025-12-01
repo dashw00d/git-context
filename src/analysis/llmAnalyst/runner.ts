@@ -3,6 +3,7 @@ import * as path from 'path';
 import { RefactorBundleFacts } from '../../facts/types';
 import { getLLMClient } from '../../llm/openrouter';
 import {
+  buildTimelineSummary,
   PROMPT_CLEANUP_PLAN,
   PROMPT_DISCOVER,
   PROMPT_DRIFT_VERIFICATION,
@@ -10,7 +11,6 @@ import {
   PROMPT_PLAN,
   PROMPT_QUANTIFY,
   SYSTEM_PROMPT,
-  buildTimelineSummary,
 } from '../../llm/prompts';
 import { getExtensionConfig, getGitRoot } from '../../utils/config';
 import { logError, logInfo, logWarn } from '../../utils/logger';
@@ -635,7 +635,7 @@ export class LlmAnalyst {
    */
   private parseCleanupResponse(
     response: any,
-    facts: RefactorBundleFacts
+    _facts: RefactorBundleFacts
   ): { claims: any[]; actions: any[] } {
     const claims: any[] = [];
     const actions: any[] = [];
@@ -1220,7 +1220,7 @@ export class LlmAnalyst {
       // For now, we modify the arrays in place if they are in evidence or findings
 
       // We need to handle both 'drift' object if it exists or findings.incompleteness
-      const inc = summarized.findings.incompleteness;
+      const _inc = summarized.findings.incompleteness;
       // We can't easily sort here without more data, but we can slice
       // Assuming the input arrays are already somewhat ordered or we just take first few
     }

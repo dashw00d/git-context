@@ -603,13 +603,14 @@ export class WorkspaceIndexer {
       const stagedFiles = await this.git.getStagedFiles();
       const stagedFile = stagedFiles.find(f => f.path === filePath);
       if (stagedFile) {
+        const stats = await this.git.getFileDiffStats(filePath, true);
         timeline.unshift({
           hash: 'workspace-staged',
           author: 'You',
           date: new Date().toISOString(),
           message: 'Staged Changes',
           virtual: true,
-          stats: { additions: 0, deletions: 0 }, // TODO: Calculate stats
+          stats: { additions: stats.added, deletions: stats.removed },
         });
       }
 
@@ -617,13 +618,14 @@ export class WorkspaceIndexer {
       const unstagedFiles = await this.git.getUnstagedFiles();
       const unstagedFile = unstagedFiles.find(f => f.path === filePath);
       if (unstagedFile) {
+        const stats = await this.git.getFileDiffStats(filePath, false);
         timeline.unshift({
           hash: 'workspace-unstaged',
           author: 'You',
           date: new Date().toISOString(),
           message: 'Unstaged Changes',
           virtual: true,
-          stats: { additions: 0, deletions: 0 }, // TODO: Calculate stats
+          stats: { additions: stats.added, deletions: stats.removed },
         });
       }
     } catch (e) {
@@ -787,7 +789,7 @@ export class WorkspaceIndexer {
       if (importPath && importPath.startsWith('.')) {
         // Resolve relative path
         try {
-          const resolved = path.resolve(basedir, importPath);
+          const _resolved = path.resolve(basedir, importPath);
           // Try to find the file with extensions
           // This is a simplification; in reality we'd check file existence
           // For the prototype, we'll just return the resolved path relative to root if possible

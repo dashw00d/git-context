@@ -21,36 +21,6 @@ const MainAreaStyle: React.CSSProperties = {
   overflow: 'hidden',
 };
 
-// Mock Explorer Data
-const MOCK_EXPLORER_DATA: ExplorerNode[] = [
-  {
-    id: 'root',
-    name: 'src',
-    type: 'folder',
-    status: 'ready',
-    children: [
-      {
-        id: 'auth.ts',
-        name: 'auth.ts',
-        type: 'file',
-        status: 'ready',
-        children: [
-          { id: 'login', name: 'login()', type: 'symbol', status: 'ready' },
-          { id: 'logout', name: 'logout()', type: 'symbol', status: 'scanning' },
-          { id: 'validate', name: 'validate()', type: 'symbol', status: 'unknown' },
-        ],
-      },
-      {
-        id: 'utils.ts',
-        name: 'utils.ts',
-        type: 'file',
-        status: 'unknown',
-        children: [],
-      },
-    ],
-  },
-];
-
 export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }> = ({
   vscode,
   cockpitState,
@@ -143,20 +113,22 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
       return;
     }
 
-    // Handle Bundle Overview
-    if (node.id === 'bundle-root') {
+    // Handle Bundle Selection
+    if (node.id.startsWith('bundle-')) {
+      const bundleId = node.id.replace('bundle-', '');
+
+      // Switch active bundle
+      vscode.postMessage({ type: 'switchBundle', id: bundleId });
+
+      // Navigate to root of this new bundle
       const newFrame: ContextFrame = {
         level: 'bundle',
-        id: 'root',
-        name: 'Bundle Overview',
+        id: 'root', // The bundle itself is the root context
+        name: node.name,
         status: 'ready',
+        parentId: undefined, // It is the root
       };
-      // For root, we might want to clear history or just navigate.
-      // Let's just navigate for now, or maybe clear history?
-      // The original code cleared history.
-      // We can dispatch a specific action or just NAVIGATE_TO.
-      // If we want to clear history, we might need a RESET_NAVIGATION action or similar.
-      // For now, NAVIGATE_TO is fine, user can back out.
+
       vscode.postMessage({
         type: 'dispatch',
         action: { type: 'NAVIGATE_TO', payload: { frame: newFrame } },
@@ -164,10 +136,18 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
       return;
     }
 
-    // Simulate navigation based on node type
+    // Determine level based on node type
     let level: ContextFrame['level'] = 'bundle';
-    if (node.type === 'file') level = 'file';
-    if (node.type === 'symbol') level = 'symbol';
+    switch (node.type) {
+      case 'file':
+        level = 'file';
+        break;
+      case 'symbol':
+        level = 'symbol';
+        break;
+      default:
+        level = 'bundle';
+    }
 
     // Trigger analysis for files
     if (level === 'file') {
@@ -192,7 +172,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         id: node.id,
         name: node.name,
         status: 'ready',
-        parentId: 'root',
+        parentId: level === 'bundle' ? undefined : 'root',
       };
       vscode.postMessage({
         type: 'dispatch',

@@ -1,6 +1,6 @@
 import {
-  IntendedState,
   buildIntendedMap,
+  IntendedState,
   reconstructIntendedFromEvidence,
 } from '../facts/intendedMap';
 import { RefactorBundleFacts } from '../facts/types';

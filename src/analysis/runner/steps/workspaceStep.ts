@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { WorkspaceIndexer } from '../../workspaceIndexer';
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+import { PipelineState, PipelineStep } from '../pipelineTypes';
 
 export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): PipelineStep {
   return {

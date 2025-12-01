@@ -557,7 +557,7 @@ export class MovedBlockDetector {
     return patterns.some(p => filePath.toLowerCase().includes(p.toLowerCase()));
   }
 
-  private hasMultipleMovesToSameFile(filePath: string): boolean {
+  private hasMultipleMovesToSameFile(_filePath: string): boolean {
     // Check if multiple blocks moved to same file
     // This requires access to all detected moves in the current batch, which is available
     // in the calling context (classifyMoveReason is called for each candidate).

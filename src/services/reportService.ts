@@ -848,7 +848,7 @@ export class ReportService {
     return grouped;
   }
 
-  private formatSymbolList(symbols: any[], sha: string, type: string): string {
+  private formatSymbolList(symbols: any[], _sha: string, _type: string): string {
     let md = '';
     // Group by kind
     const byKind: Record<string, any[]> = {};

@@ -1,12 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parentPort } from 'worker_threads';
-import { SymbolInfo, HybridFact } from '../types';
-import { LANGUAGES, isCstOnlyLanguage, getExtensionConfig } from '../utils/config';
+import { SymbolInfo } from '../types';
+import { isCstOnlyLanguage, LANGUAGES } from '../utils/config';
 import { logWarn } from '../utils/logger';
 import { CstExtractor } from './cstExtractor';
-
-// Use require for web-tree-sitter to avoid ESM issues in worker
 const { Parser, Language } = require('web-tree-sitter');
 
 // Initialize parser state

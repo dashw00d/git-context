@@ -4,10 +4,9 @@ import { updateContexts } from '../core/stateUpdaters';
 import { ActiveBundleProvider } from '../providers/activeBundleProvider';
 import { CommitsProvider } from '../providers/commitsProvider';
 import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
-import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { CockpitEffects } from '../state/effects';
 import { getStore } from '../state/store';
-import { logInfo, logError } from '../utils/logger';
+import { logError, logInfo } from '../utils/logger';
 import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
 
 export async function registerCockpitFeatures(
@@ -54,12 +53,12 @@ export async function registerCockpitFeatures(
   });
 
   // Open evidence
-  shell.registerCommand('git-context.openEvidence', async (context, args) => {
+  shell.registerCommand('git-context.openEvidence', async (_context, args) => {
     try {
       if (Array.isArray(args) && args.length > 0) {
         args = args[0];
       }
-      const { filePath, lineNumber, description, path: jsonPath } = args;
+      const { filePath, lineNumber, description: _description, path: jsonPath } = args;
       if (filePath) {
         const { getGitRoot } = await import('../utils/config');
         const gitRoot = getGitRoot();
@@ -95,7 +94,7 @@ export async function registerCockpitFeatures(
   });
 
   // Apply refactor action
-  shell.registerCommand('git-context.applyRefactor', async (context, args) => {
+  shell.registerCommand('git-context.applyRefactor', async (_context, args) => {
     try {
       if (Array.isArray(args) && args.length > 0) {
         args = args[0];
@@ -235,7 +234,7 @@ export async function registerCockpitFeatures(
   });
 
   // Open report
-  shell.registerCommand('git-context.openReport', async (context, reportId) => {
+  shell.registerCommand('git-context.openReport', async (_context, reportId) => {
     try {
       const { getReportManager } = await import('../storage/reportManager');
       const reportManager = getReportManager();
@@ -257,7 +256,7 @@ export async function registerCockpitFeatures(
   });
 
   // Regenerate report
-  shell.registerCommand('git-context.regenerateReport', async (context, reportId) => {
+  shell.registerCommand('git-context.regenerateReport', async (_context, reportId) => {
     try {
       const { getReportManager } = await import('../storage/reportManager');
       const reportManager = getReportManager();
@@ -271,7 +270,7 @@ export async function registerCockpitFeatures(
   });
 
   // Delete report
-  shell.registerCommand('git-context.deleteReport', async (context, reportId) => {
+  shell.registerCommand('git-context.deleteReport', async (_context, reportId) => {
     try {
       const { getReportManager } = await import('../storage/reportManager');
       const reportManager = getReportManager();
@@ -283,7 +282,7 @@ export async function registerCockpitFeatures(
   });
 
   // Toggle pin report
-  shell.registerCommand('git-context.togglePinReport', async (context, reportId) => {
+  shell.registerCommand('git-context.togglePinReport', async (_context, reportId) => {
     try {
       const { getReportManager } = await import('../storage/reportManager');
       const reportManager = getReportManager();
@@ -299,7 +298,7 @@ export async function registerCockpitFeatures(
   });
 
   // Bundle regenerate
-  shell.registerCommand('git-context.bundle.regenerate', async context => {
+  shell.registerCommand('git-context.bundle.regenerate', async _context => {
     await vscode.commands.executeCommand('git-context.analyze');
   });
 
@@ -308,7 +307,7 @@ export async function registerCockpitFeatures(
     effects: [
       {
         key: 'bundleFacts',
-        handler: async change => {
+        handler: async _change => {
           // Auto-update context keys when bundle changes
           await updateContexts();
         },

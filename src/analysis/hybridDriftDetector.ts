@@ -1,5 +1,5 @@
 import { IntendedState } from '../facts/intendedMap';
-import { HybridFact, CstFact, isCstFact } from '../types/cstFacts';
+import { HybridFact, isCstFact } from '../types/cstFacts';
 import { logDebug } from '../utils/logger';
 import { getCstTimelineManager, getPriorVersionInChain } from './cstTimeline';
 import type { ScopeSet } from '../facts/scope';

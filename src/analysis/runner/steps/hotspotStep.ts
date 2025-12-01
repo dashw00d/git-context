@@ -177,6 +177,24 @@ export function createHotspotStep(): PipelineStep {
       const fileHotspots = await detector.getTopFileHotspots(25);
       const symbolHotspots = await detector.getTopSymbolHotspots(25);
 
+      // Enrich file hotspots with churn stats (added/removed) from Git
+      try {
+        const git = new GitOperations();
+        // Get raw churn stats for top files (last 3 months)
+        const gitChurn = await git.getHotspots(100);
+        const churnMap = new Map(gitChurn.map(h => [h.path, h]));
+
+        for (const hotspot of fileHotspots) {
+          const churn = churnMap.get(hotspot.filePath);
+          if (churn) {
+            (hotspot as any).added = churn.added;
+            (hotspot as any).removed = churn.removed;
+          }
+        }
+      } catch (error) {
+        logDebug(`[HotspotStep] Failed to enrich hotspots with git stats: ${error}`);
+      }
+
       // Enhance file hotspots with timeline version tracking
       if (state.explicitTimeline && state.explicitTimeline.length > 0) {
         const git = new GitOperations();
@@ -217,7 +235,24 @@ export function createHotspotStep(): PipelineStep {
         }
       }
 
-      state.hotspots = [...fileHotspots, ...symbolHotspots];
+      // Map to schema-compliant objects
+      const mappedFileHotspots = fileHotspots.map(h => ({
+        path: h.filePath,
+        score: h.hotspotScore,
+        added: (h as any).added,
+        removed: (h as any).removed,
+        touchedInVersions: h.touchedInVersions,
+        touchedInVersionsDescription: h.touchedInVersionsDescription,
+      }));
+
+      const mappedSymbolHotspots = symbolHotspots.map(h => ({
+        path: h.filePath,
+        name: h.symbolName,
+        score: h.hotspotScore,
+        // Preserve other potentially useful info if needed, but schema is strict
+      }));
+
+      state.hotspots = [...mappedFileHotspots, ...mappedSymbolHotspots];
     },
   };
 }

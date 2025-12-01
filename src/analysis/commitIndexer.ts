@@ -702,7 +702,7 @@ export class CommitIndexer {
     `);
 
     this.db.transaction(() => {
-      for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
+      for (const [_dnaId, { type, symbol, filePath }] of symbolChanges) {
         // Map symbol data to table columns
         // Note: signature_pre/post are not in schema, using signature for now
         // diff_snippet_pre/post are in schema
@@ -1152,7 +1152,7 @@ export class CommitIndexer {
     return row.count || 0;
   }
 
-  private markFailed(sha: string, error: unknown): void {
+  private markFailed(sha: string, _error: unknown): void {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO commits_analysis
       (sha, status, analysis_version, analyzed_at)

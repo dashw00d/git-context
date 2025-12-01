@@ -1,4 +1,4 @@
-import { ExplorerNode, BundleFactsDTO, ContextFrame } from '../types/cockpit';
+import { BundleFactsDTO, ExplorerNode } from '../types/cockpit';
 import { logInfo } from '../utils/logger';
 
 export class ExplorerService {
@@ -22,7 +22,8 @@ export class ExplorerService {
   getExplorerTree(
     bundleFacts: BundleFactsDTO | null,
     skeleton: { files: string[] } | null,
-    bundles: any[] = []
+    bundles: any[] = [],
+    activeBundleId?: string | null
   ): ExplorerNode[] {
     const bundleNodes: ExplorerNode[] = bundles.map(b => {
       const fileCount = b.config?.files?.length || 0;
@@ -68,9 +69,19 @@ export class ExplorerService {
     // OR if bundles are passed, put the files in the first one?
 
     if (bundles.length > 0) {
-      // Attach files to the first bundle for now (MVP)
-      // TODO: Logic to attach to *active* bundle
-      bundleNodes[0].children = fileNodes;
+      // Find active bundle node
+      const activeNode = activeBundleId
+        ? bundleNodes.find(n => n.id === `bundle-${activeBundleId}`)
+        : bundleNodes[0];
+
+      if (activeNode) {
+        activeNode.children = fileNodes;
+        // Expand active bundle by default? Maybe not strictly required but good UX
+      } else if (bundleNodes.length > 0) {
+        // Fallback to first bundle if active not found
+        bundleNodes[0].children = fileNodes;
+      }
+
       return [newBundleNode, ...bundleNodes];
     } else {
       // Legacy fallback

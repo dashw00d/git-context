@@ -368,7 +368,7 @@ export class SymbolExtractor {
   async extractSymbolsWithBodies(
     content: string,
     filePath: string,
-    language: string
+    _language: string
   ): Promise<{ symbols: SymbolInfo[]; bodyTexts: Map<string, string> }> {
     const symbols = await this.extractSymbolsFromContent(content, filePath);
     const bodyTexts = new Map<string, string>();
@@ -397,7 +397,7 @@ export class SymbolExtractor {
   private compareSymbolSets(
     previous: SymbolInfo[],
     current: SymbolInfo[],
-    filePath: string
+    _filePath: string
   ): {
     added: SymbolInfo[];
     removed: SymbolInfo[];

@@ -243,7 +243,7 @@ export async function registerCommands(
           if (Array.isArray(args) && args.length > 0) {
             args = args[0];
           }
-          const { filePath, lineNumber, description, path: jsonPath } = args;
+          const { filePath, lineNumber, path: jsonPath } = args;
           if (filePath) {
             const { getGitRoot } = await import('../utils/config');
             const gitRoot = getGitRoot();
@@ -295,8 +295,6 @@ export async function registerCommands(
         try {
           const state = orchestrator.getState();
           const selected = new Set(state.selectedCommitShas);
-          const { getRefactorPipeline } = await import('../services/pipelineFactory');
-          const refactorPipeline = await getRefactorPipeline();
 
           let branchLoaded = false;
           let branchName: string | null = null;
@@ -735,7 +733,6 @@ export async function registerCommands(
       async (symbolId: string) => {
         try {
           // Show symbol history in a new document
-          const { getDatabaseManager } = await import('../storage/database');
           const history = prepare(`
             SELECT sha, name, path, change_type, diff_snippet_post
             FROM symbols

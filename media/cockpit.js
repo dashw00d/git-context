@@ -511,7 +511,7 @@
             }
             return element;
           };
-          function createElement8(type, config, children) {
+          function createElement14(type, config, children) {
             var propName;
             var props = {};
             var key = null;
@@ -1085,7 +1085,7 @@
             }
             return dispatcher.useContext(Context);
           }
-          function useState7(initialState) {
+          function useState9(initialState) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useState(initialState);
           }
@@ -1610,7 +1610,7 @@
                 error("React.createElement: type is invalid -- expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s", typeString, info);
               }
             }
-            var element = createElement8.apply(this, arguments);
+            var element = createElement14.apply(this, arguments);
             if (element == null) {
               return element;
             }
@@ -1888,7 +1888,7 @@
           exports.useMemo = useMemo;
           exports.useReducer = useReducer;
           exports.useRef = useRef;
-          exports.useState = useState7;
+          exports.useState = useState9;
           exports.useSyncExternalStore = useSyncExternalStore;
           exports.useTransition = useTransition;
           exports.version = ReactVersion;
@@ -2384,9 +2384,9 @@
           if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart === "function") {
             __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
           }
-          var React8 = require_react();
+          var React14 = require_react();
           var Scheduler = require_scheduler();
-          var ReactSharedInternals = React8.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+          var ReactSharedInternals = React14.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
           var suppressWarning = false;
           function setSuppressWarning(newSuppressWarning) {
             {
@@ -2435,7 +2435,7 @@
           var HostPortal = 4;
           var HostComponent = 5;
           var HostText = 6;
-          var Fragment4 = 7;
+          var Fragment5 = 7;
           var Mode = 8;
           var ContextConsumer = 9;
           var ContextProvider = 10;
@@ -3592,7 +3592,7 @@
                 return "DehydratedFragment";
               case ForwardRef:
                 return getWrappedName$1(type, type.render, "ForwardRef");
-              case Fragment4:
+              case Fragment5:
                 return "Fragment";
               case HostComponent:
                 return type;
@@ -3993,7 +3993,7 @@
             {
               if (props.value == null) {
                 if (typeof props.children === "object" && props.children !== null) {
-                  React8.Children.forEach(props.children, function(child) {
+                  React14.Children.forEach(props.children, function(child) {
                     if (child == null) {
                       return;
                     }
@@ -9417,7 +9417,7 @@
               }
             }
           }
-          function createElement8(type, props, rootContainerElement, parentNamespace) {
+          function createElement14(type, props, rootContainerElement, parentNamespace) {
             var isCustomComponentTag;
             var ownerDocument = getOwnerDocumentFromRootContainer(rootContainerElement);
             var domElement;
@@ -10287,7 +10287,7 @@
               }
               parentNamespace = hostContextDev.namespace;
             }
-            var domElement = createElement8(type, props, rootContainerInstance, parentNamespace);
+            var domElement = createElement14(type, props, rootContainerInstance, parentNamespace);
             precacheFiberNode(internalInstanceHandle, domElement);
             updateFiberProps(domElement, props);
             return domElement;
@@ -12021,7 +12021,7 @@
               }
             }
             function updateFragment2(returnFiber, current2, fragment, lanes, key) {
-              if (current2 === null || current2.tag !== Fragment4) {
+              if (current2 === null || current2.tag !== Fragment5) {
                 var created = createFiberFromFragment(fragment, returnFiber.mode, lanes, key);
                 created.return = returnFiber;
                 return created;
@@ -12424,7 +12424,7 @@
                 if (child.key === key) {
                   var elementType = element.type;
                   if (elementType === REACT_FRAGMENT_TYPE) {
-                    if (child.tag === Fragment4) {
+                    if (child.tag === Fragment5) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var existing = useFiber(child, element.props.children);
                       existing.return = returnFiber;
@@ -17900,7 +17900,7 @@
                 var _resolvedProps2 = workInProgress2.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current2, workInProgress2, type, _resolvedProps2, renderLanes2);
               }
-              case Fragment4:
+              case Fragment5:
                 return updateFragment(current2, workInProgress2, renderLanes2);
               case Mode:
                 return updateMode(current2, workInProgress2, renderLanes2);
@@ -18172,7 +18172,7 @@
               case SimpleMemoComponent:
               case FunctionComponent:
               case ForwardRef:
-              case Fragment4:
+              case Fragment5:
               case Mode:
               case Profiler:
               case ContextConsumer:
@@ -22433,7 +22433,7 @@
             return fiber;
           }
           function createFiberFromFragment(elements, mode, lanes, key) {
-            var fiber = createFiber(Fragment4, elements, key, mode);
+            var fiber = createFiber(Fragment5, elements, key, mode);
             fiber.lanes = lanes;
             return fiber;
           }
@@ -23583,114 +23583,25 @@
   });
 
   // src/webview/cockpit/index.tsx
-  var React7 = __toESM(require_react());
+  var React13 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
   // src/webview/cockpit/components/SuperWebview.tsx
-  var React6 = __toESM(require_react());
+  var React12 = __toESM(require_react());
 
   // src/webview/cockpit/components/Stage.tsx
+  var React8 = __toESM(require_react());
+
+  // src/webview/cockpit/components/stages/BundleStage.tsx
   var React2 = __toESM(require_react());
 
-  // src/webview/cockpit/components/ReportList.tsx
+  // src/webview/cockpit/components/stages/TreemapNode.tsx
   var React = __toESM(require_react());
-
-  // src/webview/cockpit/utils.ts
-  var formatDate = (value) => {
-    if (!value) return "";
-    try {
-      return new Date(value).toLocaleDateString();
-    } catch {
-      return value;
-    }
-  };
-
-  // src/webview/cockpit/components/ReportList.tsx
-  var ReportList = ({ state, vscode: vscode2 }) => {
-    const filter = state.reportsFilterText.toLowerCase();
-    const list = state.reports.filter(
-      (r) => (!filter || (r.title || "").toLowerCase().includes(filter) || (r.summary || "").toLowerCase().includes(filter)) && (!state.reportsShowPinnedOnly || r.pinned) && (state.reportsBranchFilter === "all" || r.branch === state.reportsBranchFilter)
-    );
-    if (!list.length) {
-      return /* @__PURE__ */ React.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React.createElement("div", null, "No reports yet"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
-    }
-    return /* @__PURE__ */ React.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React.createElement(
-      "li",
-      {
-        key: r.id,
-        className: "cockpit__list-item cockpit__list-item--clickable",
-        onClick: () => vscode2.postMessage({ type: "openReport", reportId: r.id })
-      },
-      /* @__PURE__ */ React.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
-      r.summary ? /* @__PURE__ */ React.createElement("div", { className: "cockpit__message" }, r.summary) : null,
-      /* @__PURE__ */ React.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small",
-          onClick: (e) => {
-            e.stopPropagation();
-            vscode2.postMessage({ type: "regenerateReport", reportId: r.id });
-          }
-        },
-        "Regenerate"
-      ), /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small",
-          onClick: (e) => {
-            e.stopPropagation();
-            vscode2.postMessage({ type: "togglePinReport", reportId: r.id });
-          }
-        },
-        r.pinned ? "Unpin" : "Pin"
-      ), /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small danger",
-          onClick: (e) => {
-            e.stopPropagation();
-            if (confirm(
-              `Are you sure you want to delete the report "${r.title || "Untitled"}"? This cannot be undone.`
-            )) {
-              vscode2.postMessage({ type: "deleteReport", reportId: r.id });
-            }
-          }
-        },
-        "Delete"
-      ))
-    )));
-  };
-
-  // src/webview/cockpit/components/Stage.tsx
-  var StageContainer = {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    backgroundColor: "var(--vscode-editor-background)",
-    overflow: "hidden",
-    position: "relative"
-  };
-  var HeaderStyle = {
-    padding: "10px 20px",
-    borderBottom: "1px solid var(--vscode-panel-border)",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "var(--vscode-editor-background)"
-  };
-  var ContentStyle = {
-    flex: 1,
-    padding: "20px",
-    overflow: "auto",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center"
-  };
   var TreemapNode = ({ node, depth = 0 }) => {
     const children = node.children || [];
     const hasChildren = children.length > 0;
     const baseColor = node.score > 10 ? "var(--vscode-charts-red)" : node.score > 5 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)";
-    return /* @__PURE__ */ React2.createElement(
+    return /* @__PURE__ */ React.createElement(
       "div",
       {
         style: {
@@ -23710,7 +23621,7 @@
 Churn: ${node.score.toFixed(1)}
 +${node.added || 0} / -${node.removed || 0}`
       },
-      /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React.createElement(
         "div",
         {
           style: {
@@ -23723,10 +23634,10 @@ Churn: ${node.score.toFixed(1)}
             whiteSpace: "nowrap"
           }
         },
-        /* @__PURE__ */ React2.createElement("span", null, node.name),
-        /* @__PURE__ */ React2.createElement("span", { style: { color: baseColor } }, node.score)
+        /* @__PURE__ */ React.createElement("span", null, node.name),
+        /* @__PURE__ */ React.createElement("span", { style: { color: baseColor } }, node.score)
       ),
-      /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React.createElement(
         "div",
         {
           style: {
@@ -23736,7 +23647,7 @@ Churn: ${node.score.toFixed(1)}
             overflow: "hidden"
           }
         },
-        /* @__PURE__ */ React2.createElement(
+        /* @__PURE__ */ React.createElement(
           "div",
           {
             style: {
@@ -23747,10 +23658,12 @@ Churn: ${node.score.toFixed(1)}
           }
         )
       ),
-      /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.7em", opacity: 0.7 } }, "+", node.added || 0, " / -", node.removed || 0),
-      hasChildren && /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", flexWrap: "wrap", flex: 1, overflow: "hidden" } }, children.map((child) => /* @__PURE__ */ React2.createElement(TreemapNode, { key: child.id, node: child, depth: depth + 1 })))
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: "0.7em", opacity: 0.7 } }, "+", node.added || 0, " / -", node.removed || 0),
+      hasChildren && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", flex: 1, overflow: "hidden" } }, children.map((child) => /* @__PURE__ */ React.createElement(TreemapNode, { key: child.id, node: child, depth: depth + 1 })))
     );
   };
+
+  // src/webview/cockpit/components/stages/BundleStage.tsx
   var BundleStage = ({ frame, onZoomIn, cockpitState, vscode: vscode2 }) => {
     const [isConfigOpen, setIsConfigOpen] = React2.useState(false);
     const defaultConfig = {
@@ -23997,7 +23910,7 @@ Churn: ${node.score.toFixed(1)}
       /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement("strong", null, cockpitState.bundleSummary.commitCount), " commits"),
       /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement("strong", null, cockpitState.bundleSummary.fileCount), " files"),
       cockpitState.bundleSummary.symbolCount && /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement("strong", null, cockpitState.bundleSummary.symbolCount), " symbols")
-    ), frame.data?.treemap && frame.data.treemap.length > 0 ? /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, frame.data.treemap.map((node) => /* @__PURE__ */ React2.createElement(TreemapNode, { key: node.id, node }))) : /* @__PURE__ */ React2.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, cockpitState?.isAnalyzing ? "Loading heatmap..." : "No churn data yet. Run Analyze to populate the heatmap."), frame.data?.hotspots && frame.data.hotspots.length > 0 && /* @__PURE__ */ React2.createElement(React2.Fragment, null, /* @__PURE__ */ React2.createElement(
+    ), frame.data?.treemap && frame.data.treemap.length > 0 ? /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, frame.data.treemap.map((node) => /* @__PURE__ */ React2.createElement(TreemapNode, { key: node.id, node }))) : /* @__PURE__ */ React2.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, cockpitState?.isAnalyzing ? "Loading heatmap..." : frame.data?.hotspots && frame.data.hotspots.length > 0 ? "" : "No churn data yet. Run Analyze to populate the heatmap."), frame.data?.hotspots && frame.data.hotspots.length > 0 && /* @__PURE__ */ React2.createElement(React2.Fragment, null, /* @__PURE__ */ React2.createElement(
       "p",
       {
         style: {
@@ -24108,12 +24021,15 @@ Churn: ${file.score || 0}
       risk.detail && /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.detail)
     )))));
   };
+
+  // src/webview/cockpit/components/stages/BlastRadiusStage.tsx
+  var React3 = __toESM(require_react());
   var BlastRadiusStage = ({
     frame,
     onZoomIn
   }) => {
-    const [showIncoming, setShowIncoming] = React2.useState(true);
-    const [showOutgoing, setShowOutgoing] = React2.useState(true);
+    const [showIncoming, setShowIncoming] = React3.useState(true);
+    const [showOutgoing, setShowOutgoing] = React3.useState(true);
     const incoming = frame.data?.blastRadius?.incoming || [];
     const outgoing = frame.data?.blastRadius?.outgoing || [];
     const center = frame.name;
@@ -24136,7 +24052,7 @@ Churn: ${file.score || 0}
         type: e.type
       }))
     ];
-    return /* @__PURE__ */ React2.createElement(
+    return /* @__PURE__ */ React3.createElement(
       "div",
       {
         style: {
@@ -24149,8 +24065,8 @@ Churn: ${file.score || 0}
           gap: "12px"
         }
       },
-      /* @__PURE__ */ React2.createElement("h3", { style: { fontSize: "1.2em", marginBottom: "5px" } }, "Dependencies"),
-      /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React3.createElement("h3", { style: { fontSize: "1.2em", marginBottom: "5px" } }, "Dependencies"),
+      /* @__PURE__ */ React3.createElement(
         "p",
         {
           style: {
@@ -24161,14 +24077,14 @@ Churn: ${file.score || 0}
         },
         frame.name
       ),
-      /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } }, /* @__PURE__ */ React2.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React3.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } }, /* @__PURE__ */ React3.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React3.createElement(
         "input",
         {
           type: "checkbox",
           checked: showIncoming,
           onChange: (e) => setShowIncoming(e.target.checked)
         }
-      ), " ", "Incoming"), /* @__PURE__ */ React2.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React2.createElement(
+      ), " ", "Incoming"), /* @__PURE__ */ React3.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React3.createElement(
         "input",
         {
           type: "checkbox",
@@ -24176,7 +24092,7 @@ Churn: ${file.score || 0}
           onChange: (e) => setShowOutgoing(e.target.checked)
         }
       ), " ", "Outgoing")),
-      /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React3.createElement(
         "div",
         {
           style: {
@@ -24186,7 +24102,7 @@ Churn: ${file.score || 0}
             minHeight: 180
           }
         },
-        /* @__PURE__ */ React2.createElement("div", { style: { position: "relative", width: "100%", height: 200 } }, /* @__PURE__ */ React2.createElement(
+        /* @__PURE__ */ React3.createElement("div", { style: { position: "relative", width: "100%", height: 200 } }, /* @__PURE__ */ React3.createElement(
           "div",
           {
             style: {
@@ -24208,7 +24124,7 @@ Churn: ${file.score || 0}
           const radius = 65;
           const x = 50 + radius * Math.cos(angle);
           const y = 50 + radius * Math.sin(angle);
-          return /* @__PURE__ */ React2.createElement(
+          return /* @__PURE__ */ React3.createElement(
             "div",
             {
               key: n.id,
@@ -24247,7 +24163,7 @@ Churn: ${file.score || 0}
           const y1 = 50 + radius * Math.sin(angleFrom);
           const x2 = 50 + radius * Math.cos(angleTo);
           const y2 = 50 + radius * Math.sin(angleTo);
-          return /* @__PURE__ */ React2.createElement(
+          return /* @__PURE__ */ React3.createElement(
             "svg",
             {
               key: idx,
@@ -24260,7 +24176,7 @@ Churn: ${file.score || 0}
                 pointerEvents: "none"
               }
             },
-            /* @__PURE__ */ React2.createElement(
+            /* @__PURE__ */ React3.createElement(
               "line",
               {
                 x1: `${x1}%`,
@@ -24275,7 +24191,7 @@ Churn: ${file.score || 0}
           );
         }))
       ),
-      /* @__PURE__ */ React2.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", flex: 1 } }, /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React3.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", flex: 1 } }, /* @__PURE__ */ React3.createElement(
         "div",
         {
           style: {
@@ -24285,8 +24201,8 @@ Churn: ${file.score || 0}
             overflow: "auto"
           }
         },
-        /* @__PURE__ */ React2.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Incoming (", incoming.length, ")"),
-        incoming.length ? /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, incoming.map((edge, idx) => /* @__PURE__ */ React2.createElement(
+        /* @__PURE__ */ React3.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Incoming (", incoming.length, ")"),
+        incoming.length ? /* @__PURE__ */ React3.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, incoming.map((edge, idx) => /* @__PURE__ */ React3.createElement(
           "li",
           {
             key: idx,
@@ -24309,8 +24225,8 @@ Churn: ${file.score || 0}
           " (",
           edge.type,
           ")"
-        ))) : /* @__PURE__ */ React2.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
-      ), /* @__PURE__ */ React2.createElement(
+        ))) : /* @__PURE__ */ React3.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
+      ), /* @__PURE__ */ React3.createElement(
         "div",
         {
           style: {
@@ -24320,8 +24236,8 @@ Churn: ${file.score || 0}
             overflow: "auto"
           }
         },
-        /* @__PURE__ */ React2.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Outgoing (", outgoing.length, ")"),
-        outgoing.length ? /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, outgoing.map((edge, idx) => /* @__PURE__ */ React2.createElement(
+        /* @__PURE__ */ React3.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Outgoing (", outgoing.length, ")"),
+        outgoing.length ? /* @__PURE__ */ React3.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, outgoing.map((edge, idx) => /* @__PURE__ */ React3.createElement(
           "li",
           {
             key: idx,
@@ -24344,16 +24260,19 @@ Churn: ${file.score || 0}
           " (",
           edge.type,
           ")"
-        ))) : /* @__PURE__ */ React2.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
+        ))) : /* @__PURE__ */ React3.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
       ))
     );
   };
+
+  // src/webview/cockpit/components/stages/FileStage.tsx
+  var React4 = __toESM(require_react());
   var FileStage = ({
     frame,
     onZoomIn
   }) => {
-    const [showSymbols, setShowSymbols] = React2.useState(false);
-    return /* @__PURE__ */ React2.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React2.createElement(
+    const [showSymbols, setShowSymbols] = React4.useState(false);
+    return /* @__PURE__ */ React4.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React4.createElement(
       "div",
       {
         style: {
@@ -24362,9 +24281,9 @@ Churn: ${file.score || 0}
           flexShrink: 0
         }
       },
-      /* @__PURE__ */ React2.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
-      /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.lineCount, " lines \u2022 ", frame.data?.language, frame.data?.changeStats && /* @__PURE__ */ React2.createElement("span", { style: { marginLeft: "10px" } }, "+", frame.data.changeStats.added, " / -", frame.data.changeStats.removed), typeof frame.data?.hotspotScore === "number" && /* @__PURE__ */ React2.createElement("span", { style: { marginLeft: "10px", color: "var(--vscode-charts-red)" } }, "Hotspot: ", frame.data.hotspotScore))
-    ), /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React4.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
+      /* @__PURE__ */ React4.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.lineCount, " lines \u2022 ", frame.data?.language, frame.data?.changeStats && /* @__PURE__ */ React4.createElement("span", { style: { marginLeft: "10px" } }, "+", frame.data.changeStats.added, " / -", frame.data.changeStats.removed), typeof frame.data?.hotspotScore === "number" && /* @__PURE__ */ React4.createElement("span", { style: { marginLeft: "10px", color: "var(--vscode-charts-red)" } }, "Hotspot: ", frame.data.hotspotScore))
+    ), /* @__PURE__ */ React4.createElement(
       "div",
       {
         style: {
@@ -24375,7 +24294,7 @@ Churn: ${file.score || 0}
           flexShrink: 0
         }
       },
-      /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React4.createElement(
         "button",
         {
           onClick: () => setShowSymbols(false),
@@ -24392,7 +24311,7 @@ Churn: ${file.score || 0}
         },
         "Content"
       ),
-      /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React4.createElement(
         "button",
         {
           onClick: () => setShowSymbols(true),
@@ -24411,7 +24330,7 @@ Churn: ${file.score || 0}
         frame.data?.symbols?.length || 0,
         ")"
       )
-    ), /* @__PURE__ */ React2.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, !showSymbols ? /* @__PURE__ */ React2.createElement(
+    ), /* @__PURE__ */ React4.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, !showSymbols ? /* @__PURE__ */ React4.createElement(
       "div",
       {
         style: {
@@ -24421,7 +24340,7 @@ Churn: ${file.score || 0}
           padding: "10px"
         }
       },
-      /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React4.createElement(
         "pre",
         {
           style: {
@@ -24435,7 +24354,7 @@ Churn: ${file.score || 0}
         },
         frame.data?.content || "Loading..."
       )
-    ) : /* @__PURE__ */ React2.createElement("div", { style: { flex: 1, overflow: "auto" } }, /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.symbols?.map((symbol) => /* @__PURE__ */ React2.createElement(
+    ) : /* @__PURE__ */ React4.createElement("div", { style: { flex: 1, overflow: "auto" } }, /* @__PURE__ */ React4.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.symbols?.map((symbol) => /* @__PURE__ */ React4.createElement(
       "li",
       {
         key: symbol.id,
@@ -24454,7 +24373,7 @@ Churn: ${file.score || 0}
           gap: "4px"
         }
       },
-      /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold" } }, /* @__PURE__ */ React2.createElement("span", { style: { opacity: 0.7, marginRight: "5px" } }, symbol.kind === "function" ? "\u{1D453}" : symbol.kind === "class" ? "C" : "\u2022"), symbol.name, symbol.drift && /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React4.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold" } }, /* @__PURE__ */ React4.createElement("span", { style: { opacity: 0.7, marginRight: "5px" } }, symbol.kind === "function" ? "\u{1D453}" : symbol.kind === "class" ? "C" : "\u2022"), symbol.name, symbol.drift && /* @__PURE__ */ React4.createElement(
         "span",
         {
           style: {
@@ -24469,7 +24388,7 @@ Churn: ${file.score || 0}
         },
         "Drift"
       )),
-      symbol.signature && /* @__PURE__ */ React2.createElement(
+      symbol.signature && /* @__PURE__ */ React4.createElement(
         "div",
         {
           style: {
@@ -24483,9 +24402,12 @@ Churn: ${file.score || 0}
         },
         symbol.signature
       )
-    )), !frame.data?.symbols?.length && /* @__PURE__ */ React2.createElement("li", { style: { padding: "20px", opacity: 0.6, textAlign: "center" } }, "No symbols found")))));
+    )), !frame.data?.symbols?.length && /* @__PURE__ */ React4.createElement("li", { style: { padding: "20px", opacity: 0.6, textAlign: "center" } }, "No symbols found")))));
   };
-  var SymbolStage = ({ frame, vscode: vscode2 }) => /* @__PURE__ */ React2.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React2.createElement(
+
+  // src/webview/cockpit/components/stages/SymbolStage.tsx
+  var React5 = __toESM(require_react());
+  var SymbolStage = ({ frame, vscode: vscode2 }) => /* @__PURE__ */ React5.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React5.createElement(
     "div",
     {
       style: {
@@ -24494,9 +24416,9 @@ Churn: ${file.score || 0}
         flexShrink: 0
       }
     },
-    /* @__PURE__ */ React2.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
-    /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.filePath),
-    frame.data?.drift?.length > 0 && /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React2.createElement(
+    /* @__PURE__ */ React5.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
+    /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.filePath),
+    frame.data?.drift?.length > 0 && /* @__PURE__ */ React5.createElement("div", { style: { marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React5.createElement(
       "span",
       {
         key: idx,
@@ -24511,7 +24433,7 @@ Churn: ${file.score || 0}
       "Drift: ",
       d.suggestedName || d.issue || "Rename suggested"
     ))),
-    /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" } }, frame.data?.symbolId && vscode2 && /* @__PURE__ */ React2.createElement(
+    /* @__PURE__ */ React5.createElement("div", { style: { marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" } }, frame.data?.symbolId && vscode2 && /* @__PURE__ */ React5.createElement(
       "button",
       {
         onClick: () => {
@@ -24528,7 +24450,7 @@ Churn: ${file.score || 0}
         }
       },
       "Open in Editor"
-    ), frame.data?.drift?.[0]?.suggestedName && vscode2 && /* @__PURE__ */ React2.createElement(
+    ), frame.data?.drift?.[0]?.suggestedName && vscode2 && /* @__PURE__ */ React5.createElement(
       "button",
       {
         onClick: () => {
@@ -24553,7 +24475,7 @@ Churn: ${file.score || 0}
         }
       },
       "Apply Suggestion (manual)"
-    ), vscode2 && /* @__PURE__ */ React2.createElement(
+    ), vscode2 && /* @__PURE__ */ React5.createElement(
       "button",
       {
         onClick: () => {
@@ -24578,7 +24500,7 @@ Churn: ${file.score || 0}
       },
       "Ask Assistant"
     ))
-  ), /* @__PURE__ */ React2.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React2.createElement(
+  ), /* @__PURE__ */ React5.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React5.createElement(
     "div",
     {
       style: {
@@ -24589,7 +24511,7 @@ Churn: ${file.score || 0}
         borderBottom: "1px solid var(--vscode-panel-border)"
       }
     },
-    /* @__PURE__ */ React2.createElement(
+    /* @__PURE__ */ React5.createElement(
       "pre",
       {
         style: {
@@ -24603,7 +24525,7 @@ Churn: ${file.score || 0}
       },
       frame.data?.content || "Loading..."
     )
-  ), /* @__PURE__ */ React2.createElement("div", { style: { maxHeight: "220px", overflow: "auto", padding: "10px", flexShrink: 0 } }, /* @__PURE__ */ React2.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Evolution"), /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.history?.map((commit) => /* @__PURE__ */ React2.createElement(
+  ), /* @__PURE__ */ React5.createElement("div", { style: { maxHeight: "220px", overflow: "auto", padding: "10px", flexShrink: 0 } }, /* @__PURE__ */ React5.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Evolution"), /* @__PURE__ */ React5.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.history?.map((commit) => /* @__PURE__ */ React5.createElement(
     "li",
     {
       key: commit.hash || commit.message || commit.date || commit.author,
@@ -24613,9 +24535,113 @@ Churn: ${file.score || 0}
         paddingLeft: "8px"
       }
     },
-    /* @__PURE__ */ React2.createElement("div", { style: { fontWeight: "bold", fontSize: "0.85em" } }, commit.message || commit.summary || commit.change),
-    /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
-  )), !frame.data?.history?.length && /* @__PURE__ */ React2.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
+    /* @__PURE__ */ React5.createElement("div", { style: { fontWeight: "bold", fontSize: "0.85em" } }, commit.message || commit.summary || commit.change),
+    /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
+  )), !frame.data?.history?.length && /* @__PURE__ */ React5.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
+
+  // src/webview/cockpit/components/stages/ReportsStage.tsx
+  var React7 = __toESM(require_react());
+
+  // src/webview/cockpit/components/ReportList.tsx
+  var React6 = __toESM(require_react());
+
+  // src/webview/cockpit/utils.ts
+  var formatDate = (value) => {
+    if (!value) return "";
+    try {
+      return new Date(value).toLocaleDateString();
+    } catch {
+      return value;
+    }
+  };
+
+  // src/webview/cockpit/components/ReportList.tsx
+  var ReportList = ({ state, vscode: vscode2 }) => {
+    const filter = state.reportsFilterText.toLowerCase();
+    const list = state.reports.filter(
+      (r) => (!filter || (r.title || "").toLowerCase().includes(filter) || (r.summary || "").toLowerCase().includes(filter)) && (!state.reportsShowPinnedOnly || r.pinned) && (state.reportsBranchFilter === "all" || r.branch === state.reportsBranchFilter)
+    );
+    if (!list.length) {
+      return /* @__PURE__ */ React6.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React6.createElement("div", null, "No reports yet"), /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
+    }
+    return /* @__PURE__ */ React6.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React6.createElement(
+      "li",
+      {
+        key: r.id,
+        className: "cockpit__list-item cockpit__list-item--clickable",
+        onClick: () => vscode2.postMessage({ type: "openReport", reportId: r.id })
+      },
+      /* @__PURE__ */ React6.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React6.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React6.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React6.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React6.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
+      r.summary ? /* @__PURE__ */ React6.createElement("div", { className: "cockpit__message" }, r.summary) : null,
+      /* @__PURE__ */ React6.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React6.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small",
+          onClick: (e) => {
+            e.stopPropagation();
+            vscode2.postMessage({ type: "regenerateReport", reportId: r.id });
+          }
+        },
+        "Regenerate"
+      ), /* @__PURE__ */ React6.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small",
+          onClick: (e) => {
+            e.stopPropagation();
+            vscode2.postMessage({ type: "togglePinReport", reportId: r.id });
+          }
+        },
+        r.pinned ? "Unpin" : "Pin"
+      ), /* @__PURE__ */ React6.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small danger",
+          onClick: (e) => {
+            e.stopPropagation();
+            if (confirm(
+              `Are you sure you want to delete the report "${r.title || "Untitled"}"? This cannot be undone.`
+            )) {
+              vscode2.postMessage({ type: "deleteReport", reportId: r.id });
+            }
+          }
+        },
+        "Delete"
+      ))
+    )));
+  };
+
+  // src/webview/cockpit/components/stages/ReportsStage.tsx
+  var ReportsStage = ({
+    cockpitState,
+    vscode: vscode2
+  }) => /* @__PURE__ */ React7.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React7.createElement(ReportList, { state: cockpitState, vscode: vscode2 }));
+
+  // src/webview/cockpit/components/Stage.tsx
+  var StageContainer = {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "var(--vscode-editor-background)",
+    overflow: "hidden",
+    position: "relative"
+  };
+  var HeaderStyle = {
+    padding: "10px 20px",
+    borderBottom: "1px solid var(--vscode-panel-border)",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "var(--vscode-editor-background)"
+  };
+  var ContentStyle = {
+    flex: 1,
+    padding: "20px",
+    overflow: "auto",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
+  };
   var Stage = ({
     frame,
     onZoomIn,
@@ -24640,7 +24666,7 @@ Churn: ${file.score || 0}
     const bundleData = frame.level === "bundle" ? frame.data || cockpitState?.bundleView || void 0 : void 0;
     const frameData = bundleData ?? frame.data;
     const tier = frame.tier || frameData?.tier;
-    return /* @__PURE__ */ React2.createElement("div", { style: StageContainer }, /* @__PURE__ */ React2.createElement("div", { style: HeaderStyle }, /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" } }, /* @__PURE__ */ React2.createElement(
+    return /* @__PURE__ */ React8.createElement("div", { style: StageContainer }, /* @__PURE__ */ React8.createElement("div", { style: HeaderStyle }, /* @__PURE__ */ React8.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" } }, /* @__PURE__ */ React8.createElement(
       "button",
       {
         onClick: onZoomOut,
@@ -24655,7 +24681,7 @@ Churn: ${file.score || 0}
         }
       },
       "\u2190 Back"
-    ), /* @__PURE__ */ React2.createElement("strong", null, frame.name), " ", /* @__PURE__ */ React2.createElement("span", { style: { opacity: 0.7 } }, "(", frame.level, ")"), frame.breadcrumbs && /* @__PURE__ */ React2.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, frame.breadcrumbs.join(" / ")), tier && /* @__PURE__ */ React2.createElement(
+    ), /* @__PURE__ */ React8.createElement("strong", null, frame.name), " ", /* @__PURE__ */ React8.createElement("span", { style: { opacity: 0.7 } }, "(", frame.level, ")"), frame.breadcrumbs && /* @__PURE__ */ React8.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, frame.breadcrumbs.join(" / ")), tier && /* @__PURE__ */ React8.createElement(
       "span",
       {
         style: {
@@ -24668,7 +24694,7 @@ Churn: ${file.score || 0}
         }
       },
       tier
-    ), frame.level === "bundle" && frameData?.summary && /* @__PURE__ */ React2.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "\u2022 ", frameData.summary.files, " files \u2022 ", frameData.summary.symbols, " symbols"))), /* @__PURE__ */ React2.createElement("div", { style: ContentStyle }, frame.status === "scanning" ? /* @__PURE__ */ React2.createElement("div", { style: { textAlign: "center", color: "var(--vscode-descriptionForeground)" } }, /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "2em", marginBottom: "10px" } }, "\u23F3"), /* @__PURE__ */ React2.createElement("h3", null, "Scanning ", frame.name, "..."), /* @__PURE__ */ React2.createElement("p", null, "Analyzing history, drift, and risks.")) : /* @__PURE__ */ React2.createElement(React2.Fragment, null, frame.id === "reports-root" && cockpitState && vscode2 ? /* @__PURE__ */ React2.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React2.createElement(ReportList, { state: cockpitState, vscode: vscode2 })) : /* @__PURE__ */ React2.createElement(React2.Fragment, null, frame.level === "bundle" && /* @__PURE__ */ React2.createElement(
+    ), frame.level === "bundle" && frameData?.summary && /* @__PURE__ */ React8.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "\u2022 ", frameData.summary.files, " files \u2022 ", frameData.summary.symbols, " symbols"))), /* @__PURE__ */ React8.createElement("div", { style: ContentStyle }, frame.status === "scanning" ? /* @__PURE__ */ React8.createElement("div", { style: { textAlign: "center", color: "var(--vscode-descriptionForeground)" } }, /* @__PURE__ */ React8.createElement("div", { style: { fontSize: "2em", marginBottom: "10px" } }, "\u23F3"), /* @__PURE__ */ React8.createElement("h3", null, "Scanning ", frame.name, "..."), /* @__PURE__ */ React8.createElement("p", null, "Analyzing history, drift, and risks.")) : /* @__PURE__ */ React8.createElement(React8.Fragment, null, frame.id === "reports-root" && cockpitState && vscode2 ? /* @__PURE__ */ React8.createElement(ReportsStage, { cockpitState, vscode: vscode2 }) : /* @__PURE__ */ React8.createElement(React8.Fragment, null, frame.level === "bundle" && /* @__PURE__ */ React8.createElement(
       BundleStage,
       {
         frame,
@@ -24676,11 +24702,11 @@ Churn: ${file.score || 0}
         cockpitState,
         vscode: vscode2
       }
-    ), frame.level === "blast_radius" && /* @__PURE__ */ React2.createElement(BlastRadiusStage, { frame, onZoomIn: (f) => onZoomIn(f) }), frame.level === "file" && /* @__PURE__ */ React2.createElement(FileStage, { frame, onZoomIn: (f) => onZoomIn(f) }), frame.level === "symbol" && /* @__PURE__ */ React2.createElement(SymbolStage, { frame, vscode: vscode2 })))));
+    ), frame.level === "blast_radius" && /* @__PURE__ */ React8.createElement(BlastRadiusStage, { frame, onZoomIn: (f) => onZoomIn(f) }), frame.level === "file" && /* @__PURE__ */ React8.createElement(FileStage, { frame, onZoomIn: (f) => onZoomIn(f) }), frame.level === "symbol" && /* @__PURE__ */ React8.createElement(SymbolStage, { frame, vscode: vscode2 })))));
   };
 
   // src/webview/cockpit/components/Inspector.tsx
-  var React3 = __toESM(require_react());
+  var React9 = __toESM(require_react());
   var InspectorContainer = {
     minWidth: "250px",
     width: "100%",
@@ -24714,7 +24740,7 @@ Churn: ${file.score || 0}
     overflow: "auto"
   };
   var Inspector = ({ frame }) => {
-    const [activeLens, setActiveLens] = React3.useState("timeline");
+    const [activeLens, setActiveLens] = React9.useState("timeline");
     const isBundle = frame.level === "bundle";
     const isFile = frame.level === "file";
     const isSymbol = frame.level === "symbol";
@@ -24722,7 +24748,7 @@ Churn: ${file.score || 0}
     const drift = frame.data?.drift || [];
     const relations = frame.data?.relations || { incoming: [], outgoing: [], imports: [] };
     const risk = frame.data?.risk || null;
-    return /* @__PURE__ */ React3.createElement("div", { style: InspectorContainer }, /* @__PURE__ */ React3.createElement("div", { style: TabsContainer }, ["timeline", "drift", "relations", "risk"].map((lens) => /* @__PURE__ */ React3.createElement(
+    return /* @__PURE__ */ React9.createElement("div", { style: InspectorContainer }, /* @__PURE__ */ React9.createElement("div", { style: TabsContainer }, ["timeline", "drift", "relations", "risk"].map((lens) => /* @__PURE__ */ React9.createElement(
       "div",
       {
         key: lens,
@@ -24730,7 +24756,7 @@ Churn: ${file.score || 0}
         onClick: () => setActiveLens(lens)
       },
       lens.charAt(0).toUpperCase() + lens.slice(1)
-    ))), /* @__PURE__ */ React3.createElement("div", { style: ContentStyle2 }, /* @__PURE__ */ React3.createElement("h4", null, activeLens.charAt(0).toUpperCase() + activeLens.slice(1), " Lens"), /* @__PURE__ */ React3.createElement("p", { style: { fontSize: "0.9em", color: "var(--vscode-descriptionForeground)" } }, "Scoped to: ", /* @__PURE__ */ React3.createElement("strong", null, frame.name), " (", frame.level, ")"), activeLens === "timeline" && /* @__PURE__ */ React3.createElement("div", null, /* @__PURE__ */ React3.createElement("ul", { style: { paddingLeft: "20px", marginTop: "10px", listStyle: "none" } }, timeline.map((item, index) => /* @__PURE__ */ React3.createElement(
+    ))), /* @__PURE__ */ React9.createElement("div", { style: ContentStyle2 }, /* @__PURE__ */ React9.createElement("h4", null, activeLens.charAt(0).toUpperCase() + activeLens.slice(1), " Lens"), /* @__PURE__ */ React9.createElement("p", { style: { fontSize: "0.9em", color: "var(--vscode-descriptionForeground)" } }, "Scoped to: ", /* @__PURE__ */ React9.createElement("strong", null, frame.name), " (", frame.level, ")"), activeLens === "timeline" && /* @__PURE__ */ React9.createElement("div", null, /* @__PURE__ */ React9.createElement("ul", { style: { paddingLeft: "20px", marginTop: "10px", listStyle: "none" } }, timeline.map((item, index) => /* @__PURE__ */ React9.createElement(
       "li",
       {
         key: index,
@@ -24740,7 +24766,7 @@ Churn: ${file.score || 0}
           paddingLeft: "10px"
         }
       },
-      /* @__PURE__ */ React3.createElement(
+      /* @__PURE__ */ React9.createElement(
         "div",
         {
           style: {
@@ -24750,7 +24776,7 @@ Churn: ${file.score || 0}
             gap: "5px"
           }
         },
-        item.virtual && /* @__PURE__ */ React3.createElement(
+        item.virtual && /* @__PURE__ */ React9.createElement(
           "span",
           {
             style: {
@@ -24765,7 +24791,7 @@ Churn: ${file.score || 0}
         ),
         item.message
       ),
-      /* @__PURE__ */ React3.createElement(
+      /* @__PURE__ */ React9.createElement(
         "div",
         {
           style: {
@@ -24778,14 +24804,14 @@ Churn: ${file.score || 0}
         " \u2022 ",
         item.author
       ),
-      item.stats && /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "0.8em", marginTop: "2px" } }, /* @__PURE__ */ React3.createElement(
+      item.stats && /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.8em", marginTop: "2px" } }, /* @__PURE__ */ React9.createElement(
         "span",
         {
           style: { color: "var(--vscode-gitDecoration-addedResourceForeground)" }
         },
         "+",
         item.stats.additions
-      ), " ", /* @__PURE__ */ React3.createElement(
+      ), " ", /* @__PURE__ */ React9.createElement(
         "span",
         {
           style: { color: "var(--vscode-gitDecoration-deletedResourceForeground)" }
@@ -24793,7 +24819,7 @@ Churn: ${file.score || 0}
         "-",
         item.stats.deletions
       ))
-    )), timeline.length === 0 && /* @__PURE__ */ React3.createElement("p", null, "No timeline data available.")), frame.data?.history?.length > 0 && /* @__PURE__ */ React3.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React3.createElement("strong", null, "Evolution"), /* @__PURE__ */ React3.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 0 0" } }, frame.data.history.map((h, idx) => /* @__PURE__ */ React3.createElement(
+    )), timeline.length === 0 && /* @__PURE__ */ React9.createElement("p", null, "No timeline data available.")), frame.data?.history?.length > 0 && /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React9.createElement("strong", null, "Evolution"), /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 0 0" } }, frame.data.history.map((h, idx) => /* @__PURE__ */ React9.createElement(
       "li",
       {
         key: idx,
@@ -24803,9 +24829,9 @@ Churn: ${file.score || 0}
           fontSize: "0.85em"
         }
       },
-      /* @__PURE__ */ React3.createElement("div", { style: { fontWeight: "bold" } }, h.message || h.summary || h.change),
-      /* @__PURE__ */ React3.createElement("div", { style: { opacity: 0.7 } }, h.date ? new Date(h.date).toLocaleString() : "", " \u2022 ", h.author || "unknown")
-    ))))), activeLens === "drift" && /* @__PURE__ */ React3.createElement("div", null, drift.length > 0 ? /* @__PURE__ */ React3.createElement("ul", { style: { listStyle: "none", padding: 0 } }, drift.map((item, index) => /* @__PURE__ */ React3.createElement(
+      /* @__PURE__ */ React9.createElement("div", { style: { fontWeight: "bold" } }, h.message || h.summary || h.change),
+      /* @__PURE__ */ React9.createElement("div", { style: { opacity: 0.7 } }, h.date ? new Date(h.date).toLocaleString() : "", " \u2022 ", h.author || "unknown")
+    ))))), activeLens === "drift" && /* @__PURE__ */ React9.createElement("div", null, drift.length > 0 ? /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0 } }, drift.map((item, index) => /* @__PURE__ */ React9.createElement(
       "li",
       {
         key: index,
@@ -24817,7 +24843,7 @@ Churn: ${file.score || 0}
           backgroundColor: "var(--vscode-inputValidation-warningBackground)"
         }
       },
-      /* @__PURE__ */ React3.createElement(
+      /* @__PURE__ */ React9.createElement(
         "div",
         {
           style: {
@@ -24826,11 +24852,11 @@ Churn: ${file.score || 0}
             justifyContent: "space-between"
           }
         },
-        /* @__PURE__ */ React3.createElement("span", null, item.issue),
-        /* @__PURE__ */ React3.createElement("span", { style: { fontSize: "0.8em", textTransform: "uppercase" } }, item.severity)
+        /* @__PURE__ */ React9.createElement("span", null, item.issue),
+        /* @__PURE__ */ React9.createElement("span", { style: { fontSize: "0.8em", textTransform: "uppercase" } }, item.severity)
       ),
-      /* @__PURE__ */ React3.createElement("div", { style: { marginTop: "5px" } }, /* @__PURE__ */ React3.createElement("code", null, item.symbol), ": ", item.detail)
-    ))) : /* @__PURE__ */ React3.createElement("div", { style: { padding: "10px", opacity: 0.7 } }, /* @__PURE__ */ React3.createElement("span", { style: { color: "var(--vscode-testing-iconPassed)" } }, "\u2714"), " No drift detected."), /* @__PURE__ */ React3.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React3.createElement("strong", null, "Naming Drift"), /* @__PURE__ */ React3.createElement(
+      /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "5px" } }, /* @__PURE__ */ React9.createElement("code", null, item.symbol), ": ", item.detail)
+    ))) : /* @__PURE__ */ React9.createElement("div", { style: { padding: "10px", opacity: 0.7 } }, /* @__PURE__ */ React9.createElement("span", { style: { color: "var(--vscode-testing-iconPassed)" } }, "\u2714"), " No drift detected."), /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React9.createElement("strong", null, "Naming Drift"), /* @__PURE__ */ React9.createElement(
       "div",
       {
         style: {
@@ -24841,7 +24867,7 @@ Churn: ${file.score || 0}
           overflow: "hidden"
         }
       },
-      /* @__PURE__ */ React3.createElement(
+      /* @__PURE__ */ React9.createElement(
         "div",
         {
           style: {
@@ -24851,7 +24877,7 @@ Churn: ${file.score || 0}
           }
         }
       )
-    ))), activeLens === "relations" && /* @__PURE__ */ React3.createElement("div", null, /* @__PURE__ */ React3.createElement("p", null, /* @__PURE__ */ React3.createElement("strong", null, "Incoming:"), " ", relations.incoming?.length || 0, " callers"), relations.incoming?.length > 0 && /* @__PURE__ */ React3.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 10px 0" } }, relations.incoming.map((edge, idx) => /* @__PURE__ */ React3.createElement(
+    ))), activeLens === "relations" && /* @__PURE__ */ React9.createElement("div", null, /* @__PURE__ */ React9.createElement("p", null, /* @__PURE__ */ React9.createElement("strong", null, "Incoming:"), " ", relations.incoming?.length || 0, " callers"), relations.incoming?.length > 0 && /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 10px 0" } }, relations.incoming.map((edge, idx) => /* @__PURE__ */ React9.createElement(
       "li",
       {
         key: idx,
@@ -24867,7 +24893,7 @@ Churn: ${file.score || 0}
       " (",
       edge.type,
       ")"
-    ))), /* @__PURE__ */ React3.createElement("p", null, /* @__PURE__ */ React3.createElement("strong", null, "Outgoing:"), " ", relations.outgoing?.length || 0, " callees"), relations.outgoing?.length > 0 && /* @__PURE__ */ React3.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 10px 0" } }, relations.outgoing.map((edge, idx) => /* @__PURE__ */ React3.createElement(
+    ))), /* @__PURE__ */ React9.createElement("p", null, /* @__PURE__ */ React9.createElement("strong", null, "Outgoing:"), " ", relations.outgoing?.length || 0, " callees"), relations.outgoing?.length > 0 && /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 10px 0" } }, relations.outgoing.map((edge, idx) => /* @__PURE__ */ React9.createElement(
       "li",
       {
         key: idx,
@@ -24883,7 +24909,7 @@ Churn: ${file.score || 0}
       " (",
       edge.type,
       ")"
-    ))), /* @__PURE__ */ React3.createElement("p", null, /* @__PURE__ */ React3.createElement("strong", null, "Imports:"), " ", relations.imports?.length || 0, " modules")), activeLens === "risk" && /* @__PURE__ */ React3.createElement("div", null, risk ? /* @__PURE__ */ React3.createElement(
+    ))), /* @__PURE__ */ React9.createElement("p", null, /* @__PURE__ */ React9.createElement("strong", null, "Imports:"), " ", relations.imports?.length || 0, " modules")), activeLens === "risk" && /* @__PURE__ */ React9.createElement("div", null, risk ? /* @__PURE__ */ React9.createElement(
       "div",
       {
         style: {
@@ -24893,10 +24919,10 @@ Churn: ${file.score || 0}
           border: "1px solid red"
         }
       },
-      /* @__PURE__ */ React3.createElement("strong", null, "Risk Score"),
-      /* @__PURE__ */ React3.createElement("p", { style: { margin: "5px 0 0 0", fontSize: "0.9em" } }, "Hotspot: ", risk.hotspotScore, " \u2022 Drift: ", risk.driftCount, " \u2022 Legacy:", " ", risk.legacyDead, "/", risk.legacyReplaced),
-      frame.data?.changeStats && /* @__PURE__ */ React3.createElement("p", { style: { margin: "2px 0 0 0", fontSize: "0.85em" } }, "Changes: +", frame.data.changeStats.added, " / -", frame.data.changeStats.removed)
-    ) : /* @__PURE__ */ React3.createElement("div", { style: { padding: "10px", opacity: 0.7 } }, /* @__PURE__ */ React3.createElement("span", { style: { color: "var(--vscode-testing-iconPassed)" } }, "\u2714"), " No risk signals."), frame.data?.drift?.length > 0 && /* @__PURE__ */ React3.createElement("div", { style: { marginTop: "12px" } }, /* @__PURE__ */ React3.createElement("strong", null, "Drift Signals"), /* @__PURE__ */ React3.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React3.createElement(
+      /* @__PURE__ */ React9.createElement("strong", null, "Risk Score"),
+      /* @__PURE__ */ React9.createElement("p", { style: { margin: "5px 0 0 0", fontSize: "0.9em" } }, "Hotspot: ", risk.hotspotScore, " \u2022 Drift: ", risk.driftCount, " \u2022 Legacy:", " ", risk.legacyDead, "/", risk.legacyReplaced),
+      frame.data?.changeStats && /* @__PURE__ */ React9.createElement("p", { style: { margin: "2px 0 0 0", fontSize: "0.85em" } }, "Changes: +", frame.data.changeStats.added, " / -", frame.data.changeStats.removed)
+    ) : /* @__PURE__ */ React9.createElement("div", { style: { padding: "10px", opacity: 0.7 } }, /* @__PURE__ */ React9.createElement("span", { style: { color: "var(--vscode-testing-iconPassed)" } }, "\u2714"), " No risk signals."), frame.data?.drift?.length > 0 && /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "12px" } }, /* @__PURE__ */ React9.createElement("strong", null, "Drift Signals"), /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React9.createElement(
       "li",
       {
         key: idx,
@@ -24905,13 +24931,13 @@ Churn: ${file.score || 0}
           borderBottom: "1px solid var(--vscode-panel-border)"
         }
       },
-      /* @__PURE__ */ React3.createElement("div", { style: { fontWeight: "bold" } }, d.name || d.symbol),
-      /* @__PURE__ */ React3.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, d.issue || d.detail || d.suggestedName || "Drift detected")
+      /* @__PURE__ */ React9.createElement("div", { style: { fontWeight: "bold" } }, d.name || d.symbol),
+      /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, d.issue || d.detail || d.suggestedName || "Drift detected")
     )))))));
   };
 
   // src/webview/cockpit/components/Assistant.tsx
-  var React4 = __toESM(require_react());
+  var React10 = __toESM(require_react());
   var AssistantContainer = {
     height: "200px",
     borderTop: "1px solid var(--vscode-panel-border)",
@@ -24958,28 +24984,28 @@ Churn: ${file.score || 0}
     display: "inline-block"
   };
   var Assistant = ({ frame, messages, onSend }) => {
-    const [input, setInput] = React4.useState("");
+    const [input, setInput] = React10.useState("");
     const send = (text) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       onSend(trimmed);
       setInput("");
     };
-    return /* @__PURE__ */ React4.createElement("div", { style: AssistantContainer }, /* @__PURE__ */ React4.createElement("div", { style: HeaderStyle2 }, /* @__PURE__ */ React4.createElement("span", null, "Assistant (Context: ", frame.name, ")"), /* @__PURE__ */ React4.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "On-demand")), /* @__PURE__ */ React4.createElement("div", { style: ChatAreaStyle }, messages.map((m, idx) => /* @__PURE__ */ React4.createElement("div", { key: idx, style: { marginBottom: "10px" } }, /* @__PURE__ */ React4.createElement("span", { style: { fontWeight: "bold" } }, m.role === "user" ? "You:" : "AI:", " "), /* @__PURE__ */ React4.createElement("span", null, m.content))), !messages.length && /* @__PURE__ */ React4.createElement("div", { style: { opacity: 0.7, fontSize: "0.9em" } }, "I can explain this ", frame.level, ", summarize drift/risks, or review staged/unstaged changes in scope. Ask me something."), /* @__PURE__ */ React4.createElement("div", { style: { marginTop: "15px" } }, /* @__PURE__ */ React4.createElement("div", { style: SuggestionChipStyle, onClick: () => send(`Explain this ${frame.level}`) }, "Explain this ", frame.level), frame.level === "file" && /* @__PURE__ */ React4.createElement(React4.Fragment, null, /* @__PURE__ */ React4.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Find hotspots in this file") }, "Find Hotspots"), /* @__PURE__ */ React4.createElement(
+    return /* @__PURE__ */ React10.createElement("div", { style: AssistantContainer }, /* @__PURE__ */ React10.createElement("div", { style: HeaderStyle2 }, /* @__PURE__ */ React10.createElement("span", null, "Assistant (Context: ", frame.name, ")"), /* @__PURE__ */ React10.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "On-demand")), /* @__PURE__ */ React10.createElement("div", { style: ChatAreaStyle }, messages.map((m, idx) => /* @__PURE__ */ React10.createElement("div", { key: idx, style: { marginBottom: "10px" } }, /* @__PURE__ */ React10.createElement("span", { style: { fontWeight: "bold" } }, m.role === "user" ? "You:" : "AI:", " "), /* @__PURE__ */ React10.createElement("span", null, m.content))), !messages.length && /* @__PURE__ */ React10.createElement("div", { style: { opacity: 0.7, fontSize: "0.9em" } }, "I can explain this ", frame.level, ", summarize drift/risks, or review staged/unstaged changes in scope. Ask me something."), /* @__PURE__ */ React10.createElement("div", { style: { marginTop: "15px" } }, /* @__PURE__ */ React10.createElement("div", { style: SuggestionChipStyle, onClick: () => send(`Explain this ${frame.level}`) }, "Explain this ", frame.level), frame.level === "file" && /* @__PURE__ */ React10.createElement(React10.Fragment, null, /* @__PURE__ */ React10.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Find hotspots in this file") }, "Find Hotspots"), /* @__PURE__ */ React10.createElement(
       "div",
       {
         style: SuggestionChipStyle,
         onClick: () => send("Generate unit tests for this file")
       },
       "Generate Unit Tests"
-    )), frame.data?.timeline?.some((t) => t.virtual) && /* @__PURE__ */ React4.createElement(
+    )), frame.data?.timeline?.some((t) => t.virtual) && /* @__PURE__ */ React10.createElement(
       "div",
       {
         style: SuggestionChipStyle,
         onClick: () => send("Review staged changes for this scope")
       },
       "Review Staged Changes"
-    ), /* @__PURE__ */ React4.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Identify risks here") }, "Identify Risks"))), /* @__PURE__ */ React4.createElement("div", { style: InputAreaStyle }, /* @__PURE__ */ React4.createElement(
+    ), /* @__PURE__ */ React10.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Identify risks here") }, "Identify Risks"))), /* @__PURE__ */ React10.createElement("div", { style: InputAreaStyle }, /* @__PURE__ */ React10.createElement(
       "input",
       {
         type: "text",
@@ -24991,11 +25017,11 @@ Churn: ${file.score || 0}
           if (e.key === "Enter") send(input);
         }
       }
-    ), /* @__PURE__ */ React4.createElement("button", { style: { padding: "8px 15px", cursor: "pointer" }, onClick: () => send(input) }, "Send")));
+    ), /* @__PURE__ */ React10.createElement("button", { style: { padding: "8px 15px", cursor: "pointer" }, onClick: () => send(input) }, "Send")));
   };
 
   // src/webview/cockpit/components/Sidebar.tsx
-  var React5 = __toESM(require_react());
+  var React11 = __toESM(require_react());
   var SidebarContainer = {
     minWidth: "200px",
     width: "100%",
@@ -25044,7 +25070,7 @@ Churn: ${file.score || 0}
         title = "Not Scanned";
         break;
     }
-    return /* @__PURE__ */ React5.createElement(
+    return /* @__PURE__ */ React11.createElement(
       "div",
       {
         title,
@@ -25061,9 +25087,9 @@ Churn: ${file.score || 0}
     );
   };
   var TreeNode = ({ node, depth, activeId, onSelect }) => {
-    const [expanded, setExpanded] = React5.useState(true);
+    const [expanded, setExpanded] = React11.useState(true);
     const hasChildren = node.children && node.children.length > 0;
-    return /* @__PURE__ */ React5.createElement("div", null, /* @__PURE__ */ React5.createElement(
+    return /* @__PURE__ */ React11.createElement("div", null, /* @__PURE__ */ React11.createElement(
       "div",
       {
         style: { ...NodeStyle(node.id === activeId), paddingLeft: `${depth * 15 + 10}px` },
@@ -25072,15 +25098,15 @@ Churn: ${file.score || 0}
           if (hasChildren) setExpanded(!expanded);
         }
       },
-      /* @__PURE__ */ React5.createElement(StatusIcon, { status: node.status }),
-      /* @__PURE__ */ React5.createElement(
+      /* @__PURE__ */ React11.createElement(StatusIcon, { status: node.status }),
+      /* @__PURE__ */ React11.createElement(
         "span",
         {
           style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
         },
         node.name
       )
-    ), hasChildren && expanded && /* @__PURE__ */ React5.createElement("div", null, node.children.map((child) => /* @__PURE__ */ React5.createElement(
+    ), hasChildren && expanded && /* @__PURE__ */ React11.createElement("div", null, node.children.map((child) => /* @__PURE__ */ React11.createElement(
       TreeNode,
       {
         key: child.id,
@@ -25092,7 +25118,7 @@ Churn: ${file.score || 0}
     ))));
   };
   var Sidebar = ({ data, activeId, onSelect, repoName, branchName }) => {
-    return /* @__PURE__ */ React5.createElement("div", { style: SidebarContainer }, /* @__PURE__ */ React5.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React5.createElement("div", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, repoName || "EXPLORER"), branchName && /* @__PURE__ */ React5.createElement(
+    return /* @__PURE__ */ React11.createElement("div", { style: SidebarContainer }, /* @__PURE__ */ React11.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React11.createElement("div", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, repoName || "EXPLORER"), branchName && /* @__PURE__ */ React11.createElement(
       "div",
       {
         style: {
@@ -25107,7 +25133,7 @@ Churn: ${file.score || 0}
       },
       "\u2387 ",
       branchName
-    )), /* @__PURE__ */ React5.createElement("div", { style: ListStyle }, data.map((node) => /* @__PURE__ */ React5.createElement(TreeNode, { key: node.id, node, depth: 0, activeId, onSelect }))), /* @__PURE__ */ React5.createElement("style", null, `
+    )), /* @__PURE__ */ React11.createElement("div", { style: ListStyle }, data.map((node) => /* @__PURE__ */ React11.createElement(TreeNode, { key: node.id, node, depth: 0, activeId, onSelect }))), /* @__PURE__ */ React11.createElement("style", null, `
           @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.4; }
@@ -25135,15 +25161,15 @@ Churn: ${file.score || 0}
     vscode: vscode2,
     cockpitState
   }) => {
-    const [assistantMessages, setAssistantMessages] = React6.useState([]);
-    const [width, setWidth] = React6.useState(window.innerWidth);
-    const [activeTab, setActiveTab] = React6.useState("stage");
-    const [isAssistantOpen, setIsAssistantOpen] = React6.useState(true);
+    const [assistantMessages, setAssistantMessages] = React12.useState([]);
+    const [width, setWidth] = React12.useState(window.innerWidth);
+    const [activeTab, setActiveTab] = React12.useState("stage");
+    const [isAssistantOpen, setIsAssistantOpen] = React12.useState(true);
     const activeFrame = cockpitState.activeFrame;
     const history = cockpitState.history;
     const explorerData = cockpitState.explorerData;
-    const [selection, setSelection] = React6.useState(null);
-    React6.useEffect(() => {
+    const [selection, setSelection] = React12.useState(null);
+    React12.useEffect(() => {
       vscode2.postMessage({ type: "getExplorerTree" });
       vscode2.postMessage({ type: "getBundleData" });
       const handler = (event) => {
@@ -25160,7 +25186,7 @@ Churn: ${file.score || 0}
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
     }, [vscode2]);
-    React6.useEffect(() => {
+    React12.useEffect(() => {
       const handleResize = () => setWidth(window.innerWidth);
       window.addEventListener("resize", handleResize);
       return () => window.removeEventListener("resize", handleResize);
@@ -25201,12 +25227,17 @@ Churn: ${file.score || 0}
         });
         return;
       }
-      if (node.id === "bundle-root") {
+      if (node.id.startsWith("bundle-")) {
+        const bundleId = node.id.replace("bundle-", "");
+        vscode2.postMessage({ type: "switchBundle", id: bundleId });
         const newFrame = {
           level: "bundle",
           id: "root",
-          name: "Bundle Overview",
-          status: "ready"
+          // The bundle itself is the root context
+          name: node.name,
+          status: "ready",
+          parentId: void 0
+          // It is the root
         };
         vscode2.postMessage({
           type: "dispatch",
@@ -25215,8 +25246,16 @@ Churn: ${file.score || 0}
         return;
       }
       let level = "bundle";
-      if (node.type === "file") level = "file";
-      if (node.type === "symbol") level = "symbol";
+      switch (node.type) {
+        case "file":
+          level = "file";
+          break;
+        case "symbol":
+          level = "symbol";
+          break;
+        default:
+          level = "bundle";
+      }
       if (level === "file") {
         const newFrame = {
           level,
@@ -25236,7 +25275,7 @@ Churn: ${file.score || 0}
           id: node.id,
           name: node.name,
           status: "ready",
-          parentId: "root"
+          parentId: level === "bundle" ? void 0 : "root"
         };
         vscode2.postMessage({
           type: "dispatch",
@@ -25253,7 +25292,7 @@ Churn: ${file.score || 0}
         setActiveTab("stage");
       }
     };
-    return /* @__PURE__ */ React6.createElement("div", { style: LayoutStyle }, /* @__PURE__ */ React6.createElement("div", { style: MainAreaStyle }, isWide && /* @__PURE__ */ React6.createElement(React6.Fragment, null, /* @__PURE__ */ React6.createElement(
+    return /* @__PURE__ */ React12.createElement("div", { style: LayoutStyle }, /* @__PURE__ */ React12.createElement("div", { style: MainAreaStyle }, isWide && /* @__PURE__ */ React12.createElement(React12.Fragment, null, /* @__PURE__ */ React12.createElement(
       Sidebar,
       {
         data: explorerData,
@@ -25262,7 +25301,7 @@ Churn: ${file.score || 0}
         repoName: cockpitState.repoName || void 0,
         branchName: cockpitState.branchName || void 0
       }
-    ), /* @__PURE__ */ React6.createElement(
+    ), /* @__PURE__ */ React12.createElement(
       Stage,
       {
         frame: activeFrame,
@@ -25272,7 +25311,7 @@ Churn: ${file.score || 0}
         cockpitState,
         vscode: vscode2
       }
-    ), /* @__PURE__ */ React6.createElement(Inspector, { frame: activeFrame, selection }), cockpitState.bundleSummary && cockpitState.bundleSummary.cacheHits !== void 0 && /* @__PURE__ */ React6.createElement(
+    ), /* @__PURE__ */ React12.createElement(Inspector, { frame: activeFrame, selection }), cockpitState.bundleSummary && cockpitState.bundleSummary.cacheHits !== void 0 && /* @__PURE__ */ React12.createElement(
       "div",
       {
         style: {
@@ -25292,7 +25331,7 @@ Churn: ${file.score || 0}
       " misses (",
       Math.round(cockpitState.bundleSummary.cacheHitRate * 100),
       "%)"
-    )), isMedium && /* @__PURE__ */ React6.createElement(
+    )), isMedium && /* @__PURE__ */ React12.createElement(
       "div",
       {
         style: {
@@ -25303,7 +25342,7 @@ Churn: ${file.score || 0}
           minHeight: 0
         }
       },
-      /* @__PURE__ */ React6.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "inspector" ? /* @__PURE__ */ React6.createElement(Inspector, { frame: activeFrame, selection }) : activeTab === "assistant" ? /* @__PURE__ */ React6.createElement(
+      /* @__PURE__ */ React12.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "inspector" ? /* @__PURE__ */ React12.createElement(Inspector, { frame: activeFrame, selection }) : activeTab === "assistant" ? /* @__PURE__ */ React12.createElement(
         Assistant,
         {
           frame: activeFrame,
@@ -25311,7 +25350,7 @@ Churn: ${file.score || 0}
           messages: assistantMessages,
           onSend: handleSendAssistant
         }
-      ) : /* @__PURE__ */ React6.createElement(React6.Fragment, null, /* @__PURE__ */ React6.createElement(
+      ) : /* @__PURE__ */ React12.createElement(React12.Fragment, null, /* @__PURE__ */ React12.createElement(
         Sidebar,
         {
           data: explorerData,
@@ -25320,7 +25359,7 @@ Churn: ${file.score || 0}
           repoName: cockpitState.repoName || void 0,
           branchName: cockpitState.branchName || void 0
         }
-      ), /* @__PURE__ */ React6.createElement(
+      ), /* @__PURE__ */ React12.createElement(
         Stage,
         {
           frame: activeFrame,
@@ -25331,7 +25370,7 @@ Churn: ${file.score || 0}
           vscode: vscode2
         }
       ))),
-      /* @__PURE__ */ React6.createElement(
+      /* @__PURE__ */ React12.createElement(
         "div",
         {
           style: {
@@ -25342,7 +25381,7 @@ Churn: ${file.score || 0}
             height: "40px"
           }
         },
-        /* @__PURE__ */ React6.createElement(
+        /* @__PURE__ */ React12.createElement(
           "div",
           {
             onClick: () => setActiveTab("stage"),
@@ -25358,7 +25397,7 @@ Churn: ${file.score || 0}
           },
           "Explorer + Stage"
         ),
-        /* @__PURE__ */ React6.createElement(
+        /* @__PURE__ */ React12.createElement(
           "div",
           {
             onClick: () => setActiveTab("inspector"),
@@ -25374,7 +25413,7 @@ Churn: ${file.score || 0}
           },
           "Inspector"
         ),
-        /* @__PURE__ */ React6.createElement(
+        /* @__PURE__ */ React12.createElement(
           "div",
           {
             onClick: () => setActiveTab("assistant"),
@@ -25391,7 +25430,7 @@ Churn: ${file.score || 0}
           "Assistant"
         )
       )
-    ), isNarrow && /* @__PURE__ */ React6.createElement(
+    ), isNarrow && /* @__PURE__ */ React12.createElement(
       "div",
       {
         style: {
@@ -25402,7 +25441,7 @@ Churn: ${file.score || 0}
           minHeight: 0
         }
       },
-      /* @__PURE__ */ React6.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "explorer" && /* @__PURE__ */ React6.createElement(
+      /* @__PURE__ */ React12.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "explorer" && /* @__PURE__ */ React12.createElement(
         Sidebar,
         {
           data: explorerData,
@@ -25411,7 +25450,7 @@ Churn: ${file.score || 0}
           repoName: cockpitState.repoName || void 0,
           branchName: cockpitState.branchName || void 0
         }
-      ), activeTab === "stage" && /* @__PURE__ */ React6.createElement(
+      ), activeTab === "stage" && /* @__PURE__ */ React12.createElement(
         Stage,
         {
           frame: activeFrame,
@@ -25421,7 +25460,7 @@ Churn: ${file.score || 0}
           cockpitState,
           vscode: vscode2
         }
-      ), activeTab === "inspector" && /* @__PURE__ */ React6.createElement(Inspector, { frame: activeFrame, selection }), activeTab === "assistant" && /* @__PURE__ */ React6.createElement(
+      ), activeTab === "inspector" && /* @__PURE__ */ React12.createElement(Inspector, { frame: activeFrame, selection }), activeTab === "assistant" && /* @__PURE__ */ React12.createElement(
         Assistant,
         {
           frame: activeFrame,
@@ -25430,7 +25469,7 @@ Churn: ${file.score || 0}
           onSend: handleSendAssistant
         }
       )),
-      /* @__PURE__ */ React6.createElement(
+      /* @__PURE__ */ React12.createElement(
         "div",
         {
           style: {
@@ -25441,7 +25480,7 @@ Churn: ${file.score || 0}
             height: "40px"
           }
         },
-        ["explorer", "stage", "inspector", "assistant"].map((tab) => /* @__PURE__ */ React6.createElement(
+        ["explorer", "stage", "inspector", "assistant"].map((tab) => /* @__PURE__ */ React12.createElement(
           "div",
           {
             key: tab,
@@ -25460,7 +25499,7 @@ Churn: ${file.score || 0}
           tab === "explorer" ? "\u{1F4C1}" : tab === "stage" ? "\u{1F3AF}" : tab === "inspector" ? "\u{1F50D}" : "\u{1F916}"
         ))
       )
-    )), isAssistantOpen && isWide && /* @__PURE__ */ React6.createElement(
+    )), isAssistantOpen && isWide && /* @__PURE__ */ React12.createElement(
       Assistant,
       {
         frame: activeFrame,
@@ -25531,8 +25570,8 @@ Churn: ${file.score || 0}
     explorerData: []
   };
   var App = () => {
-    const [state, setState] = React7.useState(defaultState);
-    React7.useEffect(() => {
+    const [state, setState] = React13.useState(defaultState);
+    React13.useEffect(() => {
       const handler = (event) => {
         const message = event.data;
         if (message?.type === "updateState" && message.payload) {
@@ -25555,12 +25594,12 @@ Churn: ${file.score || 0}
       vscode.postMessage({ type: "ready" });
       return () => window.removeEventListener("message", handler);
     }, []);
-    return /* @__PURE__ */ React7.createElement("div", { className: "cockpit", style: { padding: 0, margin: 0, height: "100vh", overflow: "hidden" } }, /* @__PURE__ */ React7.createElement(SuperWebview, { vscode, cockpitState: state }));
+    return /* @__PURE__ */ React13.createElement("div", { className: "cockpit", style: { padding: 0, margin: 0, height: "100vh", overflow: "hidden" } }, /* @__PURE__ */ React13.createElement(SuperWebview, { vscode, cockpitState: state }));
   };
   var rootEl = document.getElementById("root");
   if (rootEl) {
     const root = (0, import_client.createRoot)(rootEl);
-    root.render(/* @__PURE__ */ React7.createElement(App, null));
+    root.render(/* @__PURE__ */ React13.createElement(App, null));
   }
 })();
 /*! Bundled license information:

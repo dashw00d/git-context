@@ -1,9 +1,8 @@
-import { SymbolInfo } from '../types';
-import { HybridFact, CstFact, DeltaChange, isCstFact } from '../types/cstFacts';
+import { DeltaChange, HybridFact } from '../types/cstFacts';
 import { detectLanguage } from '../utils/config';
 import { logDebug } from '../utils/logger';
 import { AstSerializer } from './astSerializer';
-import { getDifftasticIntegration, DifftasticResult } from './difftastic';
+import { DifftasticResult, getDifftasticIntegration } from './difftastic';
 import { getTreeSitterParser } from './tree-sitter';
 
 export interface CstDiffResult {
@@ -113,7 +112,13 @@ export class CstDiffManager {
         }
       } else {
         // Check if modified
-        const isModified = this.isFactModified(oldFact, newFact, difftasticResult);
+        const isModified = this.isFactModified(
+          oldFact,
+          newFact,
+          difftasticResult,
+          oldTree,
+          newTree
+        );
         if (isModified) {
           const delta: DeltaChange = {
             type: 'modified',
@@ -152,7 +157,9 @@ export class CstDiffManager {
   private isFactModified(
     oldFact: HybridFact,
     newFact: HybridFact,
-    difftasticResult: DifftasticResult
+    difftasticResult: DifftasticResult,
+    oldTree?: any,
+    newTree?: any
   ): boolean {
     // Check DNA change
     if (oldFact.dnaId !== newFact.dnaId) {
@@ -172,7 +179,30 @@ export class CstDiffManager {
       return match && parseInt(match[1]) === factLine;
     });
 
-    return isHighlighted;
+    if (isHighlighted) return true;
+
+    // Check structural type change if trees are available
+    if (oldTree && newTree) {
+      const oldNode = this.findNodeForFact(oldTree, oldFact);
+      const newNode = this.findNodeForFact(newTree, newFact);
+      if (oldNode && newNode && oldNode.type !== newNode.type) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private findNodeForFact(tree: any, fact: HybridFact): any {
+    try {
+      // Assuming fact.location is 0-indexed (standard for VS Code / Tree-sitter in this codebase)
+      return tree.rootNode.descendantForPosition(
+        { row: fact.location.start.line, column: fact.location.start.column },
+        { row: fact.location.end.line, column: fact.location.end.column }
+      );
+    } catch (e) {
+      return null;
+    }
   }
 
   /**

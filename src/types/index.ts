@@ -321,5 +321,5 @@ export const ContextValues = {
 export type ContextValue = (typeof ContextValues)[keyof typeof ContextValues];
 
 // Re-export CST fact types
-export type { CstFact, CstFactKind, DeltaChange, HybridFact } from './cstFacts';
 export { isCstFact, isSymbolInfo } from './cstFacts';
+export type { CstFact, CstFactKind, DeltaChange, HybridFact } from './cstFacts';

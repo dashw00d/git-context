@@ -245,7 +245,7 @@ export class SearchIndex {
   }
 
   // Update summary snippets - no-op for now as we removed the FTS table
-  updateSummarySnippet(symbolId: number, snippet: string): void {
+  updateSummarySnippet(_symbolId: number, _snippet: string): void {
     // No-op
   }
 

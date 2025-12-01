@@ -43,7 +43,7 @@ export class TreeSitterParser {
       }
     }
 
-    const initPromises = [];
+    const _initPromises = [];
 
     for (let i = 0; i < this.workerPoolSize; i++) {
       const worker = new Worker(workerPath);
@@ -101,7 +101,7 @@ export class TreeSitterParser {
     return this.workers[Math.floor(Math.random() * this.workers.length)];
   }
 
-  async parse(content: string, languageId: string): Promise<any | undefined> {
+  async parse(_content: string, _languageId: string): Promise<any | undefined> {
     // This method is problematic because it returns a Tree object which is not transferrable
     // from worker to main thread (it contains C++ pointers).
     // We must change the contract to return extracted data (symbols/facts) directly.

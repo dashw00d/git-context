@@ -1,5 +1,5 @@
 import { RefactorBundleFacts } from '../../facts/types';
-import { LlmAnalysis, AnalysisBlock, AnalysisBlockUtils, EvidenceLink } from './blocks';
+import { AnalysisBlock, AnalysisBlockUtils, EvidenceLink, LlmAnalysis } from './blocks';
 
 /**
  * Resolve evidence JSON path to file location
@@ -13,7 +13,7 @@ export function resolveEvidencePath(
   const arrayMatch = pathParts[pathParts.length - 1].match(/^(\w+)\[(\d+)\]$/);
 
   if (arrayMatch) {
-    const [_, arrayName, index] = arrayMatch;
+    const [_unused, arrayName, index] = arrayMatch;
     const arrayPath = pathParts.slice(0, -1).join('.');
 
     // Navigate to the array in facts
@@ -714,7 +714,7 @@ export class AnalysisRenderer {
   /**
    * Generate quick stats summary
    */
-  static generateQuickStats(analysis: LlmAnalysis, facts: RefactorBundleFacts): string {
+  static generateQuickStats(analysis: LlmAnalysis, _facts: RefactorBundleFacts): string {
     const totalActions = analysis.blocks.reduce((sum, block) => sum + block.actions.length, 0);
     const highPriorityActions = analysis.blocks.reduce(
       (sum, block) =>

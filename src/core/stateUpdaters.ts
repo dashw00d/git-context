@@ -10,9 +10,9 @@ import { logError } from '../utils/logger';
  * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'commits' } })
  */
 export async function updateWorkspaceFilesState(
-  orchestrator: CockpitOrchestrator,
-  commitsProvider: CommitsProvider,
-  reason = 'workspace:update'
+  _orchestrator: CockpitOrchestrator,
+  _commitsProvider: CommitsProvider,
+  _reason = 'workspace:update'
 ): Promise<void> {
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'commits' } });
 }
@@ -21,10 +21,10 @@ export async function updateWorkspaceFilesState(
  * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'commits' } })
  */
 export async function updateCommitsState(
-  orchestrator: CockpitOrchestrator,
-  commitsProvider: CommitsProvider,
-  activeBundleProvider: ActiveBundleProvider,
-  reason = 'commits:update'
+  _orchestrator: CockpitOrchestrator,
+  _commitsProvider: CommitsProvider,
+  _activeBundleProvider: ActiveBundleProvider,
+  _reason = 'commits:update'
 ): Promise<void> {
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'commits' } });
 }
@@ -33,9 +33,9 @@ export async function updateCommitsState(
  * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'bundle' } })
  */
 export async function updateBundleState(
-  orchestrator: CockpitOrchestrator,
-  activeBundleProvider: ActiveBundleProvider,
-  reason = 'bundle:update'
+  _orchestrator: CockpitOrchestrator,
+  _activeBundleProvider: ActiveBundleProvider,
+  _reason = 'bundle:update'
 ): Promise<void> {
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'bundle' } });
 }
@@ -44,9 +44,9 @@ export async function updateBundleState(
  * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'symbols' } })
  */
 export async function updateSymbolsState(
-  orchestrator: CockpitOrchestrator,
-  symbolHistoryProvider: SymbolHistoryProvider,
-  reason = 'symbols:update'
+  _orchestrator: CockpitOrchestrator,
+  _symbolHistoryProvider: SymbolHistoryProvider,
+  _reason = 'symbols:update'
 ): Promise<void> {
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'symbols' } });
 }
@@ -55,8 +55,8 @@ export async function updateSymbolsState(
  * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'reports' } })
  */
 export async function updateReportsState(
-  orchestrator: CockpitOrchestrator,
-  reason = 'reports:update'
+  _orchestrator: CockpitOrchestrator,
+  _reason = 'reports:update'
 ): Promise<void> {
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'reports' } });
 }
@@ -65,13 +65,13 @@ export async function updateReportsState(
  * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'all' } })
  */
 export async function refreshCockpitState(
-  orchestrator: CockpitOrchestrator,
-  providers: {
+  _orchestrator: CockpitOrchestrator,
+  _providers: {
     commitsProvider: CommitsProvider;
     activeBundleProvider: ActiveBundleProvider;
     symbolHistoryProvider: SymbolHistoryProvider;
   },
-  reason = 'refresh:all'
+  _reason = 'refresh:all'
 ): Promise<void> {
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'all' } });
 }

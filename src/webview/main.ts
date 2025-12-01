@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
-import { LlmAnalysis, EvidenceLink } from '../analysis/llmAnalyst/blocks';
+import { EvidenceLink, LlmAnalysis } from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
 import { RefactorReportView } from './RefactorReportView';
 

@@ -69,7 +69,27 @@ export function logWarn(message: string): void {
  * Log error message (goes to both channels)
  */
 export function logError(message: string, error?: any): void {
-  const errorMsg = error ? `${message}: ${error}` : message;
+  let errorMsg = message;
+  let stack: string | undefined;
+
+  if (error) {
+    if (error instanceof Error) {
+      errorMsg = `${message}: ${error.message}`;
+      stack = error.stack;
+
+      // Handle ZodError (duck typing)
+      if ('issues' in error && Array.isArray((error as any).issues)) {
+        const issues = (error as any).issues;
+        const formattedIssues = issues
+          .map((i: any) => `  - [${i.path.join('.')}] ${i.message}`)
+          .join('\n');
+        errorMsg = `${message}: Validation Failed\n${formattedIssues}`;
+        stack = undefined; // Don't show stack for validation errors, it's noise
+      }
+    } else {
+      errorMsg = `${message}: ${error}`;
+    }
+  }
 
   const infoCh = getInfoChannel();
   if (infoCh) infoCh.appendLine(`[ERROR] ${errorMsg}`);
@@ -77,8 +97,8 @@ export function logError(message: string, error?: any): void {
   const debugCh = getDebugChannel();
   if (debugCh) {
     debugCh.appendLine(`[ERROR] ${errorMsg}`);
-    if (error instanceof Error && error.stack) {
-      debugCh.appendLine(error.stack);
+    if (stack) {
+      debugCh.appendLine(stack);
     }
   }
 

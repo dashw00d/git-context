@@ -108,7 +108,7 @@ export async function registerCoreFeatures(
   });
 
   // Clear selection
-  shell.registerCommand('git-context.clearSelection', async context => {
+  shell.registerCommand('git-context.clearSelection', async _context => {
     store.dispatch({ type: 'SELECTION_CLEARED' });
     await updateContexts();
   });
@@ -154,7 +154,7 @@ export async function registerCoreFeatures(
   });
 
   // Select all staged
-  shell.registerCommand('git-context.selectAllStaged', async context => {
+  shell.registerCommand('git-context.selectAllStaged', async _context => {
     const state = store.getState();
     const stagedPaths = state.stagedFiles.map(f => f.path);
     store.dispatch({
@@ -164,7 +164,7 @@ export async function registerCoreFeatures(
   });
 
   // Select all unstaged
-  shell.registerCommand('git-context.selectAllUnstaged', async context => {
+  shell.registerCommand('git-context.selectAllUnstaged', async _context => {
     const state = store.getState();
     const unstagedPaths = state.unstagedFiles.map(f => f.path);
     store.dispatch({
@@ -174,7 +174,7 @@ export async function registerCoreFeatures(
   });
 
   // Add more commits
-  shell.registerCommand('git-context.addMoreCommits', async context => {
+  shell.registerCommand('git-context.addMoreCommits', async _context => {
     try {
       providers.commitsProvider.loadMoreOffset += 20;
       await providers.commitsProvider.refresh();
@@ -185,7 +185,7 @@ export async function registerCoreFeatures(
   });
 
   // Reset all
-  shell.registerCommand('git-context.resetAll', async context => {
+  shell.registerCommand('git-context.resetAll', async _context => {
     // If cockpit features already registered this command, prefer a single path.
     // This registration provides the full reset (vectors + DB + orchestrator).
     const answer = await vscode.window.showWarningMessage(
@@ -219,8 +219,8 @@ export async function registerCoreFeatures(
       }
 
       // Clear database tables (except migration log)
-      const { getDatabaseManager } = await import('../storage/database');
-      const dbManager = getDatabaseManager();
+      const { getDatabaseManager: _getDatabaseManager } = await import('../storage/database');
+      const dbManager = _getDatabaseManager();
       const db = dbManager.getDatabase();
       const tablesToTruncate = [
         'commits_metadata',
@@ -279,20 +279,20 @@ export async function registerCoreFeatures(
   });
 
   // Bundle clear
-  shell.registerCommand('git-context.bundle.clear', async context => {
+  shell.registerCommand('git-context.bundle.clear', async _context => {
     store.dispatch({ type: 'BUNDLE_CLEARED' });
     // Clear bundle state (provider method may not exist, that's ok)
     await updateContexts();
   });
 
   // Bundle cancel
-  shell.registerCommand('git-context.bundle.cancel', async context => {
+  shell.registerCommand('git-context.bundle.cancel', async _context => {
     // Cancel any running analysis
     store.dispatch({ type: 'ANALYSIS_CANCELLED' });
   });
 
   // Bundle export
-  shell.registerCommand('git-context.bundle.export', async context => {
+  shell.registerCommand('git-context.bundle.export', async _context => {
     const state = orchestrator.getState();
     if (!state.bundleFacts) {
       vscode.window.showWarningMessage('No active bundle to export');
@@ -314,16 +314,16 @@ export async function registerCoreFeatures(
   });
 
   // Scroll to report section
-  shell.registerCommand('git-context.scrollToReportSection', async (context, sectionId) => {
+  shell.registerCommand('git-context.scrollToReportSection', async (_context, sectionId) => {
     // Forward to report webview
     logInfo(`Scroll to section: ${sectionId}`);
   });
 
   // Open symbol history
-  shell.registerCommand('git-context.openSymbolHistory', async (context, symbolId) => {
+  shell.registerCommand('git-context.openSymbolHistory', async (_context, symbolId) => {
     try {
       // Show symbol history in a new document
-      const { getDatabaseManager } = await import('../storage/database');
+      const { getDatabaseManager: _getDatabaseManager } = await import('../storage/database');
       const history = prepare(`
         SELECT sha, name, path, change_type, diff_snippet_post
         FROM symbols
@@ -352,7 +352,7 @@ export async function registerCoreFeatures(
   });
 
   // Download WASM files
-  shell.registerCommand('git-context.downloadWasmFiles', async context => {
+  shell.registerCommand('git-context.downloadWasmFiles', async _context => {
     try {
       const { spawn } = require('child_process');
       const path = require('path');

@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { getWorkingSnapshot } from '../../../facts/workingSnapshot';
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+import { PipelineState, PipelineStep } from '../pipelineTypes';
 
 export function createWorkingStep(): PipelineStep {
   return {

@@ -28,7 +28,7 @@ export async function registerGitWatcherFeature(
   const orchestrator = shell.getOrchestrator();
   const pipeline = await shell.getPipeline();
 
-  const watcher = new GitCommitWatcher(pipeline, orchestrator, async sha => {
+  const watcher = new GitCommitWatcher(pipeline, orchestrator, async _sha => {
     if (globalProviders) {
       await refreshCockpitState(orchestrator, globalProviders, 'git:commit');
     }

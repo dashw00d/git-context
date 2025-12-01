@@ -78,6 +78,23 @@ export class StructuralDiffManager {
 
     const metrics = this.extractMetrics(difftasticResult);
 
+    // Refine with CST diff if possible (uses tree-based verification)
+    try {
+      const cstResult = await this.computeCstDelta(parentContent, currentContent, filePath);
+      if (cstResult.changedFacts.length > 0) {
+        // If we have verified CST changes, ensure score is at least 0.1 per change
+        // This helps surface structural changes that might be small in line count
+        const cstScore = Math.min(cstResult.changedFacts.length * 0.1, 1.0);
+        metrics.structuralChangeScore = Math.max(metrics.structuralChangeScore, cstScore);
+
+        // Also set interface/control flow flags if CST facts indicate it
+        // (This is a heuristic, as HybridFacts don't explicitly say "interface" vs "control flow" yet,
+        // but we can infer from kinds if needed. For now, just boosting score is good.)
+      }
+    } catch (e) {
+      logDebug(`[StructDiff] Failed to compute CST delta for refinement: ${e}`);
+    }
+
     // Queue for batch write
     this.queueDiff(parentBlobSha, currentBlobSha, filePath, metrics);
 
@@ -198,16 +215,28 @@ export class StructuralDiffManager {
           ? difftasticOutput.rawData
           : JSON.stringify(difftasticOutput.rawData);
 
-      // Parse @@ hunk headers with regex
+      // Parse @@ hunk headers with regex to identify valid hunk blocks
       const hunkRegex = /^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/gm;
       const hunkLines = rawOutput.split('\n');
 
+      let inHunk = false;
       for (let i = 0; i < hunkLines.length; i++) {
         const line = hunkLines[i];
-        if (line.startsWith('+') && !line.startsWith('+++')) {
-          linesAdded++;
-        } else if (line.startsWith('-') && !line.startsWith('---')) {
-          linesRemoved++;
+
+        // Check for hunk header
+        if (hunkRegex.test(line)) {
+          inHunk = true;
+          // Reset regex lastIndex because test() advances it
+          hunkRegex.lastIndex = 0;
+          continue;
+        }
+
+        if (inHunk) {
+          if (line.startsWith('+') && !line.startsWith('+++')) {
+            linesAdded++;
+          } else if (line.startsWith('-') && !line.startsWith('---')) {
+            linesRemoved++;
+          }
         }
       }
     }
@@ -235,7 +264,19 @@ export class StructuralDiffManager {
 
     // Calculate structural change score: min(linesChanged / 10, 1.0)
     const linesChanged = linesAdded + linesRemoved;
-    const structuralChangeScore = Math.min(linesChanged / 10, 1.0);
+    let structuralChangeScore = Math.min(linesChanged / 10, 1.0);
+
+    // Refine with highlights if available (highlighted volume)
+    if (highlights.length > 0 && linesChanged > 0) {
+      // Heuristic: if we have highlights, use them to weight the score
+      // A fully highlighted line counts more than a partially highlighted one
+      // For now, we'll just boost the score if there are many highlights relative to lines changed
+      const highlightCount = highlights.length;
+      const highlightRatio = Math.min(highlightCount / linesChanged, 1.0);
+
+      // Boost score based on highlight density, but cap at 1.0
+      structuralChangeScore = Math.min(structuralChangeScore * (1 + highlightRatio), 1.0);
+    }
 
     return {
       structuralChangeScore,

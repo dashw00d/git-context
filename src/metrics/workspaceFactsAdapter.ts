@@ -14,7 +14,7 @@
  */
 
 import { WorkspaceFacts } from '../analysis/workspaceIndexer';
-import { SymbolInfo, EdgeInfo } from '../types';
+import { EdgeInfo, SymbolInfo } from '../types';
 
 export interface WorkspaceMetrics {
   symbolsAdded: number;

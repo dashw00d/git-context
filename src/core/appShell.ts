@@ -3,8 +3,8 @@ import { RefactorPipeline } from '../analysis/refactorPipeline';
 import { PipelineFactory } from '../services/pipelineFactory';
 import {
   CockpitOrchestrator,
-  getCockpitOrchestrator,
   CockpitStateChange,
+  getCockpitOrchestrator,
 } from '../state/cockpitOrchestrator';
 import { logError } from '../utils/logger';
 import type { CockpitState } from '../types/cockpit';

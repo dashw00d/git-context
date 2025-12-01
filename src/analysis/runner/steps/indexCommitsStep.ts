@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { CommitIndexer } from '../../commitIndexer';
-import { PipelineStep, PipelineState } from '../pipelineTypes';
+import { PipelineState, PipelineStep } from '../pipelineTypes';
 
 export function createIndexCommitsStep(
   commitIndexer: CommitIndexer,

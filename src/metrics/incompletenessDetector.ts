@@ -8,7 +8,7 @@
  * This adapter uses V2 detector for consistency with the pipeline.
  */
 
-import { SymbolContext, EdgeContext } from '../contracts/llmContext';
+import { EdgeContext, SymbolContext } from '../contracts/llmContext';
 import { DriftDetector } from '../facts/driftDetector';
 import { IntendedState } from '../facts/intendedMap';
 import { WorkingSnapshot } from '../facts/workingSnapshot';

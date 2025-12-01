@@ -5,8 +5,7 @@ import { registerCockpitFeatures } from './features/cockpitFeatures';
 import { registerCoreFeatures } from './features/coreFeatures';
 import { registerGitWatcherFeature, setGlobalProviders } from './features/gitWatcherFeature';
 import { LiveDiffTracker } from './liveTracker';
-import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
-import { logInfo, logDebug, logError } from './utils/logger';
+import { logDebug, logError, logInfo } from './utils/logger';
 import type { ActiveBundleProvider } from './providers/activeBundleProvider';
 import type { CommitsProvider } from './providers/commitsProvider';
 import type { SymbolHistoryProvider } from './providers/symbolHistoryProvider';
@@ -160,9 +159,11 @@ export async function activate(context: vscode.ExtensionContext) {
       }, 300);
     };
     context.subscriptions.push(
-      vscode.workspace.onDidChangeTextDocument(() =>
-        scheduleWorkspaceRefresh('workspace:textChange')
-      ),
+      vscode.workspace.onDidChangeTextDocument(e => {
+        // Ignore output channel updates to prevent infinite loops
+        if (e.document.uri.scheme === 'output') return;
+        scheduleWorkspaceRefresh('workspace:textChange');
+      }),
       vscode.workspace.onDidSaveTextDocument(() => scheduleWorkspaceRefresh('workspace:save'))
     );
 
@@ -266,11 +267,58 @@ export async function activate(context: vscode.ExtensionContext) {
     // Register git watcher feature
     await registerGitWatcherFeature(shell, context);
 
+    // Register debug commands
+    context.subscriptions.push(
+      vscode.commands.registerCommand('git-context.debug.dumpState', async () => {
+        if (!cockpitProvider) {
+          vscode.window.showErrorMessage('Cockpit provider not initialized');
+          return;
+        }
+        const state = cockpitProvider.getState();
+        const doc = await vscode.workspace.openTextDocument({
+          content: JSON.stringify(state, null, 2),
+          language: 'json',
+        });
+        await vscode.window.showTextDocument(doc);
+      }),
+      vscode.commands.registerCommand('git-context.debug.loadState', async () => {
+        if (!cockpitProvider) {
+          vscode.window.showErrorMessage('Cockpit provider not initialized');
+          return;
+        }
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+          vscode.window.showErrorMessage('No active editor with state JSON');
+          return;
+        }
+        try {
+          const text = editor.document.getText();
+          const state = JSON.parse(text);
+          cockpitProvider.injectState(state);
+          vscode.window.showInformationMessage('Debug state injected successfully');
+        } catch (error) {
+          vscode.window.showErrorMessage(`Failed to parse state JSON: ${error}`);
+        }
+      }),
+      vscode.commands.registerCommand('git-context.debug.openStateLog', async () => {
+        const { getStateLogger } = await import('./services/stateLogger');
+        const logPath = getStateLogger().getLogPath();
+        if (logPath && require('fs').existsSync(logPath)) {
+          const doc = await vscode.workspace.openTextDocument(logPath);
+          await vscode.window.showTextDocument(doc);
+        } else {
+          vscode.window.showInformationMessage(
+            'State log file not found (it may be empty or not initialized yet).'
+          );
+        }
+      })
+    );
+
     // Refresh providers when workspace changes
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
         // Re-setup watchers for new workspace structure
-        const newWatchers = setupFileWatchers(
+        const _newWatchers = setupFileWatchers(
           context,
           {
             activeBundleProvider,

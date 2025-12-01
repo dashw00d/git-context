@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { LRUCache } from 'lru-cache';
 import { GitOperations } from '../analysis/git';
-import { getExtensionConfig, getSupportedExtensions, createCustomIgnoreMatcher } from './config';
+import { createCustomIgnoreMatcher, getExtensionConfig, getSupportedExtensions } from './config';
 import { logDebug } from './logger';
 
 export interface PathFilterOptions {
