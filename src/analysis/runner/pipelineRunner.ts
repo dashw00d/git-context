@@ -182,7 +182,7 @@ export async function runPipeline(
             timestamp,
           });
           logDebug(`[Pipeline] Failed step: ${step.label} (${duration}ms): ${stepError.message}`);
-          // Continue with other steps in level (best-effort mode)
+          // Skip remaining work in this level for live mode optional steps\n+          if (state.mode === 'cheap_live' && LIVE_OPTIONAL_STEPS.has(step.id)) {\n+            return;\n+          }\n+\n+          // Continue with other steps in level (best-effort mode)
         });
     });
 

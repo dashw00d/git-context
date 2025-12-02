@@ -1,8 +1,21 @@
 import * as vscode from 'vscode';
-import { Action } from '../../state/actions';
-import { CockpitStateSchema } from '../../state/schemas';
+import {
+  analysisActions,
+  bundleActions,
+  commitActions,
+  reportActions,
+  selectionActions,
+  symbolActions,
+  uiActions,
+} from '../../state/actionCreators';
+import { CockpitHostMessageSchema, CockpitStateSchema } from '../../state/schemas';
 import { getStore } from '../../state/store';
-import { CockpitClientMessage, CockpitSectionKey, CockpitState } from '../../types/cockpit';
+import {
+  CockpitClientMessage,
+  CockpitHostMessage,
+  CockpitSectionKey,
+  CockpitState,
+} from '../../types/cockpit';
 import { logDebug, logError, logInfo } from '../../utils/logger';
 import { AnalysisController } from './services/AnalysisController';
 import { BundleManager } from './services/BundleManager';
@@ -161,7 +174,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
   }
 
   updateCommits(commits: CockpitState['commits']) {
-    getStore().dispatch({ type: 'COMMITS_DATA_UPDATED', payload: { commits } });
+    getStore().dispatch(commitActions.updateData(commits));
   }
 
   updateSelection(
@@ -171,98 +184,66 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     workspaceScope: CockpitState['workspaceScope'],
     selectedFiles?: string[]
   ) {
-    getStore().dispatch({
-      type: 'SELECTION_UPDATED',
-      payload: {
+    getStore().dispatch(
+      selectionActions.update(
         selectedCommitShas,
         selectedStagedPaths,
         selectedUnstagedPaths,
-        selectedFiles,
         workspaceScope,
-      },
-    });
+        selectedFiles
+      )
+    );
   }
 
   updateWorkspaceFiles(
     stagedFiles: CockpitState['stagedFiles'],
     unstagedFiles: CockpitState['unstagedFiles']
   ) {
-    getStore().dispatch({
-      type: 'WORKSPACE_FILES_UPDATED',
-      payload: { staged: stagedFiles, unstaged: unstagedFiles },
-    });
+    getStore().dispatch(commitActions.updateWorkspaceFiles(stagedFiles, unstagedFiles));
   }
 
   updateBundleFacts(
     bundleFacts: CockpitState['bundleFacts'],
     bundleSummary?: CockpitState['bundleSummary']
   ) {
-    getStore().dispatch({
-      type: 'BUNDLE_FACTS_UPDATED',
-      payload: {
-        facts: bundleFacts,
-        summary: bundleSummary ?? this.state.bundleSummary,
-      },
-    });
+    getStore().dispatch(
+      bundleActions.factsUpdated(bundleFacts, bundleSummary ?? this.state.bundleSummary)
+    );
   }
 
   updateSymbols(symbols: CockpitState['symbols']) {
-    getStore().dispatch({ type: 'SYMBOLS_UPDATED', payload: { symbols } });
+    getStore().dispatch(symbolActions.update(symbols));
   }
 
   updateReports(reports: CockpitState['reports']) {
-    getStore().dispatch({ type: 'REPORTS_UPDATED', payload: { reports } });
+    getStore().dispatch(reportActions.update(reports));
   }
 
   /**
    * @deprecated Use specific action dispatchers instead (updateBundleFacts, updateSymbols, etc.)
    * Only kept for backward compatibility and debug scenarios
    */
-  updateState(partial: Partial<CockpitState>) {
-    logInfo(
-      '[Cockpit] DEPRECATED: updateState called with partial update. Use specific actions instead.'
-    );
-    getStore().dispatch({
-      type: 'LEGACY_STATE_UPDATED',
-      payload: { partial, reason: 'deprecated_updateState' },
-    });
+  updateState(): void {
+    logInfo('[Cockpit] updateState is removed. Ignoring call; use explicit actions.');
   }
 
   /**
    * DEBUG ONLY: Inject a full state object to test UI rendering
    */
-  injectState(state: CockpitState) {
-    logInfo('[Cockpit] DEBUG: Injecting debug state...');
-    // Better approach: Dispatch a RESET_ALL_STATE then LEGACY_STATE_UPDATED
-    getStore().dispatch({ type: 'RESET_ALL_STATE' });
-    getStore().dispatch({
-      type: 'LEGACY_STATE_UPDATED',
-      payload: { partial: state, reason: 'debug_inject' },
-    });
-
-    // Force send to webview
-    this.state = getStore().getState();
-    this.sendState();
-    logInfo('[Cockpit] DEBUG: Debug state injected');
+  injectState(_state: CockpitState) {
+    logInfo('[Cockpit] DEBUG injectState removed. Use explicit actions instead.');
   }
 
   updateAnalysisProgress(isAnalyzing: boolean, step?: string, progress?: number) {
-    getStore().dispatch({
-      type: 'ANALYSIS_PROGRESS_UPDATED',
-      payload: { isAnalyzing, step, progress },
-    });
+    getStore().dispatch(analysisActions.progress(isAnalyzing, step, progress));
   }
 
   focusSection(section: CockpitSectionKey) {
-    getStore().dispatch({ type: 'SECTION_CHANGED', payload: { section } });
+    getStore().dispatch(uiActions.setActiveSection(section));
   }
 
   private async handleMessage(
-    msg:
-      | CockpitClientMessage
-      | { type: 'ready' }
-      | { type: 'clearError' }
-      | { type: 'dispatch'; action: Action }
+    msg: CockpitClientMessage | { type: 'ready' } | { type: 'clearError' }
   ) {
     if (this.messageController) {
       await this.messageController.handleMessage(msg);
@@ -299,8 +280,14 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         // In strict mode, we might want to block this.
       }
 
+      const message: CockpitHostMessage = { type: 'updateState', payload: sanitizedState };
+      try {
+        CockpitHostMessageSchema.parse(message);
+      } catch (validationError) {
+        logError('[Cockpit] Host message validation failed!', validationError);
+      }
       // eslint-disable-next-line no-restricted-syntax
-      this.view.webview.postMessage({ type: 'updateState', payload: sanitizedState });
+      this.view.webview.postMessage(message);
       logInfo('[Cockpit] Sent state update to webview');
     } catch (error) {
       logError('[Cockpit] Failed to send state', error);
@@ -323,7 +310,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       <html lang="en">
         <head>
           <meta charset="UTF-8">
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} blob: data:; style-src ${cspSource}; script-src 'nonce-${nonce}';">
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} blob: data:; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <link rel="stylesheet" href="${styleUri}">
           <title>Cockpit</title>

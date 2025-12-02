@@ -60,6 +60,7 @@ export type Action =
       type: 'WORKSPACE_FILES_UPDATED';
       payload: { staged: StagedFileDTO[]; unstaged: UnstagedFileDTO[] };
     }
+  | { type: 'WORKSPACE_FACTS_UPDATED'; payload: { workspaceFacts: any } }
 
   // UI State
   | { type: 'SECTION_CHANGED'; payload: { section: CockpitSectionKey } }
@@ -114,14 +115,22 @@ export type Action =
       };
     }
 
-  // Legacy / Migration
-  | { type: 'LEGACY_STATE_UPDATED'; payload: { partial: any; reason?: string } }
+  // Refresh
   | {
       type: 'REFRESH_REQUESTED';
       payload: { scope: 'all' | 'commits' | 'bundle' | 'symbols' | 'reports' };
     }
+  | { type: 'WORKSPACE_FACTS_UPDATED'; payload: { workspaceFacts: any } }
   | { type: 'LIVE_STATE_UPDATED'; payload: { status: 'idle' | 'analyzing' | 'error' } }
   | { type: 'RESET_ALL_STATE' }
+  | {
+      type: 'PIPELINE_HEALTH_UPDATED';
+      payload: {
+        currentStepId?: string | null;
+        pipelineErrors?: Array<{ stepId: string; error: string }>;
+        stepTimings?: Record<string, number>;
+      };
+    }
 
   // Navigation (Centralized)
   | { type: 'NAVIGATE_TO'; payload: { frame: ContextFrame } }

@@ -1,114 +1,103 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CockpitOrchestrator } from '../../../src/state/cockpitOrchestrator';
-import { getStore } from '../../../src/state/store';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { analysisActions, liveActions } from '../../../src/state/actionCreators';
+import { CockpitStore } from '../../../src/state/store';
 
-// Mock the store
-vi.mock('../../../src/state/store', () => ({
-  getStore: vi.fn(),
+// Mock state logger to avoid console output
+vi.mock('../../../src/services/stateLogger', () => ({
+  getStateLogger: vi.fn(() => ({
+    log: vi.fn(),
+  })),
 }));
 
-describe('CockpitOrchestrator', () => {
-  let mockStore: any;
-  let orchestrator: CockpitOrchestrator;
-  let subscribeCallback: (state: any, action: any) => void;
+describe('CockpitStore', () => {
+  let store: CockpitStore;
+  let _subscribeCallback: (state: any, action: any) => void;
 
   beforeEach(() => {
-    // Reset singleton instance (hacky but needed since it's a singleton)
-    (CockpitOrchestrator as any).instance = undefined;
+    // Reset singleton instance
+    (CockpitStore as any).resetForTesting?.() || vi.clearAllMocks();
 
-    mockStore = {
-      getState: vi.fn(() => ({})),
-      dispatch: vi.fn(),
-      subscribe: vi.fn((cb) => {
-        subscribeCallback = cb;
-        return vi.fn(); // unsubscribe
-      }),
-    };
-    (getStore as any).mockReturnValue(mockStore);
+    store = new CockpitStore();
 
-    orchestrator = CockpitOrchestrator.getInstance();
+    // Mock the subscribe method to capture callback
+    const originalSubscribe = store.subscribe.bind(store);
+    store.subscribe = vi.fn(cb => {
+      _subscribeCallback = cb;
+      return originalSubscribe(cb);
+    });
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should be a singleton', () => {
-    const instance2 = CockpitOrchestrator.getInstance();
-    expect(orchestrator).toBe(instance2);
+  it('should initialize with initial state', () => {
+    const state = store.getState();
+    expect(state).toMatchObject({
+      activeFrame: {
+        id: 'root',
+        level: 'bundle',
+        name: 'Bundle Overview',
+        status: 'ready',
+      },
+      history: [],
+      bundleView: null,
+      explorerData: [],
+      actionHistory: [],
+      isAnalyzing: false,
+    });
+    // analysisStep and analysisProgress should not be present initially
+    expect(state.analysisStep).toBeUndefined();
+    expect(state.analysisProgress).toBeUndefined();
   });
 
-  it('should dispatch LEGACY_STATE_UPDATED on updateState', () => {
-    const partial = { isAnalyzing: true };
-    orchestrator.updateState(partial, 'test-reason');
+  it('should dispatch actions and update state', () => {
+    const action = analysisActions.start('init');
+    store.dispatch(action);
 
-    expect(mockStore.dispatch).toHaveBeenCalledWith({
-      type: 'LEGACY_STATE_UPDATED',
-      payload: { partial, reason: 'test-reason' },
-    });
+    const state = store.getState();
+    expect(state.isAnalyzing).toBe(true);
+    expect(state.analysisStep).toBe('init');
+    expect(state.analysisProgress).toBe(0);
   });
 
-  it('should dispatch LIVE_ANALYSIS_UPDATED on updateLiveState', () => {
-    const partial = { status: 'analyzing' as const };
-    orchestrator.updateLiveState(partial);
+  it('should handle multiple state transitions', () => {
+    store.dispatch(analysisActions.start('parsing'));
+    store.dispatch(analysisActions.progress(true, 'processing', 75));
 
-    expect(mockStore.dispatch).toHaveBeenCalledWith({
-      type: 'LIVE_ANALYSIS_UPDATED',
-      payload: partial,
-    });
+    const state = store.getState();
+    expect(state.isAnalyzing).toBe(true);
+    expect(state.analysisStep).toBe('processing');
+    expect(state.analysisProgress).toBe(75);
   });
 
-  it('should trigger effects when state changes', async () => {
-    const effectHandler = vi.fn();
-    orchestrator.onStateChange('isAnalyzing', effectHandler);
+  it('should emit stateChanged events on dispatch', () => {
+    const listener = vi.fn();
+    const unsubscribe = store.subscribe(listener);
 
-    // Simulate store update
-    const newState = { isAnalyzing: true };
-    mockStore.getState.mockReturnValue(newState);
-    
-    // Trigger the subscription callback manually
-    // We need to simulate the action that caused the change
-    subscribeCallback(newState, {
-      type: 'LEGACY_STATE_UPDATED',
-      payload: { partial: { isAnalyzing: true } }
-    });
+    const action = analysisActions.start('test');
+    store.dispatch(action);
 
-    // Wait for debounce
-    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(listener).toHaveBeenCalledWith(store.getState(), action);
 
-    expect(effectHandler).toHaveBeenCalled();
-    const callArg = effectHandler.mock.calls[0][0];
-    expect(callArg.partial).toEqual({ isAnalyzing: true });
+    unsubscribe();
   });
 
-  it('should debounce multiple updates', async () => {
-    const changeHandler = vi.fn();
-    orchestrator.subscribe(changeHandler);
+  it('should handle live analysis updates', () => {
+    const payload = { status: 'analyzing' as const };
+    store.dispatch(liveActions.update(payload));
 
-    // Trigger multiple updates rapidly
-    subscribeCallback({}, { type: 'TEST_ACTION_1', payload: {} }); // Should result in empty partial or inferred
-    
-    // We need to simulate actions that the orchestrator understands to populate partials
-    subscribeCallback({}, { 
-      type: 'ANALYSIS_STARTED', 
-      payload: { step: 'init' } 
-    });
-    
-    subscribeCallback({}, { 
-      type: 'ANALYSIS_PROGRESS_UPDATED', 
-      payload: { isAnalyzing: true, step: 'parsing', progress: 50 } 
-    });
+    const state = store.getState();
+    expect(state.liveAnalysis.status).toBe('analyzing');
+  });
 
-    // Wait for debounce
-    await new Promise(resolve => setTimeout(resolve, 50));
+  it('should maintain action history', () => {
+    store.dispatch(analysisActions.start('test1'));
+    store.dispatch(analysisActions.progress(true, 'test2', 50));
 
-    expect(changeHandler).toHaveBeenCalledTimes(1);
-    const callArg = changeHandler.mock.calls[0][0];
-    // It merges partials
-    expect(callArg.partial).toEqual({
-      isAnalyzing: true,
-      analysisStep: 'parsing',
-      analysisProgress: 50
-    });
+    const state = store.getState();
+    expect(state.actionHistory).toHaveLength(2);
+    expect(state.actionHistory?.[0].type).toBe('ANALYSIS_STARTED');
+    expect(state.actionHistory?.[1].type).toBe('ANALYSIS_PROGRESS_UPDATED');
   });
 });

@@ -1,6 +1,18 @@
 import * as vscode from 'vscode';
-import { CockpitClientMessageSchema } from '../../../state/schemas';
+import {
+  analysisActions,
+  bundleActions,
+  commitActions,
+  liveActions,
+  navigationActions,
+  reportActions,
+  symbolActions,
+  uiActions,
+} from '../../../state/actionCreators';
+import { CockpitClientMessageSchema, CockpitHostMessageSchema } from '../../../state/schemas';
+import { selectSelection } from '../../../state/selectors';
 import { getStore } from '../../../state/store';
+import { CockpitHostMessage } from '../../../types/cockpit';
 import { logDebug, logError, logInfo } from '../../../utils/logger';
 import { MessageTracer } from '../../../utils/messageTracer';
 import { AnalysisController } from './AnalysisController';
@@ -31,14 +43,17 @@ export class MessageController {
     logInfo(`[Cockpit] Received message: ${msg.type}`);
     // console.log('[Cockpit] Message details:', msg); // Reduce noise
     switch (msg.type) {
-      case 'dispatch':
-        getStore().dispatch(msg.action);
+      case 'navigateToFrame':
+        getStore().dispatch(navigationActions.navigateTo(msg.frame));
+        break;
+      case 'navigateBack':
+        getStore().dispatch(navigationActions.navigateBack());
         break;
       case 'setActiveSection':
-        getStore().dispatch({ type: 'SECTION_CHANGED', payload: { section: msg.section } });
+        getStore().dispatch(uiActions.setActiveSection(msg.section));
         break;
       case 'generateLiveReport':
-        getStore().dispatch({ type: 'LIVE_STATE_UPDATED', payload: { status: 'analyzing' } });
+        getStore().dispatch(liveActions.updateLegacy({ status: 'analyzing' }));
         await vscode.commands.executeCommand('git-context.generateLiveReport');
         break;
       case 'startLiveAnalysis':
@@ -54,7 +69,7 @@ export class MessageController {
           );
           // Update depth if passed explicitly (Stage posts LAST_N separately but keep this for safety)
           if (typeof msg.lastN === 'number') {
-            getStore().dispatch({ type: 'LAST_N_COMMITS_CHANGED', payload: { n: msg.lastN } });
+            getStore().dispatch(commitActions.setLastN(msg.lastN));
           }
 
           // For lastN mode, prompt the user then dispatch analysis
@@ -77,15 +92,13 @@ export class MessageController {
 
             if (count) {
               const lastN = parseInt(count);
-              getStore().dispatch({ type: 'LAST_N_COMMITS_CHANGED', payload: { n: lastN } });
+              getStore().dispatch(commitActions.setLastN(lastN));
             }
           }
 
           // Trigger the new store-based analysis flow (auto-selects depth in effects)
-          getStore().dispatch({
-            type: 'ANALYSIS_REQUESTED',
-            payload: { selection: state.selectedCommitShas, force },
-          });
+          const selection = selectSelection(state).commits;
+          getStore().dispatch(analysisActions.request(selection, force));
 
           // Kick off a skeleton so the UI can show progressive context while pipeline runs
           this.analysisController
@@ -96,31 +109,22 @@ export class MessageController {
             .sendHybridProgress()
             .catch(err => logDebug(`[Cockpit] Hybrid update failed: ${err}`));
 
-          getStore().dispatch({
-            type: 'ANALYSIS_PROGRESS_UPDATED',
-            payload: { isAnalyzing: true },
-          });
-          getStore().dispatch({ type: 'ERROR_CLEARED' });
+          getStore().dispatch(analysisActions.progress(true));
+          getStore().dispatch(analysisActions.clearError());
           logInfo(
             `[Cockpit] Triggered analysis via store (${mode || 'selection'}), selection=${state.selectedCommitShas.length}`
           );
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          getStore().dispatch({
-            type: 'ANALYSIS_PROGRESS_UPDATED',
-            payload: { isAnalyzing: false },
-          });
-          getStore().dispatch({ type: 'ERROR_SET', payload: { error: errorMessage } });
+          getStore().dispatch(analysisActions.progress(false));
+          getStore().dispatch(analysisActions.setError(errorMessage));
           logError('[Cockpit] Failed to trigger analysis', error);
         }
         break;
       }
       case 'cancelAnalysis':
         await vscode.commands.executeCommand('git-context.bundle.cancel');
-        getStore().dispatch({
-          type: 'ANALYSIS_PROGRESS_UPDATED',
-          payload: { isAnalyzing: false },
-        });
+        getStore().dispatch(analysisActions.progress(false));
         break;
       case 'toggleCommit':
         if (msg.sha) {
@@ -136,24 +140,20 @@ export class MessageController {
         await vscode.commands.executeCommand('git-context.addMoreCommits');
         break;
       case 'setCommitsFilterText':
-        getStore().dispatch({
-          type: 'COMMITS_FILTER_TEXT_CHANGED',
-          payload: { text: msg.text ?? '' },
-        });
+        getStore().dispatch(commitActions.setFilterText(msg.text ?? ''));
         break;
       case 'setCommitsFilterScopes': {
         const state = getStore().getState();
-        getStore().dispatch({
-          type: 'COMMITS_FILTER_SCOPES_CHANGED',
-          payload: { scopes: { ...state.commitsFilterScopes, ...msg.scopes } },
-        });
+        getStore().dispatch(
+          commitActions.setFilterScopes({ ...state.commitsFilterScopes, ...msg.scopes })
+        );
         break;
       }
       case 'clearSelection':
         await vscode.commands.executeCommand('git-context.clearSelection');
         break;
       case 'resetAll':
-        getStore().dispatch({ type: 'RESET_ALL_STATE' });
+        getStore().dispatch(uiActions.resetAll());
         await vscode.commands.executeCommand('git-context.resetAll');
         break;
       case 'openActiveReport': {
@@ -256,35 +256,29 @@ export class MessageController {
             temperature: 0.2,
           });
 
-          this.sendMessage('assistantResponse', { text: reply });
+          this.sendMessage({ type: 'assistantResponse', payload: { text: reply } });
         } catch (err) {
           logError('[Cockpit] Assistant handling failed', err);
-          this.sendMessage('assistantResponse', {
-            text: `Assistant error: ${err instanceof Error ? err.message : String(err)}`,
+          this.sendMessage({
+            type: 'assistantResponse',
+            payload: {
+              text: `Assistant error: ${err instanceof Error ? err.message : String(err)}`,
+            },
           });
         }
         break;
       case 'setSymbolFilterText':
-        getStore().dispatch({
-          type: 'SYMBOL_FILTER_TEXT_CHANGED',
-          payload: { text: msg.text ?? '' },
-        });
+        getStore().dispatch(symbolActions.setFilterText(msg.text ?? ''));
         break;
       case 'setSymbolKindFilter':
-        getStore().dispatch({
-          type: 'SYMBOL_KIND_FILTER_CHANGED',
-          payload: { kind: msg.kind ?? 'all' },
-        });
+        getStore().dispatch(symbolActions.setKindFilter(msg.kind ?? 'all'));
         break;
       case 'setSymbolChangeFilter':
-        getStore().dispatch({
-          type: 'SYMBOL_CHANGE_FILTER_CHANGED',
-          payload: { change: msg.change ?? 'all' },
-        });
+        getStore().dispatch(symbolActions.setChangeFilter(msg.change ?? 'all'));
         break;
       case 'setLastNCommits':
         if (typeof msg.value === 'number') {
-          getStore().dispatch({ type: 'LAST_N_COMMITS_CHANGED', payload: { n: msg.value } });
+          getStore().dispatch(commitActions.setLastN(msg.value));
         }
         break;
       case 'compareFilesToCommit':
@@ -293,22 +287,13 @@ export class MessageController {
         }
         break;
       case 'setReportsFilterText':
-        getStore().dispatch({
-          type: 'REPORTS_FILTER_TEXT_CHANGED',
-          payload: { text: msg.text ?? '' },
-        });
+        getStore().dispatch(reportActions.setFilterText(msg.text ?? ''));
         break;
       case 'setReportsBranchFilter':
-        getStore().dispatch({
-          type: 'REPORTS_BRANCH_FILTER_CHANGED',
-          payload: { branch: msg.branch ?? 'all' },
-        });
+        getStore().dispatch(reportActions.setBranchFilter(msg.branch ?? 'all'));
         break;
       case 'setReportsShowPinnedOnly':
-        getStore().dispatch({
-          type: 'REPORTS_PINNED_FILTER_CHANGED',
-          payload: { showPinnedOnly: msg.value ?? false },
-        });
+        getStore().dispatch(reportActions.setPinnedOnly(msg.value ?? false));
         break;
       case 'scrollReportToSection':
         if (msg.sectionId) {
@@ -336,7 +321,7 @@ export class MessageController {
         await this.explorerController.updateExplorerTree();
         break;
       case 'clearError':
-        getStore().dispatch({ type: 'ERROR_CLEARED' });
+        getStore().dispatch(analysisActions.clearError());
         break;
       case 'getExplorerTree':
         await this.explorerController.updateExplorerTree();
@@ -370,9 +355,10 @@ export class MessageController {
         }
         break;
       case 'switchBundle':
-        if (msg.id) {
+        if (msg.id && msg.id !== 'root') {
+          // Don't switch if navigating to generic 'root' frame
           // 1. Clear UI state immediately to show clean slate
-          getStore().dispatch({ type: 'BUNDLE_SWITCH_START' });
+          getStore().dispatch(bundleActions.switchStart());
 
           // 2. Switch active bundle in database
           await this.bundleManager.setActiveBundle(msg.id);
@@ -382,19 +368,17 @@ export class MessageController {
 
           if (bundle) {
             // 4. Update config
-            getStore().dispatch({
-              type: 'BUNDLE_CONFIG_UPDATED',
-              payload: { config: bundle.config },
-            });
+            getStore().dispatch(bundleActions.configUpdated(bundle.config));
 
             // 5. Clear facts (will reload from analysis)
-            getStore().dispatch({
-              type: 'BUNDLE_FACTS_UPDATED',
-              payload: {
-                facts: null,
-                summary: { id: msg.id, commitCount: 0, fileCount: 0, symbolCount: 0 },
-              },
-            });
+            getStore().dispatch(
+              bundleActions.factsUpdated(null, {
+                id: msg.id,
+                commitCount: 0,
+                fileCount: 0,
+                symbolCount: 0,
+              })
+            );
 
             // 6. Populate skeleton, bundle data, and explorer
             await this.analysisController.updateSkeleton(bundle.config);
@@ -402,17 +386,14 @@ export class MessageController {
             await this.explorerController.updateExplorerTree();
 
             // 7. Navigate to bundle root with proper frame
-            getStore().dispatch({
-              type: 'NAVIGATE_TO',
-              payload: {
-                frame: {
-                  level: 'bundle',
-                  id: 'root',
-                  name: bundle.name,
-                  status: 'ready',
-                },
-              },
-            });
+            getStore().dispatch(
+              navigationActions.navigateTo({
+                level: 'bundle',
+                id: 'root',
+                name: bundle.name,
+                status: 'ready',
+              })
+            );
 
             logInfo(`[Cockpit] Switched to bundle ${msg.id}`);
           }
@@ -428,10 +409,7 @@ export class MessageController {
             exclusions: [],
           };
           const newConfig = { ...currentConfig, ...msg.config };
-          getStore().dispatch({
-            type: 'BUNDLE_CONFIG_UPDATED',
-            payload: { config: newConfig },
-          });
+          getStore().dispatch(bundleActions.configUpdated(newConfig));
 
           // Trigger immediate skeleton update for visual feedback
           await this.analysisController.updateSkeleton(newConfig);
@@ -451,16 +429,25 @@ export class MessageController {
   }
 
   private sendState() {
-    const message = { type: 'updateState', payload: getStore().getState() };
-    this.sendMessage(message.type, message.payload);
+    const state = getStore().getState();
+    const sanitizedState = {
+      ...state,
+      commits: state.commits.map(c => ({
+        ...c,
+        scope: c.scope || ('history' as const),
+      })),
+    };
+    const message: CockpitHostMessage = { type: 'updateState', payload: sanitizedState };
+    this.sendMessage(message);
     logInfo('[Cockpit] Sent state update to webview');
   }
 
-  sendMessage(type: string, payload: any) {
-    this.tracer.logOutgoing(type, payload, 'extension');
+  sendMessage(message: CockpitHostMessage) {
+    const parsed = CockpitHostMessageSchema.parse(message);
+    this.tracer.logOutgoing(parsed.type, parsed.payload, 'extension');
     try {
       // eslint-disable-next-line no-restricted-syntax
-      this.view.webview.postMessage({ type, payload });
+      this.view.webview.postMessage(parsed);
     } catch (error) {
       logError('[Cockpit] Failed to send message', error);
     }

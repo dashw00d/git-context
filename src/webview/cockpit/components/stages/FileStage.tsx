@@ -105,7 +105,7 @@ export const FileStage: React.FC<{ frame: any; onZoomIn: (frame: any) => void }>
                   onClick={() =>
                     onZoomIn({
                       level: 'symbol',
-                      id: `${frame.id}::${symbol.name}`,
+                      id: `${frame.id}:${symbol.name}`,
                       name: symbol.name,
                       status: 'scanning',
                     })

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { CockpitState } from '../../../types/cockpit';
+import { postMessageWithTracing } from '../utils/messageUtils';
 
 interface StatsSectionProps {
   state: CockpitState;
@@ -24,6 +25,14 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
     (findings?.legacyAudit?.legacyUsed || 0) +
     (findings?.legacyAudit?.replacedLeftovers?.length || 0) +
     (findings?.patternDrift?.conventionDrift?.driftSymbolCount || 0);
+
+  // Pipeline health snapshot
+  const stepTimings = Object.entries(state.pipelineStepTimings || {}).sort(
+    ([, a], [, b]) => (b || 0) - (a || 0)
+  );
+  const topSteps = stepTimings.slice(0, 3);
+  const pipelineErrors = state.pipelineErrors || [];
+  const currentStep = state.currentStepId ?? 'idle';
 
   // Calculate health score (replicated from MetricsRow logic)
   let healthScore = 100;
@@ -111,7 +120,10 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
           <button
             className="cockpit__button small ghost"
             onClick={() =>
-              vscode.postMessage({ type: 'openReport', reportId: state.bundleReportId })
+              postMessageWithTracing(vscode, {
+                type: 'openReport',
+                reportId: state.bundleReportId!,
+              })
             }
           >
             Open Full Report
@@ -143,6 +155,30 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
             <div className="stat-card__value">{state.bundleSummary?.symbolCount || 0}</div>
           </div>
         </div>
+      </div>
+
+      <div className="cockpit__stat-group cockpit__stat-group--full">
+        <h3>Pipeline Health</h3>
+        <div className="cockpit__stat-row">
+          <div className="cockpit__stat-item">
+            <span className="label">Current step</span>
+            <span className="value">{currentStep}</span>
+          </div>
+          <div className="cockpit__stat-item">
+            <span className="label">Errors</span>
+            <span className="value warning">{pipelineErrors.length}</span>
+          </div>
+        </div>
+        {topSteps.length > 0 && (
+          <div className="cockpit__stat-row" style={{ flexWrap: 'wrap', gap: '8px' }}>
+            {topSteps.map(([stepId, duration]) => (
+              <div key={stepId} className="cockpit__stat-item">
+                <span className="label">{stepId}</span>
+                <span className="value">{Math.round(duration)}ms</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

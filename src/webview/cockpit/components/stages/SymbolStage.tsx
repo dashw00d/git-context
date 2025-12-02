@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { postMessageWithTracing } from '../../utils/messageUtils';
 
 export const SymbolStage: React.FC<{ frame: any; vscode?: any }> = ({ frame, vscode }) => (
   <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -33,7 +34,10 @@ export const SymbolStage: React.FC<{ frame: any; vscode?: any }> = ({ frame, vsc
         {frame.data?.symbolId && vscode && (
           <button
             onClick={() => {
-              vscode.postMessage({ type: 'openSymbolInEditor', symbolId: frame.data.symbolId });
+              postMessageWithTracing(vscode, {
+                type: 'openSymbolInEditor',
+                symbolId: frame.data.symbolId,
+              });
             }}
             style={{
               padding: '4px 8px',
@@ -52,7 +56,7 @@ export const SymbolStage: React.FC<{ frame: any; vscode?: any }> = ({ frame, vsc
           <button
             onClick={() => {
               const suggestion = frame.data.drift[0].suggestedName;
-              vscode.postMessage({
+              postMessageWithTracing(vscode, {
                 type: 'applyRefactorSuggestion',
                 payload: {
                   symbolId: frame.data.symbolId,
@@ -77,7 +81,7 @@ export const SymbolStage: React.FC<{ frame: any; vscode?: any }> = ({ frame, vsc
         {vscode && (
           <button
             onClick={() => {
-              vscode.postMessage({
+              postMessageWithTracing(vscode, {
                 type: 'askAssistant',
                 payload: {
                   symbolId: frame.data?.symbolId,

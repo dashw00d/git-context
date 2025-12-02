@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { CockpitState } from '../../../types/cockpit';
+import { postMessageWithTracing } from '../utils/messageUtils';
 
 interface LiveTabContentProps {
   state: CockpitState;
@@ -80,7 +81,7 @@ export const LiveTabContent: React.FC<LiveTabContentProps> = ({ state, vscode })
         {!liveAnalysis.isTracking && (
           <button
             className="cockpit__button primary"
-            onClick={() => vscode.postMessage({ type: 'startLiveAnalysis' })}
+            onClick={() => postMessageWithTracing(vscode, { type: 'startLiveAnalysis' })}
           >
             Start Live Analysis
           </button>
@@ -91,7 +92,7 @@ export const LiveTabContent: React.FC<LiveTabContentProps> = ({ state, vscode })
             {liveAnalysis.pendingChanges > 0 && liveAnalysis.status !== 'analyzing' && (
               <button
                 className="cockpit__button primary"
-                onClick={() => vscode.postMessage({ type: 'generateLiveReport' })}
+                onClick={() => postMessageWithTracing(vscode, { type: 'generateLiveReport' })}
               >
                 Analyze Pending Changes
               </button>
@@ -99,7 +100,7 @@ export const LiveTabContent: React.FC<LiveTabContentProps> = ({ state, vscode })
 
             <button
               className="cockpit__button ghost"
-              onClick={() => vscode.postMessage({ type: 'generateLiveReport' })}
+              onClick={() => postMessageWithTracing(vscode, { type: 'generateLiveReport' })}
               disabled={liveAnalysis.status === 'analyzing'}
             >
               Run Manual Scan

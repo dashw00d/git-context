@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { CockpitClientMessageSchema } from '../../../state/schemas';
+import { CockpitClientMessage } from '../../../types/cockpit';
 import { MessageTracer } from '../../../utils/messageTracer';
 
 // Singleton tracer for webview side
@@ -11,7 +13,8 @@ export function getMessageTracer(): MessageTracer {
   return webviewTracer;
 }
 
-export function postMessageWithTracing(vscode: any, type: string, payload?: any): void {
-  getMessageTracer().logOutgoing(type, payload || {}, 'webview');
-  vscode.postMessage({ type, ...payload });
+export function postMessageWithTracing(vscode: any, message: CockpitClientMessage): void {
+  const parsed = CockpitClientMessageSchema.parse(message);
+  getMessageTracer().logOutgoing(parsed.type, parsed, 'webview');
+  vscode.postMessage(parsed);
 }

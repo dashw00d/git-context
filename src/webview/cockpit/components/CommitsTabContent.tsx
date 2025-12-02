@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { CockpitState } from '../../../types/cockpit';
+import { postMessageWithTracing } from '../utils/messageUtils';
 import { CommitList } from './CommitList';
 
 interface CommitsTabContentProps {
@@ -22,7 +23,7 @@ export const CommitsTabContent: React.FC<CommitsTabContentProps> = ({
       <div className="cockpit__actions">
         <button
           className="cockpit__button ghost"
-          onClick={() => vscode.postMessage({ type: 'clearSelection' })}
+          onClick={() => postMessageWithTracing(vscode, { type: 'clearSelection' })}
         >
           Clear selection
         </button>
@@ -31,7 +32,7 @@ export const CommitsTabContent: React.FC<CommitsTabContentProps> = ({
           onClick={() => {
             const value = prompt('Add commit by SHA or ref');
             if (value) {
-              vscode.postMessage({ type: 'addCommitBySha', shaOrRef: value });
+              postMessageWithTracing(vscode, { type: 'addCommitBySha', shaOrRef: value });
             }
           }}
         >
@@ -71,7 +72,7 @@ export const CommitsTabContent: React.FC<CommitsTabContentProps> = ({
         {state.hasMoreCommits ? (
           <button
             className="cockpit__button ghost"
-            onClick={() => vscode.postMessage({ type: 'loadMoreCommits' })}
+            onClick={() => postMessageWithTracing(vscode, { type: 'loadMoreCommits' })}
           >
             Load more
           </button>

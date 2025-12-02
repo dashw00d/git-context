@@ -3,6 +3,7 @@
     "module": "commonjs",
     "target": "ES2020",
     "outDir": "out",
+    "rootDir": "src",
     "lib": ["ES2020", "DOM"],
     "jsx": "react",
     "sourceMap": true,
@@ -15,5 +16,5 @@
     "declarationMap": true
   },
   "exclude": ["node_modules", "**/node_modules/*", "out", "tests/manual/**", "tests/performance/**"],
-  "include": ["src/**/*", ".eslintrc.cjs", "tests/**/*"]
+  "include": ["src/**/*"]
 }

@@ -117,9 +117,14 @@ export class EmbeddingIndexer {
 
     const symbolShards = [];
 
+    logInfo(`[EmbeddingIndexer] Gathering symbol history from ${commitFacts.length} commits...`);
+
     // Gather symbol history from DB
     for (const facts of commitFacts) {
       const symbols = this.loadSymbolHistory(facts.sha);
+      logDebug(
+        `[EmbeddingIndexer] Found ${symbols.length} symbols for commit ${facts.sha.substring(0, 8)}`
+      );
 
       for (const symbol of symbols) {
         const shard = await this.buildSymbolShard(symbol, facts, projectId);
@@ -127,25 +132,43 @@ export class EmbeddingIndexer {
       }
     }
 
+    if (symbolShards.length === 0) {
+      logInfo('[EmbeddingIndexer] No symbols to index, skipping symbol indexing');
+      return 0;
+    }
+
     logInfo(
       `[EmbeddingIndexer] Indexing ${symbolShards.length} symbol shards to ${collectionName}...`
     );
 
+    let processed = 0;
     await runWithConcurrency(symbolShards, 10, async ({ shard, symbol }) => {
-      const embedding = await generateEmbedding(shard.text);
+      try {
+        const embedding = await generateEmbedding(shard.text);
 
-      await client.upsert(collectionName, {
-        wait: true,
-        points: [
-          {
-            id: this.symbolToPointId(symbol.symbol_dna_id, symbol.sha),
-            vector: embedding,
-            payload: shard.metadata,
-          },
-        ],
-      });
+        await client.upsert(collectionName, {
+          wait: true,
+          points: [
+            {
+              id: this.symbolToPointId(symbol.symbol_dna_id, symbol.sha),
+              vector: embedding,
+              payload: shard.metadata,
+            },
+          ],
+        });
+
+        processed++;
+        if (processed % 10 === 0) {
+          logDebug(`[EmbeddingIndexer] Processed ${processed}/${symbolShards.length} symbols`);
+        }
+      } catch (error) {
+        logDebug(
+          `[EmbeddingIndexer] Failed to index symbol ${symbol.name}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
     });
 
+    logInfo(`[EmbeddingIndexer] Symbol indexing complete: ${processed}/${symbolShards.length}`);
     return symbolShards.length;
   }
 

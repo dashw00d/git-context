@@ -26,7 +26,7 @@ export interface CommitDTO {
   files?: Array<{ path: string; status: FileStatus }>; // files changed in this commit
 }
 
-export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'unknown';
+export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'unknown' | string;
 
 export interface StagedFileDTO {
   path: string;
@@ -141,6 +141,7 @@ export interface CockpitState {
   /* Pipeline execution state */
   currentStepId?: string | null;
   pipelineErrors?: Array<{ stepId: string; error: string }>;
+  pipelineStepTimings?: Record<string, number>;
 
   /* Historical context (NEW) */
   retrievedHistory?: {
@@ -176,7 +177,7 @@ export interface CockpitState {
   unstagedFiles: UnstagedFileDTO[];
 
   /* Active bundle section */
-  bundleSummary: BundleSummaryDTO | null;
+  bundleSummary?: BundleSummaryDTO | null;
   bundleFacts: BundleFactsDTO; // used by full report webview, not rendered in cockpit
   bundleReportId: string | null; // id of currently active report, if any
   bundleView: BundleView | null;
@@ -221,7 +222,7 @@ export interface CockpitState {
   actionHistory?: Array<{ type: string; payload?: any; timestamp: string }>;
 }
 
-export type ZoomLevel = 'bundle' | 'blast_radius' | 'file' | 'symbol';
+export type ZoomLevel = 'bundle' | 'folder' | 'blast_radius' | 'file' | 'symbol';
 export type AnalysisStatus = 'ready' | 'scanning' | 'unknown' | 'error';
 
 export interface ContextFrame {
@@ -448,7 +449,13 @@ export type CockpitClientMessage =
   | {
       type: 'updateBundleConfig';
       config: Partial<BundleConfig>;
-    };
+    }
+  | {
+      type: 'ready';
+    }
+  | { type: 'clearError' }
+  | { type: 'navigateToFrame'; frame: ContextFrame }
+  | { type: 'navigateBack' };
 
 /* ---------- Host → Cockpit messages ---------- */
 
@@ -459,6 +466,14 @@ export type CockpitHostMessage =
       payload: { isAnalyzing: boolean; step?: string; progress?: number };
     }
   | { type: 'focusSection'; payload: { section: CockpitSectionKey } }
-  | { type: 'updateExplorerTree'; payload: any[] }
-  | { type: 'updateFrame'; payload: { frame: any; data: any } }
-  | { type: 'updateBundle'; payload: any };
+  | { type: 'assistantResponse'; payload: { text: string } }
+  | { type: 'updateExplorerTree'; payload: ExplorerNode[] }
+  | { type: 'updateFrame'; payload: { frame: ContextFrame; data: any } }
+  | {
+      type: 'updateBundle';
+      payload: {
+        view?: BundleView | null;
+        summary?: BundleSummaryDTO | null;
+        facts?: BundleFactsDTO;
+      };
+    };

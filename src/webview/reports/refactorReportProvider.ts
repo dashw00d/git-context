@@ -2,7 +2,14 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { EvidenceLink, LlmAnalysis } from '../../analysis/llmAnalyst/blocks';
 import { resolveEvidencePath } from '../../analysis/llmAnalyst/renderer';
+import { LlmAnalysisSchema } from '../../analysis/llmAnalyst/schemas';
 import { RefactorBundleFacts } from '../../facts/types';
+import { BundleFactsSchema } from '../../state/schemas';
+import {
+  ReportClientMessageSchema,
+  ReportHostMessage,
+  ReportHostMessageSchema,
+} from '../../types/reportWebview';
 import { getGitRoot } from '../../utils/config';
 import { logDebug, logError } from '../../utils/logger';
 
@@ -80,17 +87,24 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
 
     // Setup message handling
     webviewView.webview.onDidReceiveMessage(async message => {
-      if (message.type === 'evidenceClick') {
-        await this._handleEvidenceClick(message.evidence);
-      } else if (message.type === 'action') {
-        if (message.action === 'delete') {
-          await vscode.commands.executeCommand('git-context.applyRefactor', {
-            action: 'delete',
-            symbolId: message.data.symbolId,
-            filePath: message.data.filePath,
-            range: message.data.range,
-          });
-        }
+      const parsed = ReportClientMessageSchema.safeParse(message);
+      if (!parsed.success) {
+        logError('[WEBVIEW] Invalid report message received', message);
+        return;
+      }
+
+      if (parsed.data.type === 'evidenceClick') {
+        await this._handleEvidenceClick(parsed.data.evidence);
+        return;
+      }
+
+      if (parsed.data.type === 'action' && parsed.data.action === 'delete') {
+        await vscode.commands.executeCommand('git-context.applyRefactor', {
+          action: 'delete',
+          symbolId: parsed.data.data?.symbolId,
+          filePath: parsed.data.data?.filePath,
+          range: parsed.data.data?.range,
+        });
       }
     });
   }
@@ -107,9 +121,12 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    logDebug(
-      `[WEBVIEW] Posting message to webview - hasAnalysis: ${!!this._analysis}, hasFacts: ${!!this._facts}`
-    );
+    if (!this._analysis || !this._facts) {
+      logDebug('[WEBVIEW] Skipping update - analysis or facts missing');
+      return;
+    }
+
+    logDebug('[WEBVIEW] Posting message to webview with validated data');
 
     // Create slim payload to avoid VS Code message size limits (approx 1MB)
     const slimAnalysis = this._analysis
@@ -145,10 +162,13 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
         }
       : undefined;
 
-    const message = {
+    const validatedAnalysis = LlmAnalysisSchema.parse(slimAnalysis);
+    const validatedFacts = BundleFactsSchema.parse(slimFacts as any);
+
+    const message: ReportHostMessage = {
       type: 'setData',
-      analysis: slimAnalysis,
-      facts: slimFacts,
+      analysis: validatedAnalysis,
+      facts: validatedFacts,
     };
 
     // Check size and warn/slim further if needed
@@ -165,7 +185,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    webview.postMessage(message);
+    this._postMessage(message);
     logDebug('[WEBVIEW] Message posted to webview');
   }
 
@@ -186,13 +206,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
    * Navigate to a specific commit section in the report
    */
   public navigateToCommitSection(commitSha: string): void {
-    const webview = this._panel?.webview;
-    if (!webview) {
-      return;
-    }
-
-    // Send scroll message to webview
-    webview.postMessage({
+    this._postMessage({
       type: 'scrollToSection',
       sectionId: `commit-${commitSha.substring(0, 8)}`,
     });
@@ -202,13 +216,7 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
    * Scroll to a specific section in the report (e.g., "overview", "incompleteness", "drift", "legacy", "timeline")
    */
   public scrollToSection(sectionId: string): void {
-    const webview = this._panel?.webview;
-    if (!webview) {
-      return;
-    }
-
-    // Send scroll message to webview
-    webview.postMessage({
+    this._postMessage({
       type: 'scrollToSection',
       sectionId,
     });
@@ -309,7 +317,18 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     if (!webview) {
       return;
     }
-    webview.postMessage(message);
+    this._postMessage(message as ReportHostMessage);
+  }
+
+  private _postMessage(message: ReportHostMessage): void {
+    const parsed = ReportHostMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      logError('[WEBVIEW] Refusing to send invalid report message', message);
+      return;
+    }
+
+    // eslint-disable-next-line no-restricted-syntax
+    this._panel?.webview.postMessage(parsed.data);
   }
 
   /**

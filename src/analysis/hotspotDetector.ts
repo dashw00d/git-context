@@ -670,10 +670,23 @@ export class HotspotDetector {
     return await this.commitService.countCommits();
   }
 
-  private async getFileAuthorCount(_filePath: string): Promise<number> {
-    // This is a simplified implementation
-    // In a real system, we'd track authors per file
-    return Math.min(5, Math.floor(Math.random() * 10) + 1); // Placeholder
+  private async getFileAuthorCount(filePath: string): Promise<number> {
+    try {
+      // Get unique authors who have modified this file from git history
+      const stmt = prepare(`
+        SELECT COUNT(DISTINCT m.author) as author_count
+        FROM commits_metadata m
+        JOIN files f ON f.sha = m.sha
+        WHERE f.path = ?
+      `);
+      const result = stmt.get(filePath) as { author_count: number } | undefined;
+
+      // Return author count, or default to 1 if no data (file might be new/untracked)
+      return result?.author_count || 1;
+    } catch (error) {
+      // If query fails, return a conservative estimate
+      return 1;
+    }
   }
 
   private async updateAuthorCount(filePath: string, author: string): Promise<number> {

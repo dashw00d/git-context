@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { CockpitState, SymbolChangeType } from '../../../types/cockpit';
+import { postMessageWithTracing } from '../utils/messageUtils';
 import { formatDate, getSymbolKindIcon, getChangeTypeBadge } from '../utils';
 
 interface SymbolListProps {
@@ -66,13 +67,17 @@ export const SymbolList: React.FC<SymbolListProps> = ({ state, vscode }) => {
           <div className="cockpit__actions">
             <button
               className="cockpit__button ghost small"
-              onClick={() => vscode.postMessage({ type: 'openSymbolHistory', symbolId: s.id })}
+              onClick={() =>
+                postMessageWithTracing(vscode, { type: 'openSymbolHistory', symbolId: s.id })
+              }
             >
               Open history
             </button>
             <button
               className="cockpit__button ghost small"
-              onClick={() => vscode.postMessage({ type: 'openSymbolInEditor', symbolId: s.id })}
+              onClick={() =>
+                postMessageWithTracing(vscode, { type: 'openSymbolInEditor', symbolId: s.id })
+              }
             >
               Open latest
             </button>

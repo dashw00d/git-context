@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { CockpitState, ContextFrame, ExplorerNode } from '../../../types/cockpit';
+import { CockpitHostMessageSchema } from '../../../state/schemas';
 import { getMessageTracer, postMessageWithTracing } from '../utils/messageUtils';
 import { Assistant } from './Assistant';
 import { Inspector } from './Inspector';
@@ -47,21 +48,28 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
 
   React.useEffect(() => {
     // Request explorer tree and bundle data on mount
-    postMessageWithTracing(vscode, 'getExplorerTree');
-    postMessageWithTracing(vscode, 'getBundleData');
+    postMessageWithTracing(vscode, { type: 'getExplorerTree' });
+    postMessageWithTracing(vscode, { type: 'getBundleData' });
 
     const handler = (event: MessageEvent) => {
-      const message = event.data;
-      getMessageTracer().logIncoming(message.type, message.payload, 'extension');
+      const raw = event.data;
 
-      if (message?.type === 'analysisError' && message.payload) {
-        console.warn('[SuperWebview] Analysis error', message.payload);
-      } else if (message?.type === 'assistantResponse' && message.payload) {
+      // Handle specific SuperWebview messages only
+      if (raw?.type === 'analysisError' && raw.payload) {
+        console.warn('[SuperWebview] Analysis error', raw.payload);
+        return;
+      }
+
+      if (raw?.type === 'assistantResponse' && raw.payload) {
         setAssistantMessages(prev => [
           ...prev,
-          { role: 'assistant', content: message.payload.text },
+          { role: 'assistant', content: raw.payload.text || '' },
         ]);
+        return;
       }
+
+      // All other messages (updateState, etc.) are handled by parent App component
+      // No need to validate or warn about them here
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
@@ -74,21 +82,17 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
   }, []);
 
   const handleZoomIn = (frame: ContextFrame) => {
-    postMessageWithTracing(vscode, 'dispatch', {
-      action: { type: 'NAVIGATE_TO', payload: { frame } },
-    });
+    postMessageWithTracing(vscode, { type: 'navigateToFrame', frame });
     setSelection(null);
   };
 
   const handleSendAssistant = (text: string) => {
     setAssistantMessages(prev => [...prev, { role: 'user', content: text }]);
-    postMessageWithTracing(vscode, 'askAssistant', { text, frame: activeFrame });
+    postMessageWithTracing(vscode, { type: 'askAssistant', payload: { text, frame: activeFrame } });
   };
 
   const handleZoomOut = () => {
-    postMessageWithTracing(vscode, 'dispatch', {
-      action: { type: 'NAVIGATE_BACK' },
-    });
+    postMessageWithTracing(vscode, { type: 'navigateBack' });
     setSelection(null);
   };
 
@@ -106,9 +110,9 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         status: 'ready',
         parentId: 'root',
       };
-      vscode.postMessage({
-        type: 'dispatch',
-        action: { type: 'NAVIGATE_TO', payload: { frame: newFrame } },
+      postMessageWithTracing(vscode, {
+        type: 'navigateToFrame',
+        frame: newFrame,
       });
       return;
     }
@@ -118,7 +122,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
       const bundleId = node.id.replace('bundle-', '');
 
       // Switch active bundle
-      postMessageWithTracing(vscode, 'switchBundle', { id: bundleId });
+      postMessageWithTracing(vscode, { type: 'switchBundle', id: bundleId });
 
       // Navigate to root of this new bundle
       const newFrame: ContextFrame = {
@@ -129,8 +133,9 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         parentId: undefined, // It is the root
       };
 
-      postMessageWithTracing(vscode, 'dispatch', {
-        action: { type: 'NAVIGATE_TO', payload: { frame: newFrame } },
+      postMessageWithTracing(vscode, {
+        type: 'navigateToFrame',
+        frame: newFrame,
       });
       return;
     }
@@ -143,6 +148,9 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         break;
       case 'symbol':
         level = 'symbol';
+        break;
+      case 'folder':
+        level = 'folder';
         break;
       default:
         level = 'bundle';
@@ -159,11 +167,12 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         status: 'scanning',
         parentId: 'root',
       };
-      postMessageWithTracing(vscode, 'dispatch', {
-        action: { type: 'NAVIGATE_TO', payload: { frame: newFrame } },
+      postMessageWithTracing(vscode, {
+        type: 'navigateToFrame',
+        frame: newFrame,
       });
 
-      postMessageWithTracing(vscode, 'analyzeFrame', { frameId: node.id });
+      postMessageWithTracing(vscode, { type: 'analyzeFrame', frameId: node.id });
     } else {
       const newFrame: ContextFrame = {
         level,
@@ -172,8 +181,9 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         status: 'ready',
         parentId: level === 'bundle' ? undefined : 'root',
       };
-      postMessageWithTracing(vscode, 'dispatch', {
-        action: { type: 'NAVIGATE_TO', payload: { frame: newFrame } },
+      postMessageWithTracing(vscode, {
+        type: 'navigateToFrame',
+        frame: newFrame,
       });
     }
   };

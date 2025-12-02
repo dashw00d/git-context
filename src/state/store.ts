@@ -8,12 +8,14 @@ import { cockpitReducer, initialState } from './reducers';
 export class CockpitStore extends EventEmitter {
   private state: CockpitState;
   private debugger: StateDebugger;
+  private traceActions: boolean;
 
   constructor() {
     super();
     this.state = initialState;
     // Always create debugger, it will check getDebugMode() internally for logging
     this.debugger = new StateDebugger();
+    this.traceActions = process.env.GIT_CONTEXT_TRACE_ACTIONS === '1';
   }
 
   getState(): CockpitState {
@@ -29,13 +31,13 @@ export class CockpitStore extends EventEmitter {
 
     // Append action to history (capped at 50)
     const newHistory = [
+      ...(baseNextState.actionHistory || []),
       {
         type: action.type,
         payload: (action as any).payload,
         timestamp: new Date().toISOString(),
       },
-      ...(baseNextState.actionHistory || []),
-    ].slice(0, 50);
+    ].slice(-50);
 
     // Assign final state with updated history
     const nextState = { ...baseNextState, actionHistory: newHistory };
@@ -47,20 +49,26 @@ export class CockpitStore extends EventEmitter {
     }
 
     // Log state transition
-    try {
-      const { getStateLogger } = require('../services/stateLogger');
-      getStateLogger().log({
-        actionType: action.type,
-        payload: (action as any).payload,
-        stateBefore: prevState,
-        stateAfter: nextState,
-      });
-    } catch (e) {
-      // Ignore logging errors to prevent app crash
-    }
+    if (this.traceActions) {
+      try {
+        const { getStateLogger } = require('../services/stateLogger');
+        getStateLogger().log({
+          actionType: action.type,
+          payload: (action as any).payload,
+          stateBefore: prevState,
+          stateAfter: nextState,
+        });
+      } catch (e) {
+        // Ignore logging errors to prevent app crash
+      }
 
-    // Log action and state diff (simplified)
-    console.log(`[Store] Action: ${action.type}`, 'Payload:', (action as any).payload);
+      // Minimal console trace to avoid noisy dumps
+      const payloadKeys = Object.keys((action as any).payload || {});
+      console.log(
+        `[Store] Action: ${action.type}`,
+        payloadKeys.length ? `payloadKeys=${payloadKeys.join(',')}` : ''
+      );
+    }
 
     this.emit('stateChanged', this.state, action);
   }

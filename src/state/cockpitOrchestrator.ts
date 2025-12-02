@@ -49,51 +49,30 @@ export class CockpitOrchestrator extends EventEmitter {
     this.debounceMs = debounceMs;
     this.store = getStore();
 
-    // Subscribe to store changes to propagate to legacy listeners
+    // Subscribe to store changes to propagate to listeners
     this.store.subscribe((state, action) => {
-      // Determine partial state from action if possible, or diff?
-      // For legacy actions, we have the partial.
-      // For new actions, we might need to infer or just emit the whole state as changed.
-
       let partial: Partial<CockpitState> = {};
-      let reason: string = action.type;
+      const reason: string = action.type;
 
-      if (action.type === 'LEGACY_STATE_UPDATED') {
-        partial = action.payload.partial;
-        reason = action.payload.reason || action.type;
-      } else {
-        // For non-legacy actions, we don't easily know exactly what changed without diffing.
-        // But we can emit a generic update.
-        // Ideally, we'd diff, but for now let's assume the UI re-renders based on 'full' state anyway.
-        // We'll pass an empty partial or a "full update" marker?
-        // Existing consumers might rely on `partial` keys to decide what to update.
-        // So we should try to provide meaningful partials.
-
-        // Quick mapping for common actions:
-        if (action.type === 'ANALYSIS_STARTED')
-          partial = { isAnalyzing: true, analysisStep: action.payload.step };
-        else if (action.type === 'ANALYSIS_COMPLETED')
-          partial = { isAnalyzing: false, bundleFacts: action.payload.facts };
-        else if (action.type === 'ANALYSIS_PROGRESS_UPDATED')
-          partial = {
-            isAnalyzing: action.payload.isAnalyzing,
-            analysisStep: action.payload.step,
-            analysisProgress: action.payload.progress,
-          };
-        else if (action.type === 'SELECTION_TOGGLED')
-          partial = { selectedCommitShas: state.selectedCommitShas };
-        else if (action.type === 'SECTION_CHANGED')
-          partial = { activeSection: action.payload.section };
-        else if (action.type === 'EXPLORER_UPDATED')
-          partial = { explorerData: action.payload.nodes };
-        else if (action.type === 'BUNDLE_VIEW_UPDATED')
-          partial = { bundleView: action.payload.view };
-        else if (action.type === 'LIVE_ANALYSIS_UPDATED')
-          partial = { liveAnalysis: { ...this.store.getState().liveAnalysis, ...action.payload } };
-        // ... etc.
-        // If we miss something, the UI might not update granularly if it relies on partial keys.
-        // But React usually diffs props.
-      }
+      // Quick mapping for common actions:
+      if (action.type === 'ANALYSIS_STARTED')
+        partial = { isAnalyzing: true, analysisStep: action.payload.step };
+      else if (action.type === 'ANALYSIS_COMPLETED')
+        partial = { isAnalyzing: false, bundleFacts: action.payload.facts };
+      else if (action.type === 'ANALYSIS_PROGRESS_UPDATED')
+        partial = {
+          isAnalyzing: action.payload.isAnalyzing,
+          analysisStep: action.payload.step,
+          analysisProgress: action.payload.progress,
+        };
+      else if (action.type === 'SELECTION_TOGGLED')
+        partial = { selectedCommitShas: state.selectedCommitShas };
+      else if (action.type === 'SECTION_CHANGED')
+        partial = { activeSection: action.payload.section };
+      else if (action.type === 'EXPLORER_UPDATED') partial = { explorerData: action.payload.nodes };
+      else if (action.type === 'BUNDLE_VIEW_UPDATED') partial = { bundleView: action.payload.view };
+      else if (action.type === 'LIVE_ANALYSIS_UPDATED')
+        partial = { liveAnalysis: { ...this.store.getState().liveAnalysis, ...action.payload } };
 
       this.queueEmit(state, partial, reason);
     });
@@ -126,29 +105,25 @@ export class CockpitOrchestrator extends EventEmitter {
     return { debtScore, symbolCount, fileCount };
   }
 
-  reset(partial?: Partial<CockpitState>, reason = 'reset'): void {
-    // We don't have a RESET action yet, but we can use LEGACY
-    // Or add a RESET action.
-    // For now, use legacy update to set state (though it won't clear fields not in partial)
-    // Actually, store.state is overwritten in reducer? No, spread.
-    // To truly reset, we need a RESET action.
-    // But for now, let's just update.
-    this.store.dispatch({
-      type: 'LEGACY_STATE_UPDATED',
-      payload: { partial: partial || {}, reason },
-    });
+  reset(): void {
+    this.store.dispatch({ type: 'RESET_ALL_STATE' });
   }
 
-  updateState(partial: Partial<CockpitState>, reason = 'updateState'): void {
-    this.store.dispatch({ type: 'LEGACY_STATE_UPDATED', payload: { partial, reason } });
+  getStore(): CockpitStore {
+    return this.store;
+  }
+
+  updateState(_partial?: Partial<CockpitState>, _reason = 'updateState'): void {
+    // Explicitly avoid legacy partial merges; log for visibility.
+    logDebug('[CockpitOrchestrator] updateState is removed; ignoring call');
   }
 
   updatePartial<K extends keyof CockpitState>(
-    key: K,
-    value: CockpitState[K],
-    reason?: string
+    _key?: K,
+    _value?: CockpitState[K],
+    _reason?: string
   ): void {
-    this.updateState({ [key]: value } as Partial<CockpitState>, reason ?? `update:${String(key)}`);
+    logDebug('[CockpitOrchestrator] updatePartial is removed; ignoring call');
   }
 
   updateLiveState(partial: Partial<CockpitState['liveAnalysis']>, _reason = 'live:update'): void {

@@ -6,6 +6,7 @@ import { GitOperations } from './analysis/git';
 import { SymbolExtractor } from './analysis/symbols';
 import { getTreeSitterParser } from './analysis/tree-sitter';
 import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
+import { getStore } from './state/store';
 import {
   detectLanguage,
   getExtensionConfig,
@@ -162,13 +163,15 @@ export class LiveDiffTracker extends EventEmitter {
       const facts = await workspaceIndexer.analyzeWorkspace(staged ? 'staged' : 'unstaged');
 
       if (facts) {
-        getCockpitOrchestrator().updateState(
-          {
-            workspaceFacts: facts,
-            activeSection: 'live',
-          },
-          'liveTracker:analysis'
-        );
+        const dispatcher = getStore();
+        dispatcher.dispatch({
+          type: 'WORKSPACE_FACTS_UPDATED',
+          payload: { workspaceFacts: facts },
+        });
+        dispatcher.dispatch({
+          type: 'SECTION_CHANGED',
+          payload: { section: 'live' },
+        });
       }
     } catch (error) {
       logError('[LiveTracker] Analysis failed', error);

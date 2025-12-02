@@ -33,12 +33,14 @@ export class AnalysisController {
     const gitRoot = (await import('../../../utils/config')).getGitRoot();
     if (!gitRoot || !this.view) return;
 
-    const level: 'file' | 'symbol' = frameId.includes('::') ? 'symbol' : 'file';
+    // Symbol IDs use single colon separator (e.g., "file.php:method_name")
+    // Detect symbols by checking if there's a colon after a file extension
+    const symbolMatch = frameId.match(/^(.+\.\w+):(.+)$/);
+    const level: 'file' | 'symbol' = symbolMatch ? 'symbol' : 'file';
     let targetPath = frameId;
 
-    if (level === 'symbol') {
-      const [filePart] = frameId.split('::');
-      targetPath = filePart;
+    if (level === 'symbol' && symbolMatch) {
+      targetPath = symbolMatch[1]; // Extract file path before the colon
     }
 
     // Navigation is handled by the webview before calling analyzeFrame.

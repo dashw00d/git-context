@@ -64,8 +64,12 @@ export const TreemapNode: React.FC<{ node: any; depth?: number }> = ({ node, dep
       </div>
       {hasChildren && (
         <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1, overflow: 'hidden' }}>
-          {children.map((child: any) => (
-            <TreemapNode key={child.id} node={child} depth={depth + 1} />
+          {children.map((child: any, index: number) => (
+            <TreemapNode
+              key={child.id || child.path || `${child.name}-${index}`}
+              node={child}
+              depth={depth + 1}
+            />
           ))}
         </div>
       )}

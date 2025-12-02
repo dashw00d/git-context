@@ -48,7 +48,8 @@ export const Inspector: React.FC<InspectorProps> = ({ frame }) => {
   const timeline = frame.data?.timeline || [];
   const drift = frame.data?.drift || [];
   // Support both 'blastRadius' (FrameAnalyzer) and 'relations' (legacy)
-  const relations = frame.data?.blastRadius || frame.data?.relations || { incoming: [], outgoing: [], imports: [] };
+  const relations = frame.data?.blastRadius ||
+    frame.data?.relations || { incoming: [], outgoing: [], imports: [] };
   const risk = frame.data?.risk || null;
 
   return (

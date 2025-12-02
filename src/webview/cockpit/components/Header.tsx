@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { CockpitState } from '../../../types/cockpit';
+import { postMessageWithTracing } from '../utils/messageUtils';
 
 interface HeaderProps {
   state: CockpitState;
@@ -15,15 +16,15 @@ export const Header: React.FC<HeaderProps> = ({
   onDismissError,
 }) => {
   const handleAnalyze = () => {
-    vscode.postMessage({ type: 'generateReport', mode: 'selection' });
+    postMessageWithTracing(vscode, { type: 'generateReport', mode: 'selection' });
   };
 
   const handleAnalyzeLast = () => {
-    vscode.postMessage({ type: 'generateReport', mode: 'lastN' });
+    postMessageWithTracing(vscode, { type: 'generateReport', mode: 'lastN' });
   };
 
   const handleAnalyzeForce = () => {
-    vscode.postMessage({ type: 'generateReport', mode: 'selection', force: true });
+    postMessageWithTracing(vscode, { type: 'generateReport', mode: 'selection', force: true });
   };
 
   return (
@@ -91,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({
           className="cockpit__button ghost danger"
           onClick={() => {
             // Reset all logic is handled by backend command with confirmation
-            vscode.postMessage({ type: 'resetAll' });
+            postMessageWithTracing(vscode, { type: 'resetAll' });
           }}
           disabled={state.isAnalyzing}
         >
@@ -100,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
         {state.isAnalyzing ? (
           <button
             className="cockpit__button ghost danger"
-            onClick={() => vscode.postMessage({ type: 'cancelAnalysis' })}
+            onClick={() => postMessageWithTracing(vscode, { type: 'cancelAnalysis' })}
           >
             Cancel
           </button>

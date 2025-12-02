@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { CockpitState } from '../../../types/cockpit';
+import { postMessageWithTracing } from '../utils/messageUtils';
 import { formatDate } from '../utils';
 
 interface ReportListProps {
@@ -35,7 +36,7 @@ export const ReportList: React.FC<ReportListProps> = ({ state, vscode }) => {
         <li
           key={r.id}
           className="cockpit__list-item cockpit__list-item--clickable"
-          onClick={() => vscode.postMessage({ type: 'openReport', reportId: r.id })}
+          onClick={() => postMessageWithTracing(vscode, { type: 'openReport', reportId: r.id })}
         >
           <div className="cockpit__row">
             <span>{r.title || 'Untitled report'}</span>
@@ -53,7 +54,7 @@ export const ReportList: React.FC<ReportListProps> = ({ state, vscode }) => {
               className="cockpit__button ghost small"
               onClick={e => {
                 e.stopPropagation();
-                vscode.postMessage({ type: 'regenerateReport', reportId: r.id });
+                postMessageWithTracing(vscode, { type: 'regenerateReport', reportId: r.id });
               }}
             >
               Regenerate
@@ -62,7 +63,7 @@ export const ReportList: React.FC<ReportListProps> = ({ state, vscode }) => {
               className="cockpit__button ghost small"
               onClick={e => {
                 e.stopPropagation();
-                vscode.postMessage({ type: 'togglePinReport', reportId: r.id });
+                postMessageWithTracing(vscode, { type: 'togglePinReport', reportId: r.id });
               }}
             >
               {r.pinned ? 'Unpin' : 'Pin'}
@@ -76,7 +77,7 @@ export const ReportList: React.FC<ReportListProps> = ({ state, vscode }) => {
                     `Are you sure you want to delete the report "${r.title || 'Untitled'}"? This cannot be undone.`
                   )
                 ) {
-                  vscode.postMessage({ type: 'deleteReport', reportId: r.id });
+                  postMessageWithTracing(vscode, { type: 'deleteReport', reportId: r.id });
                 }
               }}
             >

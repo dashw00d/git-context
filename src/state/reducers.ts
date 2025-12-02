@@ -56,6 +56,7 @@ export const initialState: CockpitState = {
   explorerData: [],
   actionHistory: [],
   pipelineErrors: [],
+  pipelineStepTimings: {},
 };
 
 export function cockpitReducer(state: CockpitState = initialState, action: Action): CockpitState {
@@ -63,7 +64,13 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
     case 'ANALYSIS_REQUESTED':
       return { ...state, isAnalyzing: true, error: null };
     case 'ANALYSIS_STARTED':
-      return { ...state, isAnalyzing: true, analysisStep: action.payload.step, error: null };
+      return {
+        ...state,
+        isAnalyzing: true,
+        analysisStep: action.payload.step,
+        analysisProgress: 0,
+        error: null,
+      };
     case 'ANALYSIS_STEP_UPDATED':
       return {
         ...state,
@@ -264,6 +271,17 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
     }
     case 'EXPLORER_UPDATED':
       return { ...state, explorerData: action.payload.nodes };
+    case 'PIPELINE_HEALTH_UPDATED': {
+      const nextTimings = action.payload.stepTimings
+        ? { ...(state as any).pipelineStepTimings, ...action.payload.stepTimings }
+        : (state as any).pipelineStepTimings;
+      return {
+        ...state,
+        currentStepId: action.payload.currentStepId ?? state.currentStepId,
+        pipelineErrors: action.payload.pipelineErrors ?? state.pipelineErrors,
+        pipelineStepTimings: nextTimings,
+      };
+    }
 
     // Tiered Frame Analysis - Progressive loading
     case 'FRAME_ANALYSIS_TIER_1_COMPLETE':
@@ -356,8 +374,8 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         },
       };
 
-    case 'LEGACY_STATE_UPDATED':
-      return { ...state, ...action.payload.partial };
+    case 'WORKSPACE_FACTS_UPDATED':
+      return { ...state, workspaceFacts: action.payload.workspaceFacts };
 
     case 'LIVE_STATE_UPDATED':
       return {

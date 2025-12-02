@@ -475,6 +475,13 @@ The webview uses several optimization techniques:
 - **Memoization**: React.memo for expensive components
 - **Lazy Loading**: Components loaded on demand
 - **Debounced Updates**: State updates batched to prevent excessive re-renders
+- **Pipeline Health**: Cockpit shows current pipeline step, recent step timings, and error count during analysis.
+
+### Live Analysis Guardrails
+
+- Live mode uses a **cheap** pipeline (`mode: cheap_live`) that skips heavy steps (hotspots, embeddings, LLM) and tolerates optional step failures.
+- Only one live analysis runs at a time; overlapping triggers are ignored.
+- Thresholds for auto-run are controlled via `git-context.live.thresholds.*` (lines, symbols, extensions) and `autoRunAfterEdits`.
 
 ## Dependencies
 

@@ -201,15 +201,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
       if (commitCount === 0) {
         logInfo(
-          `[Cockpit] Database is empty, loading initial ${config.defaultCommitCount} commits...`
+          `[Cockpit] Database is empty, loading initial ${config.defaultCommitCount} commit metadata (without full analysis)...`
         );
 
-        // Load recent commits directly
+        // Load recent commits metadata only (no tree-sitter parsing)
         const { GitOperations } = await import('./analysis/git');
         const git = new GitOperations();
         const branchManager = new BranchManager(db);
         const recentCommits = await git.getRecentCommits(config.defaultCommitCount);
-        const shas = recentCommits.map(c => c.sha);
 
         // Record commits in branch manager
         const branch = await git.getCurrentBranch();
@@ -220,13 +219,24 @@ export async function activate(context: vscode.ExtensionContext) {
           branchManager.updateBranchHead(branch, recentCommits[0].sha);
         }
 
-        // Index the commits to ensure they're in the database
-        const { getRefactorPipeline } = await import('./services/pipelineFactory');
-        const refactorPipeline = await getRefactorPipeline();
-        await refactorPipeline.indexCommits(shas);
+        // Store commit metadata (lightweight, no tree-sitter parsing)
+        const { DatabaseHelpers } = await import('./storage/database');
+        for (const commit of recentCommits) {
+          DatabaseHelpers.insertCommitMetadata({
+            sha: commit.sha,
+            author: commit.author,
+            date: commit.date,
+            message: commit.message,
+            parent: commit.parent,
+            files_changed: 0, // Will be populated on actual analysis
+            loaded_at: new Date().toISOString(),
+          });
+        }
 
         await commitsProvider.refresh();
-        logInfo('[Cockpit] Initial commits loaded successfully');
+        logInfo(
+          '[Cockpit] Initial commit metadata loaded. Full analysis will run when user requests it.'
+        );
       } else {
         logInfo(`[Cockpit] Database already has ${commitCount} commits, skipping initial load`);
       }

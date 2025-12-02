@@ -22,6 +22,7 @@ export interface PipelineState {
     staged: WorkspaceFacts | null;
     unstaged: WorkspaceFacts | null;
   };
+  mode?: 'full' | 'live' | 'cheap_live';
   bundleFacts?: any;
   history?: any;
   llmOutputs?: any;

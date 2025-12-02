@@ -7,21 +7,9 @@ import { RefactorBundleFacts } from '../facts/types';
 import { BundleStoryEngine } from './bundleStoryEngine';
 import { CommitIndexer } from './commitIndexer';
 import { EmbeddingIndexer } from './embeddingIndexer';
+import { buildPipelineSteps } from './runner/pipelineManifest';
 import { runPipeline } from './runner/pipelineRunner';
 import { PipelineConfig, PipelineEvent, PipelineState } from './runner/pipelineTypes';
-import { createBundleFactsStep } from './runner/steps/bundleFactsStep';
-import { createDriftStep } from './runner/steps/driftStep';
-import { createEmbeddingStep } from './runner/steps/embeddingStep';
-import { createHistoryRetrievalStep } from './runner/steps/historyStep';
-import { createHotspotStep } from './runner/steps/hotspotStep';
-import { createIndexCommitsStep } from './runner/steps/indexCommitsStep';
-import { createIntendedStep } from './runner/steps/intendedStep';
-import { createLegacyStep } from './runner/steps/legacyStep';
-import { createMovedBlockStep } from './runner/steps/movedBlockStep';
-import { createScopeStep } from './runner/steps/scopeStep';
-import { createStoryStep } from './runner/steps/storyStep';
-import { createWorkingStep } from './runner/steps/workingStep';
-import { createWorkspaceOverlayStep } from './runner/steps/workspaceStep';
 import { WorkspaceIndexer } from './workspaceIndexer';
 
 /**
@@ -92,40 +80,15 @@ export class RefactorPipeline {
       selectedCommitShas: commitShas,
     });
 
-    const steps = [
-      // LEVEL 0: Workspace FIRST + independent queries
-      // workspace_overlay runs first to warm cache from newest → oldest
-      createWorkspaceOverlayStep(this.workspaceIndexer),
-      createScopeStep(),
-
-      // LEVEL 1: Parallel processing with scope
-      // index_commits now benefits from workspace cache warming
-      createIndexCommitsStep(this.commitIndexer, this.config.concurrency),
-      createWorkingStep(), // Depends on scope
-
-      // LEVEL 2: Dependent on Commits & Scope
-      // These steps require the DB to be populated by index_commits
-      createIntendedStep(), // Now has deps: ['index_commits']
-      createHotspotStep(), // Now has deps: ['index_commits']
-      createMovedBlockStep(), // Already has deps: ['index_commits']
-
-      // LEVEL 3: Drift detection (needs hybrid facts from index_commits/workspace_overlay)
-      createDriftStep(), // Now has deps: ['intended', 'working', 'scope', 'index_commits', 'workspace_overlay']
-      createLegacyStep(), // Now has deps: ['intended', 'working', 'scope', 'drift', 'index_commits', 'workspace_overlay']
-
-      // LEVEL 4: Bundle assembly
-      createBundleFactsStep(), // Now has deps: ['scope', 'intended', 'working', 'drift', 'legacy', 'hotspots', 'index_commits', 'moved_blocks']
-    ];
-
-    // Conditionally add embedding and LLM steps based on config
-    if (!this.config.skipEmbedding) {
-      steps.push(createEmbeddingStep(this.embeddingIndexer));
-      steps.push(createHistoryRetrievalStep(this.storyEngine));
-    }
-
-    if (!this.config.skipLLM) {
-      steps.push(createStoryStep(this.storyEngine));
-    }
+    const steps = buildPipelineSteps({
+      commitIndexer: this.commitIndexer,
+      workspaceIndexer: this.workspaceIndexer,
+      embeddingIndexer: this.embeddingIndexer,
+      storyEngine: this.storyEngine,
+      concurrency: this.config.concurrency,
+      skipEmbedding: this.config.skipEmbedding,
+      skipLLM: this.config.skipLLM,
+    });
 
     const initialState: PipelineState = {
       selectedCommitShas: commitShas,
@@ -175,13 +138,20 @@ export class RefactorPipeline {
 
     // 2. Configure Lightweight Steps
     // Note: We skip index_commits because we rely on previous bundle or workspace state
-    const steps = [
-      createWorkspaceOverlayStep(this.workspaceIndexer),
-      createScopeStep(),
-      createWorkingStep(), // Will use liveOverrides from state
-      createDriftStep(),
-      createLegacyStep(),
-    ];
+    const steps = buildPipelineSteps({
+      commitIndexer: this.commitIndexer,
+      workspaceIndexer: this.workspaceIndexer,
+      embeddingIndexer: this.embeddingIndexer,
+      storyEngine: this.storyEngine,
+      concurrency: this.config.concurrency,
+      skipEmbedding: true,
+      skipLLM: true,
+    }).filter(
+      step =>
+        !['hotspots', 'moved_blocks', 'embedding_index', 'retrieve_history', 'llm_story'].includes(
+          step.id
+        )
+    );
 
     // 3. Run Pipeline
     // We set workspaceParts to both staged/unstaged to ensure full scope coverage
@@ -198,6 +168,7 @@ export class RefactorPipeline {
       liveOverrides,
       intended,
       bundleFacts: previousBundleFacts, // Inject for context
+      mode: 'cheap_live',
       completedSteps: new Set(),
       errors: [],
     };

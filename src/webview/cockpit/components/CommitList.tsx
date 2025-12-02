@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { CockpitState } from '../../../types/cockpit';
+import { postMessageWithTracing } from '../utils/messageUtils';
 
 interface CommitListProps {
   state: CockpitState;
@@ -98,7 +99,7 @@ export const CommitList: React.FC<CommitListProps> = ({ state, vscode, formatDat
             <li
               key={c.sha}
               className={`cockpit__list-item ${isSelected ? 'cockpit__list-item--active' : ''}`}
-              onClick={() => vscode.postMessage({ type: 'toggleCommit', sha: c.sha })}
+              onClick={() => postMessageWithTracing(vscode, { type: 'toggleCommit', sha: c.sha })}
             >
               <div className="cockpit__row">
                 <span

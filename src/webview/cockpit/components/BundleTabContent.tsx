@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { CockpitState } from '../../../types/cockpit';
+import { postMessageWithTracing } from '../utils/messageUtils';
 import { ExpandableSection } from './ExpandableSection';
 
 interface BundleTabContentProps {
@@ -34,7 +35,7 @@ export const BundleTabContent: React.FC<BundleTabContentProps> = ({
           )}
           <button
             className="cockpit__button primary"
-            onClick={() => vscode.postMessage({ type: 'bundleRegenerate' })}
+            onClick={() => postMessageWithTracing(vscode, { type: 'bundleRegenerate' })}
           >
             Reanalyze
           </button>
@@ -74,38 +75,38 @@ export const BundleTabContent: React.FC<BundleTabContentProps> = ({
       <div className="cockpit__actions">
         <button
           className="cockpit__button ghost"
-          onClick={() => vscode.postMessage({ type: 'bundleRegenerate' })}
+          onClick={() => postMessageWithTracing(vscode, { type: 'bundleRegenerate' })}
         >
           Regenerate
         </button>
         <button
           className="cockpit__button ghost"
-          onClick={() => vscode.postMessage({ type: 'bundleExport' })}
+          onClick={() => postMessageWithTracing(vscode, { type: 'bundleExport' })}
         >
           Export JSON
         </button>
         <button
           className="cockpit__button ghost"
-          onClick={() => vscode.postMessage({ type: 'openSuperReport' })}
+          onClick={() => postMessageWithTracing(vscode, { type: 'openSuperReport' })}
         >
           Super Report
         </button>
         <button
           className="cockpit__button ghost"
-          onClick={() => vscode.postMessage({ type: 'openActiveReport' })}
+          onClick={() => postMessageWithTracing(vscode, { type: 'openActiveReport' })}
         >
           Open full report
         </button>
         <button
           className="cockpit__button ghost"
-          onClick={() => vscode.postMessage({ type: 'bundleClear' })}
+          onClick={() => postMessageWithTracing(vscode, { type: 'bundleClear' })}
         >
           Clear bundle
         </button>
         {state.isAnalyzing && (
           <button
             className="cockpit__button ghost danger"
-            onClick={() => vscode.postMessage({ type: 'cancelAnalysis' })}
+            onClick={() => postMessageWithTracing(vscode, { type: 'cancelAnalysis' })}
           >
             Cancel analysis
           </button>
@@ -119,7 +120,10 @@ export const BundleTabContent: React.FC<BundleTabContentProps> = ({
           <button
             className="cockpit__button ghost small"
             onClick={() =>
-              vscode.postMessage({ type: 'scrollReportToSection', sectionId: 'overview' })
+              postMessageWithTracing(vscode, {
+                type: 'scrollReportToSection',
+                sectionId: 'overview',
+              })
             }
           >
             Overview
@@ -127,7 +131,10 @@ export const BundleTabContent: React.FC<BundleTabContentProps> = ({
           <button
             className="cockpit__button ghost small"
             onClick={() =>
-              vscode.postMessage({ type: 'scrollReportToSection', sectionId: 'incompleteness' })
+              postMessageWithTracing(vscode, {
+                type: 'scrollReportToSection',
+                sectionId: 'incompleteness',
+              })
             }
           >
             Incompleteness
@@ -135,7 +142,7 @@ export const BundleTabContent: React.FC<BundleTabContentProps> = ({
           <button
             className="cockpit__button ghost small"
             onClick={() =>
-              vscode.postMessage({ type: 'scrollReportToSection', sectionId: 'drift' })
+              postMessageWithTracing(vscode, { type: 'scrollReportToSection', sectionId: 'drift' })
             }
           >
             Drift
@@ -143,7 +150,7 @@ export const BundleTabContent: React.FC<BundleTabContentProps> = ({
           <button
             className="cockpit__button ghost small"
             onClick={() =>
-              vscode.postMessage({ type: 'scrollReportToSection', sectionId: 'legacy' })
+              postMessageWithTracing(vscode, { type: 'scrollReportToSection', sectionId: 'legacy' })
             }
           >
             Legacy
@@ -151,7 +158,10 @@ export const BundleTabContent: React.FC<BundleTabContentProps> = ({
           <button
             className="cockpit__button ghost small"
             onClick={() =>
-              vscode.postMessage({ type: 'scrollReportToSection', sectionId: 'timeline' })
+              postMessageWithTracing(vscode, {
+                type: 'scrollReportToSection',
+                sectionId: 'timeline',
+              })
             }
           >
             Timeline
@@ -186,7 +196,7 @@ export const BundleTabContent: React.FC<BundleTabContentProps> = ({
             key={i}
             className="cockpit__evidence-item cockpit__evidence-item--clickable"
             onClick={() =>
-              vscode.postMessage({
+              postMessageWithTracing(vscode, {
                 type: 'openEvidence',
                 evidenceId: item.symbol_id,
               })

@@ -43,9 +43,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         >
           <h2>Something went wrong</h2>
           <details style={{ whiteSpace: 'pre-wrap', marginTop: '10px' }}>
-            <summary style={{ cursor: 'pointer', marginBottom: '10px' }}>
-              Error Details
-            </summary>
+            <summary style={{ cursor: 'pointer', marginBottom: '10px' }}>Error Details</summary>
             <div style={{ fontSize: '12px', fontFamily: 'monospace' }}>
               <strong>Error:</strong> {this.state.error?.toString()}
               <br />

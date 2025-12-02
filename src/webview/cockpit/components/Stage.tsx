@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { StageProps } from '../types/superWebviewTypes';
 import { ZoomLevel, CockpitState } from '../../../types/cockpit';
-import { BundleStage } from './stages/BundleStage';
 import { BlastRadiusStage } from './stages/BlastRadiusStage';
+import { BundleStage } from './stages/BundleStage';
 import { FileStage } from './stages/FileStage';
-import { SymbolStage } from './stages/SymbolStage';
+import { FolderStage } from './stages/FolderStage';
 import { ReportsStage } from './stages/ReportsStage';
+import { SymbolStage } from './stages/SymbolStage';
 
 const StageContainer: React.CSSProperties = {
   flex: 1,
@@ -59,10 +60,9 @@ export const Stage: React.FC<StageProps & { cockpitState?: CockpitState; vscode?
 
   // For bundle frames, prefer bundleView from global state (always up-to-date)
   // For other frames, use frame.data (populated by tier analysis)
-  const frameData = frame.level === 'bundle'
-    ? cockpitState?.bundleView || frame.data
-    : frame.data;
+  const frameData = frame.level === 'bundle' ? cockpitState?.bundleView || frame.data : frame.data;
   const tier = frame.tier || frameData?.tier;
+  const renderFrame = frame.level === 'bundle' ? { ...frame, data: frameData } : frame;
 
   return (
     <div style={StageContainer}>
@@ -124,23 +124,34 @@ export const Stage: React.FC<StageProps & { cockpitState?: CockpitState; vscode?
           </div>
         ) : (
           <>
-            {frame.id === 'reports-root' && cockpitState && vscode ? (
+            {renderFrame.id === 'reports-root' && cockpitState && vscode ? (
               <ReportsStage cockpitState={cockpitState} vscode={vscode} />
             ) : (
               <>
-                {frame.level === 'bundle' && (
+                {renderFrame.level === 'bundle' && (
                   <BundleStage
-                    frame={frame}
+                    frame={renderFrame}
                     onZoomIn={f => onZoomIn(f)}
                     cockpitState={cockpitState}
                     vscode={vscode}
                   />
                 )}
-                {frame.level === 'blast_radius' && (
-                  <BlastRadiusStage frame={frame} onZoomIn={f => onZoomIn(f)} />
+                {renderFrame.level === 'folder' && (
+                  <FolderStage
+                    frame={renderFrame}
+                    onZoomIn={f => onZoomIn(f)}
+                    cockpitState={cockpitState}
+                  />
                 )}
-                {frame.level === 'file' && <FileStage frame={frame} onZoomIn={f => onZoomIn(f)} />}
-                {frame.level === 'symbol' && <SymbolStage frame={frame} vscode={vscode} />}
+                {renderFrame.level === 'blast_radius' && (
+                  <BlastRadiusStage frame={renderFrame} onZoomIn={f => onZoomIn(f)} />
+                )}
+                {renderFrame.level === 'file' && (
+                  <FileStage frame={renderFrame} onZoomIn={f => onZoomIn(f)} />
+                )}
+                {renderFrame.level === 'symbol' && (
+                  <SymbolStage frame={renderFrame} vscode={vscode} />
+                )}
               </>
             )}
           </>

@@ -2,7 +2,9 @@ import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import { EvidenceLink, LlmAnalysis } from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
+import { ReportHostMessage } from '../types/reportWebview';
 import { RefactorReportView } from './RefactorReportView';
+import { postReportMessage, validateHostMessage } from './reports/messageUtils';
 
 /**
  * Main entry point for the webview
@@ -23,16 +25,16 @@ let facts: RefactorBundleFacts | undefined;
  * Handle messages from the extension
  */
 window.addEventListener('message', event => {
-  const message = event.data;
+  const message = validateHostMessage(event.data) as ReportHostMessage | null;
+  if (!message) return;
 
   switch (message.type) {
     case 'setData':
-      analysis = message.analysis;
-      facts = message.facts;
+      analysis = message.analysis as unknown as LlmAnalysis;
+      facts = message.facts as unknown as RefactorBundleFacts;
       renderApp();
       break;
-    case 'scrollToSection':
-      // Scroll to section by ID
+    case 'scrollToSection': {
       const sectionId = message.sectionId;
       if (sectionId) {
         const element = document.getElementById(sectionId);
@@ -41,6 +43,9 @@ window.addEventListener('message', event => {
         }
       }
       break;
+    }
+    default:
+      break;
   }
 });
 
@@ -48,21 +53,14 @@ window.addEventListener('message', event => {
  * Handle evidence clicks
  */
 const handleEvidenceClick = (evidence: EvidenceLink) => {
-  vscode.postMessage({
-    type: 'evidenceClick',
-    evidence,
-  });
+  postReportMessage(vscode, { type: 'evidenceClick', evidence: evidence as any });
 };
 
 /**
  * Handle actions
  */
 const handleAction = (action: string, data: any) => {
-  vscode.postMessage({
-    type: 'action',
-    action,
-    data,
-  });
+  postReportMessage(vscode, { type: 'action', action, data });
 };
 
 /**
@@ -86,4 +84,4 @@ function renderApp() {
 /**
  * Signal that the webview is ready
  */
-vscode.postMessage({ type: 'ready' });
+postReportMessage(vscode, { type: 'ready' });

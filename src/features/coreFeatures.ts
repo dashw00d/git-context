@@ -259,7 +259,7 @@ export async function registerCoreFeatures(
         }
       })();
 
-      orchestrator.reset(undefined, 'command:resetAll');
+      orchestrator.reset();
       providers.commitsProvider.loadMoreOffset = 0;
       await providers.commitsProvider.refresh();
       if (providers.activeBundleProvider) {

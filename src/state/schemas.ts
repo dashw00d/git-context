@@ -166,6 +166,17 @@ export const ReportDTOSchema = z.object({
   criticalCount: z.number().optional(),
 });
 
+export const BundleSummarySchema = z
+  .object({
+    id: z.string(),
+    commitCount: z.number(),
+    fileCount: z.number(),
+    symbolCount: z.number(),
+    createdAt: z.string().optional(),
+    debtScore: z.number().optional(),
+  })
+  .passthrough();
+
 export const BundleConfigSchema = z.object({
   mode: z.enum(['repo', 'module', 'changes', 'custom']),
   roots: z.array(z.string()),
@@ -271,7 +282,8 @@ export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
   // Special internal types
   z.object({ type: z.literal('ready') }),
   z.object({ type: z.literal('clearError') }),
-  z.object({ type: z.literal('dispatch'), action: z.any() }), // Action schema is complex, leaving as any for now
+  z.object({ type: z.literal('navigateToFrame'), frame: ContextFrameSchema }),
+  z.object({ type: z.literal('navigateBack') }),
 ]);
 
 export const CockpitStateSchema = z
@@ -293,6 +305,7 @@ export const CockpitStateSchema = z
     error: z.string().nullable().optional(),
     currentStepId: z.string().nullable().optional(),
     pipelineErrors: z.array(z.object({ stepId: z.string(), error: z.string() })).optional(),
+    pipelineStepTimings: z.record(z.number()).optional(),
     retrievedHistory: z.any().optional(),
     workspaceFacts: z.any().nullable().optional(),
     llmOutputs: z.any().optional(),
@@ -310,8 +323,8 @@ export const CockpitStateSchema = z
     lastNCommits: z.number(),
     stagedFiles: z.array(FileDTOSchema),
     unstagedFiles: z.array(FileDTOSchema),
-    bundleSummary: z.any().nullable(),
-    bundleFacts: BundleFactsSchema.nullable(),
+    bundleSummary: BundleSummarySchema.nullable().optional(),
+    bundleFacts: BundleFactsSchema.nullable().optional(),
     bundleReportId: z.string().nullable(),
     bundleView: BundleViewSchema.nullable(),
     bundleViewVersion: z.number(),
@@ -349,6 +362,52 @@ export const CockpitStateSchema = z
       .optional(),
   })
   .passthrough();
+
+export const CockpitHostMessageSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('updateState'),
+    payload: CockpitStateSchema,
+  }),
+  z.object({
+    type: z.literal('analysisProgress'),
+    payload: z.object({
+      isAnalyzing: z.boolean(),
+      step: z.string().optional(),
+      progress: z.number().optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal('focusSection'),
+    payload: z.object({
+      section: z.enum(['commits', 'bundle', 'symbols', 'reports', 'live']),
+    }),
+  }),
+  z.object({
+    type: z.literal('assistantResponse'),
+    payload: z.object({ text: z.string() }),
+  }),
+  z.object({
+    type: z.literal('updateExplorerTree'),
+    payload: z.array(ExplorerNodeSchema),
+  }),
+  z.object({
+    type: z.literal('updateFrame'),
+    payload: z.object({
+      frame: ContextFrameSchema,
+      data: z.any(),
+    }),
+  }),
+  z.object({
+    type: z.literal('updateBundle'),
+    payload: z
+      .object({
+        view: BundleViewSchema.nullable().optional(),
+        summary: BundleSummarySchema.nullable().optional(),
+        facts: BundleFactsSchema.nullable().optional(),
+      })
+      .passthrough(),
+  }),
+]);
 
 // Action Payloads
 export const ActionPayloadSchemas: Record<string, z.ZodType<any>> = {

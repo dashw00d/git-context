@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { MermaidGenerator } from '../analysis/mermaidGenerator';
 import { RefactorBundleFacts } from '../facts/types';
 import { getRefactorPipeline } from '../services/pipelineFactory';
+import { pipelineActions } from '../state/actionCreators';
 import { getStore } from '../state/store';
 import { getReportManager } from '../storage/reportManager';
 import { prepare } from '../storage/statement-wrapper';
@@ -78,11 +79,22 @@ export class ReportService {
           // Fall through to full generation (cache bypassed)
         } else {
           logInfo(`[ReportService] Cache hit for ${fingerprint}`);
+
+          // Build proper BundleSummaryDTO from cached report
+          const summary = {
+            id: cachedReport.id,
+            commitCount: cachedReport.commitShas.length,
+            fileCount: facts.scope.files,
+            symbolCount: facts.working.symbols,
+            createdAt: cachedReport.createdAt.toISOString(),
+            debtScore: 0,
+          };
+
           this.store.dispatch({
             type: 'ANALYSIS_COMPLETED',
             payload: {
               facts: facts as any,
-              summary: cachedReport.analysis as any,
+              summary,
               reportId: cachedReport.id,
             },
           });
@@ -90,7 +102,7 @@ export class ReportService {
             type: 'ANALYSIS_COMPLETED',
             payload: {
               facts,
-              summary: cachedReport.analysis,
+              summary,
               reportId: cachedReport.id,
               history: undefined,
             },
@@ -133,6 +145,23 @@ export class ReportService {
         workspaceParts,
         event => {
           // Map pipeline events to orchestrator state
+          const timings: Record<string, number> = {};
+          if (event.state?.stepTimings) {
+            Object.entries(event.state.stepTimings).forEach(([stepId, timing]) => {
+              if ((timing as any).duration !== undefined) {
+                timings[stepId] = (timing as any).duration as number;
+              }
+            });
+          }
+          const pipelineError =
+            event.type === 'error' && event.step?.id && event.error
+              ? [{ stepId: event.step.id, error: String(event.error) }]
+              : undefined;
+          const healthPayload = {
+            currentStepId: event.type === 'finished' ? null : event.step?.id,
+            stepTimings: Object.keys(timings).length ? timings : undefined,
+            pipelineErrors: pipelineError,
+          };
           switch (event.type) {
             case 'start':
               this.store.dispatch({
@@ -143,6 +172,8 @@ export class ReportService {
                 type: 'ANALYSIS_STEP_UPDATED',
                 payload: { step: event.step.label },
               });
+              this.store.dispatch(pipelineActions.health(healthPayload));
+              getStore().dispatch(pipelineActions.health(healthPayload));
               break;
 
             case 'complete':
@@ -154,6 +185,8 @@ export class ReportService {
                 type: 'ANALYSIS_STEP_UPDATED',
                 payload: { step: event.step.label, progress: 100 },
               });
+              this.store.dispatch(pipelineActions.health(healthPayload));
+              getStore().dispatch(pipelineActions.health(healthPayload));
               break;
 
             case 'error':
@@ -165,9 +198,13 @@ export class ReportService {
                 type: 'ANALYSIS_FAILED',
                 payload: { error: String(event.error) },
               });
+              this.store.dispatch(pipelineActions.health(healthPayload));
+              getStore().dispatch(pipelineActions.health(healthPayload));
               break;
 
             case 'finished':
+              this.store.dispatch(pipelineActions.health(healthPayload));
+              getStore().dispatch(pipelineActions.health(healthPayload));
               if (event.state.errors.length === 0) {
                 // Serialize symbolEvolution map
                 const history = event.state.history;
@@ -180,15 +217,8 @@ export class ReportService {
                     }
                   : undefined;
 
-                this.store.dispatch({
-                  type: 'ANALYSIS_COMPLETED',
-                  payload: {
-                    facts: event.state.bundleFacts as any,
-                    summary: {} as any, // TODO: extract summary
-                    reportId: '', // TODO: get report ID
-                    history: serializedHistory,
-                  },
-                });
+                // Don't dispatch ANALYSIS_COMPLETED here - it will be dispatched after
+                // the report is saved with proper summary and reportId (line ~345)
               }
               break;
           }
