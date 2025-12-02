@@ -28,6 +28,8 @@ export interface WorkspaceFacts {
   filesChanged: number;
   structuralChangeScore: number;
   blastRadius: number;
+  incoming?: Map<string, string[]>; // Reverse edge index (to -> from[])
+  outgoing?: Map<string, string[]>; // Forward edge index (from -> to[])
 }
 
 export class WorkspaceIndexer {
@@ -130,7 +132,11 @@ export class WorkspaceIndexer {
           const fullPath = path.join(gitRoot, filePath);
           let workingContent: string;
           try {
-            workingContent = fs.readFileSync(fullPath, 'utf8');
+            if (mode === 'staged') {
+              workingContent = await this.git.safeGetStagedContent(filePath);
+            } else {
+              workingContent = fs.readFileSync(fullPath, 'utf8');
+            }
           } catch (error: any) {
             // Provide detailed error with path information
             logError(
@@ -303,6 +309,8 @@ export class WorkspaceIndexer {
       filesChanged: changedFiles.length,
       structuralChangeScore: maxStructuralChange,
       blastRadius: totalImpact,
+      incoming: blastRadiusResult.incoming,
+      outgoing: blastRadiusResult.outgoing,
     };
 
     // Cache result
@@ -345,13 +353,37 @@ export class WorkspaceIndexer {
   }
 
   /**
-   * Calculate blast radius for workspace changes
+   * Calculate blast radius for workspace changes with reverse edge index
    */
   private calculateBlastRadius(
     changedSymbols: any[],
     allEdges: any[]
-  ): { impactScore: Map<string, number> } {
+  ): {
+    impactScore: Map<string, number>;
+    incoming: Map<string, string[]>;
+    outgoing: Map<string, string[]>;
+  } {
     const impactScore = new Map<string, number>();
+    const incoming = new Map<string, string[]>();
+    const outgoing = new Map<string, string[]>();
+
+    // Build bidirectional edge index
+    for (const edge of allEdges) {
+      const fromId = edge.from;
+      const toId = edge.to;
+
+      // Outgoing edges: from → to
+      if (!outgoing.has(fromId)) {
+        outgoing.set(fromId, []);
+      }
+      outgoing.get(fromId)!.push(toId);
+
+      // Incoming edges: to ← from (reverse index)
+      if (!incoming.has(toId)) {
+        incoming.set(toId, []);
+      }
+      incoming.get(toId)!.push(fromId);
+    }
 
     // Simple blast radius calculation based on edge connectivity
     for (const symbol of changedSymbols) {
@@ -360,23 +392,22 @@ export class WorkspaceIndexer {
       // Direct impact
       impactScore.set(symbolId, (impactScore.get(symbolId) || 0) + 10);
 
-      // Indirect impact through edges
-      const connectedSymbols = new Set<string>();
-      for (const edge of allEdges) {
-        if (edge.from === symbolId) {
-          connectedSymbols.add(edge.to);
-        } else if (edge.to === symbolId) {
-          connectedSymbols.add(edge.from);
-        }
-      }
+      // Indirect impact through edges (use outgoing for forward impact)
+      const connectedSymbols = outgoing.get(symbolId) || [];
 
       // Secondary impact (reduced weight)
       for (const connectedId of connectedSymbols) {
         impactScore.set(connectedId, (impactScore.get(connectedId) || 0) + 5);
       }
+
+      // Also consider reverse impact (symbols that depend on this one)
+      const dependentSymbols = incoming.get(symbolId) || [];
+      for (const dependentId of dependentSymbols) {
+        impactScore.set(dependentId, (impactScore.get(dependentId) || 0) + 3);
+      }
     }
 
-    return { impactScore };
+    return { impactScore, incoming, outgoing };
   }
 
   private getCachedWorkspace(headSha: string, workspaceHash: string): WorkspaceFacts | null {

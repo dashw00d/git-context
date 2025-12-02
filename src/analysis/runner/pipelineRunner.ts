@@ -85,6 +85,8 @@ export async function runPipeline(
     ...initialState,
     completedSteps: new Set<string>(),
     errors: [],
+    stepTimings: {},
+    partialReasons: [],
   };
 
   const pipelineStartTime = Date.now();
@@ -104,6 +106,7 @@ export async function runPipeline(
       const step = steps.find(s => s.id === stepId)!;
       const startTime = Date.now();
       stepTimings[stepId] = { start: startTime };
+      state.stepTimings![stepId] = { start: startTime };
 
       return Promise.resolve()
         .then(() => {
@@ -118,6 +121,8 @@ export async function runPipeline(
           const duration = endTime - startTime;
           stepTimings[stepId].end = endTime;
           stepTimings[stepId].duration = duration;
+          state.stepTimings![stepId].end = endTime;
+          state.stepTimings![stepId].duration = duration;
           state.completedSteps.add(step.id);
 
           // Collect cache statistics if available
@@ -148,8 +153,18 @@ export async function runPipeline(
           const duration = endTime - startTime;
           stepTimings[stepId].end = endTime;
           stepTimings[stepId].duration = duration;
+          state.stepTimings![stepId].end = endTime;
+          state.stepTimings![stepId].duration = duration;
 
           state.errors.push({ stepId: step.id, error });
+
+          // Track optional step failures for partial execution
+          const optionalSteps = ['drift', 'legacy', 'hotspots', 'moved_blocks'];
+          if (optionalSteps.includes(step.id)) {
+            state.partialReasons!.push(
+              `${step.label} failed: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
 
           // Extract detailed error information
           const stepError = {
@@ -178,6 +193,7 @@ export async function runPipeline(
   // Log performance summary
   const pipelineEndTime = Date.now();
   const totalDuration = pipelineEndTime - pipelineStartTime;
+  state.pipelineDuration = totalDuration;
 
   logInfo(`[Pipeline] Pipeline completed in ${totalDuration}ms`);
   logInfo(`[Pipeline] Steps completed: ${state.completedSteps.size}/${steps.length}`);

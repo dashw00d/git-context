@@ -23,6 +23,17 @@ export type StateEffect<T extends keyof CockpitState = keyof CockpitState> = {
   priority?: number; // Lower = higher priority
 };
 
+/**
+ * ARCHITECTURE NOTE: The orchestrator creates a duplicate bus for state updates.
+ * - CockpitProvider subscribes directly to the store and diffs manually
+ * - Orchestrator subscribes to store, guesses partials, debounces, and emits
+ *
+ * RECOMMENDATION: Remove orchestrator for UI updates. Use selectors/hooks only,
+ * or make CockpitProvider subscribe to orchestrator exclusively and remove manual diffs.
+ *
+ * Current partial guessing is error-prone - a missed action type means no UI update.
+ * Consider emitting full state or using selector-derived deltas only.
+ */
 export class CockpitOrchestrator extends EventEmitter {
   private static instance: CockpitOrchestrator;
   private store: CockpitStore;
@@ -77,6 +88,8 @@ export class CockpitOrchestrator extends EventEmitter {
           partial = { explorerData: action.payload.nodes };
         else if (action.type === 'BUNDLE_VIEW_UPDATED')
           partial = { bundleView: action.payload.view };
+        else if (action.type === 'LIVE_ANALYSIS_UPDATED')
+          partial = { liveAnalysis: { ...this.store.getState().liveAnalysis, ...action.payload } };
         // ... etc.
         // If we miss something, the UI might not update granularly if it relies on partial keys.
         // But React usually diffs props.
@@ -138,14 +151,12 @@ export class CockpitOrchestrator extends EventEmitter {
     this.updateState({ [key]: value } as Partial<CockpitState>, reason ?? `update:${String(key)}`);
   }
 
-  updateLiveState(partial: Partial<CockpitState['liveAnalysis']>, reason = 'live:update'): void {
-    const current = this.getState().liveAnalysis;
-    this.updateState(
-      {
-        liveAnalysis: { ...current, ...partial },
-      },
-      reason
-    );
+  updateLiveState(partial: Partial<CockpitState['liveAnalysis']>, _reason = 'live:update'): void {
+    // Use the new LIVE_ANALYSIS_UPDATED action instead of LEGACY_STATE_UPDATED
+    this.store.dispatch({
+      type: 'LIVE_ANALYSIS_UPDATED',
+      payload: partial,
+    });
   }
 
   registerEffect(effect: StateEffect): () => void {

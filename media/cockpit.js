@@ -6,7 +6,13 @@
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __getProtoOf = Object.getPrototypeOf;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __commonJS = (cb, mod) => function __require() {
+  var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+    get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+  }) : x)(function(x) {
+    if (typeof require !== "undefined") return require.apply(this, arguments);
+    throw Error('Dynamic require of "' + x + '" is not supported');
+  });
+  var __commonJS = (cb, mod) => function __require2() {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
   var __copyProps = (to, from, except, desc) => {
@@ -239,20 +245,20 @@
           {
             Object.freeze(emptyObject);
           }
-          function Component(props, context, updater) {
+          function Component2(props, context, updater) {
             this.props = props;
             this.context = context;
             this.refs = emptyObject;
             this.updater = updater || ReactNoopUpdateQueue;
           }
-          Component.prototype.isReactComponent = {};
-          Component.prototype.setState = function(partialState, callback) {
+          Component2.prototype.isReactComponent = {};
+          Component2.prototype.setState = function(partialState, callback) {
             if (typeof partialState !== "object" && typeof partialState !== "function" && partialState != null) {
               throw new Error("setState(...): takes an object of state variables to update or a function which returns an object of state variables.");
             }
             this.updater.enqueueSetState(this, partialState, callback, "setState");
           };
-          Component.prototype.forceUpdate = function(callback) {
+          Component2.prototype.forceUpdate = function(callback) {
             this.updater.enqueueForceUpdate(this, callback, "forceUpdate");
           };
           {
@@ -261,7 +267,7 @@
               replaceState: ["replaceState", "Refactor your code to use setState instead (see https://github.com/facebook/react/issues/3236)."]
             };
             var defineDeprecationWarning = function(methodName, info) {
-              Object.defineProperty(Component.prototype, methodName, {
+              Object.defineProperty(Component2.prototype, methodName, {
                 get: function() {
                   warn("%s(...) is deprecated in plain JavaScript React classes. %s", info[0], info[1]);
                   return void 0;
@@ -276,7 +282,7 @@
           }
           function ComponentDummy() {
           }
-          ComponentDummy.prototype = Component.prototype;
+          ComponentDummy.prototype = Component2.prototype;
           function PureComponent(props, context, updater) {
             this.props = props;
             this.context = context;
@@ -285,7 +291,7 @@
           }
           var pureComponentPrototype = PureComponent.prototype = new ComponentDummy();
           pureComponentPrototype.constructor = PureComponent;
-          assign(pureComponentPrototype, Component.prototype);
+          assign(pureComponentPrototype, Component2.prototype);
           pureComponentPrototype.isPureReactComponent = true;
           function createRef() {
             var refObject = {
@@ -511,7 +517,7 @@
             }
             return element;
           };
-          function createElement14(type, config, children) {
+          function createElement15(type, config, children) {
             var propName;
             var props = {};
             var key = null;
@@ -1350,8 +1356,8 @@
               return describeNativeComponentFrame(fn, false);
             }
           }
-          function shouldConstruct(Component2) {
-            var prototype = Component2.prototype;
+          function shouldConstruct(Component3) {
+            var prototype = Component3.prototype;
             return !!(prototype && prototype.isReactComponent);
           }
           function describeUnknownElementTypeFrameInDEV(type, source, ownerFn) {
@@ -1610,7 +1616,7 @@
                 error("React.createElement: type is invalid -- expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s", typeString, info);
               }
             }
-            var element = createElement14.apply(this, arguments);
+            var element = createElement15.apply(this, arguments);
             if (element == null) {
               return element;
             }
@@ -1857,7 +1863,7 @@
             only: onlyChild
           };
           exports.Children = Children;
-          exports.Component = Component;
+          exports.Component = Component2;
           exports.Fragment = REACT_FRAGMENT_TYPE;
           exports.Profiler = REACT_PROFILER_TYPE;
           exports.PureComponent = PureComponent;
@@ -2384,9 +2390,9 @@
           if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart === "function") {
             __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
           }
-          var React14 = require_react();
+          var React15 = require_react();
           var Scheduler = require_scheduler();
-          var ReactSharedInternals = React14.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+          var ReactSharedInternals = React15.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
           var suppressWarning = false;
           function setSuppressWarning(newSuppressWarning) {
             {
@@ -3422,8 +3428,8 @@
               return describeNativeComponentFrame(fn, false);
             }
           }
-          function shouldConstruct(Component) {
-            var prototype = Component.prototype;
+          function shouldConstruct(Component2) {
+            var prototype = Component2.prototype;
             return !!(prototype && prototype.isReactComponent);
           }
           function describeUnknownElementTypeFrameInDEV(type, source, ownerFn) {
@@ -3993,7 +3999,7 @@
             {
               if (props.value == null) {
                 if (typeof props.children === "object" && props.children !== null) {
-                  React14.Children.forEach(props.children, function(child) {
+                  React15.Children.forEach(props.children, function(child) {
                     if (child == null) {
                       return;
                     }
@@ -9417,7 +9423,7 @@
               }
             }
           }
-          function createElement14(type, props, rootContainerElement, parentNamespace) {
+          function createElement15(type, props, rootContainerElement, parentNamespace) {
             var isCustomComponentTag;
             var ownerDocument = getOwnerDocumentFromRootContainer(rootContainerElement);
             var domElement;
@@ -10287,7 +10293,7 @@
               }
               parentNamespace = hostContextDev.namespace;
             }
-            var domElement = createElement14(type, props, rootContainerInstance, parentNamespace);
+            var domElement = createElement15(type, props, rootContainerInstance, parentNamespace);
             precacheFiberNode(internalInstanceHandle, domElement);
             updateFiberProps(domElement, props);
             return domElement;
@@ -10886,9 +10892,9 @@
           var contextStackCursor = createCursor(emptyContextObject);
           var didPerformWorkStackCursor = createCursor(false);
           var previousContext = emptyContextObject;
-          function getUnmaskedContext(workInProgress2, Component, didPushOwnContextIfProvider) {
+          function getUnmaskedContext(workInProgress2, Component2, didPushOwnContextIfProvider) {
             {
-              if (didPushOwnContextIfProvider && isContextProvider(Component)) {
+              if (didPushOwnContextIfProvider && isContextProvider(Component2)) {
                 return previousContext;
               }
               return contextStackCursor.current;
@@ -11025,8 +11031,8 @@
                   case HostRoot:
                     return node.stateNode.context;
                   case ClassComponent: {
-                    var Component = node.type;
-                    if (isContextProvider(Component)) {
+                    var Component2 = node.type;
+                    if (isContextProvider(Component2)) {
                       return node.stateNode.__reactInternalMemoizedMergedChildContext;
                     }
                     break;
@@ -13480,7 +13486,7 @@
             }
             return true;
           }
-          function renderWithHooks(current2, workInProgress2, Component, props, secondArg, nextRenderLanes) {
+          function renderWithHooks(current2, workInProgress2, Component2, props, secondArg, nextRenderLanes) {
             renderLanes = nextRenderLanes;
             currentlyRenderingFiber$1 = workInProgress2;
             {
@@ -13500,7 +13506,7 @@
                 ReactCurrentDispatcher$1.current = HooksDispatcherOnMountInDEV;
               }
             }
-            var children = Component(props, secondArg);
+            var children = Component2(props, secondArg);
             if (didScheduleRenderPhaseUpdateDuringThisPass) {
               var numberOfReRenders = 0;
               do {
@@ -13520,7 +13526,7 @@
                   hookTypesUpdateIndexDev = -1;
                 }
                 ReactCurrentDispatcher$1.current = HooksDispatcherOnRerenderInDEV;
-                children = Component(props, secondArg);
+                children = Component2(props, secondArg);
               } while (didScheduleRenderPhaseUpdateDuringThisPass);
             }
             ReactCurrentDispatcher$1.current = ContextOnlyDispatcher;
@@ -15319,10 +15325,10 @@
               child = child.sibling;
             }
           }
-          function resolveDefaultProps(Component, baseProps) {
-            if (Component && Component.defaultProps) {
+          function resolveDefaultProps(Component2, baseProps) {
+            if (Component2 && Component2.defaultProps) {
               var props = assign({}, baseProps);
-              var defaultProps = Component.defaultProps;
+              var defaultProps = Component2.defaultProps;
               for (var propName in defaultProps) {
                 if (props[propName] === void 0) {
                   props[propName] = defaultProps[propName];
@@ -16251,22 +16257,22 @@
             workInProgress2.child = reconcileChildFibers(workInProgress2, current2.child, null, renderLanes2);
             workInProgress2.child = reconcileChildFibers(workInProgress2, null, nextChildren, renderLanes2);
           }
-          function updateForwardRef(current2, workInProgress2, Component, nextProps, renderLanes2) {
+          function updateForwardRef(current2, workInProgress2, Component2, nextProps, renderLanes2) {
             {
               if (workInProgress2.type !== workInProgress2.elementType) {
-                var innerPropTypes = Component.propTypes;
+                var innerPropTypes = Component2.propTypes;
                 if (innerPropTypes) {
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
                     // Resolved props
                     "prop",
-                    getComponentNameFromType(Component)
+                    getComponentNameFromType(Component2)
                   );
                 }
               }
             }
-            var render2 = Component.render;
+            var render2 = Component2.render;
             var ref = workInProgress2.ref;
             var nextChildren;
             var hasId;
@@ -16304,11 +16310,11 @@
             reconcileChildren(current2, workInProgress2, nextChildren, renderLanes2);
             return workInProgress2.child;
           }
-          function updateMemoComponent(current2, workInProgress2, Component, nextProps, renderLanes2) {
+          function updateMemoComponent(current2, workInProgress2, Component2, nextProps, renderLanes2) {
             if (current2 === null) {
-              var type = Component.type;
-              if (isSimpleFunctionComponent(type) && Component.compare === null && // SimpleMemoComponent codepath doesn't resolve outer props either.
-              Component.defaultProps === void 0) {
+              var type = Component2.type;
+              if (isSimpleFunctionComponent(type) && Component2.compare === null && // SimpleMemoComponent codepath doesn't resolve outer props either.
+              Component2.defaultProps === void 0) {
                 var resolvedType = type;
                 {
                   resolvedType = resolveFunctionForHotReloading(type);
@@ -16331,7 +16337,7 @@
                     getComponentNameFromType(type)
                   );
                 }
-                if (Component.defaultProps !== void 0) {
+                if (Component2.defaultProps !== void 0) {
                   var componentName = getComponentNameFromType(type) || "Unknown";
                   if (!didWarnAboutDefaultPropsOnFunctionComponent[componentName]) {
                     error("%s: Support for defaultProps will be removed from memo components in a future major release. Use JavaScript default parameters instead.", componentName);
@@ -16339,14 +16345,14 @@
                   }
                 }
               }
-              var child = createFiberFromTypeAndProps(Component.type, null, nextProps, workInProgress2, workInProgress2.mode, renderLanes2);
+              var child = createFiberFromTypeAndProps(Component2.type, null, nextProps, workInProgress2, workInProgress2.mode, renderLanes2);
               child.ref = workInProgress2.ref;
               child.return = workInProgress2;
               workInProgress2.child = child;
               return child;
             }
             {
-              var _type = Component.type;
+              var _type = Component2.type;
               var _innerPropTypes = _type.propTypes;
               if (_innerPropTypes) {
                 checkPropTypes(
@@ -16362,7 +16368,7 @@
             var hasScheduledUpdateOrContext = checkScheduledUpdateOrContext(current2, renderLanes2);
             if (!hasScheduledUpdateOrContext) {
               var prevProps = currentChild.memoizedProps;
-              var compare = Component.compare;
+              var compare = Component2.compare;
               compare = compare !== null ? compare : shallowEqual;
               if (compare(prevProps, nextProps) && current2.ref === workInProgress2.ref) {
                 return bailoutOnAlreadyFinishedWork(current2, workInProgress2, renderLanes2);
@@ -16375,7 +16381,7 @@
             workInProgress2.child = newChild;
             return newChild;
           }
-          function updateSimpleMemoComponent(current2, workInProgress2, Component, nextProps, renderLanes2) {
+          function updateSimpleMemoComponent(current2, workInProgress2, Component2, nextProps, renderLanes2) {
             {
               if (workInProgress2.type !== workInProgress2.elementType) {
                 var outerMemoType = workInProgress2.elementType;
@@ -16415,7 +16421,7 @@
                 }
               }
             }
-            return updateFunctionComponent(current2, workInProgress2, Component, nextProps, renderLanes2);
+            return updateFunctionComponent(current2, workInProgress2, Component2, nextProps, renderLanes2);
           }
           function updateOffscreenComponent(current2, workInProgress2, renderLanes2) {
             var nextProps = workInProgress2.pendingProps;
@@ -16505,24 +16511,24 @@
               }
             }
           }
-          function updateFunctionComponent(current2, workInProgress2, Component, nextProps, renderLanes2) {
+          function updateFunctionComponent(current2, workInProgress2, Component2, nextProps, renderLanes2) {
             {
               if (workInProgress2.type !== workInProgress2.elementType) {
-                var innerPropTypes = Component.propTypes;
+                var innerPropTypes = Component2.propTypes;
                 if (innerPropTypes) {
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
                     // Resolved props
                     "prop",
-                    getComponentNameFromType(Component)
+                    getComponentNameFromType(Component2)
                   );
                 }
               }
             }
             var context;
             {
-              var unmaskedContext = getUnmaskedContext(workInProgress2, Component, true);
+              var unmaskedContext = getUnmaskedContext(workInProgress2, Component2, true);
               context = getMaskedContext(workInProgress2, unmaskedContext);
             }
             var nextChildren;
@@ -16534,12 +16540,12 @@
             {
               ReactCurrentOwner$1.current = workInProgress2;
               setIsRendering(true);
-              nextChildren = renderWithHooks(current2, workInProgress2, Component, nextProps, context, renderLanes2);
+              nextChildren = renderWithHooks(current2, workInProgress2, Component2, nextProps, context, renderLanes2);
               hasId = checkDidRenderIdHook();
               if (workInProgress2.mode & StrictLegacyMode) {
                 setIsStrictModeForDevtools(true);
                 try {
-                  nextChildren = renderWithHooks(current2, workInProgress2, Component, nextProps, context, renderLanes2);
+                  nextChildren = renderWithHooks(current2, workInProgress2, Component2, nextProps, context, renderLanes2);
                   hasId = checkDidRenderIdHook();
                 } finally {
                   setIsStrictModeForDevtools(false);
@@ -16561,7 +16567,7 @@
             reconcileChildren(current2, workInProgress2, nextChildren, renderLanes2);
             return workInProgress2.child;
           }
-          function updateClassComponent(current2, workInProgress2, Component, nextProps, renderLanes2) {
+          function updateClassComponent(current2, workInProgress2, Component2, nextProps, renderLanes2) {
             {
               switch (shouldError(workInProgress2)) {
                 case false: {
@@ -16584,20 +16590,20 @@
                 }
               }
               if (workInProgress2.type !== workInProgress2.elementType) {
-                var innerPropTypes = Component.propTypes;
+                var innerPropTypes = Component2.propTypes;
                 if (innerPropTypes) {
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
                     // Resolved props
                     "prop",
-                    getComponentNameFromType(Component)
+                    getComponentNameFromType(Component2)
                   );
                 }
               }
             }
             var hasContext;
-            if (isContextProvider(Component)) {
+            if (isContextProvider(Component2)) {
               hasContext = true;
               pushContextProvider(workInProgress2);
             } else {
@@ -16608,15 +16614,15 @@
             var shouldUpdate;
             if (instance === null) {
               resetSuspendedCurrentOnMountInLegacyMode(current2, workInProgress2);
-              constructClassInstance(workInProgress2, Component, nextProps);
-              mountClassInstance(workInProgress2, Component, nextProps, renderLanes2);
+              constructClassInstance(workInProgress2, Component2, nextProps);
+              mountClassInstance(workInProgress2, Component2, nextProps, renderLanes2);
               shouldUpdate = true;
             } else if (current2 === null) {
-              shouldUpdate = resumeMountClassInstance(workInProgress2, Component, nextProps, renderLanes2);
+              shouldUpdate = resumeMountClassInstance(workInProgress2, Component2, nextProps, renderLanes2);
             } else {
-              shouldUpdate = updateClassInstance(current2, workInProgress2, Component, nextProps, renderLanes2);
+              shouldUpdate = updateClassInstance(current2, workInProgress2, Component2, nextProps, renderLanes2);
             }
-            var nextUnitOfWork = finishClassComponent(current2, workInProgress2, Component, shouldUpdate, hasContext, renderLanes2);
+            var nextUnitOfWork = finishClassComponent(current2, workInProgress2, Component2, shouldUpdate, hasContext, renderLanes2);
             {
               var inst = workInProgress2.stateNode;
               if (shouldUpdate && inst.props !== nextProps) {
@@ -16628,19 +16634,19 @@
             }
             return nextUnitOfWork;
           }
-          function finishClassComponent(current2, workInProgress2, Component, shouldUpdate, hasContext, renderLanes2) {
+          function finishClassComponent(current2, workInProgress2, Component2, shouldUpdate, hasContext, renderLanes2) {
             markRef(current2, workInProgress2);
             var didCaptureError = (workInProgress2.flags & DidCapture) !== NoFlags;
             if (!shouldUpdate && !didCaptureError) {
               if (hasContext) {
-                invalidateContextProvider(workInProgress2, Component, false);
+                invalidateContextProvider(workInProgress2, Component2, false);
               }
               return bailoutOnAlreadyFinishedWork(current2, workInProgress2, renderLanes2);
             }
             var instance = workInProgress2.stateNode;
             ReactCurrentOwner$1.current = workInProgress2;
             var nextChildren;
-            if (didCaptureError && typeof Component.getDerivedStateFromError !== "function") {
+            if (didCaptureError && typeof Component2.getDerivedStateFromError !== "function") {
               nextChildren = null;
               {
                 stopProfilerTimerIfRunning();
@@ -16674,7 +16680,7 @@
             }
             workInProgress2.memoizedState = instance.state;
             if (hasContext) {
-              invalidateContextProvider(workInProgress2, Component, true);
+              invalidateContextProvider(workInProgress2, Component2, true);
             }
             return workInProgress2.child;
           }
@@ -16774,45 +16780,45 @@
             var lazyComponent = elementType;
             var payload = lazyComponent._payload;
             var init = lazyComponent._init;
-            var Component = init(payload);
-            workInProgress2.type = Component;
-            var resolvedTag = workInProgress2.tag = resolveLazyComponentTag(Component);
-            var resolvedProps = resolveDefaultProps(Component, props);
+            var Component2 = init(payload);
+            workInProgress2.type = Component2;
+            var resolvedTag = workInProgress2.tag = resolveLazyComponentTag(Component2);
+            var resolvedProps = resolveDefaultProps(Component2, props);
             var child;
             switch (resolvedTag) {
               case FunctionComponent: {
                 {
-                  validateFunctionComponentInDev(workInProgress2, Component);
-                  workInProgress2.type = Component = resolveFunctionForHotReloading(Component);
+                  validateFunctionComponentInDev(workInProgress2, Component2);
+                  workInProgress2.type = Component2 = resolveFunctionForHotReloading(Component2);
                 }
-                child = updateFunctionComponent(null, workInProgress2, Component, resolvedProps, renderLanes2);
+                child = updateFunctionComponent(null, workInProgress2, Component2, resolvedProps, renderLanes2);
                 return child;
               }
               case ClassComponent: {
                 {
-                  workInProgress2.type = Component = resolveClassForHotReloading(Component);
+                  workInProgress2.type = Component2 = resolveClassForHotReloading(Component2);
                 }
-                child = updateClassComponent(null, workInProgress2, Component, resolvedProps, renderLanes2);
+                child = updateClassComponent(null, workInProgress2, Component2, resolvedProps, renderLanes2);
                 return child;
               }
               case ForwardRef: {
                 {
-                  workInProgress2.type = Component = resolveForwardRefForHotReloading(Component);
+                  workInProgress2.type = Component2 = resolveForwardRefForHotReloading(Component2);
                 }
-                child = updateForwardRef(null, workInProgress2, Component, resolvedProps, renderLanes2);
+                child = updateForwardRef(null, workInProgress2, Component2, resolvedProps, renderLanes2);
                 return child;
               }
               case MemoComponent: {
                 {
                   if (workInProgress2.type !== workInProgress2.elementType) {
-                    var outerPropTypes = Component.propTypes;
+                    var outerPropTypes = Component2.propTypes;
                     if (outerPropTypes) {
                       checkPropTypes(
                         outerPropTypes,
                         resolvedProps,
                         // Resolved for outer only
                         "prop",
-                        getComponentNameFromType(Component)
+                        getComponentNameFromType(Component2)
                       );
                     }
                   }
@@ -16820,8 +16826,8 @@
                 child = updateMemoComponent(
                   null,
                   workInProgress2,
-                  Component,
-                  resolveDefaultProps(Component.type, resolvedProps),
+                  Component2,
+                  resolveDefaultProps(Component2.type, resolvedProps),
                   // The inner type can have defaults too
                   renderLanes2
                 );
@@ -16830,33 +16836,33 @@
             }
             var hint = "";
             {
-              if (Component !== null && typeof Component === "object" && Component.$$typeof === REACT_LAZY_TYPE) {
+              if (Component2 !== null && typeof Component2 === "object" && Component2.$$typeof === REACT_LAZY_TYPE) {
                 hint = " Did you wrap a component in React.lazy() more than once?";
               }
             }
-            throw new Error("Element type is invalid. Received a promise that resolves to: " + Component + ". " + ("Lazy element type must resolve to a class or function." + hint));
+            throw new Error("Element type is invalid. Received a promise that resolves to: " + Component2 + ". " + ("Lazy element type must resolve to a class or function." + hint));
           }
-          function mountIncompleteClassComponent(_current, workInProgress2, Component, nextProps, renderLanes2) {
+          function mountIncompleteClassComponent(_current, workInProgress2, Component2, nextProps, renderLanes2) {
             resetSuspendedCurrentOnMountInLegacyMode(_current, workInProgress2);
             workInProgress2.tag = ClassComponent;
             var hasContext;
-            if (isContextProvider(Component)) {
+            if (isContextProvider(Component2)) {
               hasContext = true;
               pushContextProvider(workInProgress2);
             } else {
               hasContext = false;
             }
             prepareToReadContext(workInProgress2, renderLanes2);
-            constructClassInstance(workInProgress2, Component, nextProps);
-            mountClassInstance(workInProgress2, Component, nextProps, renderLanes2);
-            return finishClassComponent(null, workInProgress2, Component, true, hasContext, renderLanes2);
+            constructClassInstance(workInProgress2, Component2, nextProps);
+            mountClassInstance(workInProgress2, Component2, nextProps, renderLanes2);
+            return finishClassComponent(null, workInProgress2, Component2, true, hasContext, renderLanes2);
           }
-          function mountIndeterminateComponent(_current, workInProgress2, Component, renderLanes2) {
+          function mountIndeterminateComponent(_current, workInProgress2, Component2, renderLanes2) {
             resetSuspendedCurrentOnMountInLegacyMode(_current, workInProgress2);
             var props = workInProgress2.pendingProps;
             var context;
             {
-              var unmaskedContext = getUnmaskedContext(workInProgress2, Component, false);
+              var unmaskedContext = getUnmaskedContext(workInProgress2, Component2, false);
               context = getMaskedContext(workInProgress2, unmaskedContext);
             }
             prepareToReadContext(workInProgress2, renderLanes2);
@@ -16866,8 +16872,8 @@
               markComponentRenderStarted(workInProgress2);
             }
             {
-              if (Component.prototype && typeof Component.prototype.render === "function") {
-                var componentName = getComponentNameFromType(Component) || "Unknown";
+              if (Component2.prototype && typeof Component2.prototype.render === "function") {
+                var componentName = getComponentNameFromType(Component2) || "Unknown";
                 if (!didWarnAboutBadClass[componentName]) {
                   error("The <%s /> component appears to have a render method, but doesn't extend React.Component. This is likely to cause errors. Change %s to extend React.Component instead.", componentName, componentName);
                   didWarnAboutBadClass[componentName] = true;
@@ -16878,7 +16884,7 @@
               }
               setIsRendering(true);
               ReactCurrentOwner$1.current = workInProgress2;
-              value = renderWithHooks(null, workInProgress2, Component, props, context, renderLanes2);
+              value = renderWithHooks(null, workInProgress2, Component2, props, context, renderLanes2);
               hasId = checkDidRenderIdHook();
               setIsRendering(false);
             }
@@ -16888,7 +16894,7 @@
             workInProgress2.flags |= PerformedWork;
             {
               if (typeof value === "object" && value !== null && typeof value.render === "function" && value.$$typeof === void 0) {
-                var _componentName = getComponentNameFromType(Component) || "Unknown";
+                var _componentName = getComponentNameFromType(Component2) || "Unknown";
                 if (!didWarnAboutModulePatternComponent[_componentName]) {
                   error("The <%s /> component appears to be a function component that returns a class instance. Change %s to a class that extends React.Component instead. If you can't use a class try assigning the prototype on the function as a workaround. `%s.prototype = React.Component.prototype`. Don't use an arrow function since it cannot be called with `new` by React.", _componentName, _componentName, _componentName);
                   didWarnAboutModulePatternComponent[_componentName] = true;
@@ -16901,7 +16907,7 @@
               typeof value === "object" && value !== null && typeof value.render === "function" && value.$$typeof === void 0
             ) {
               {
-                var _componentName2 = getComponentNameFromType(Component) || "Unknown";
+                var _componentName2 = getComponentNameFromType(Component2) || "Unknown";
                 if (!didWarnAboutModulePatternComponent[_componentName2]) {
                   error("The <%s /> component appears to be a function component that returns a class instance. Change %s to a class that extends React.Component instead. If you can't use a class try assigning the prototype on the function as a workaround. `%s.prototype = React.Component.prototype`. Don't use an arrow function since it cannot be called with `new` by React.", _componentName2, _componentName2, _componentName2);
                   didWarnAboutModulePatternComponent[_componentName2] = true;
@@ -16911,7 +16917,7 @@
               workInProgress2.memoizedState = null;
               workInProgress2.updateQueue = null;
               var hasContext = false;
-              if (isContextProvider(Component)) {
+              if (isContextProvider(Component2)) {
                 hasContext = true;
                 pushContextProvider(workInProgress2);
               } else {
@@ -16920,15 +16926,15 @@
               workInProgress2.memoizedState = value.state !== null && value.state !== void 0 ? value.state : null;
               initializeUpdateQueue(workInProgress2);
               adoptClassInstance(workInProgress2, value);
-              mountClassInstance(workInProgress2, Component, props, renderLanes2);
-              return finishClassComponent(null, workInProgress2, Component, true, hasContext, renderLanes2);
+              mountClassInstance(workInProgress2, Component2, props, renderLanes2);
+              return finishClassComponent(null, workInProgress2, Component2, true, hasContext, renderLanes2);
             } else {
               workInProgress2.tag = FunctionComponent;
               {
                 if (workInProgress2.mode & StrictLegacyMode) {
                   setIsStrictModeForDevtools(true);
                   try {
-                    value = renderWithHooks(null, workInProgress2, Component, props, context, renderLanes2);
+                    value = renderWithHooks(null, workInProgress2, Component2, props, context, renderLanes2);
                     hasId = checkDidRenderIdHook();
                   } finally {
                     setIsStrictModeForDevtools(false);
@@ -16940,16 +16946,16 @@
               }
               reconcileChildren(null, workInProgress2, value, renderLanes2);
               {
-                validateFunctionComponentInDev(workInProgress2, Component);
+                validateFunctionComponentInDev(workInProgress2, Component2);
               }
               return workInProgress2.child;
             }
           }
-          function validateFunctionComponentInDev(workInProgress2, Component) {
+          function validateFunctionComponentInDev(workInProgress2, Component2) {
             {
-              if (Component) {
-                if (Component.childContextTypes) {
-                  error("%s(...): childContextTypes cannot be defined on a function component.", Component.displayName || Component.name || "Component");
+              if (Component2) {
+                if (Component2.childContextTypes) {
+                  error("%s(...): childContextTypes cannot be defined on a function component.", Component2.displayName || Component2.name || "Component");
                 }
               }
               if (workInProgress2.ref !== null) {
@@ -16968,22 +16974,22 @@
                   error("Function components cannot be given refs. Attempts to access this ref will fail. Did you mean to use React.forwardRef()?%s", info);
                 }
               }
-              if (Component.defaultProps !== void 0) {
-                var componentName = getComponentNameFromType(Component) || "Unknown";
+              if (Component2.defaultProps !== void 0) {
+                var componentName = getComponentNameFromType(Component2) || "Unknown";
                 if (!didWarnAboutDefaultPropsOnFunctionComponent[componentName]) {
                   error("%s: Support for defaultProps will be removed from function components in a future major release. Use JavaScript default parameters instead.", componentName);
                   didWarnAboutDefaultPropsOnFunctionComponent[componentName] = true;
                 }
               }
-              if (typeof Component.getDerivedStateFromProps === "function") {
-                var _componentName3 = getComponentNameFromType(Component) || "Unknown";
+              if (typeof Component2.getDerivedStateFromProps === "function") {
+                var _componentName3 = getComponentNameFromType(Component2) || "Unknown";
                 if (!didWarnAboutGetDerivedStateOnFunctionComponent[_componentName3]) {
                   error("%s: Function components do not support getDerivedStateFromProps.", _componentName3);
                   didWarnAboutGetDerivedStateOnFunctionComponent[_componentName3] = true;
                 }
               }
-              if (typeof Component.contextType === "object" && Component.contextType !== null) {
-                var _componentName4 = getComponentNameFromType(Component) || "Unknown";
+              if (typeof Component2.contextType === "object" && Component2.contextType !== null) {
+                var _componentName4 = getComponentNameFromType(Component2) || "Unknown";
                 if (!didWarnAboutContextTypeOnFunctionComponent[_componentName4]) {
                   error("%s: Function components do not support contextType.", _componentName4);
                   didWarnAboutContextTypeOnFunctionComponent[_componentName4] = true;
@@ -17745,8 +17751,8 @@
                 pushHostContext(workInProgress2);
                 break;
               case ClassComponent: {
-                var Component = workInProgress2.type;
-                if (isContextProvider(Component)) {
+                var Component2 = workInProgress2.type;
+                if (isContextProvider(Component2)) {
                   pushContextProvider(workInProgress2);
                 }
                 break;
@@ -17873,10 +17879,10 @@
                 return mountLazyComponent(current2, workInProgress2, elementType, renderLanes2);
               }
               case FunctionComponent: {
-                var Component = workInProgress2.type;
+                var Component2 = workInProgress2.type;
                 var unresolvedProps = workInProgress2.pendingProps;
-                var resolvedProps = workInProgress2.elementType === Component ? unresolvedProps : resolveDefaultProps(Component, unresolvedProps);
-                return updateFunctionComponent(current2, workInProgress2, Component, resolvedProps, renderLanes2);
+                var resolvedProps = workInProgress2.elementType === Component2 ? unresolvedProps : resolveDefaultProps(Component2, unresolvedProps);
+                return updateFunctionComponent(current2, workInProgress2, Component2, resolvedProps, renderLanes2);
               }
               case ClassComponent: {
                 var _Component = workInProgress2.type;
@@ -18180,8 +18186,8 @@
                 bubbleProperties(workInProgress2);
                 return null;
               case ClassComponent: {
-                var Component = workInProgress2.type;
-                if (isContextProvider(Component)) {
+                var Component2 = workInProgress2.type;
+                if (isContextProvider(Component2)) {
                   popContext(workInProgress2);
                 }
                 bubbleProperties(workInProgress2);
@@ -18499,8 +18505,8 @@
             popTreeContext(workInProgress2);
             switch (workInProgress2.tag) {
               case ClassComponent: {
-                var Component = workInProgress2.type;
-                if (isContextProvider(Component)) {
+                var Component2 = workInProgress2.type;
+                if (isContextProvider(Component2)) {
                   popContext(workInProgress2);
                 }
                 var flags = workInProgress2.flags;
@@ -22185,18 +22191,18 @@
           var createFiber = function(tag, pendingProps, key, mode) {
             return new FiberNode(tag, pendingProps, key, mode);
           };
-          function shouldConstruct$1(Component) {
-            var prototype = Component.prototype;
+          function shouldConstruct$1(Component2) {
+            var prototype = Component2.prototype;
             return !!(prototype && prototype.isReactComponent);
           }
           function isSimpleFunctionComponent(type) {
             return typeof type === "function" && !shouldConstruct$1(type) && type.defaultProps === void 0;
           }
-          function resolveLazyComponentTag(Component) {
-            if (typeof Component === "function") {
-              return shouldConstruct$1(Component) ? ClassComponent : FunctionComponent;
-            } else if (Component !== void 0 && Component !== null) {
-              var $$typeof = Component.$$typeof;
+          function resolveLazyComponentTag(Component2) {
+            if (typeof Component2 === "function") {
+              return shouldConstruct$1(Component2) ? ClassComponent : FunctionComponent;
+            } else if (Component2 !== void 0 && Component2 !== null) {
+              var $$typeof = Component2.$$typeof;
               if ($$typeof === REACT_FORWARD_REF_TYPE) {
                 return ForwardRef;
               }
@@ -22637,9 +22643,9 @@
             var fiber = get(parentComponent);
             var parentContext = findCurrentUnmaskedContext(fiber);
             if (fiber.tag === ClassComponent) {
-              var Component = fiber.type;
-              if (isContextProvider(Component)) {
-                return processChildContext(fiber, Component, parentContext);
+              var Component2 = fiber.type;
+              if (isContextProvider(Component2)) {
+                return processChildContext(fiber, Component2, parentContext);
               }
             }
             return parentContext;
@@ -23583,1361 +23589,177 @@
   });
 
   // src/webview/cockpit/index.tsx
-  var React13 = __toESM(require_react());
+  var React14 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
   // src/webview/cockpit/components/SuperWebview.tsx
   var React12 = __toESM(require_react());
 
-  // src/webview/cockpit/components/Stage.tsx
-  var React8 = __toESM(require_react());
+  // src/utils/logger.ts
+  var vscode;
+  try {
+    vscode = __require("vscode");
+  } catch {
+    vscode = null;
+  }
+  var infoChannel;
+  var debugChannel;
+  var isVsCode = vscode && vscode.window;
+  function getInfoChannel() {
+    if (!isVsCode) return void 0;
+    if (!infoChannel) {
+      infoChannel = vscode.window.createOutputChannel("Git Context");
+    }
+    return infoChannel;
+  }
+  function getDebugChannel() {
+    if (!isVsCode) return void 0;
+    if (!debugChannel) {
+      debugChannel = vscode.window.createOutputChannel("Git Context (Debug)");
+    }
+    return debugChannel;
+  }
+  function logDebug(message) {
+    const channel = getDebugChannel();
+    if (channel) {
+      channel.appendLine(message);
+    }
+    console.log(message);
+  }
+  function logWarn(message) {
+    const infoCh = getInfoChannel();
+    if (infoCh) infoCh.appendLine(`[WARN] ${message}`);
+    const debugCh = getDebugChannel();
+    if (debugCh) debugCh.appendLine(`[WARN] ${message}`);
+    console.warn(`[WARN] ${message}`);
+  }
 
-  // src/webview/cockpit/components/stages/BundleStage.tsx
-  var React2 = __toESM(require_react());
-
-  // src/webview/cockpit/components/stages/TreemapNode.tsx
-  var React = __toESM(require_react());
-  var TreemapNode = ({ node, depth = 0 }) => {
-    const children = node.children || [];
-    const hasChildren = children.length > 0;
-    const baseColor = node.score > 10 ? "var(--vscode-charts-red)" : node.score > 5 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)";
-    return /* @__PURE__ */ React.createElement(
-      "div",
-      {
-        style: {
-          flex: node.weight || 1,
-          minWidth: 80,
-          minHeight: 60,
-          border: "1px solid var(--vscode-panel-border)",
-          borderRadius: 4,
-          padding: 6,
-          margin: 4,
-          background: hasChildren ? "var(--vscode-editor-background)" : "var(--vscode-editor-inactiveSelectionBackground)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 4
-        },
-        title: `${node.name}
-Churn: ${node.score.toFixed(1)}
-+${node.added || 0} / -${node.removed || 0}`
-      },
-      /* @__PURE__ */ React.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            justifyContent: "space-between",
-            fontSize: "0.8em",
-            fontWeight: "bold",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap"
-          }
-        },
-        /* @__PURE__ */ React.createElement("span", null, node.name),
-        /* @__PURE__ */ React.createElement("span", { style: { color: baseColor } }, node.score)
-      ),
-      /* @__PURE__ */ React.createElement(
-        "div",
-        {
-          style: {
-            height: 4,
-            borderRadius: 2,
-            background: "var(--vscode-progressBar-background)",
-            overflow: "hidden"
-          }
-        },
-        /* @__PURE__ */ React.createElement(
-          "div",
-          {
-            style: {
-              height: "100%",
-              width: `${Math.min((node.score || 0) * 2, 100)}%`,
-              background: baseColor
-            }
-          }
-        )
-      ),
-      /* @__PURE__ */ React.createElement("div", { style: { fontSize: "0.7em", opacity: 0.7 } }, "+", node.added || 0, " / -", node.removed || 0),
-      hasChildren && /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", flex: 1, overflow: "hidden" } }, children.map((child) => /* @__PURE__ */ React.createElement(TreemapNode, { key: child.id, node: child, depth: depth + 1 })))
-    );
-  };
-
-  // src/webview/cockpit/components/stages/BundleStage.tsx
-  var BundleStage = ({ frame, onZoomIn, cockpitState, vscode: vscode2 }) => {
-    const [isConfigOpen, setIsConfigOpen] = React2.useState(false);
-    const defaultConfig = {
-      mode: "repo",
-      roots: [],
-      includeConnected: false,
-      exclusions: []
-    };
-    const [formConfig, setFormConfig] = React2.useState(
-      cockpitState?.bundleConfig || defaultConfig
-    );
-    const [depth, setDepth] = React2.useState(cockpitState?.lastNCommits || 20);
-    React2.useEffect(() => {
-      setFormConfig(
-        cockpitState?.bundleConfig || {
-          mode: "repo",
-          roots: [],
-          includeConnected: false,
-          exclusions: []
+  // src/utils/messageTracer.ts
+  var MessageTracer = class {
+    constructor() {
+      this.traces = [];
+      this.pendingRequests = /* @__PURE__ */ new Map();
+      this.maxHistory = 200;
+    }
+    logOutgoing(type, payload, source) {
+      const trace = {
+        direction: source === "webview" ? "webview\u2192extension" : "extension\u2192webview",
+        type,
+        payload: this.sanitizePayload(payload),
+        timestamp: Date.now()
+      };
+      this.traces.push(trace);
+      if (this.traces.length > this.maxHistory) {
+        this.traces.shift();
+      }
+      if (type === "analyzeFrame" || type === "getBundleData" || type === "getExplorerTree" || type === "switchBundle") {
+        const requestKey = `${type}:${payload?.frameId || payload?.id || "default"}`;
+        this.pendingRequests.set(requestKey, trace.timestamp);
+        trace.sequenceId = requestKey;
+      }
+      logDebug(`\u{1F4E4} ${trace.direction} [${type}]${trace.sequenceId ? ` (${trace.sequenceId})` : ""}`);
+      if (payload && typeof payload === "object") {
+        const keys = Object.keys(payload);
+        if (keys.length > 0 && keys.length <= 5) {
+          logDebug(`   ${JSON.stringify(payload)}`);
         }
+      }
+    }
+    logIncoming(type, payload, source) {
+      const direction = source === "webview" ? "extension\u2192webview" : "webview\u2192extension";
+      let responseTime;
+      let sequenceId;
+      for (const [key, timestamp] of this.pendingRequests.entries()) {
+        const [reqType] = key.split(":");
+        if (type === "updateState" && reqType === "analyzeFrame" || type === "updateExplorerTree" && reqType === "getExplorerTree" || type === reqType) {
+          responseTime = Date.now() - timestamp;
+          sequenceId = key;
+          this.pendingRequests.delete(key);
+          break;
+        }
+      }
+      const trace = {
+        direction,
+        type,
+        payload: this.sanitizePayload(payload),
+        timestamp: Date.now(),
+        responseTime,
+        sequenceId
+      };
+      this.traces.push(trace);
+      if (this.traces.length > this.maxHistory) {
+        this.traces.shift();
+      }
+      logDebug(
+        `\u{1F4E5} ${trace.direction} [${type}]${responseTime ? ` (${responseTime}ms)` : ""}${sequenceId ? ` (${sequenceId})` : ""}`
       );
-      setDepth(cockpitState?.lastNCommits || 20);
-    }, [cockpitState?.bundleConfig, cockpitState?.lastNCommits]);
-    const handleConfigChange = (updates) => {
-      setFormConfig((prev) => ({ ...prev, ...updates }));
-    };
-    const applyConfig = () => {
-      if (!vscode2) return;
-      vscode2.postMessage({ type: "updateBundleConfig", config: formConfig });
-      vscode2.postMessage({ type: "setLastNCommits", value: depth });
-      vscode2.postMessage({ type: "generateReport", mode: "selection", force: true });
-    };
-    return /* @__PURE__ */ React2.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React2.createElement(
-      "div",
-      {
-        style: {
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "10px"
-        }
-      },
-      /* @__PURE__ */ React2.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, "Hotspots"),
-      /* @__PURE__ */ React2.createElement(
-        "button",
-        {
-          onClick: () => setIsConfigOpen(!isConfigOpen),
-          style: {
-            background: "none",
-            border: "none",
-            color: "var(--vscode-textLink-foreground)",
-            cursor: "pointer",
-            fontSize: "0.9em"
-          }
-        },
-        isConfigOpen ? "Hide Scope" : "Configure Scope"
-      )
-    ), isConfigOpen && /* @__PURE__ */ React2.createElement(
-      "div",
-      {
-        style: {
-          marginBottom: "15px",
-          padding: "10px",
-          backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-          borderRadius: "4px",
-          border: "1px solid var(--vscode-panel-border)"
-        }
-      },
-      /* @__PURE__ */ React2.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React2.createElement(
-        "label",
-        {
-          style: {
-            display: "block",
-            marginBottom: "5px",
-            fontWeight: "bold",
-            fontSize: "0.9em"
-          }
-        },
-        "Mode"
-      ), /* @__PURE__ */ React2.createElement(
-        "select",
-        {
-          value: formConfig.mode,
-          onChange: (e) => handleConfigChange({ mode: e.target.value }),
-          style: {
-            width: "100%",
-            padding: "4px",
-            background: "var(--vscode-dropdown-background)",
-            color: "var(--vscode-dropdown-foreground)",
-            border: "1px solid var(--vscode-dropdown-border)"
-          }
-        },
-        /* @__PURE__ */ React2.createElement("option", { value: "repo" }, "Full Repo"),
-        /* @__PURE__ */ React2.createElement("option", { value: "module" }, "Current Module"),
-        /* @__PURE__ */ React2.createElement("option", { value: "changes" }, "My Changes (Staged + Unstaged)"),
-        /* @__PURE__ */ React2.createElement("option", { value: "custom" }, "Custom Roots")
-      )),
-      formConfig.mode === "custom" && /* @__PURE__ */ React2.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React2.createElement(
-        "label",
-        {
-          style: {
-            display: "block",
-            marginBottom: "5px",
-            fontWeight: "bold",
-            fontSize: "0.9em"
-          }
-        },
-        "Roots (comma separated)"
-      ), /* @__PURE__ */ React2.createElement(
-        "input",
-        {
-          type: "text",
-          value: formConfig.roots.join(", "),
-          onChange: (e) => handleConfigChange({
-            roots: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-          }),
-          placeholder: "src/auth, utils.ts",
-          style: {
-            width: "100%",
-            padding: "4px",
-            background: "var(--vscode-input-background)",
-            color: "var(--vscode-input-foreground)",
-            border: "1px solid var(--vscode-input-border)"
-          }
-        }
-      )),
-      /* @__PURE__ */ React2.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React2.createElement(
-        "label",
-        {
-          style: {
-            display: "flex",
-            alignItems: "center",
-            fontSize: "0.9em",
-            cursor: "pointer"
-          }
-        },
-        /* @__PURE__ */ React2.createElement(
-          "input",
-          {
-            type: "checkbox",
-            checked: formConfig.includeConnected,
-            onChange: (e) => handleConfigChange({ includeConnected: e.target.checked }),
-            style: { marginRight: "8px" }
-          }
-        ),
-        "Include Connected Set (Callers/Callees)"
-      )),
-      /* @__PURE__ */ React2.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React2.createElement(
-        "label",
-        {
-          style: {
-            display: "block",
-            marginBottom: "5px",
-            fontWeight: "bold",
-            fontSize: "0.9em"
-          }
-        },
-        "Exclusions (glob)"
-      ), /* @__PURE__ */ React2.createElement(
-        "input",
-        {
-          type: "text",
-          value: formConfig.exclusions.join(", "),
-          onChange: (e) => handleConfigChange({
-            exclusions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-          }),
-          placeholder: "**/*.test.ts",
-          style: {
-            width: "100%",
-            padding: "4px",
-            background: "var(--vscode-input-background)",
-            color: "var(--vscode-input-foreground)",
-            border: "1px solid var(--vscode-input-border)"
-          }
-        }
-      )),
-      /* @__PURE__ */ React2.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React2.createElement(
-        "label",
-        {
-          style: {
-            display: "block",
-            marginBottom: "5px",
-            fontWeight: "bold",
-            fontSize: "0.9em"
-          }
-        },
-        "Analysis Depth (Commits)"
-      ), /* @__PURE__ */ React2.createElement(
-        "input",
-        {
-          type: "number",
-          min: "1",
-          max: "100",
-          value: depth,
-          onChange: (e) => {
-            const val = parseInt(e.target.value);
-            if (!isNaN(val)) {
-              setDepth(val);
-            }
-          },
-          style: {
-            width: "100%",
-            padding: "4px",
-            background: "var(--vscode-input-background)",
-            color: "var(--vscode-input-foreground)",
-            border: "1px solid var(--vscode-input-border)"
-          }
-        }
-      )),
-      /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", gap: "10px", marginTop: "10px" } }, /* @__PURE__ */ React2.createElement(
-        "button",
-        {
-          onClick: () => {
-            applyConfig();
-            setIsConfigOpen(false);
-          },
-          disabled: cockpitState?.isAnalyzing,
-          style: {
-            flex: 1,
-            padding: "6px",
-            background: cockpitState?.isAnalyzing ? "var(--vscode-button-secondaryBackground)" : "var(--vscode-button-background)",
-            color: cockpitState?.isAnalyzing ? "var(--vscode-button-secondaryForeground)" : "var(--vscode-button-foreground)",
-            border: "none",
-            borderRadius: "2px",
-            cursor: cockpitState?.isAnalyzing ? "not-allowed" : "pointer",
-            opacity: cockpitState?.isAnalyzing ? 0.7 : 1
-          }
-        },
-        cockpitState?.isAnalyzing ? "Analyzing..." : "Apply & Analyze"
-      ))
-    ), cockpitState?.bundleSummary && /* @__PURE__ */ React2.createElement(
-      "div",
-      {
-        style: {
-          display: "flex",
-          gap: "15px",
-          marginBottom: "15px",
-          fontSize: "0.85em",
-          color: "var(--vscode-descriptionForeground)",
-          borderBottom: "1px solid var(--vscode-panel-border)",
-          paddingBottom: "10px"
-        }
-      },
-      /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement("strong", null, cockpitState.bundleSummary.commitCount), " commits"),
-      /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement("strong", null, cockpitState.bundleSummary.fileCount), " files"),
-      cockpitState.bundleSummary.symbolCount && /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement("strong", null, cockpitState.bundleSummary.symbolCount), " symbols")
-    ), frame.data?.treemap && frame.data.treemap.length > 0 ? /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, frame.data.treemap.map((node) => /* @__PURE__ */ React2.createElement(TreemapNode, { key: node.id, node }))) : /* @__PURE__ */ React2.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, cockpitState?.isAnalyzing ? "Loading heatmap..." : frame.data?.hotspots && frame.data.hotspots.length > 0 ? "" : "No churn data yet. Run Analyze to populate the heatmap."), frame.data?.hotspots && frame.data.hotspots.length > 0 && /* @__PURE__ */ React2.createElement(React2.Fragment, null, /* @__PURE__ */ React2.createElement(
-      "p",
-      {
-        style: {
-          fontSize: "0.85em",
-          color: "var(--vscode-descriptionForeground)",
-          marginBottom: "10px"
-        }
-      },
-      "Most modified files (3 months)"
-    ), /* @__PURE__ */ React2.createElement(
-      "div",
-      {
-        style: {
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-          gap: "10px"
-        }
-      },
-      frame.data.hotspots.map((file) => /* @__PURE__ */ React2.createElement(
-        "div",
-        {
-          key: file.path,
-          onClick: () => onZoomIn({
-            level: "file",
-            id: file.path,
-            name: file.name || file.path.split("/").pop(),
-            status: "scanning"
-          }),
-          style: {
-            padding: "12px 10px",
-            border: "1px solid var(--vscode-button-background)",
-            backgroundColor: "var(--vscode-editor-background)",
-            cursor: "pointer",
-            borderRadius: "4px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "4px",
-            minHeight: "80px"
-          },
-          title: `${file.name}
-Churn: ${file.score || 0}
-+${file.added || 0} / -${file.removed || 0}`
-        },
-        /* @__PURE__ */ React2.createElement(
-          "div",
-          {
-            style: {
-              fontWeight: "bold",
-              fontSize: "0.9em",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap"
-            }
-          },
-          file.name
-        ),
-        /* @__PURE__ */ React2.createElement(
-          "div",
-          {
-            style: {
-              fontSize: "0.75em",
-              color: "var(--vscode-descriptionForeground)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap"
-            }
-          },
-          file.path
-        ),
-        /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7 } }, "+", file.added || 0, " / -", file.removed || 0),
-        /* @__PURE__ */ React2.createElement(
-          "div",
-          {
-            style: {
-              height: "6px",
-              borderRadius: "3px",
-              background: "var(--vscode-progressBar-background)",
-              overflow: "hidden",
-              marginTop: "auto"
-            }
-          },
-          /* @__PURE__ */ React2.createElement(
-            "div",
-            {
-              style: {
-                width: `${Math.min((file.score || 0) * 2, 100)}%`,
-                height: "100%",
-                background: file.score > 10 ? "var(--vscode-charts-red)" : file.score > 5 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)"
-              }
-            }
-          )
-        )
-      ))
-    )), frame.data?.hotspots && frame.data.hotspots.length === 0 && !cockpitState?.isAnalyzing && /* @__PURE__ */ React2.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots available for this scope."), frame.data?.risks?.length > 0 && /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React2.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Top Risks"), /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data.risks.map((risk, idx) => /* @__PURE__ */ React2.createElement(
-      "li",
-      {
-        key: idx,
-        style: {
-          padding: "8px",
-          border: "1px solid var(--vscode-inputValidation-warningBorder)",
-          borderRadius: "4px",
-          background: "var(--vscode-inputValidation-warningBackground)",
-          marginBottom: "8px"
-        }
-      },
-      /* @__PURE__ */ React2.createElement("div", { style: { fontWeight: "bold" } }, risk.name || risk.path),
-      /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.issue),
-      risk.detail && /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.detail)
-    )))));
-  };
-
-  // src/webview/cockpit/components/stages/BlastRadiusStage.tsx
-  var React3 = __toESM(require_react());
-  var BlastRadiusStage = ({
-    frame,
-    onZoomIn
-  }) => {
-    const [showIncoming, setShowIncoming] = React3.useState(true);
-    const [showOutgoing, setShowOutgoing] = React3.useState(true);
-    const incoming = frame.data?.blastRadius?.incoming || [];
-    const outgoing = frame.data?.blastRadius?.outgoing || [];
-    const center = frame.name;
-    const nodes = [
-      ...incoming.map((edge) => ({ id: edge.from.split(":")[0], direction: "in" })),
-      ...outgoing.map((edge) => ({ id: edge.to.split(":")[0], direction: "out" }))
-    ];
-    const uniqueNodes = Array.from(new Map(nodes.map((n) => [n.id, n])).values());
-    const edges = [
-      ...incoming.map((e) => ({
-        from: e.from.split(":")[0],
-        to: center,
-        direction: "in",
-        type: e.type
-      })),
-      ...outgoing.map((e) => ({
-        from: center,
-        to: e.to.split(":")[0],
-        direction: "out",
-        type: e.type
-      }))
-    ];
-    return /* @__PURE__ */ React3.createElement(
-      "div",
-      {
-        style: {
-          width: "100%",
-          height: "100%",
-          padding: "10px",
-          overflow: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px"
-        }
-      },
-      /* @__PURE__ */ React3.createElement("h3", { style: { fontSize: "1.2em", marginBottom: "5px" } }, "Dependencies"),
-      /* @__PURE__ */ React3.createElement(
-        "p",
-        {
-          style: {
-            fontSize: "0.85em",
-            color: "var(--vscode-descriptionForeground)",
-            marginBottom: "10px"
-          }
-        },
-        frame.name
-      ),
-      /* @__PURE__ */ React3.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } }, /* @__PURE__ */ React3.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React3.createElement(
-        "input",
-        {
-          type: "checkbox",
-          checked: showIncoming,
-          onChange: (e) => setShowIncoming(e.target.checked)
-        }
-      ), " ", "Incoming"), /* @__PURE__ */ React3.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React3.createElement(
-        "input",
-        {
-          type: "checkbox",
-          checked: showOutgoing,
-          onChange: (e) => setShowOutgoing(e.target.checked)
-        }
-      ), " ", "Outgoing")),
-      /* @__PURE__ */ React3.createElement(
-        "div",
-        {
-          style: {
-            border: "1px solid var(--vscode-panel-border)",
-            borderRadius: "4px",
-            padding: "8px",
-            minHeight: 180
-          }
-        },
-        /* @__PURE__ */ React3.createElement("div", { style: { position: "relative", width: "100%", height: 200 } }, /* @__PURE__ */ React3.createElement(
-          "div",
-          {
-            style: {
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              padding: "6px 10px",
-              borderRadius: "8px",
-              background: "var(--vscode-editor-background)",
-              border: "1px solid var(--vscode-panel-border)",
-              fontWeight: "bold",
-              fontSize: "0.9em"
-            }
-          },
-          center
-        ), uniqueNodes.map((n, idx) => {
-          const angle = idx / uniqueNodes.length * Math.PI * 2;
-          const radius = 65;
-          const x = 50 + radius * Math.cos(angle);
-          const y = 50 + radius * Math.sin(angle);
-          return /* @__PURE__ */ React3.createElement(
-            "div",
-            {
-              key: n.id,
-              onClick: () => onZoomIn({
-                level: "file",
-                id: n.id,
-                name: n.id.split("/").pop(),
-                status: "scanning"
-              }),
-              style: {
-                position: "absolute",
-                top: `${y}%`,
-                left: `${x}%`,
-                transform: "translate(-50%, -50%)",
-                padding: "4px 6px",
-                borderRadius: "6px",
-                background: n.direction === "in" ? "var(--vscode-charts-blue)" : "var(--vscode-charts-orange)",
-                color: "var(--vscode-editor-foreground)",
-                fontSize: "0.75em",
-                cursor: "pointer",
-                whiteSpace: "nowrap"
-              }
-            },
-            n.id.split("/").pop()
-          );
-        }), edges.filter(
-          (e) => e.direction === "in" && showIncoming || e.direction === "out" && showOutgoing
-        ).map((e, idx) => {
-          const fromIdx = uniqueNodes.findIndex((n) => n.id === e.from);
-          const toIdx = uniqueNodes.findIndex((n) => n.id === e.to);
-          if (fromIdx === -1 || toIdx === -1) return null;
-          const angleFrom = fromIdx / uniqueNodes.length * Math.PI * 2;
-          const angleTo = toIdx / uniqueNodes.length * Math.PI * 2;
-          const radius = 65;
-          const x1 = 50 + radius * Math.cos(angleFrom);
-          const y1 = 50 + radius * Math.sin(angleFrom);
-          const x2 = 50 + radius * Math.cos(angleTo);
-          const y2 = 50 + radius * Math.sin(angleTo);
-          return /* @__PURE__ */ React3.createElement(
-            "svg",
-            {
-              key: idx,
-              style: {
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                pointerEvents: "none"
-              }
-            },
-            /* @__PURE__ */ React3.createElement(
-              "line",
-              {
-                x1: `${x1}%`,
-                y1: `${y1}%`,
-                x2: `${x2}%`,
-                y2: `${y2}%`,
-                stroke: e.direction === "in" ? "var(--vscode-charts-blue)" : "var(--vscode-charts-orange)",
-                strokeWidth: 1.5,
-                opacity: 0.6
-              }
-            )
-          );
-        }))
-      ),
-      /* @__PURE__ */ React3.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", flex: 1 } }, /* @__PURE__ */ React3.createElement(
-        "div",
-        {
-          style: {
-            border: "1px solid var(--vscode-panel-border)",
-            borderRadius: "4px",
-            padding: "8px",
-            overflow: "auto"
-          }
-        },
-        /* @__PURE__ */ React3.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Incoming (", incoming.length, ")"),
-        incoming.length ? /* @__PURE__ */ React3.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, incoming.map((edge, idx) => /* @__PURE__ */ React3.createElement(
-          "li",
-          {
-            key: idx,
-            onClick: () => onZoomIn({
-              level: "file",
-              id: edge.from.split(":")[0],
-              name: edge.from.split(":")[0].split("/").pop(),
-              status: "scanning"
-            }),
-            style: {
-              padding: "6px",
-              borderBottom: "1px solid var(--vscode-panel-border)",
-              cursor: "pointer",
-              fontSize: "0.85em"
-            }
-          },
-          edge.from.split(":")[0],
-          " \u2192 ",
-          edge.to.split(":")[0],
-          " (",
-          edge.type,
-          ")"
-        ))) : /* @__PURE__ */ React3.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
-      ), /* @__PURE__ */ React3.createElement(
-        "div",
-        {
-          style: {
-            border: "1px solid var(--vscode-panel-border)",
-            borderRadius: "4px",
-            padding: "8px",
-            overflow: "auto"
-          }
-        },
-        /* @__PURE__ */ React3.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Outgoing (", outgoing.length, ")"),
-        outgoing.length ? /* @__PURE__ */ React3.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, outgoing.map((edge, idx) => /* @__PURE__ */ React3.createElement(
-          "li",
-          {
-            key: idx,
-            onClick: () => onZoomIn({
-              level: "file",
-              id: edge.to.split(":")[0],
-              name: edge.to.split(":")[0].split("/").pop(),
-              status: "scanning"
-            }),
-            style: {
-              padding: "6px",
-              borderBottom: "1px solid var(--vscode-panel-border)",
-              cursor: "pointer",
-              fontSize: "0.85em"
-            }
-          },
-          edge.from.split(":")[0],
-          " \u2192 ",
-          edge.to.split(":")[0],
-          " (",
-          edge.type,
-          ")"
-        ))) : /* @__PURE__ */ React3.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
-      ))
-    );
-  };
-
-  // src/webview/cockpit/components/stages/FileStage.tsx
-  var React4 = __toESM(require_react());
-  var FileStage = ({
-    frame,
-    onZoomIn
-  }) => {
-    const [showSymbols, setShowSymbols] = React4.useState(false);
-    return /* @__PURE__ */ React4.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React4.createElement(
-      "div",
-      {
-        style: {
-          padding: "10px",
-          borderBottom: "1px solid var(--vscode-panel-border)",
-          flexShrink: 0
-        }
-      },
-      /* @__PURE__ */ React4.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
-      /* @__PURE__ */ React4.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.lineCount, " lines \u2022 ", frame.data?.language, frame.data?.changeStats && /* @__PURE__ */ React4.createElement("span", { style: { marginLeft: "10px" } }, "+", frame.data.changeStats.added, " / -", frame.data.changeStats.removed), typeof frame.data?.hotspotScore === "number" && /* @__PURE__ */ React4.createElement("span", { style: { marginLeft: "10px", color: "var(--vscode-charts-red)" } }, "Hotspot: ", frame.data.hotspotScore))
-    ), /* @__PURE__ */ React4.createElement(
-      "div",
-      {
-        style: {
-          padding: "8px 10px",
-          borderBottom: "1px solid var(--vscode-panel-border)",
-          display: "flex",
-          gap: "10px",
-          flexShrink: 0
-        }
-      },
-      /* @__PURE__ */ React4.createElement(
-        "button",
-        {
-          onClick: () => setShowSymbols(false),
-          style: {
-            flex: 1,
-            padding: "6px",
-            border: "none",
-            background: !showSymbols ? "var(--vscode-button-background)" : "transparent",
-            color: !showSymbols ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)",
-            cursor: "pointer",
-            fontSize: "0.85em",
-            borderRadius: "4px"
-          }
-        },
-        "Content"
-      ),
-      /* @__PURE__ */ React4.createElement(
-        "button",
-        {
-          onClick: () => setShowSymbols(true),
-          style: {
-            flex: 1,
-            padding: "6px",
-            border: "none",
-            background: showSymbols ? "var(--vscode-button-background)" : "transparent",
-            color: showSymbols ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)",
-            cursor: "pointer",
-            fontSize: "0.85em",
-            borderRadius: "4px"
-          }
-        },
-        "Symbols (",
-        frame.data?.symbols?.length || 0,
-        ")"
-      )
-    ), /* @__PURE__ */ React4.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, !showSymbols ? /* @__PURE__ */ React4.createElement(
-      "div",
-      {
-        style: {
-          flex: 1,
-          overflow: "auto",
-          backgroundColor: "var(--vscode-editor-background)",
-          padding: "10px"
-        }
-      },
-      /* @__PURE__ */ React4.createElement(
-        "pre",
-        {
-          style: {
-            margin: 0,
-            fontFamily: "var(--vscode-editor-font-family)",
-            fontSize: "0.85em",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            lineHeight: "1.5"
-          }
-        },
-        frame.data?.content || "Loading..."
-      )
-    ) : /* @__PURE__ */ React4.createElement("div", { style: { flex: 1, overflow: "auto" } }, /* @__PURE__ */ React4.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.symbols?.map((symbol) => /* @__PURE__ */ React4.createElement(
-      "li",
-      {
-        key: symbol.id,
-        onClick: () => onZoomIn({
-          level: "symbol",
-          id: `${frame.id}::${symbol.name}`,
-          name: symbol.name,
-          status: "scanning"
-        }),
-        style: {
-          padding: "10px",
-          borderBottom: "1px solid var(--vscode-input-border)",
-          cursor: "pointer",
-          display: "flex",
-          flexDirection: "column",
-          gap: "4px"
-        }
-      },
-      /* @__PURE__ */ React4.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold" } }, /* @__PURE__ */ React4.createElement("span", { style: { opacity: 0.7, marginRight: "5px" } }, symbol.kind === "function" ? "\u{1D453}" : symbol.kind === "class" ? "C" : "\u2022"), symbol.name, symbol.drift && /* @__PURE__ */ React4.createElement(
-        "span",
-        {
-          style: {
-            marginLeft: "8px",
-            padding: "2px 6px",
-            borderRadius: "4px",
-            background: "var(--vscode-inputValidation-warningBackground)",
-            color: "var(--vscode-inputValidation-warningForeground)",
-            fontSize: "0.7em",
-            textTransform: "uppercase"
-          }
-        },
-        "Drift"
-      )),
-      symbol.signature && /* @__PURE__ */ React4.createElement(
-        "div",
-        {
-          style: {
-            fontSize: "0.75em",
-            opacity: 0.7,
-            marginTop: "2px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap"
-          }
-        },
-        symbol.signature
-      )
-    )), !frame.data?.symbols?.length && /* @__PURE__ */ React4.createElement("li", { style: { padding: "20px", opacity: 0.6, textAlign: "center" } }, "No symbols found")))));
-  };
-
-  // src/webview/cockpit/components/stages/SymbolStage.tsx
-  var React5 = __toESM(require_react());
-  var SymbolStage = ({ frame, vscode: vscode2 }) => /* @__PURE__ */ React5.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React5.createElement(
-    "div",
-    {
-      style: {
-        padding: "10px",
-        borderBottom: "1px solid var(--vscode-panel-border)",
-        flexShrink: 0
+      if (responseTime && responseTime > 5e3) {
+        logWarn(`\u23F1\uFE0F  SLOW RESPONSE: ${type} took ${responseTime}ms`);
       }
-    },
-    /* @__PURE__ */ React5.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
-    /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.filePath),
-    frame.data?.drift?.length > 0 && /* @__PURE__ */ React5.createElement("div", { style: { marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React5.createElement(
-      "span",
-      {
-        key: idx,
-        style: {
-          padding: "2px 6px",
-          borderRadius: "4px",
-          background: "var(--vscode-inputValidation-warningBackground)",
-          color: "var(--vscode-inputValidation-warningForeground)",
-          fontSize: "0.75em"
+    }
+    // Find message sequences
+    findSequence(startType, endType) {
+      const startIdx = this.traces.findIndex((t) => t.type === startType);
+      if (startIdx === -1) return [];
+      const endIdx = this.traces.findIndex((t, i) => i > startIdx && t.type === endType);
+      if (endIdx === -1) return [];
+      return this.traces.slice(startIdx, endIdx + 1);
+    }
+    // Get pending requests (requests without responses)
+    getPendingRequests() {
+      const now = Date.now();
+      return Array.from(this.pendingRequests.entries()).map(([key, timestamp]) => ({
+        type: key,
+        waitTime: now - timestamp
+      }));
+    }
+    exportHistory() {
+      return JSON.stringify(this.traces, null, 2);
+    }
+    sanitizePayload(payload) {
+      if (!payload) return payload;
+      if (typeof payload === "object") {
+        const str = JSON.stringify(payload);
+        if (str.length > 500) {
+          return `[Object: ${str.length} bytes]`;
         }
-      },
-      "Drift: ",
-      d.suggestedName || d.issue || "Rename suggested"
-    ))),
-    /* @__PURE__ */ React5.createElement("div", { style: { marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" } }, frame.data?.symbolId && vscode2 && /* @__PURE__ */ React5.createElement(
-      "button",
-      {
-        onClick: () => {
-          vscode2.postMessage({ type: "openSymbolInEditor", symbolId: frame.data.symbolId });
-        },
-        style: {
-          padding: "4px 8px",
-          border: "1px solid var(--vscode-button-border)",
-          background: "var(--vscode-button-secondaryBackground)",
-          color: "var(--vscode-button-foreground)",
-          borderRadius: "4px",
-          cursor: "pointer",
-          fontSize: "0.8em"
-        }
-      },
-      "Open in Editor"
-    ), frame.data?.drift?.[0]?.suggestedName && vscode2 && /* @__PURE__ */ React5.createElement(
-      "button",
-      {
-        onClick: () => {
-          const suggestion = frame.data.drift[0].suggestedName;
-          vscode2.postMessage({
-            type: "applyRefactorSuggestion",
-            payload: {
-              symbolId: frame.data.symbolId,
-              suggestedName: suggestion,
-              filePath: frame.data.filePath
-            }
-          });
-        },
-        style: {
-          padding: "4px 8px",
-          border: "1px solid var(--vscode-button-border)",
-          background: "var(--vscode-button-background)",
-          color: "var(--vscode-button-foreground)",
-          borderRadius: "4px",
-          cursor: "pointer",
-          fontSize: "0.8em"
-        }
-      },
-      "Apply Suggestion (manual)"
-    ), vscode2 && /* @__PURE__ */ React5.createElement(
-      "button",
-      {
-        onClick: () => {
-          vscode2.postMessage({
-            type: "askAssistant",
-            payload: {
-              symbolId: frame.data?.symbolId,
-              filePath: frame.data?.filePath,
-              drift: frame.data?.drift
-            }
-          });
-        },
-        style: {
-          padding: "4px 8px",
-          border: "1px solid var(--vscode-button-border)",
-          background: "var(--vscode-button-secondaryBackground)",
-          color: "var(--vscode-button-foreground)",
-          borderRadius: "4px",
-          cursor: "pointer",
-          fontSize: "0.8em"
-        }
-      },
-      "Ask Assistant"
-    ))
-  ), /* @__PURE__ */ React5.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React5.createElement(
-    "div",
-    {
-      style: {
-        flex: 1,
-        overflow: "auto",
-        backgroundColor: "var(--vscode-editor-background)",
-        padding: "10px",
-        borderBottom: "1px solid var(--vscode-panel-border)"
       }
-    },
-    /* @__PURE__ */ React5.createElement(
-      "pre",
-      {
-        style: {
-          margin: 0,
-          fontFamily: "var(--vscode-editor-font-family)",
-          fontSize: "0.85em",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          lineHeight: "1.5"
-        }
-      },
-      frame.data?.content || "Loading..."
-    )
-  ), /* @__PURE__ */ React5.createElement("div", { style: { maxHeight: "220px", overflow: "auto", padding: "10px", flexShrink: 0 } }, /* @__PURE__ */ React5.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Evolution"), /* @__PURE__ */ React5.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.history?.map((commit) => /* @__PURE__ */ React5.createElement(
-    "li",
-    {
-      key: commit.hash || commit.message || commit.date || commit.author,
-      style: {
-        marginBottom: "12px",
-        borderLeft: "2px solid var(--vscode-charts-blue)",
-        paddingLeft: "8px"
+      return payload;
+    }
+    // Cleanup old traces
+    cleanup(olderThanMs = 3e5) {
+      const cutoff = Date.now() - olderThanMs;
+      const before = this.traces.length;
+      this.traces = this.traces.filter((t) => t.timestamp > cutoff);
+      const cleaned = before - this.traces.length;
+      if (cleaned > 0) {
+        logDebug(`[MessageTracer] Cleaned ${cleaned} old message traces`);
       }
-    },
-    /* @__PURE__ */ React5.createElement("div", { style: { fontWeight: "bold", fontSize: "0.85em" } }, commit.message || commit.summary || commit.change),
-    /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
-  )), !frame.data?.history?.length && /* @__PURE__ */ React5.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
-
-  // src/webview/cockpit/components/stages/ReportsStage.tsx
-  var React7 = __toESM(require_react());
-
-  // src/webview/cockpit/components/ReportList.tsx
-  var React6 = __toESM(require_react());
-
-  // src/webview/cockpit/utils.ts
-  var formatDate = (value) => {
-    if (!value) return "";
-    try {
-      return new Date(value).toLocaleDateString();
-    } catch {
-      return value;
+      const staleCutoff = Date.now() - 3e4;
+      for (const [key, timestamp] of this.pendingRequests.entries()) {
+        if (timestamp < staleCutoff) {
+          logWarn(`[MessageTracer] Pending request never completed: ${key}`);
+          this.pendingRequests.delete(key);
+        }
+      }
     }
   };
 
-  // src/webview/cockpit/components/ReportList.tsx
-  var ReportList = ({ state, vscode: vscode2 }) => {
-    const filter = state.reportsFilterText.toLowerCase();
-    const list = state.reports.filter(
-      (r) => (!filter || (r.title || "").toLowerCase().includes(filter) || (r.summary || "").toLowerCase().includes(filter)) && (!state.reportsShowPinnedOnly || r.pinned) && (state.reportsBranchFilter === "all" || r.branch === state.reportsBranchFilter)
-    );
-    if (!list.length) {
-      return /* @__PURE__ */ React6.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React6.createElement("div", null, "No reports yet"), /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
+  // src/webview/cockpit/utils/messageUtils.ts
+  var webviewTracer = null;
+  function getMessageTracer() {
+    if (!webviewTracer) {
+      webviewTracer = new MessageTracer();
     }
-    return /* @__PURE__ */ React6.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React6.createElement(
-      "li",
-      {
-        key: r.id,
-        className: "cockpit__list-item cockpit__list-item--clickable",
-        onClick: () => vscode2.postMessage({ type: "openReport", reportId: r.id })
-      },
-      /* @__PURE__ */ React6.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React6.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React6.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React6.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React6.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
-      r.summary ? /* @__PURE__ */ React6.createElement("div", { className: "cockpit__message" }, r.summary) : null,
-      /* @__PURE__ */ React6.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React6.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small",
-          onClick: (e) => {
-            e.stopPropagation();
-            vscode2.postMessage({ type: "regenerateReport", reportId: r.id });
-          }
-        },
-        "Regenerate"
-      ), /* @__PURE__ */ React6.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small",
-          onClick: (e) => {
-            e.stopPropagation();
-            vscode2.postMessage({ type: "togglePinReport", reportId: r.id });
-          }
-        },
-        r.pinned ? "Unpin" : "Pin"
-      ), /* @__PURE__ */ React6.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small danger",
-          onClick: (e) => {
-            e.stopPropagation();
-            if (confirm(
-              `Are you sure you want to delete the report "${r.title || "Untitled"}"? This cannot be undone.`
-            )) {
-              vscode2.postMessage({ type: "deleteReport", reportId: r.id });
-            }
-          }
-        },
-        "Delete"
-      ))
-    )));
-  };
-
-  // src/webview/cockpit/components/stages/ReportsStage.tsx
-  var ReportsStage = ({
-    cockpitState,
-    vscode: vscode2
-  }) => /* @__PURE__ */ React7.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React7.createElement(ReportList, { state: cockpitState, vscode: vscode2 }));
-
-  // src/webview/cockpit/components/Stage.tsx
-  var StageContainer = {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    backgroundColor: "var(--vscode-editor-background)",
-    overflow: "hidden",
-    position: "relative"
-  };
-  var HeaderStyle = {
-    padding: "10px 20px",
-    borderBottom: "1px solid var(--vscode-panel-border)",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "var(--vscode-editor-background)"
-  };
-  var ContentStyle = {
-    flex: 1,
-    padding: "20px",
-    overflow: "auto",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center"
-  };
-  var Stage = ({
-    frame,
-    onZoomIn,
-    onZoomOut,
-    cockpitState,
-    vscode: vscode2
-  }) => {
-    const handleZoomIn = (id, name) => {
-      let nextLevel = "bundle";
-      if (frame.level === "bundle") nextLevel = "blast_radius";
-      else if (frame.level === "blast_radius") nextLevel = "file";
-      else if (frame.level === "file") nextLevel = "symbol";
-      else return;
-      onZoomIn({
-        level: nextLevel,
-        id,
-        name,
-        parentId: frame.id,
-        status: "ready"
-      });
-    };
-    const bundleData = frame.level === "bundle" ? frame.data || cockpitState?.bundleView || void 0 : void 0;
-    const frameData = bundleData ?? frame.data;
-    const tier = frame.tier || frameData?.tier;
-    return /* @__PURE__ */ React8.createElement("div", { style: StageContainer }, /* @__PURE__ */ React8.createElement("div", { style: HeaderStyle }, /* @__PURE__ */ React8.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" } }, /* @__PURE__ */ React8.createElement(
-      "button",
-      {
-        onClick: onZoomOut,
-        disabled: !frame.parentId,
-        style: {
-          marginRight: "6px",
-          background: "none",
-          border: "none",
-          color: "var(--vscode-button-foreground)",
-          cursor: "pointer",
-          opacity: !frame.parentId ? 0.5 : 1
-        }
-      },
-      "\u2190 Back"
-    ), /* @__PURE__ */ React8.createElement("strong", null, frame.name), " ", /* @__PURE__ */ React8.createElement("span", { style: { opacity: 0.7 } }, "(", frame.level, ")"), frame.breadcrumbs && /* @__PURE__ */ React8.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, frame.breadcrumbs.join(" / ")), tier && /* @__PURE__ */ React8.createElement(
-      "span",
-      {
-        style: {
-          padding: "2px 6px",
-          borderRadius: "4px",
-          background: tier === "structure" ? "var(--vscode-badge-background)" : tier === "hybrid" ? "var(--vscode-inputValidation-warningBackground)" : "var(--vscode-charts-green)",
-          color: tier === "structure" ? "var(--vscode-badge-foreground)" : "var(--vscode-foreground)",
-          fontSize: "0.75em",
-          textTransform: "uppercase"
-        }
-      },
-      tier
-    ), frame.level === "bundle" && frameData?.summary && /* @__PURE__ */ React8.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "\u2022 ", frameData.summary.files, " files \u2022 ", frameData.summary.symbols, " symbols"))), /* @__PURE__ */ React8.createElement("div", { style: ContentStyle }, frame.status === "scanning" ? /* @__PURE__ */ React8.createElement("div", { style: { textAlign: "center", color: "var(--vscode-descriptionForeground)" } }, /* @__PURE__ */ React8.createElement("div", { style: { fontSize: "2em", marginBottom: "10px" } }, "\u23F3"), /* @__PURE__ */ React8.createElement("h3", null, "Scanning ", frame.name, "..."), /* @__PURE__ */ React8.createElement("p", null, "Analyzing history, drift, and risks.")) : /* @__PURE__ */ React8.createElement(React8.Fragment, null, frame.id === "reports-root" && cockpitState && vscode2 ? /* @__PURE__ */ React8.createElement(ReportsStage, { cockpitState, vscode: vscode2 }) : /* @__PURE__ */ React8.createElement(React8.Fragment, null, frame.level === "bundle" && /* @__PURE__ */ React8.createElement(
-      BundleStage,
-      {
-        frame,
-        onZoomIn: (f) => onZoomIn(f),
-        cockpitState,
-        vscode: vscode2
-      }
-    ), frame.level === "blast_radius" && /* @__PURE__ */ React8.createElement(BlastRadiusStage, { frame, onZoomIn: (f) => onZoomIn(f) }), frame.level === "file" && /* @__PURE__ */ React8.createElement(FileStage, { frame, onZoomIn: (f) => onZoomIn(f) }), frame.level === "symbol" && /* @__PURE__ */ React8.createElement(SymbolStage, { frame, vscode: vscode2 })))));
-  };
-
-  // src/webview/cockpit/components/Inspector.tsx
-  var React9 = __toESM(require_react());
-  var InspectorContainer = {
-    minWidth: "250px",
-    width: "100%",
-    maxWidth: "300px",
-    borderLeft: "1px solid var(--vscode-panel-border)",
-    backgroundColor: "var(--vscode-sideBar-background)",
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden"
-  };
-  var TabsContainer = {
-    display: "flex",
-    borderBottom: "1px solid var(--vscode-panel-border)"
-  };
-  var TabStyle = {
-    flex: 1,
-    padding: "8px",
-    textAlign: "center",
-    cursor: "pointer",
-    fontSize: "0.9em",
-    borderBottom: "2px solid transparent"
-  };
-  var ActiveTabStyle = {
-    ...TabStyle,
-    borderBottom: "2px solid var(--vscode-panelTitle-activeBorder)",
-    color: "var(--vscode-panelTitle-activeForeground)"
-  };
-  var ContentStyle2 = {
-    flex: 1,
-    padding: "15px",
-    overflow: "auto"
-  };
-  var Inspector = ({ frame }) => {
-    const [activeLens, setActiveLens] = React9.useState("timeline");
-    const isBundle = frame.level === "bundle";
-    const isFile = frame.level === "file";
-    const isSymbol = frame.level === "symbol";
-    const timeline = frame.data?.timeline || [];
-    const drift = frame.data?.drift || [];
-    const relations = frame.data?.relations || { incoming: [], outgoing: [], imports: [] };
-    const risk = frame.data?.risk || null;
-    return /* @__PURE__ */ React9.createElement("div", { style: InspectorContainer }, /* @__PURE__ */ React9.createElement("div", { style: TabsContainer }, ["timeline", "drift", "relations", "risk"].map((lens) => /* @__PURE__ */ React9.createElement(
-      "div",
-      {
-        key: lens,
-        style: activeLens === lens ? ActiveTabStyle : TabStyle,
-        onClick: () => setActiveLens(lens)
-      },
-      lens.charAt(0).toUpperCase() + lens.slice(1)
-    ))), /* @__PURE__ */ React9.createElement("div", { style: ContentStyle2 }, /* @__PURE__ */ React9.createElement("h4", null, activeLens.charAt(0).toUpperCase() + activeLens.slice(1), " Lens"), /* @__PURE__ */ React9.createElement("p", { style: { fontSize: "0.9em", color: "var(--vscode-descriptionForeground)" } }, "Scoped to: ", /* @__PURE__ */ React9.createElement("strong", null, frame.name), " (", frame.level, ")"), activeLens === "timeline" && /* @__PURE__ */ React9.createElement("div", null, /* @__PURE__ */ React9.createElement("ul", { style: { paddingLeft: "20px", marginTop: "10px", listStyle: "none" } }, timeline.map((item, index) => /* @__PURE__ */ React9.createElement(
-      "li",
-      {
-        key: index,
-        style: {
-          marginBottom: "15px",
-          borderLeft: item.virtual ? "2px dashed var(--vscode-gitDecoration-modifiedResourceForeground)" : "2px solid var(--vscode-charts-blue)",
-          paddingLeft: "10px"
-        }
-      },
-      /* @__PURE__ */ React9.createElement(
-        "div",
-        {
-          style: {
-            fontWeight: "bold",
-            display: "flex",
-            alignItems: "center",
-            gap: "5px"
-          }
-        },
-        item.virtual && /* @__PURE__ */ React9.createElement(
-          "span",
-          {
-            style: {
-              fontSize: "0.8em",
-              padding: "2px 4px",
-              borderRadius: "4px",
-              background: "var(--vscode-badge-background)",
-              color: "var(--vscode-badge-foreground)"
-            }
-          },
-          "VIRTUAL"
-        ),
-        item.message
-      ),
-      /* @__PURE__ */ React9.createElement(
-        "div",
-        {
-          style: {
-            fontSize: "0.8em",
-            color: "var(--vscode-descriptionForeground)",
-            marginTop: "2px"
-          }
-        },
-        item.date ? new Date(item.date).toLocaleString() : "Now",
-        " \u2022 ",
-        item.author
-      ),
-      item.stats && /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.8em", marginTop: "2px" } }, /* @__PURE__ */ React9.createElement(
-        "span",
-        {
-          style: { color: "var(--vscode-gitDecoration-addedResourceForeground)" }
-        },
-        "+",
-        item.stats.additions
-      ), " ", /* @__PURE__ */ React9.createElement(
-        "span",
-        {
-          style: { color: "var(--vscode-gitDecoration-deletedResourceForeground)" }
-        },
-        "-",
-        item.stats.deletions
-      ))
-    )), timeline.length === 0 && /* @__PURE__ */ React9.createElement("p", null, "No timeline data available.")), frame.data?.history?.length > 0 && /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React9.createElement("strong", null, "Evolution"), /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 0 0" } }, frame.data.history.map((h, idx) => /* @__PURE__ */ React9.createElement(
-      "li",
-      {
-        key: idx,
-        style: {
-          padding: "6px 0",
-          borderBottom: "1px solid var(--vscode-panel-border)",
-          fontSize: "0.85em"
-        }
-      },
-      /* @__PURE__ */ React9.createElement("div", { style: { fontWeight: "bold" } }, h.message || h.summary || h.change),
-      /* @__PURE__ */ React9.createElement("div", { style: { opacity: 0.7 } }, h.date ? new Date(h.date).toLocaleString() : "", " \u2022 ", h.author || "unknown")
-    ))))), activeLens === "drift" && /* @__PURE__ */ React9.createElement("div", null, drift.length > 0 ? /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0 } }, drift.map((item, index) => /* @__PURE__ */ React9.createElement(
-      "li",
-      {
-        key: index,
-        style: {
-          marginBottom: "10px",
-          padding: "8px",
-          border: "1px solid var(--vscode-inputValidation-warningBorder)",
-          borderRadius: "4px",
-          backgroundColor: "var(--vscode-inputValidation-warningBackground)"
-        }
-      },
-      /* @__PURE__ */ React9.createElement(
-        "div",
-        {
-          style: {
-            fontWeight: "bold",
-            display: "flex",
-            justifyContent: "space-between"
-          }
-        },
-        /* @__PURE__ */ React9.createElement("span", null, item.issue),
-        /* @__PURE__ */ React9.createElement("span", { style: { fontSize: "0.8em", textTransform: "uppercase" } }, item.severity)
-      ),
-      /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "5px" } }, /* @__PURE__ */ React9.createElement("code", null, item.symbol), ": ", item.detail)
-    ))) : /* @__PURE__ */ React9.createElement("div", { style: { padding: "10px", opacity: 0.7 } }, /* @__PURE__ */ React9.createElement("span", { style: { color: "var(--vscode-testing-iconPassed)" } }, "\u2714"), " No drift detected."), /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React9.createElement("strong", null, "Naming Drift"), /* @__PURE__ */ React9.createElement(
-      "div",
-      {
-        style: {
-          height: "4px",
-          background: "var(--vscode-progressBar-background)",
-          marginTop: "4px",
-          borderRadius: "2px",
-          overflow: "hidden"
-        }
-      },
-      /* @__PURE__ */ React9.createElement(
-        "div",
-        {
-          style: {
-            width: `${Math.min(drift.length * 10, 100)}%`,
-            height: "100%",
-            background: drift.length ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)"
-          }
-        }
-      )
-    ))), activeLens === "relations" && /* @__PURE__ */ React9.createElement("div", null, /* @__PURE__ */ React9.createElement("p", null, /* @__PURE__ */ React9.createElement("strong", null, "Incoming:"), " ", relations.incoming?.length || 0, " callers"), relations.incoming?.length > 0 && /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 10px 0" } }, relations.incoming.map((edge, idx) => /* @__PURE__ */ React9.createElement(
-      "li",
-      {
-        key: idx,
-        style: {
-          fontSize: "0.85em",
-          padding: "4px 0",
-          borderBottom: "1px solid var(--vscode-panel-border)"
-        }
-      },
-      edge.from?.split(":")[0] || edge.from,
-      " \u2192 ",
-      edge.to?.split(":")[0] || edge.to,
-      " (",
-      edge.type,
-      ")"
-    ))), /* @__PURE__ */ React9.createElement("p", null, /* @__PURE__ */ React9.createElement("strong", null, "Outgoing:"), " ", relations.outgoing?.length || 0, " callees"), relations.outgoing?.length > 0 && /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 10px 0" } }, relations.outgoing.map((edge, idx) => /* @__PURE__ */ React9.createElement(
-      "li",
-      {
-        key: idx,
-        style: {
-          fontSize: "0.85em",
-          padding: "4px 0",
-          borderBottom: "1px solid var(--vscode-panel-border)"
-        }
-      },
-      edge.from?.split(":")[0] || edge.from,
-      " \u2192 ",
-      edge.to?.split(":")[0] || edge.to,
-      " (",
-      edge.type,
-      ")"
-    ))), /* @__PURE__ */ React9.createElement("p", null, /* @__PURE__ */ React9.createElement("strong", null, "Imports:"), " ", relations.imports?.length || 0, " modules")), activeLens === "risk" && /* @__PURE__ */ React9.createElement("div", null, risk ? /* @__PURE__ */ React9.createElement(
-      "div",
-      {
-        style: {
-          padding: "8px",
-          backgroundColor: "rgba(255, 0, 0, 0.1)",
-          borderRadius: "4px",
-          border: "1px solid red"
-        }
-      },
-      /* @__PURE__ */ React9.createElement("strong", null, "Risk Score"),
-      /* @__PURE__ */ React9.createElement("p", { style: { margin: "5px 0 0 0", fontSize: "0.9em" } }, "Hotspot: ", risk.hotspotScore, " \u2022 Drift: ", risk.driftCount, " \u2022 Legacy:", " ", risk.legacyDead, "/", risk.legacyReplaced),
-      frame.data?.changeStats && /* @__PURE__ */ React9.createElement("p", { style: { margin: "2px 0 0 0", fontSize: "0.85em" } }, "Changes: +", frame.data.changeStats.added, " / -", frame.data.changeStats.removed)
-    ) : /* @__PURE__ */ React9.createElement("div", { style: { padding: "10px", opacity: 0.7 } }, /* @__PURE__ */ React9.createElement("span", { style: { color: "var(--vscode-testing-iconPassed)" } }, "\u2714"), " No risk signals."), frame.data?.drift?.length > 0 && /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "12px" } }, /* @__PURE__ */ React9.createElement("strong", null, "Drift Signals"), /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React9.createElement(
-      "li",
-      {
-        key: idx,
-        style: {
-          padding: "6px 0",
-          borderBottom: "1px solid var(--vscode-panel-border)"
-        }
-      },
-      /* @__PURE__ */ React9.createElement("div", { style: { fontWeight: "bold" } }, d.name || d.symbol),
-      /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, d.issue || d.detail || d.suggestedName || "Drift detected")
-    )))))));
-  };
+    return webviewTracer;
+  }
+  function postMessageWithTracing(vscode3, type, payload) {
+    getMessageTracer().logOutgoing(type, payload || {}, "webview");
+    vscode3.postMessage({ type, ...payload });
+  }
 
   // src/webview/cockpit/components/Assistant.tsx
-  var React10 = __toESM(require_react());
+  var React = __toESM(require_react());
   var AssistantContainer = {
     height: "200px",
     borderTop: "1px solid var(--vscode-panel-border)",
@@ -24945,7 +23767,7 @@ Churn: ${file.score || 0}
     display: "flex",
     flexDirection: "column"
   };
-  var HeaderStyle2 = {
+  var HeaderStyle = {
     padding: "8px 15px",
     backgroundColor: "var(--vscode-panel-background)",
     borderBottom: "1px solid var(--vscode-panel-border)",
@@ -24984,28 +23806,28 @@ Churn: ${file.score || 0}
     display: "inline-block"
   };
   var Assistant = ({ frame, messages, onSend }) => {
-    const [input, setInput] = React10.useState("");
+    const [input, setInput] = React.useState("");
     const send = (text) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       onSend(trimmed);
       setInput("");
     };
-    return /* @__PURE__ */ React10.createElement("div", { style: AssistantContainer }, /* @__PURE__ */ React10.createElement("div", { style: HeaderStyle2 }, /* @__PURE__ */ React10.createElement("span", null, "Assistant (Context: ", frame.name, ")"), /* @__PURE__ */ React10.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "On-demand")), /* @__PURE__ */ React10.createElement("div", { style: ChatAreaStyle }, messages.map((m, idx) => /* @__PURE__ */ React10.createElement("div", { key: idx, style: { marginBottom: "10px" } }, /* @__PURE__ */ React10.createElement("span", { style: { fontWeight: "bold" } }, m.role === "user" ? "You:" : "AI:", " "), /* @__PURE__ */ React10.createElement("span", null, m.content))), !messages.length && /* @__PURE__ */ React10.createElement("div", { style: { opacity: 0.7, fontSize: "0.9em" } }, "I can explain this ", frame.level, ", summarize drift/risks, or review staged/unstaged changes in scope. Ask me something."), /* @__PURE__ */ React10.createElement("div", { style: { marginTop: "15px" } }, /* @__PURE__ */ React10.createElement("div", { style: SuggestionChipStyle, onClick: () => send(`Explain this ${frame.level}`) }, "Explain this ", frame.level), frame.level === "file" && /* @__PURE__ */ React10.createElement(React10.Fragment, null, /* @__PURE__ */ React10.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Find hotspots in this file") }, "Find Hotspots"), /* @__PURE__ */ React10.createElement(
+    return /* @__PURE__ */ React.createElement("div", { style: AssistantContainer }, /* @__PURE__ */ React.createElement("div", { style: HeaderStyle }, /* @__PURE__ */ React.createElement("span", null, "Assistant (Context: ", frame.name, ")"), /* @__PURE__ */ React.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "On-demand")), /* @__PURE__ */ React.createElement("div", { style: ChatAreaStyle }, messages.map((m, idx) => /* @__PURE__ */ React.createElement("div", { key: idx, style: { marginBottom: "10px" } }, /* @__PURE__ */ React.createElement("span", { style: { fontWeight: "bold" } }, m.role === "user" ? "You:" : "AI:", " "), /* @__PURE__ */ React.createElement("span", null, m.content))), !messages.length && /* @__PURE__ */ React.createElement("div", { style: { opacity: 0.7, fontSize: "0.9em" } }, "I can explain this ", frame.level, ", summarize drift/risks, or review staged/unstaged changes in scope. Ask me something."), /* @__PURE__ */ React.createElement("div", { style: { marginTop: "15px" } }, /* @__PURE__ */ React.createElement("div", { style: SuggestionChipStyle, onClick: () => send(`Explain this ${frame.level}`) }, "Explain this ", frame.level), frame.level === "file" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Find hotspots in this file") }, "Find Hotspots"), /* @__PURE__ */ React.createElement(
       "div",
       {
         style: SuggestionChipStyle,
         onClick: () => send("Generate unit tests for this file")
       },
       "Generate Unit Tests"
-    )), frame.data?.timeline?.some((t) => t.virtual) && /* @__PURE__ */ React10.createElement(
+    )), frame.data?.timeline?.some((t) => t.virtual) && /* @__PURE__ */ React.createElement(
       "div",
       {
         style: SuggestionChipStyle,
         onClick: () => send("Review staged changes for this scope")
       },
       "Review Staged Changes"
-    ), /* @__PURE__ */ React10.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Identify risks here") }, "Identify Risks"))), /* @__PURE__ */ React10.createElement("div", { style: InputAreaStyle }, /* @__PURE__ */ React10.createElement(
+    ), /* @__PURE__ */ React.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Identify risks here") }, "Identify Risks"))), /* @__PURE__ */ React.createElement("div", { style: InputAreaStyle }, /* @__PURE__ */ React.createElement(
       "input",
       {
         type: "text",
@@ -25017,11 +23839,242 @@ Churn: ${file.score || 0}
           if (e.key === "Enter") send(input);
         }
       }
-    ), /* @__PURE__ */ React10.createElement("button", { style: { padding: "8px 15px", cursor: "pointer" }, onClick: () => send(input) }, "Send")));
+    ), /* @__PURE__ */ React.createElement("button", { style: { padding: "8px 15px", cursor: "pointer" }, onClick: () => send(input) }, "Send")));
+  };
+
+  // src/webview/cockpit/components/Inspector.tsx
+  var React2 = __toESM(require_react());
+  var InspectorContainer = {
+    minWidth: "250px",
+    width: "100%",
+    maxWidth: "300px",
+    borderLeft: "1px solid var(--vscode-panel-border)",
+    backgroundColor: "var(--vscode-sideBar-background)",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden"
+  };
+  var TabsContainer = {
+    display: "flex",
+    borderBottom: "1px solid var(--vscode-panel-border)"
+  };
+  var TabStyle = {
+    flex: 1,
+    padding: "8px",
+    textAlign: "center",
+    cursor: "pointer",
+    fontSize: "0.9em",
+    borderBottom: "2px solid transparent"
+  };
+  var ActiveTabStyle = {
+    ...TabStyle,
+    borderBottom: "2px solid var(--vscode-panelTitle-activeBorder)",
+    color: "var(--vscode-panelTitle-activeForeground)"
+  };
+  var ContentStyle = {
+    flex: 1,
+    padding: "15px",
+    overflow: "auto"
+  };
+  var Inspector = ({ frame }) => {
+    const [activeLens, setActiveLens] = React2.useState("timeline");
+    const isBundle = frame.level === "bundle";
+    const isFile = frame.level === "file";
+    const isSymbol = frame.level === "symbol";
+    const timeline = frame.data?.timeline || [];
+    const drift = frame.data?.drift || [];
+    const relations = frame.data?.blastRadius || frame.data?.relations || { incoming: [], outgoing: [], imports: [] };
+    const risk = frame.data?.risk || null;
+    return /* @__PURE__ */ React2.createElement("div", { style: InspectorContainer }, /* @__PURE__ */ React2.createElement("div", { style: TabsContainer }, ["timeline", "drift", "relations", "risk"].map((lens) => /* @__PURE__ */ React2.createElement(
+      "div",
+      {
+        key: lens,
+        style: activeLens === lens ? ActiveTabStyle : TabStyle,
+        onClick: () => setActiveLens(lens)
+      },
+      lens.charAt(0).toUpperCase() + lens.slice(1)
+    ))), /* @__PURE__ */ React2.createElement("div", { style: ContentStyle }, /* @__PURE__ */ React2.createElement("h4", null, activeLens.charAt(0).toUpperCase() + activeLens.slice(1), " Lens"), /* @__PURE__ */ React2.createElement("p", { style: { fontSize: "0.9em", color: "var(--vscode-descriptionForeground)" } }, "Scoped to: ", /* @__PURE__ */ React2.createElement("strong", null, frame.name), " (", frame.level, ")"), activeLens === "timeline" && /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement("ul", { style: { paddingLeft: "20px", marginTop: "10px", listStyle: "none" } }, timeline.map((item, index) => /* @__PURE__ */ React2.createElement(
+      "li",
+      {
+        key: index,
+        style: {
+          marginBottom: "15px",
+          borderLeft: item.virtual ? "2px dashed var(--vscode-gitDecoration-modifiedResourceForeground)" : "2px solid var(--vscode-charts-blue)",
+          paddingLeft: "10px"
+        }
+      },
+      /* @__PURE__ */ React2.createElement(
+        "div",
+        {
+          style: {
+            fontWeight: "bold",
+            display: "flex",
+            alignItems: "center",
+            gap: "5px"
+          }
+        },
+        item.virtual && /* @__PURE__ */ React2.createElement(
+          "span",
+          {
+            style: {
+              fontSize: "0.8em",
+              padding: "2px 4px",
+              borderRadius: "4px",
+              background: "var(--vscode-badge-background)",
+              color: "var(--vscode-badge-foreground)"
+            }
+          },
+          "VIRTUAL"
+        ),
+        item.message
+      ),
+      /* @__PURE__ */ React2.createElement(
+        "div",
+        {
+          style: {
+            fontSize: "0.8em",
+            color: "var(--vscode-descriptionForeground)",
+            marginTop: "2px"
+          }
+        },
+        item.date ? new Date(item.date).toLocaleString() : "Now",
+        " \u2022 ",
+        item.author
+      ),
+      item.stats && /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.8em", marginTop: "2px" } }, /* @__PURE__ */ React2.createElement(
+        "span",
+        {
+          style: { color: "var(--vscode-gitDecoration-addedResourceForeground)" }
+        },
+        "+",
+        item.stats.additions
+      ), " ", /* @__PURE__ */ React2.createElement(
+        "span",
+        {
+          style: { color: "var(--vscode-gitDecoration-deletedResourceForeground)" }
+        },
+        "-",
+        item.stats.deletions
+      ))
+    )), timeline.length === 0 && /* @__PURE__ */ React2.createElement("p", null, "No timeline data available.")), frame.data?.history?.length > 0 && /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React2.createElement("strong", null, "Evolution"), /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 0 0" } }, frame.data.history.map((h, idx) => /* @__PURE__ */ React2.createElement(
+      "li",
+      {
+        key: idx,
+        style: {
+          padding: "6px 0",
+          borderBottom: "1px solid var(--vscode-panel-border)",
+          fontSize: "0.85em"
+        }
+      },
+      /* @__PURE__ */ React2.createElement("div", { style: { fontWeight: "bold" } }, h.message || h.summary || h.change),
+      /* @__PURE__ */ React2.createElement("div", { style: { opacity: 0.7 } }, h.date ? new Date(h.date).toLocaleString() : "", " \u2022 ", h.author || "unknown")
+    ))))), activeLens === "drift" && /* @__PURE__ */ React2.createElement("div", null, drift.length > 0 ? /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0 } }, drift.map((item, index) => /* @__PURE__ */ React2.createElement(
+      "li",
+      {
+        key: index,
+        style: {
+          marginBottom: "10px",
+          padding: "8px",
+          border: "1px solid var(--vscode-inputValidation-warningBorder)",
+          borderRadius: "4px",
+          backgroundColor: "var(--vscode-inputValidation-warningBackground)"
+        }
+      },
+      /* @__PURE__ */ React2.createElement(
+        "div",
+        {
+          style: {
+            fontWeight: "bold",
+            display: "flex",
+            justifyContent: "space-between"
+          }
+        },
+        /* @__PURE__ */ React2.createElement("span", null, item.issue),
+        /* @__PURE__ */ React2.createElement("span", { style: { fontSize: "0.8em", textTransform: "uppercase" } }, item.severity)
+      ),
+      /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "5px" } }, /* @__PURE__ */ React2.createElement("code", null, item.symbol), ": ", item.detail)
+    ))) : /* @__PURE__ */ React2.createElement("div", { style: { padding: "10px", opacity: 0.7 } }, /* @__PURE__ */ React2.createElement("span", { style: { color: "var(--vscode-testing-iconPassed)" } }, "\u2714"), " No drift detected."), /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React2.createElement("strong", null, "Naming Drift"), /* @__PURE__ */ React2.createElement(
+      "div",
+      {
+        style: {
+          height: "4px",
+          background: "var(--vscode-progressBar-background)",
+          marginTop: "4px",
+          borderRadius: "2px",
+          overflow: "hidden"
+        }
+      },
+      /* @__PURE__ */ React2.createElement(
+        "div",
+        {
+          style: {
+            width: `${Math.min(drift.length * 10, 100)}%`,
+            height: "100%",
+            background: drift.length ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)"
+          }
+        }
+      )
+    ))), activeLens === "relations" && /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement("p", null, /* @__PURE__ */ React2.createElement("strong", null, "Incoming:"), " ", relations.incoming?.length || 0, " callers"), relations.incoming?.length > 0 && /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 10px 0" } }, relations.incoming.map((edge, idx) => /* @__PURE__ */ React2.createElement(
+      "li",
+      {
+        key: idx,
+        style: {
+          fontSize: "0.85em",
+          padding: "4px 0",
+          borderBottom: "1px solid var(--vscode-panel-border)"
+        }
+      },
+      edge.from?.split(":")[0] || edge.from,
+      " \u2192 ",
+      edge.to?.split(":")[0] || edge.to,
+      " (",
+      edge.type,
+      ")"
+    ))), /* @__PURE__ */ React2.createElement("p", null, /* @__PURE__ */ React2.createElement("strong", null, "Outgoing:"), " ", relations.outgoing?.length || 0, " callees"), relations.outgoing?.length > 0 && /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 10px 0" } }, relations.outgoing.map((edge, idx) => /* @__PURE__ */ React2.createElement(
+      "li",
+      {
+        key: idx,
+        style: {
+          fontSize: "0.85em",
+          padding: "4px 0",
+          borderBottom: "1px solid var(--vscode-panel-border)"
+        }
+      },
+      edge.from?.split(":")[0] || edge.from,
+      " \u2192 ",
+      edge.to?.split(":")[0] || edge.to,
+      " (",
+      edge.type,
+      ")"
+    ))), /* @__PURE__ */ React2.createElement("p", null, /* @__PURE__ */ React2.createElement("strong", null, "Imports:"), " ", relations.imports?.length || 0, " modules")), activeLens === "risk" && /* @__PURE__ */ React2.createElement("div", null, risk ? /* @__PURE__ */ React2.createElement(
+      "div",
+      {
+        style: {
+          padding: "8px",
+          backgroundColor: "rgba(255, 0, 0, 0.1)",
+          borderRadius: "4px",
+          border: "1px solid red"
+        }
+      },
+      /* @__PURE__ */ React2.createElement("strong", null, "Risk Score"),
+      /* @__PURE__ */ React2.createElement("p", { style: { margin: "5px 0 0 0", fontSize: "0.9em" } }, "Hotspot: ", risk.hotspotScore, " \u2022 Drift: ", risk.driftCount, " \u2022 Legacy:", " ", risk.legacyDead, "/", risk.legacyReplaced),
+      frame.data?.changeStats && /* @__PURE__ */ React2.createElement("p", { style: { margin: "2px 0 0 0", fontSize: "0.85em" } }, "Changes: +", frame.data.changeStats.added, " / -", frame.data.changeStats.removed)
+    ) : /* @__PURE__ */ React2.createElement("div", { style: { padding: "10px", opacity: 0.7 } }, /* @__PURE__ */ React2.createElement("span", { style: { color: "var(--vscode-testing-iconPassed)" } }, "\u2714"), " No risk signals."), frame.data?.drift?.length > 0 && /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "12px" } }, /* @__PURE__ */ React2.createElement("strong", null, "Drift Signals"), /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React2.createElement(
+      "li",
+      {
+        key: idx,
+        style: {
+          padding: "6px 0",
+          borderBottom: "1px solid var(--vscode-panel-border)"
+        }
+      },
+      /* @__PURE__ */ React2.createElement("div", { style: { fontWeight: "bold" } }, d.name || d.symbol),
+      /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, d.issue || d.detail || d.suggestedName || "Drift detected")
+    )))))));
   };
 
   // src/webview/cockpit/components/Sidebar.tsx
-  var React11 = __toESM(require_react());
+  var React3 = __toESM(require_react());
   var SidebarContainer = {
     minWidth: "200px",
     width: "100%",
@@ -25032,7 +24085,7 @@ Churn: ${file.score || 0}
     flexDirection: "column",
     overflow: "hidden"
   };
-  var HeaderStyle3 = {
+  var HeaderStyle2 = {
     padding: "10px",
     fontWeight: "bold",
     borderBottom: "1px solid var(--vscode-panel-border)",
@@ -25070,7 +24123,7 @@ Churn: ${file.score || 0}
         title = "Not Scanned";
         break;
     }
-    return /* @__PURE__ */ React11.createElement(
+    return /* @__PURE__ */ React3.createElement(
       "div",
       {
         title,
@@ -25087,9 +24140,9 @@ Churn: ${file.score || 0}
     );
   };
   var TreeNode = ({ node, depth, activeId, onSelect }) => {
-    const [expanded, setExpanded] = React11.useState(true);
+    const [expanded, setExpanded] = React3.useState(true);
     const hasChildren = node.children && node.children.length > 0;
-    return /* @__PURE__ */ React11.createElement("div", null, /* @__PURE__ */ React11.createElement(
+    return /* @__PURE__ */ React3.createElement("div", null, /* @__PURE__ */ React3.createElement(
       "div",
       {
         style: { ...NodeStyle(node.id === activeId), paddingLeft: `${depth * 15 + 10}px` },
@@ -25098,15 +24151,15 @@ Churn: ${file.score || 0}
           if (hasChildren) setExpanded(!expanded);
         }
       },
-      /* @__PURE__ */ React11.createElement(StatusIcon, { status: node.status }),
-      /* @__PURE__ */ React11.createElement(
+      /* @__PURE__ */ React3.createElement(StatusIcon, { status: node.status }),
+      /* @__PURE__ */ React3.createElement(
         "span",
         {
           style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
         },
         node.name
       )
-    ), hasChildren && expanded && /* @__PURE__ */ React11.createElement("div", null, node.children.map((child) => /* @__PURE__ */ React11.createElement(
+    ), hasChildren && expanded && /* @__PURE__ */ React3.createElement("div", null, node.children.map((child) => /* @__PURE__ */ React3.createElement(
       TreeNode,
       {
         key: child.id,
@@ -25118,7 +24171,7 @@ Churn: ${file.score || 0}
     ))));
   };
   var Sidebar = ({ data, activeId, onSelect, repoName, branchName }) => {
-    return /* @__PURE__ */ React11.createElement("div", { style: SidebarContainer }, /* @__PURE__ */ React11.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React11.createElement("div", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, repoName || "EXPLORER"), branchName && /* @__PURE__ */ React11.createElement(
+    return /* @__PURE__ */ React3.createElement("div", { style: SidebarContainer }, /* @__PURE__ */ React3.createElement("div", { style: HeaderStyle2 }, /* @__PURE__ */ React3.createElement("div", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, repoName || "EXPLORER"), branchName && /* @__PURE__ */ React3.createElement(
       "div",
       {
         style: {
@@ -25133,13 +24186,1131 @@ Churn: ${file.score || 0}
       },
       "\u2387 ",
       branchName
-    )), /* @__PURE__ */ React11.createElement("div", { style: ListStyle }, data.map((node) => /* @__PURE__ */ React11.createElement(TreeNode, { key: node.id, node, depth: 0, activeId, onSelect }))), /* @__PURE__ */ React11.createElement("style", null, `
+    )), /* @__PURE__ */ React3.createElement("div", { style: ListStyle }, data.map((node) => /* @__PURE__ */ React3.createElement(TreeNode, { key: node.id, node, depth: 0, activeId, onSelect }))), /* @__PURE__ */ React3.createElement("style", null, `
           @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.4; }
             100% { opacity: 1; }
           }
         `));
+  };
+
+  // src/webview/cockpit/components/Stage.tsx
+  var React11 = __toESM(require_react());
+
+  // src/webview/cockpit/components/stages/BundleStage.tsx
+  var React5 = __toESM(require_react());
+
+  // src/webview/cockpit/components/stages/TreemapNode.tsx
+  var React4 = __toESM(require_react());
+  var TreemapNode = ({ node, depth = 0 }) => {
+    const children = node.children || [];
+    const hasChildren = children.length > 0;
+    const baseColor = node.score > 10 ? "var(--vscode-charts-red)" : node.score > 5 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)";
+    return /* @__PURE__ */ React4.createElement(
+      "div",
+      {
+        style: {
+          flex: node.weight || 1,
+          minWidth: 80,
+          minHeight: 60,
+          border: "1px solid var(--vscode-panel-border)",
+          borderRadius: 4,
+          padding: 6,
+          margin: 4,
+          background: hasChildren ? "var(--vscode-editor-background)" : "var(--vscode-editor-inactiveSelectionBackground)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4
+        },
+        title: `${node.name}
+Churn: ${node.score.toFixed(1)}
++${node.added || 0} / -${node.removed || 0}`
+      },
+      /* @__PURE__ */ React4.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: "0.8em",
+            fontWeight: "bold",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap"
+          }
+        },
+        /* @__PURE__ */ React4.createElement("span", null, node.name),
+        /* @__PURE__ */ React4.createElement("span", { style: { color: baseColor } }, node.score)
+      ),
+      /* @__PURE__ */ React4.createElement(
+        "div",
+        {
+          style: {
+            height: 4,
+            borderRadius: 2,
+            background: "var(--vscode-progressBar-background)",
+            overflow: "hidden"
+          }
+        },
+        /* @__PURE__ */ React4.createElement(
+          "div",
+          {
+            style: {
+              height: "100%",
+              width: `${Math.min((node.score || 0) * 2, 100)}%`,
+              background: baseColor
+            }
+          }
+        )
+      ),
+      /* @__PURE__ */ React4.createElement("div", { style: { fontSize: "0.7em", opacity: 0.7 } }, "+", node.added || 0, " / -", node.removed || 0),
+      hasChildren && /* @__PURE__ */ React4.createElement("div", { style: { display: "flex", flexWrap: "wrap", flex: 1, overflow: "hidden" } }, children.map((child) => /* @__PURE__ */ React4.createElement(TreemapNode, { key: child.id, node: child, depth: depth + 1 })))
+    );
+  };
+
+  // src/webview/cockpit/components/stages/BundleStage.tsx
+  var BundleStage = ({ frame, onZoomIn, cockpitState, vscode: vscode3 }) => {
+    const [isConfigOpen, setIsConfigOpen] = React5.useState(false);
+    const defaultConfig = {
+      mode: "repo",
+      roots: [],
+      includeConnected: false,
+      exclusions: []
+    };
+    const [formConfig, setFormConfig] = React5.useState(
+      cockpitState?.bundleConfig || defaultConfig
+    );
+    const [depth, setDepth] = React5.useState(cockpitState?.lastNCommits || 20);
+    React5.useEffect(() => {
+      setFormConfig(
+        cockpitState?.bundleConfig || {
+          mode: "repo",
+          roots: [],
+          includeConnected: false,
+          exclusions: []
+        }
+      );
+      setDepth(cockpitState?.lastNCommits || 20);
+    }, [cockpitState?.bundleConfig, cockpitState?.lastNCommits]);
+    const handleConfigChange = (updates) => {
+      setFormConfig((prev) => ({ ...prev, ...updates }));
+    };
+    const applyConfig = () => {
+      if (!vscode3) return;
+      vscode3.postMessage({ type: "updateBundleConfig", config: formConfig });
+      vscode3.postMessage({ type: "setLastNCommits", value: depth });
+      vscode3.postMessage({ type: "generateReport", mode: "selection", force: true });
+    };
+    console.log("[BundleStage] frame.data:", frame.data);
+    console.log("[BundleStage] frame.data.hotspots:", frame.data?.hotspots);
+    console.log("[BundleStage] frame.data.treemap:", frame.data?.treemap);
+    return /* @__PURE__ */ React5.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React5.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "10px"
+        }
+      },
+      /* @__PURE__ */ React5.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, "Hotspots"),
+      /* @__PURE__ */ React5.createElement(
+        "button",
+        {
+          onClick: () => setIsConfigOpen(!isConfigOpen),
+          style: {
+            background: "none",
+            border: "none",
+            color: "var(--vscode-textLink-foreground)",
+            cursor: "pointer",
+            fontSize: "0.9em"
+          }
+        },
+        isConfigOpen ? "Hide Scope" : "Configure Scope"
+      )
+    ), isConfigOpen && /* @__PURE__ */ React5.createElement(
+      "div",
+      {
+        style: {
+          marginBottom: "15px",
+          padding: "10px",
+          backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+          borderRadius: "4px",
+          border: "1px solid var(--vscode-panel-border)"
+        }
+      },
+      /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
+        "label",
+        {
+          style: {
+            display: "block",
+            marginBottom: "5px",
+            fontWeight: "bold",
+            fontSize: "0.9em"
+          }
+        },
+        "Mode"
+      ), /* @__PURE__ */ React5.createElement(
+        "select",
+        {
+          value: formConfig.mode,
+          onChange: (e) => handleConfigChange({ mode: e.target.value }),
+          style: {
+            width: "100%",
+            padding: "4px",
+            background: "var(--vscode-dropdown-background)",
+            color: "var(--vscode-dropdown-foreground)",
+            border: "1px solid var(--vscode-dropdown-border)"
+          }
+        },
+        /* @__PURE__ */ React5.createElement("option", { value: "repo" }, "Full Repo"),
+        /* @__PURE__ */ React5.createElement("option", { value: "module" }, "Current Module"),
+        /* @__PURE__ */ React5.createElement("option", { value: "changes" }, "My Changes (Staged + Unstaged)"),
+        /* @__PURE__ */ React5.createElement("option", { value: "custom" }, "Custom Roots")
+      )),
+      formConfig.mode === "custom" && /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
+        "label",
+        {
+          style: {
+            display: "block",
+            marginBottom: "5px",
+            fontWeight: "bold",
+            fontSize: "0.9em"
+          }
+        },
+        "Roots (comma separated)"
+      ), /* @__PURE__ */ React5.createElement(
+        "input",
+        {
+          type: "text",
+          value: formConfig.roots.join(", "),
+          onChange: (e) => handleConfigChange({
+            roots: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+          }),
+          placeholder: "src/auth, utils.ts",
+          style: {
+            width: "100%",
+            padding: "4px",
+            background: "var(--vscode-input-background)",
+            color: "var(--vscode-input-foreground)",
+            border: "1px solid var(--vscode-input-border)"
+          }
+        }
+      )),
+      /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
+        "label",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            fontSize: "0.9em",
+            cursor: "pointer"
+          }
+        },
+        /* @__PURE__ */ React5.createElement(
+          "input",
+          {
+            type: "checkbox",
+            checked: formConfig.includeConnected,
+            onChange: (e) => handleConfigChange({ includeConnected: e.target.checked }),
+            style: { marginRight: "8px" }
+          }
+        ),
+        "Include Connected Set (Callers/Callees)"
+      )),
+      /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
+        "label",
+        {
+          style: {
+            display: "block",
+            marginBottom: "5px",
+            fontWeight: "bold",
+            fontSize: "0.9em"
+          }
+        },
+        "Exclusions (glob)"
+      ), /* @__PURE__ */ React5.createElement(
+        "input",
+        {
+          type: "text",
+          value: formConfig.exclusions.join(", "),
+          onChange: (e) => handleConfigChange({
+            exclusions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+          }),
+          placeholder: "**/*.test.ts",
+          style: {
+            width: "100%",
+            padding: "4px",
+            background: "var(--vscode-input-background)",
+            color: "var(--vscode-input-foreground)",
+            border: "1px solid var(--vscode-input-border)"
+          }
+        }
+      )),
+      /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
+        "label",
+        {
+          style: {
+            display: "block",
+            marginBottom: "5px",
+            fontWeight: "bold",
+            fontSize: "0.9em"
+          }
+        },
+        "Analysis Depth (Commits)"
+      ), /* @__PURE__ */ React5.createElement(
+        "input",
+        {
+          type: "number",
+          min: "1",
+          max: "100",
+          value: depth,
+          onChange: (e) => {
+            const val = parseInt(e.target.value);
+            if (!isNaN(val)) {
+              setDepth(val);
+            }
+          },
+          style: {
+            width: "100%",
+            padding: "4px",
+            background: "var(--vscode-input-background)",
+            color: "var(--vscode-input-foreground)",
+            border: "1px solid var(--vscode-input-border)"
+          }
+        }
+      )),
+      /* @__PURE__ */ React5.createElement("div", { style: { display: "flex", gap: "10px", marginTop: "10px" } }, /* @__PURE__ */ React5.createElement(
+        "button",
+        {
+          onClick: () => {
+            applyConfig();
+            setIsConfigOpen(false);
+          },
+          disabled: cockpitState?.isAnalyzing,
+          style: {
+            flex: 1,
+            padding: "6px",
+            background: cockpitState?.isAnalyzing ? "var(--vscode-button-secondaryBackground)" : "var(--vscode-button-background)",
+            color: cockpitState?.isAnalyzing ? "var(--vscode-button-secondaryForeground)" : "var(--vscode-button-foreground)",
+            border: "none",
+            borderRadius: "2px",
+            cursor: cockpitState?.isAnalyzing ? "not-allowed" : "pointer",
+            opacity: cockpitState?.isAnalyzing ? 0.7 : 1
+          }
+        },
+        cockpitState?.isAnalyzing ? "Analyzing..." : "Apply & Analyze"
+      ))
+    ), cockpitState?.bundleSummary && /* @__PURE__ */ React5.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          gap: "15px",
+          marginBottom: "15px",
+          fontSize: "0.85em",
+          color: "var(--vscode-descriptionForeground)",
+          borderBottom: "1px solid var(--vscode-panel-border)",
+          paddingBottom: "10px"
+        }
+      },
+      /* @__PURE__ */ React5.createElement("div", null, /* @__PURE__ */ React5.createElement("strong", null, cockpitState.bundleSummary.commitCount), " commits"),
+      /* @__PURE__ */ React5.createElement("div", null, /* @__PURE__ */ React5.createElement("strong", null, cockpitState.bundleSummary.fileCount), " files"),
+      cockpitState.bundleSummary.symbolCount && /* @__PURE__ */ React5.createElement("div", null, /* @__PURE__ */ React5.createElement("strong", null, cockpitState.bundleSummary.symbolCount), " symbols")
+    ), frame.data?.treemap && frame.data.treemap.length > 0 ? /* @__PURE__ */ React5.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, frame.data.treemap.map((node) => /* @__PURE__ */ React5.createElement(TreemapNode, { key: node.id, node }))) : /* @__PURE__ */ React5.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, cockpitState?.isAnalyzing ? "Loading heatmap..." : frame.data?.hotspots && frame.data.hotspots.length > 0 ? "" : "No churn data yet. Run Analyze to populate the heatmap."), frame.data?.hotspots && frame.data.hotspots.length > 0 && /* @__PURE__ */ React5.createElement(React5.Fragment, null, /* @__PURE__ */ React5.createElement(
+      "p",
+      {
+        style: {
+          fontSize: "0.85em",
+          color: "var(--vscode-descriptionForeground)",
+          marginBottom: "10px"
+        }
+      },
+      "Most modified files (3 months)"
+    ), /* @__PURE__ */ React5.createElement(
+      "div",
+      {
+        style: {
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+          gap: "10px"
+        }
+      },
+      frame.data.hotspots.map((file) => /* @__PURE__ */ React5.createElement(
+        "div",
+        {
+          key: file.path,
+          onClick: () => onZoomIn({
+            level: "file",
+            id: file.path,
+            name: file.name || file.path.split("/").pop(),
+            status: "scanning"
+          }),
+          style: {
+            padding: "12px 10px",
+            border: "1px solid var(--vscode-button-background)",
+            backgroundColor: "var(--vscode-editor-background)",
+            cursor: "pointer",
+            borderRadius: "4px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+            minHeight: "80px"
+          },
+          title: `${file.name}
+Churn: ${file.score || 0}
++${file.added || 0} / -${file.removed || 0}`
+        },
+        /* @__PURE__ */ React5.createElement(
+          "div",
+          {
+            style: {
+              fontWeight: "bold",
+              fontSize: "0.9em",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap"
+            }
+          },
+          file.name
+        ),
+        /* @__PURE__ */ React5.createElement(
+          "div",
+          {
+            style: {
+              fontSize: "0.75em",
+              color: "var(--vscode-descriptionForeground)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap"
+            }
+          },
+          file.path
+        ),
+        /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7 } }, "+", file.added || 0, " / -", file.removed || 0),
+        /* @__PURE__ */ React5.createElement(
+          "div",
+          {
+            style: {
+              height: "6px",
+              borderRadius: "3px",
+              background: "var(--vscode-progressBar-background)",
+              overflow: "hidden",
+              marginTop: "auto"
+            }
+          },
+          /* @__PURE__ */ React5.createElement(
+            "div",
+            {
+              style: {
+                width: `${Math.min((file.score || 0) * 2, 100)}%`,
+                height: "100%",
+                background: file.score > 10 ? "var(--vscode-charts-red)" : file.score > 5 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)"
+              }
+            }
+          )
+        )
+      ))
+    )), frame.data?.hotspots && frame.data.hotspots.length === 0 && !cockpitState?.isAnalyzing && /* @__PURE__ */ React5.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots available for this scope."), frame.data?.risks?.length > 0 && /* @__PURE__ */ React5.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React5.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Top Risks"), /* @__PURE__ */ React5.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data.risks.map((risk, idx) => /* @__PURE__ */ React5.createElement(
+      "li",
+      {
+        key: idx,
+        style: {
+          padding: "8px",
+          border: "1px solid var(--vscode-inputValidation-warningBorder)",
+          borderRadius: "4px",
+          background: "var(--vscode-inputValidation-warningBackground)",
+          marginBottom: "8px"
+        }
+      },
+      /* @__PURE__ */ React5.createElement("div", { style: { fontWeight: "bold" } }, risk.name || risk.path),
+      /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.issue),
+      risk.detail && /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.detail)
+    )))));
+  };
+
+  // src/webview/cockpit/components/stages/BlastRadiusStage.tsx
+  var React6 = __toESM(require_react());
+  var BlastRadiusStage = ({
+    frame,
+    onZoomIn
+  }) => {
+    const [showIncoming, setShowIncoming] = React6.useState(true);
+    const [showOutgoing, setShowOutgoing] = React6.useState(true);
+    const incoming = frame.data?.blastRadius?.incoming || [];
+    const outgoing = frame.data?.blastRadius?.outgoing || [];
+    const center = frame.name;
+    const nodes = [
+      ...incoming.map((edge) => ({ id: edge.from.split(":")[0], direction: "in" })),
+      ...outgoing.map((edge) => ({ id: edge.to.split(":")[0], direction: "out" }))
+    ];
+    const uniqueNodes = Array.from(new Map(nodes.map((n) => [n.id, n])).values());
+    const edges = [
+      ...incoming.map((e) => ({
+        from: e.from.split(":")[0],
+        to: center,
+        direction: "in",
+        type: e.type
+      })),
+      ...outgoing.map((e) => ({
+        from: center,
+        to: e.to.split(":")[0],
+        direction: "out",
+        type: e.type
+      }))
+    ];
+    return /* @__PURE__ */ React6.createElement(
+      "div",
+      {
+        style: {
+          width: "100%",
+          height: "100%",
+          padding: "10px",
+          overflow: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px"
+        }
+      },
+      /* @__PURE__ */ React6.createElement("h3", { style: { fontSize: "1.2em", marginBottom: "5px" } }, "Dependencies"),
+      /* @__PURE__ */ React6.createElement(
+        "p",
+        {
+          style: {
+            fontSize: "0.85em",
+            color: "var(--vscode-descriptionForeground)",
+            marginBottom: "10px"
+          }
+        },
+        frame.name
+      ),
+      /* @__PURE__ */ React6.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } }, /* @__PURE__ */ React6.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React6.createElement(
+        "input",
+        {
+          type: "checkbox",
+          checked: showIncoming,
+          onChange: (e) => setShowIncoming(e.target.checked)
+        }
+      ), " ", "Incoming"), /* @__PURE__ */ React6.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React6.createElement(
+        "input",
+        {
+          type: "checkbox",
+          checked: showOutgoing,
+          onChange: (e) => setShowOutgoing(e.target.checked)
+        }
+      ), " ", "Outgoing")),
+      /* @__PURE__ */ React6.createElement(
+        "div",
+        {
+          style: {
+            border: "1px solid var(--vscode-panel-border)",
+            borderRadius: "4px",
+            padding: "8px",
+            minHeight: 180
+          }
+        },
+        /* @__PURE__ */ React6.createElement("div", { style: { position: "relative", width: "100%", height: 200 } }, /* @__PURE__ */ React6.createElement(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              padding: "6px 10px",
+              borderRadius: "8px",
+              background: "var(--vscode-editor-background)",
+              border: "1px solid var(--vscode-panel-border)",
+              fontWeight: "bold",
+              fontSize: "0.9em"
+            }
+          },
+          center
+        ), uniqueNodes.map((n, idx) => {
+          const angle = idx / uniqueNodes.length * Math.PI * 2;
+          const radius = 65;
+          const x = 50 + radius * Math.cos(angle);
+          const y = 50 + radius * Math.sin(angle);
+          return /* @__PURE__ */ React6.createElement(
+            "div",
+            {
+              key: n.id,
+              onClick: () => onZoomIn({
+                level: "file",
+                id: n.id,
+                name: n.id.split("/").pop(),
+                status: "scanning"
+              }),
+              style: {
+                position: "absolute",
+                top: `${y}%`,
+                left: `${x}%`,
+                transform: "translate(-50%, -50%)",
+                padding: "4px 6px",
+                borderRadius: "6px",
+                background: n.direction === "in" ? "var(--vscode-charts-blue)" : "var(--vscode-charts-orange)",
+                color: "var(--vscode-editor-foreground)",
+                fontSize: "0.75em",
+                cursor: "pointer",
+                whiteSpace: "nowrap"
+              }
+            },
+            n.id.split("/").pop()
+          );
+        }), edges.filter(
+          (e) => e.direction === "in" && showIncoming || e.direction === "out" && showOutgoing
+        ).map((e, idx) => {
+          const fromIdx = uniqueNodes.findIndex((n) => n.id === e.from);
+          const toIdx = uniqueNodes.findIndex((n) => n.id === e.to);
+          if (fromIdx === -1 || toIdx === -1) return null;
+          const angleFrom = fromIdx / uniqueNodes.length * Math.PI * 2;
+          const angleTo = toIdx / uniqueNodes.length * Math.PI * 2;
+          const radius = 65;
+          const x1 = 50 + radius * Math.cos(angleFrom);
+          const y1 = 50 + radius * Math.sin(angleFrom);
+          const x2 = 50 + radius * Math.cos(angleTo);
+          const y2 = 50 + radius * Math.sin(angleTo);
+          return /* @__PURE__ */ React6.createElement(
+            "svg",
+            {
+              key: idx,
+              style: {
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                pointerEvents: "none"
+              }
+            },
+            /* @__PURE__ */ React6.createElement(
+              "line",
+              {
+                x1: `${x1}%`,
+                y1: `${y1}%`,
+                x2: `${x2}%`,
+                y2: `${y2}%`,
+                stroke: e.direction === "in" ? "var(--vscode-charts-blue)" : "var(--vscode-charts-orange)",
+                strokeWidth: 1.5,
+                opacity: 0.6
+              }
+            )
+          );
+        }))
+      ),
+      /* @__PURE__ */ React6.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", flex: 1 } }, /* @__PURE__ */ React6.createElement(
+        "div",
+        {
+          style: {
+            border: "1px solid var(--vscode-panel-border)",
+            borderRadius: "4px",
+            padding: "8px",
+            overflow: "auto"
+          }
+        },
+        /* @__PURE__ */ React6.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Incoming (", incoming.length, ")"),
+        incoming.length ? /* @__PURE__ */ React6.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, incoming.map((edge, idx) => /* @__PURE__ */ React6.createElement(
+          "li",
+          {
+            key: idx,
+            onClick: () => onZoomIn({
+              level: "file",
+              id: edge.from.split(":")[0],
+              name: edge.from.split(":")[0].split("/").pop(),
+              status: "scanning"
+            }),
+            style: {
+              padding: "6px",
+              borderBottom: "1px solid var(--vscode-panel-border)",
+              cursor: "pointer",
+              fontSize: "0.85em"
+            }
+          },
+          edge.from.split(":")[0],
+          " \u2192 ",
+          edge.to.split(":")[0],
+          " (",
+          edge.type,
+          ")"
+        ))) : /* @__PURE__ */ React6.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
+      ), /* @__PURE__ */ React6.createElement(
+        "div",
+        {
+          style: {
+            border: "1px solid var(--vscode-panel-border)",
+            borderRadius: "4px",
+            padding: "8px",
+            overflow: "auto"
+          }
+        },
+        /* @__PURE__ */ React6.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Outgoing (", outgoing.length, ")"),
+        outgoing.length ? /* @__PURE__ */ React6.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, outgoing.map((edge, idx) => /* @__PURE__ */ React6.createElement(
+          "li",
+          {
+            key: idx,
+            onClick: () => onZoomIn({
+              level: "file",
+              id: edge.to.split(":")[0],
+              name: edge.to.split(":")[0].split("/").pop(),
+              status: "scanning"
+            }),
+            style: {
+              padding: "6px",
+              borderBottom: "1px solid var(--vscode-panel-border)",
+              cursor: "pointer",
+              fontSize: "0.85em"
+            }
+          },
+          edge.from.split(":")[0],
+          " \u2192 ",
+          edge.to.split(":")[0],
+          " (",
+          edge.type,
+          ")"
+        ))) : /* @__PURE__ */ React6.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
+      ))
+    );
+  };
+
+  // src/webview/cockpit/components/stages/FileStage.tsx
+  var React7 = __toESM(require_react());
+  var FileStage = ({
+    frame,
+    onZoomIn
+  }) => {
+    const [showSymbols, setShowSymbols] = React7.useState(false);
+    return /* @__PURE__ */ React7.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React7.createElement(
+      "div",
+      {
+        style: {
+          padding: "10px",
+          borderBottom: "1px solid var(--vscode-panel-border)",
+          flexShrink: 0
+        }
+      },
+      /* @__PURE__ */ React7.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
+      /* @__PURE__ */ React7.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.lineCount, " lines \u2022 ", frame.data?.language, frame.data?.changeStats && /* @__PURE__ */ React7.createElement("span", { style: { marginLeft: "10px" } }, "+", frame.data.changeStats.added, " / -", frame.data.changeStats.removed), typeof frame.data?.hotspotScore === "number" && /* @__PURE__ */ React7.createElement("span", { style: { marginLeft: "10px", color: "var(--vscode-charts-red)" } }, "Hotspot: ", frame.data.hotspotScore))
+    ), /* @__PURE__ */ React7.createElement(
+      "div",
+      {
+        style: {
+          padding: "8px 10px",
+          borderBottom: "1px solid var(--vscode-panel-border)",
+          display: "flex",
+          gap: "10px",
+          flexShrink: 0
+        }
+      },
+      /* @__PURE__ */ React7.createElement(
+        "button",
+        {
+          onClick: () => setShowSymbols(false),
+          style: {
+            flex: 1,
+            padding: "6px",
+            border: "none",
+            background: !showSymbols ? "var(--vscode-button-background)" : "transparent",
+            color: !showSymbols ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)",
+            cursor: "pointer",
+            fontSize: "0.85em",
+            borderRadius: "4px"
+          }
+        },
+        "Content"
+      ),
+      /* @__PURE__ */ React7.createElement(
+        "button",
+        {
+          onClick: () => setShowSymbols(true),
+          style: {
+            flex: 1,
+            padding: "6px",
+            border: "none",
+            background: showSymbols ? "var(--vscode-button-background)" : "transparent",
+            color: showSymbols ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)",
+            cursor: "pointer",
+            fontSize: "0.85em",
+            borderRadius: "4px"
+          }
+        },
+        "Symbols (",
+        frame.data?.symbols?.length || 0,
+        ")"
+      )
+    ), /* @__PURE__ */ React7.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, !showSymbols ? /* @__PURE__ */ React7.createElement(
+      "div",
+      {
+        style: {
+          flex: 1,
+          overflow: "auto",
+          backgroundColor: "var(--vscode-editor-background)",
+          padding: "10px"
+        }
+      },
+      /* @__PURE__ */ React7.createElement(
+        "pre",
+        {
+          style: {
+            margin: 0,
+            fontFamily: "var(--vscode-editor-font-family)",
+            fontSize: "0.85em",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            lineHeight: "1.5"
+          }
+        },
+        frame.data?.content || "Loading..."
+      )
+    ) : /* @__PURE__ */ React7.createElement("div", { style: { flex: 1, overflow: "auto" } }, /* @__PURE__ */ React7.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.symbols?.map((symbol) => /* @__PURE__ */ React7.createElement(
+      "li",
+      {
+        key: symbol.id,
+        onClick: () => onZoomIn({
+          level: "symbol",
+          id: `${frame.id}::${symbol.name}`,
+          name: symbol.name,
+          status: "scanning"
+        }),
+        style: {
+          padding: "10px",
+          borderBottom: "1px solid var(--vscode-input-border)",
+          cursor: "pointer",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px"
+        }
+      },
+      /* @__PURE__ */ React7.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold" } }, /* @__PURE__ */ React7.createElement("span", { style: { opacity: 0.7, marginRight: "5px" } }, symbol.kind === "function" ? "\u{1D453}" : symbol.kind === "class" ? "C" : "\u2022"), symbol.name, symbol.drift && /* @__PURE__ */ React7.createElement(
+        "span",
+        {
+          style: {
+            marginLeft: "8px",
+            padding: "2px 6px",
+            borderRadius: "4px",
+            background: "var(--vscode-inputValidation-warningBackground)",
+            color: "var(--vscode-inputValidation-warningForeground)",
+            fontSize: "0.7em",
+            textTransform: "uppercase"
+          }
+        },
+        "Drift"
+      )),
+      symbol.signature && /* @__PURE__ */ React7.createElement(
+        "div",
+        {
+          style: {
+            fontSize: "0.75em",
+            opacity: 0.7,
+            marginTop: "2px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap"
+          }
+        },
+        symbol.signature
+      )
+    )), !frame.data?.symbols?.length && /* @__PURE__ */ React7.createElement("li", { style: { padding: "20px", opacity: 0.6, textAlign: "center" } }, "No symbols found")))));
+  };
+
+  // src/webview/cockpit/components/stages/SymbolStage.tsx
+  var React8 = __toESM(require_react());
+  var SymbolStage = ({ frame, vscode: vscode3 }) => /* @__PURE__ */ React8.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React8.createElement(
+    "div",
+    {
+      style: {
+        padding: "10px",
+        borderBottom: "1px solid var(--vscode-panel-border)",
+        flexShrink: 0
+      }
+    },
+    /* @__PURE__ */ React8.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
+    /* @__PURE__ */ React8.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.filePath),
+    frame.data?.drift?.length > 0 && /* @__PURE__ */ React8.createElement("div", { style: { marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React8.createElement(
+      "span",
+      {
+        key: idx,
+        style: {
+          padding: "2px 6px",
+          borderRadius: "4px",
+          background: "var(--vscode-inputValidation-warningBackground)",
+          color: "var(--vscode-inputValidation-warningForeground)",
+          fontSize: "0.75em"
+        }
+      },
+      "Drift: ",
+      d.suggestedName || d.issue || "Rename suggested"
+    ))),
+    /* @__PURE__ */ React8.createElement("div", { style: { marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" } }, frame.data?.symbolId && vscode3 && /* @__PURE__ */ React8.createElement(
+      "button",
+      {
+        onClick: () => {
+          vscode3.postMessage({ type: "openSymbolInEditor", symbolId: frame.data.symbolId });
+        },
+        style: {
+          padding: "4px 8px",
+          border: "1px solid var(--vscode-button-border)",
+          background: "var(--vscode-button-secondaryBackground)",
+          color: "var(--vscode-button-foreground)",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "0.8em"
+        }
+      },
+      "Open in Editor"
+    ), frame.data?.drift?.[0]?.suggestedName && vscode3 && /* @__PURE__ */ React8.createElement(
+      "button",
+      {
+        onClick: () => {
+          const suggestion = frame.data.drift[0].suggestedName;
+          vscode3.postMessage({
+            type: "applyRefactorSuggestion",
+            payload: {
+              symbolId: frame.data.symbolId,
+              suggestedName: suggestion,
+              filePath: frame.data.filePath
+            }
+          });
+        },
+        style: {
+          padding: "4px 8px",
+          border: "1px solid var(--vscode-button-border)",
+          background: "var(--vscode-button-background)",
+          color: "var(--vscode-button-foreground)",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "0.8em"
+        }
+      },
+      "Apply Suggestion (manual)"
+    ), vscode3 && /* @__PURE__ */ React8.createElement(
+      "button",
+      {
+        onClick: () => {
+          vscode3.postMessage({
+            type: "askAssistant",
+            payload: {
+              symbolId: frame.data?.symbolId,
+              filePath: frame.data?.filePath,
+              drift: frame.data?.drift
+            }
+          });
+        },
+        style: {
+          padding: "4px 8px",
+          border: "1px solid var(--vscode-button-border)",
+          background: "var(--vscode-button-secondaryBackground)",
+          color: "var(--vscode-button-foreground)",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "0.8em"
+        }
+      },
+      "Ask Assistant"
+    ))
+  ), /* @__PURE__ */ React8.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React8.createElement(
+    "div",
+    {
+      style: {
+        flex: 1,
+        overflow: "auto",
+        backgroundColor: "var(--vscode-editor-background)",
+        padding: "10px",
+        borderBottom: "1px solid var(--vscode-panel-border)"
+      }
+    },
+    /* @__PURE__ */ React8.createElement(
+      "pre",
+      {
+        style: {
+          margin: 0,
+          fontFamily: "var(--vscode-editor-font-family)",
+          fontSize: "0.85em",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          lineHeight: "1.5"
+        }
+      },
+      frame.data?.content || "Loading..."
+    )
+  ), /* @__PURE__ */ React8.createElement("div", { style: { maxHeight: "220px", overflow: "auto", padding: "10px", flexShrink: 0 } }, /* @__PURE__ */ React8.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Evolution"), /* @__PURE__ */ React8.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.history?.map((commit) => /* @__PURE__ */ React8.createElement(
+    "li",
+    {
+      key: commit.hash || commit.message || commit.date || commit.author,
+      style: {
+        marginBottom: "12px",
+        borderLeft: "2px solid var(--vscode-charts-blue)",
+        paddingLeft: "8px"
+      }
+    },
+    /* @__PURE__ */ React8.createElement("div", { style: { fontWeight: "bold", fontSize: "0.85em" } }, commit.message || commit.summary || commit.change),
+    /* @__PURE__ */ React8.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
+  )), !frame.data?.history?.length && /* @__PURE__ */ React8.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
+
+  // src/webview/cockpit/components/stages/ReportsStage.tsx
+  var React10 = __toESM(require_react());
+
+  // src/webview/cockpit/components/ReportList.tsx
+  var React9 = __toESM(require_react());
+
+  // src/webview/cockpit/utils.ts
+  var formatDate = (value) => {
+    if (!value) return "";
+    try {
+      return new Date(value).toLocaleDateString();
+    } catch {
+      return value;
+    }
+  };
+
+  // src/webview/cockpit/components/ReportList.tsx
+  var ReportList = ({ state, vscode: vscode3 }) => {
+    const filter = state.reportsFilterText.toLowerCase();
+    const list = state.reports.filter(
+      (r) => (!filter || (r.title || "").toLowerCase().includes(filter) || (r.summary || "").toLowerCase().includes(filter)) && (!state.reportsShowPinnedOnly || r.pinned) && (state.reportsBranchFilter === "all" || r.branch === state.reportsBranchFilter)
+    );
+    if (!list.length) {
+      return /* @__PURE__ */ React9.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React9.createElement("div", null, "No reports yet"), /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
+    }
+    return /* @__PURE__ */ React9.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React9.createElement(
+      "li",
+      {
+        key: r.id,
+        className: "cockpit__list-item cockpit__list-item--clickable",
+        onClick: () => vscode3.postMessage({ type: "openReport", reportId: r.id })
+      },
+      /* @__PURE__ */ React9.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React9.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React9.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React9.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React9.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
+      r.summary ? /* @__PURE__ */ React9.createElement("div", { className: "cockpit__message" }, r.summary) : null,
+      /* @__PURE__ */ React9.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React9.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small",
+          onClick: (e) => {
+            e.stopPropagation();
+            vscode3.postMessage({ type: "regenerateReport", reportId: r.id });
+          }
+        },
+        "Regenerate"
+      ), /* @__PURE__ */ React9.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small",
+          onClick: (e) => {
+            e.stopPropagation();
+            vscode3.postMessage({ type: "togglePinReport", reportId: r.id });
+          }
+        },
+        r.pinned ? "Unpin" : "Pin"
+      ), /* @__PURE__ */ React9.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small danger",
+          onClick: (e) => {
+            e.stopPropagation();
+            if (confirm(
+              `Are you sure you want to delete the report "${r.title || "Untitled"}"? This cannot be undone.`
+            )) {
+              vscode3.postMessage({ type: "deleteReport", reportId: r.id });
+            }
+          }
+        },
+        "Delete"
+      ))
+    )));
+  };
+
+  // src/webview/cockpit/components/stages/ReportsStage.tsx
+  var ReportsStage = ({
+    cockpitState,
+    vscode: vscode3
+  }) => /* @__PURE__ */ React10.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React10.createElement(ReportList, { state: cockpitState, vscode: vscode3 }));
+
+  // src/webview/cockpit/components/Stage.tsx
+  var StageContainer = {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "var(--vscode-editor-background)",
+    overflow: "hidden",
+    position: "relative"
+  };
+  var HeaderStyle3 = {
+    padding: "10px 20px",
+    borderBottom: "1px solid var(--vscode-panel-border)",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "var(--vscode-editor-background)"
+  };
+  var ContentStyle2 = {
+    flex: 1,
+    padding: "20px",
+    overflow: "auto",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center"
+  };
+  var Stage = ({
+    frame,
+    onZoomIn,
+    onZoomOut,
+    cockpitState,
+    vscode: vscode3
+  }) => {
+    const handleZoomIn = (id, name) => {
+      let nextLevel = "bundle";
+      if (frame.level === "bundle") nextLevel = "blast_radius";
+      else if (frame.level === "blast_radius") nextLevel = "file";
+      else if (frame.level === "file") nextLevel = "symbol";
+      else return;
+      onZoomIn({
+        level: nextLevel,
+        id,
+        name,
+        parentId: frame.id,
+        status: "ready"
+      });
+    };
+    const frameData = frame.level === "bundle" ? cockpitState?.bundleView || frame.data : frame.data;
+    const tier = frame.tier || frameData?.tier;
+    return /* @__PURE__ */ React11.createElement("div", { style: StageContainer }, /* @__PURE__ */ React11.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React11.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" } }, /* @__PURE__ */ React11.createElement(
+      "button",
+      {
+        onClick: onZoomOut,
+        disabled: !frame.parentId,
+        style: {
+          marginRight: "6px",
+          background: "none",
+          border: "none",
+          color: "var(--vscode-button-foreground)",
+          cursor: "pointer",
+          opacity: !frame.parentId ? 0.5 : 1
+        }
+      },
+      "\u2190 Back"
+    ), /* @__PURE__ */ React11.createElement("strong", null, frame.name), " ", /* @__PURE__ */ React11.createElement("span", { style: { opacity: 0.7 } }, "(", frame.level, ")"), frame.breadcrumbs && /* @__PURE__ */ React11.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, frame.breadcrumbs.join(" / ")), tier && /* @__PURE__ */ React11.createElement(
+      "span",
+      {
+        style: {
+          padding: "2px 6px",
+          borderRadius: "4px",
+          background: tier === "structure" ? "var(--vscode-badge-background)" : tier === "hybrid" ? "var(--vscode-inputValidation-warningBackground)" : "var(--vscode-charts-green)",
+          color: tier === "structure" ? "var(--vscode-badge-foreground)" : "var(--vscode-foreground)",
+          fontSize: "0.75em",
+          textTransform: "uppercase"
+        }
+      },
+      tier
+    ), frame.level === "bundle" && frameData?.summary && /* @__PURE__ */ React11.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "\u2022 ", frameData.summary.files, " files \u2022 ", frameData.summary.symbols, " symbols"))), /* @__PURE__ */ React11.createElement("div", { style: ContentStyle2 }, frame.status === "scanning" ? /* @__PURE__ */ React11.createElement("div", { style: { textAlign: "center", color: "var(--vscode-descriptionForeground)" } }, /* @__PURE__ */ React11.createElement("div", { style: { fontSize: "2em", marginBottom: "10px" } }, "\u23F3"), /* @__PURE__ */ React11.createElement("h3", null, "Scanning ", frame.name, "..."), /* @__PURE__ */ React11.createElement("p", null, "Analyzing history, drift, and risks.")) : /* @__PURE__ */ React11.createElement(React11.Fragment, null, frame.id === "reports-root" && cockpitState && vscode3 ? /* @__PURE__ */ React11.createElement(ReportsStage, { cockpitState, vscode: vscode3 }) : /* @__PURE__ */ React11.createElement(React11.Fragment, null, frame.level === "bundle" && /* @__PURE__ */ React11.createElement(
+      BundleStage,
+      {
+        frame,
+        onZoomIn: (f) => onZoomIn(f),
+        cockpitState,
+        vscode: vscode3
+      }
+    ), frame.level === "blast_radius" && /* @__PURE__ */ React11.createElement(BlastRadiusStage, { frame, onZoomIn: (f) => onZoomIn(f) }), frame.level === "file" && /* @__PURE__ */ React11.createElement(FileStage, { frame, onZoomIn: (f) => onZoomIn(f) }), frame.level === "symbol" && /* @__PURE__ */ React11.createElement(SymbolStage, { frame, vscode: vscode3 })))));
   };
 
   // src/webview/cockpit/components/SuperWebview.tsx
@@ -25158,7 +25329,7 @@ Churn: ${file.score || 0}
     overflow: "hidden"
   };
   var SuperWebview = ({
-    vscode: vscode2,
+    vscode: vscode3,
     cockpitState
   }) => {
     const [assistantMessages, setAssistantMessages] = React12.useState([]);
@@ -25170,10 +25341,11 @@ Churn: ${file.score || 0}
     const explorerData = cockpitState.explorerData;
     const [selection, setSelection] = React12.useState(null);
     React12.useEffect(() => {
-      vscode2.postMessage({ type: "getExplorerTree" });
-      vscode2.postMessage({ type: "getBundleData" });
+      postMessageWithTracing(vscode3, "getExplorerTree");
+      postMessageWithTracing(vscode3, "getBundleData");
       const handler = (event) => {
         const message = event.data;
+        getMessageTracer().logIncoming(message.type, message.payload, "extension");
         if (message?.type === "analysisError" && message.payload) {
           console.warn("[SuperWebview] Analysis error", message.payload);
         } else if (message?.type === "assistantResponse" && message.payload) {
@@ -25185,26 +25357,24 @@ Churn: ${file.score || 0}
       };
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
-    }, [vscode2]);
+    }, [vscode3]);
     React12.useEffect(() => {
       const handleResize = () => setWidth(window.innerWidth);
       window.addEventListener("resize", handleResize);
       return () => window.removeEventListener("resize", handleResize);
     }, []);
     const handleZoomIn = (frame) => {
-      vscode2.postMessage({
-        type: "dispatch",
+      postMessageWithTracing(vscode3, "dispatch", {
         action: { type: "NAVIGATE_TO", payload: { frame } }
       });
       setSelection(null);
     };
     const handleSendAssistant = (text) => {
       setAssistantMessages((prev) => [...prev, { role: "user", content: text }]);
-      vscode2.postMessage({ type: "askAssistant", payload: { text, frame: activeFrame } });
+      postMessageWithTracing(vscode3, "askAssistant", { text, frame: activeFrame });
     };
     const handleZoomOut = () => {
-      vscode2.postMessage({
-        type: "dispatch",
+      postMessageWithTracing(vscode3, "dispatch", {
         action: { type: "NAVIGATE_BACK" }
       });
       setSelection(null);
@@ -25221,7 +25391,7 @@ Churn: ${file.score || 0}
           status: "ready",
           parentId: "root"
         };
-        vscode2.postMessage({
+        vscode3.postMessage({
           type: "dispatch",
           action: { type: "NAVIGATE_TO", payload: { frame: newFrame } }
         });
@@ -25229,7 +25399,7 @@ Churn: ${file.score || 0}
       }
       if (node.id.startsWith("bundle-")) {
         const bundleId = node.id.replace("bundle-", "");
-        vscode2.postMessage({ type: "switchBundle", id: bundleId });
+        postMessageWithTracing(vscode3, "switchBundle", { id: bundleId });
         const newFrame = {
           level: "bundle",
           id: "root",
@@ -25239,8 +25409,7 @@ Churn: ${file.score || 0}
           parentId: void 0
           // It is the root
         };
-        vscode2.postMessage({
-          type: "dispatch",
+        postMessageWithTracing(vscode3, "dispatch", {
           action: { type: "NAVIGATE_TO", payload: { frame: newFrame } }
         });
         return;
@@ -25256,7 +25425,7 @@ Churn: ${file.score || 0}
         default:
           level = "bundle";
       }
-      if (level === "file") {
+      if (level === "file" || level === "symbol") {
         const newFrame = {
           level,
           id: node.id,
@@ -25264,11 +25433,10 @@ Churn: ${file.score || 0}
           status: "scanning",
           parentId: "root"
         };
-        vscode2.postMessage({
-          type: "dispatch",
+        postMessageWithTracing(vscode3, "dispatch", {
           action: { type: "NAVIGATE_TO", payload: { frame: newFrame } }
         });
-        vscode2.postMessage({ type: "analyzeFrame", frameId: node.id });
+        postMessageWithTracing(vscode3, "analyzeFrame", { frameId: node.id });
       } else {
         const newFrame = {
           level,
@@ -25277,8 +25445,7 @@ Churn: ${file.score || 0}
           status: "ready",
           parentId: level === "bundle" ? void 0 : "root"
         };
-        vscode2.postMessage({
-          type: "dispatch",
+        postMessageWithTracing(vscode3, "dispatch", {
           action: { type: "NAVIGATE_TO", payload: { frame: newFrame } }
         });
       }
@@ -25309,7 +25476,7 @@ Churn: ${file.score || 0}
         onZoomOut: handleZoomOut,
         onSelect: handleSelect,
         cockpitState,
-        vscode: vscode2
+        vscode: vscode3
       }
     ), /* @__PURE__ */ React12.createElement(Inspector, { frame: activeFrame, selection }), cockpitState.bundleSummary && cockpitState.bundleSummary.cacheHits !== void 0 && /* @__PURE__ */ React12.createElement(
       "div",
@@ -25367,7 +25534,7 @@ Churn: ${file.score || 0}
           onZoomOut: handleZoomOut,
           onSelect: handleSelect,
           cockpitState,
-          vscode: vscode2
+          vscode: vscode3
         }
       ))),
       /* @__PURE__ */ React12.createElement(
@@ -25458,7 +25625,7 @@ Churn: ${file.score || 0}
           onZoomOut: handleZoomOut,
           onSelect: handleSelect,
           cockpitState,
-          vscode: vscode2
+          vscode: vscode3
         }
       ), activeTab === "inspector" && /* @__PURE__ */ React12.createElement(Inspector, { frame: activeFrame, selection }), activeTab === "assistant" && /* @__PURE__ */ React12.createElement(
         Assistant,
@@ -25510,8 +25677,62 @@ Churn: ${file.score || 0}
     ));
   };
 
+  // src/webview/cockpit/components/ErrorBoundary.tsx
+  var React13 = __toESM(require_react());
+  var ErrorBoundary = class extends React13.Component {
+    constructor(props) {
+      super(props);
+      this.handleReset = () => {
+        this.setState({ hasError: false, error: null, errorInfo: null });
+      };
+      this.state = { hasError: false, error: null, errorInfo: null };
+    }
+    static getDerivedStateFromError(error) {
+      return { hasError: true };
+    }
+    componentDidCatch(error, errorInfo) {
+      console.error("[ErrorBoundary] Caught error:", error, errorInfo);
+      this.setState({ error, errorInfo });
+    }
+    render() {
+      if (this.state.hasError) {
+        return /* @__PURE__ */ React13.createElement(
+          "div",
+          {
+            style: {
+              padding: "20px",
+              backgroundColor: "var(--vscode-editorError-background)",
+              color: "var(--vscode-editorError-foreground)",
+              borderRadius: "4px",
+              margin: "10px"
+            }
+          },
+          /* @__PURE__ */ React13.createElement("h2", null, "Something went wrong"),
+          /* @__PURE__ */ React13.createElement("details", { style: { whiteSpace: "pre-wrap", marginTop: "10px" } }, /* @__PURE__ */ React13.createElement("summary", { style: { cursor: "pointer", marginBottom: "10px" } }, "Error Details"), /* @__PURE__ */ React13.createElement("div", { style: { fontSize: "12px", fontFamily: "monospace" } }, /* @__PURE__ */ React13.createElement("strong", null, "Error:"), " ", this.state.error?.toString(), /* @__PURE__ */ React13.createElement("br", null), /* @__PURE__ */ React13.createElement("br", null), /* @__PURE__ */ React13.createElement("strong", null, "Component Stack:"), /* @__PURE__ */ React13.createElement("br", null), this.state.errorInfo?.componentStack)),
+          /* @__PURE__ */ React13.createElement(
+            "button",
+            {
+              onClick: this.handleReset,
+              style: {
+                marginTop: "10px",
+                padding: "5px 10px",
+                backgroundColor: "var(--vscode-button-background)",
+                color: "var(--vscode-button-foreground)",
+                border: "none",
+                borderRadius: "2px",
+                cursor: "pointer"
+              }
+            },
+            "Try Again"
+          )
+        );
+      }
+      return this.props.children;
+    }
+  };
+
   // src/webview/cockpit/index.tsx
-  var vscode = window.acquireVsCodeApi();
+  var vscode2 = window.acquireVsCodeApi();
   var defaultState = {
     repoName: null,
     branchName: null,
@@ -25536,6 +25757,7 @@ Churn: ${file.score || 0}
     bundleFacts: null,
     bundleReportId: null,
     bundleView: null,
+    bundleViewVersion: 0,
     symbols: [],
     symbolFilterText: "",
     symbolKindFilter: "all",
@@ -25570,8 +25792,8 @@ Churn: ${file.score || 0}
     explorerData: []
   };
   var App = () => {
-    const [state, setState] = React13.useState(defaultState);
-    React13.useEffect(() => {
+    const [state, setState] = React14.useState(defaultState);
+    React14.useEffect(() => {
       const handler = (event) => {
         const message = event.data;
         if (message?.type === "updateState" && message.payload) {
@@ -25591,15 +25813,15 @@ Churn: ${file.score || 0}
         }
       };
       window.addEventListener("message", handler);
-      vscode.postMessage({ type: "ready" });
+      vscode2.postMessage({ type: "ready" });
       return () => window.removeEventListener("message", handler);
     }, []);
-    return /* @__PURE__ */ React13.createElement("div", { className: "cockpit", style: { padding: 0, margin: 0, height: "100vh", overflow: "hidden" } }, /* @__PURE__ */ React13.createElement(SuperWebview, { vscode, cockpitState: state }));
+    return /* @__PURE__ */ React14.createElement(ErrorBoundary, null, /* @__PURE__ */ React14.createElement("div", { className: "cockpit", style: { padding: 0, margin: 0, height: "100vh", overflow: "hidden" } }, /* @__PURE__ */ React14.createElement(SuperWebview, { vscode: vscode2, cockpitState: state })));
   };
   var rootEl = document.getElementById("root");
   if (rootEl) {
     const root = (0, import_client.createRoot)(rootEl);
-    root.render(/* @__PURE__ */ React13.createElement(App, null));
+    root.render(/* @__PURE__ */ React14.createElement(App, null));
   }
 })();
 /*! Bundled license information:

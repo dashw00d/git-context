@@ -10,6 +10,7 @@ import { SymbolsTabContent } from './components/SymbolsTabContent';
 import { ReportsTabContent } from './components/ReportsTabContent';
 import { LiveTabContent } from './components/LiveTabContent';
 import { SuperWebview } from './components/SuperWebview';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { formatDate } from './utils';
 
 declare global {
@@ -46,6 +47,7 @@ const defaultState: CockpitState = {
   bundleFacts: null,
   bundleReportId: null,
   bundleView: null,
+  bundleViewVersion: 0,
   symbols: [],
   symbolFilterText: '',
   symbolKindFilter: 'all',
@@ -112,9 +114,11 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <div className="cockpit" style={{ padding: 0, margin: 0, height: '100vh', overflow: 'hidden' }}>
-      <SuperWebview vscode={vscode} cockpitState={state} />
-    </div>
+    <ErrorBoundary>
+      <div className="cockpit" style={{ padding: 0, margin: 0, height: '100vh', overflow: 'hidden' }}>
+        <SuperWebview vscode={vscode} cockpitState={state} />
+      </div>
+    </ErrorBoundary>
   );
 };
 

@@ -24,33 +24,33 @@ export function createBundleFactsStep(): PipelineStep {
         return; // Return early instead of throwing
       }
 
-      // Use full logic if all facts are available, otherwise fallback
-      const options: any = {
-        commitShas: state.selectedCommitShas,
-      };
-
-      if (state.scope && state.intended && state.working && state.drift && state.legacy) {
-        options.scope = state.scope;
-        options.intended = state.intended;
-        options.working = state.working;
-        options.drift = state.drift;
-        options.legacy = state.legacy;
-        options.hotspots = state.hotspots;
+      if (!state.scope || !state.intended || !state.working || !state.drift || !state.legacy) {
+        logError('Missing required pipeline data for bundle facts');
+        return;
       }
 
       // Add timeline and movedLineage if available
-      if (state.explicitTimeline) {
-        options.timeline = state.explicitTimeline;
-      }
-      if (state.movedLineage) {
-        options.movedLineage = state.movedLineage;
-      }
-
       const bundleFacts = await buildRefactorBundleFacts(
         state.commitFacts,
         state.workspaceFacts ?? null,
-        options
+        {
+          commitShas: state.selectedCommitShas,
+          scope: state.scope,
+          intended: state.intended,
+          working: state.working,
+          drift: state.drift,
+          legacy: state.legacy,
+          hotspots: state.hotspots,
+          timeline: state.explicitTimeline,
+          movedLineage: state.movedLineage,
+        }
       );
+
+      // Mark as partial if any optional steps failed
+      if (state.partialReasons && state.partialReasons.length > 0) {
+        (bundleFacts as any).partial = true;
+        (bundleFacts as any).partialReasons = state.partialReasons;
+      }
 
       state.bundleFacts = bundleFacts;
     },

@@ -116,7 +116,7 @@
         {
           "id": "gitContext",
           "title": "Git Context",
-          "icon": "resources/git-context.svg"
+          "icon": "media/git-context.svg"
         }
       ]
     },
@@ -156,7 +156,8 @@
         },
         "git-context.difftasticPath": {
           "type": "string",
-          "description": "Path to difftastic binary (auto-detected if not set)"
+          "description": "Path to difftastic binary (auto-detected if not set)",
+          "default": "/home/ryan/plugins/git-context/binaries/difftastic"
         },
         "git-context.defaultCommitCount": {
           "type": "number",
@@ -343,6 +344,11 @@
           },
           "description": "Threshold configuration for detector algorithms (BaseDetector)"
         },
+        "git-context.debugMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable comprehensive debugging logs for state transitions, message flow, and pipeline execution. Logs appear in 'Git Context (Debug)' output channel."
+        },
         "git-context.bundleConfig": {
           "type": "object",
           "default": {
@@ -407,6 +413,8 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\""
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
     "@types/express": "^4.17.0",
     "@types/node": "^20.19.25",
     "@types/react": "^18.0.0",
@@ -420,6 +428,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-prettier": "^5.5.4",
+    "jsdom": "^27.2.0",
     "organize-imports-cli": "^0.10.0",
     "prettier": "^3.7.3",
     "react": "^18.0.0",

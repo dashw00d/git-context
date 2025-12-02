@@ -49,6 +49,11 @@ export const BundleStage: React.FC<{
     vscode.postMessage({ type: 'generateReport', mode: 'selection', force: true });
   };
 
+  // Debug logging
+  console.log('[BundleStage] frame.data:', frame.data);
+  console.log('[BundleStage] frame.data.hotspots:', frame.data?.hotspots);
+  console.log('[BundleStage] frame.data.treemap:', frame.data?.treemap);
+
   return (
     <div style={{ width: '100%', padding: '10px', overflow: 'auto' }}>
       <div

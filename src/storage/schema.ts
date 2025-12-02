@@ -662,8 +662,16 @@ CREATE INDEX IF NOT EXISTS idx_dna_decision_log_sha ON dna_decision_log(sha);`,
         sql: `ALTER TABLE symbols ADD COLUMN naming_convention TEXT; ALTER TABLE symbols ADD COLUMN convention_confidence REAL;`,
         safe: true,
       },
+      {
+        name: 'add_dna_v2',
+        sql: `ALTER TABLE symbol_versions ADD COLUMN dna_id_v2 TEXT;
+ALTER TABLE symbol_versions ADD COLUMN dna_version INTEGER DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_symbol_versions_dna_v2 ON symbol_versions(dna_id_v2);`,
+        safe: true,
+        requiresReindex: false,
+      },
     ],
-    currentVersion: 2,
+    currentVersion: 3,
   },
 
   // Edges Module: edges, renames, import_conventions

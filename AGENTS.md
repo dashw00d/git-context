@@ -1,5 +1,10 @@
 # Repository Guidelines
 
+## Rules
+
+No backward compatibility, all must be standardized
+Fail fast, dont add workarounds
+
 ## Project Structure & Module Organization
 
 The VS Code extension lives in `src`, split by responsibility: `analysis/` for symbol+diff parsing and pipeline steps, `cli/` for the `ct` binary, `facts/` for drift/legacy/intended state detection, `storage/` for database and Qdrant integration, `state/` and `services/` for Cockpit orchestration, `webview/` for the React cockpit UI that bundles to `media/cockpit.js`, `providers/` for VS Code tree view providers, `commands/` for VS Code command handlers, `metrics/` for metric adapters, `llm/` for LLM client integration, `utils/` for shared utilities, `watchers/` for git commit watchers, and `contracts/` for type definitions. `liveTracker.ts` resides at `src/` root for live change tracking. Tree-sitter WASM files are downloaded to `out/` at build time (via `scripts/download-wasm.js`), while static assets like difftastic binary reside in `resources/`. Compiled JS ends up in `out/`. Keep generated data inside `.git/commit-tracker/` (database) or `out/` (WASM files, compiled code).
@@ -8,7 +13,7 @@ The VS Code extension lives in `src`, split by responsibility: `analysis/` for s
 
 Follow the existing 2-space indentation, `const`-first mindset, and explicit return types for exported functions. Module boundaries mirror the folder names—prefer domain-based filenames such as `liveTracker.ts` or `cockpitOrchestrator.ts`, and export discriminated unions for node types per the invariants in `README.md`. Keep imports ordered from Node built-ins → packages → local modules, and document nuanced logic with short comments rather than narrating every line.
 
-Please try to adhere to these architecture standards: /docs/architecture-patterns.md
+Please try to adhere to these architecture standards: /docs/src/architecture-patterns.md
 
 ## Analysis Pipeline Steps (deps | key output | critical details)
 

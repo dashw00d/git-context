@@ -136,9 +136,12 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
 
     if (factsChanged || configChanged) {
       if (configChanged) {
-        // Invalidate hotspot cache on config change to ensure fresh filtering
-        this.analysisController?.hotspotCache.clear();
-        logInfo('[Cockpit] Cleared hotspot cache due to config change');
+        // Invalidate ALL caches on config change to ensure fresh data
+        if (this.analysisController) {
+          this.analysisController.hotspotCache.clear();
+          this.analysisController.clearSkeletonCache();
+          logInfo('[Cockpit] Cleared hotspot and skeleton caches due to config change');
+        }
       }
 
       if (factsChanged) {
@@ -211,30 +214,36 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     getStore().dispatch({ type: 'REPORTS_UPDATED', payload: { reports } });
   }
 
+  /**
+   * @deprecated Use specific action dispatchers instead (updateBundleFacts, updateSymbols, etc.)
+   * Only kept for backward compatibility and debug scenarios
+   */
   updateState(partial: Partial<CockpitState>) {
-    getStore().dispatch({ type: 'LEGACY_STATE_UPDATED', payload: { partial } });
+    logInfo(
+      '[Cockpit] DEPRECATED: updateState called with partial update. Use specific actions instead.'
+    );
+    getStore().dispatch({
+      type: 'LEGACY_STATE_UPDATED',
+      payload: { partial, reason: 'deprecated_updateState' },
+    });
   }
 
   /**
    * DEBUG ONLY: Inject a full state object to test UI rendering
    */
   injectState(state: CockpitState) {
-    logInfo('[Cockpit] Injecting debug state...');
-    // Dispatch a legacy update with the full state to force a refresh
-    // We use LEGACY_STATE_UPDATED because it merges partial state, but if we pass the full state
-    // it effectively replaces it (mostly). Ideally we'd have a RESET_STATE action.
-    // For now, let's try updating the store with the injected state.
-    // Actually, let's add a proper action for this if we want it to be clean,
-    // but for quick testing, we can just dispatch updates for key components.
-
+    logInfo('[Cockpit] DEBUG: Injecting debug state...');
     // Better approach: Dispatch a RESET_ALL_STATE then LEGACY_STATE_UPDATED
     getStore().dispatch({ type: 'RESET_ALL_STATE' });
-    getStore().dispatch({ type: 'LEGACY_STATE_UPDATED', payload: { partial: state } });
+    getStore().dispatch({
+      type: 'LEGACY_STATE_UPDATED',
+      payload: { partial: state, reason: 'debug_inject' },
+    });
 
     // Force send to webview
     this.state = getStore().getState();
     this.sendState();
-    logInfo('[Cockpit] Debug state injected');
+    logInfo('[Cockpit] DEBUG: Debug state injected');
   }
 
   updateAnalysisProgress(isAnalyzing: boolean, step?: string, progress?: number) {
@@ -271,9 +280,19 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       return;
     }
     try {
+      // Sanitize state to ensure all required fields are present
+      const sanitizedState = {
+        ...this.state,
+        // Ensure commits have scope field (backward compatibility)
+        commits: this.state.commits.map(c => ({
+          ...c,
+          scope: c.scope || ('history' as const),
+        })),
+      };
+
       // Validate state before sending
       try {
-        CockpitStateSchema.parse(this.state);
+        CockpitStateSchema.parse(sanitizedState);
       } catch (validationError) {
         logError('[Cockpit] State validation failed!', validationError);
         // We still send the state so the UI doesn't freeze, but the error is logged.
@@ -281,7 +300,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       }
 
       // eslint-disable-next-line no-restricted-syntax
-      this.view.webview.postMessage({ type: 'updateState', payload: this.state });
+      this.view.webview.postMessage({ type: 'updateState', payload: sanitizedState });
       logInfo('[Cockpit] Sent state update to webview');
     } catch (error) {
       logError('[Cockpit] Failed to send state', error);

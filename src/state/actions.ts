@@ -72,7 +72,7 @@ export type Action =
 
   // Bundle
   | { type: 'BUNDLE_CLEARED' }
-  | { type: 'BUNDLE_VIEW_UPDATED'; payload: { view: BundleView } }
+  | { type: 'BUNDLE_VIEW_UPDATED'; payload: { view: BundleView; version?: number } }
   | { type: 'BUNDLE_VIEW_CLEARED' }
   | {
       type: 'BUNDLE_FACTS_UPDATED';
@@ -82,6 +82,7 @@ export type Action =
       };
     }
   | { type: 'BUNDLE_CONFIG_UPDATED'; payload: { config: any } }
+  | { type: 'BUNDLE_SWITCH_START' }
 
   // Symbols
   | { type: 'SYMBOLS_UPDATED'; payload: { symbols: SymbolDTO[] } }
@@ -99,6 +100,18 @@ export type Action =
   | {
       type: 'REPO_CONTEXT_UPDATED';
       payload: { repoName: string | null; branchName: string | null };
+    }
+
+  // Live Analysis
+  | {
+      type: 'LIVE_ANALYSIS_UPDATED';
+      payload: {
+        status?: 'idle' | 'analyzing' | 'ready' | 'error';
+        summary?: any;
+        facts?: any;
+        pendingChanges?: number;
+        totalEdits?: number;
+      };
     }
 
   // Legacy / Migration

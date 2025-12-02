@@ -19,7 +19,9 @@ export interface FileChange {
 // Symbol information extracted from code
 export interface SymbolInfo {
   id: string; // MUST be stable DNA-based ID
-  dnaId: string; // Explicit DNA hash for tracking across renames
+  dnaId: string; // Explicit DNA hash for tracking across renames (v1)
+  dnaIdV2?: string; // Enhanced DNA with AST n-grams (v2)
+  dnaVersion?: 1 | 2; // Which DNA version is authoritative
   semanticId?: string; // Path-independent ID (e.g., class:MyClass)
   name: string;
   kind: 'function' | 'class' | 'method' | 'const' | 'interface' | 'type' | 'variable';

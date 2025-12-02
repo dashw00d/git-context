@@ -47,7 +47,8 @@ export const Inspector: React.FC<InspectorProps> = ({ frame }) => {
   const isSymbol = frame.level === 'symbol';
   const timeline = frame.data?.timeline || [];
   const drift = frame.data?.drift || [];
-  const relations = frame.data?.relations || { incoming: [], outgoing: [], imports: [] };
+  // Support both 'blastRadius' (FrameAnalyzer) and 'relations' (legacy)
+  const relations = frame.data?.blastRadius || frame.data?.relations || { incoming: [], outgoing: [], imports: [] };
   const risk = frame.data?.risk || null;
 
   return (

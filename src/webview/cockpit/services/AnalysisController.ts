@@ -1,11 +1,14 @@
 import * as vscode from 'vscode';
 import { getStore } from '../../../state/store';
-import { BundleView, ContextFrame, BundleFactsDTO } from '../../../types/cockpit';
+import { BundleView } from '../../../types/cockpit';
 import { logDebug, logError, logInfo } from '../../../utils/logger';
+import { PipelineDebugger } from '../../../utils/pipelineDebugger';
 
 export class AnalysisController {
   public hotspotCache: Map<string, any[]> = new Map();
   public skeletonCache: { files: string[]; roots: string[]; mode: string } | null = null;
+  private pipelineDebugger = new PipelineDebugger();
+  private bundleViewVersion = 0;
 
   constructor(private readonly view?: vscode.WebviewView) {}
 
@@ -22,6 +25,10 @@ export class AnalysisController {
     this.skeletonCache = null;
   }
 
+  public resetBundleViewVersion() {
+    this.bundleViewVersion = 0;
+  }
+
   async analyzeFrame(frameId: string) {
     const gitRoot = (await import('../../../utils/config')).getGitRoot();
     if (!gitRoot || !this.view) return;
@@ -34,30 +41,28 @@ export class AnalysisController {
       targetPath = filePart;
     }
 
-    // 1. Dispatch navigation immediately with 'scanning' status
-    const initialFrame: ContextFrame = {
-      id: frameId,
-      level: level as any,
-      name: targetPath.split('/').slice(-1)[0] || targetPath,
-      status: 'scanning',
-      breadcrumbs: targetPath.split('/'),
-      tier: 'structure',
-    };
-    getStore().dispatch({ type: 'NAVIGATE_TO', payload: { frame: initialFrame } });
-
+    // Navigation is handled by the webview before calling analyzeFrame.
+    // We only enrich the frame with analysis data via tier completion actions.
     const { FrameAnalyzer } = await import('./FrameAnalyzer');
     const analyzer = new FrameAnalyzer(this.view);
     const state = getStore().getState();
     const facts = state.bundleFacts;
+    const activeFrame = state.activeFrame.id;
 
     // TIER 1: Structure (Always succeeds)
+    // Capture tier1Data to thread through to tier 3
+    let tier1Data: any;
+    this.pipelineDebugger.startTier(frameId, 1, activeFrame);
     try {
-      const tier1Data = await analyzer.analyzeTier1(frameId, targetPath, gitRoot);
+      tier1Data = await analyzer.analyzeTier1(frameId, targetPath, gitRoot);
+      const currentState = getStore().getState();
+      this.pipelineDebugger.completeTier(frameId, 1, tier1Data, currentState.activeFrame.id);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_1_COMPLETE',
         payload: { frameId, data: tier1Data },
       });
     } catch (error) {
+      this.pipelineDebugger.failTier(frameId, 1, String(error));
       logError(`[Tier 1] Failed for ${frameId}`, error);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_FAILED',
@@ -67,13 +72,17 @@ export class AnalysisController {
     }
 
     // TIER 2: Hybrid Metadata (Best effort)
+    this.pipelineDebugger.startTier(frameId, 2, getStore().getState().activeFrame.id);
     try {
       const tier2Data = await analyzer.analyzeTier2(frameId, targetPath, facts);
+      const currentState = getStore().getState();
+      this.pipelineDebugger.completeTier(frameId, 2, tier2Data, currentState.activeFrame.id);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_2_COMPLETE',
         payload: { frameId, data: tier2Data },
       });
     } catch (error) {
+      this.pipelineDebugger.failTier(frameId, 2, String(error));
       logError(`[Tier 2] Failed for ${frameId}`, error);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_FAILED',
@@ -83,16 +92,20 @@ export class AnalysisController {
     }
 
     // TIER 3: Semantics (Optional)
+    // Use tier1Data.content directly to avoid race condition with reducer
+    this.pipelineDebugger.startTier(frameId, 3, getStore().getState().activeFrame.id);
     try {
-      const currentState = getStore().getState();
-      const content = currentState.activeFrame.data?.content || '';
+      const content = tier1Data?.content || '';
       const tier3Data = await analyzer.analyzeTier3(frameId, targetPath, content, facts);
+      const currentState = getStore().getState();
+      this.pipelineDebugger.completeTier(frameId, 3, tier3Data, currentState.activeFrame.id);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_3_COMPLETE',
         payload: { frameId, data: tier3Data },
       });
       logInfo(`[Cockpit] Analyzed frame ${frameId} (${level})`);
     } catch (error) {
+      this.pipelineDebugger.failTier(frameId, 3, String(error));
       logError(`[Tier 3] Failed for ${frameId}`, error);
       getStore().dispatch({
         type: 'FRAME_ANALYSIS_TIER_FAILED',
@@ -167,7 +180,8 @@ export class AnalysisController {
         // Let's proceed but be careful not to clear existing hotspots if we are just waiting.
       }
 
-      const cacheKey = facts?.bundle?.newestSha || 'workspace';
+      // Fix: Use stable cache key (SHA set or bundle id) instead of just newestSha
+      const cacheKey = facts?.bundle?.shas ? facts.bundle.shas.join(',') : 'workspace';
       let hotspots: any[] = [];
       if (facts) {
         if (this.hotspotCache.has(cacheKey)) {
@@ -208,8 +222,8 @@ export class AnalysisController {
               logDebug(`[Cockpit] Fallback hotspots failed: ${err}`);
             }
           }
-          // Cache Management: Limit size to prevent leaks (LRU-like)
-          if (this.hotspotCache.size > 20) {
+          // Cache Management: LRU with max 10 entries
+          if (this.hotspotCache.size >= 10) {
             const firstKey = this.hotspotCache.keys().next().value;
             if (firstKey) this.hotspotCache.delete(firstKey);
           }
@@ -287,75 +301,103 @@ export class AnalysisController {
 
   private pushBundleView(view: BundleView) {
     const store = getStore();
-    store.dispatch({ type: 'BUNDLE_VIEW_UPDATED', payload: { view } });
-    store.dispatch({ type: 'FRAME_DATA_UPDATED', payload: { frameId: 'root', data: view } });
+    // Increment version to ensure monotonic ordering
+    this.bundleViewVersion++;
+    // Only dispatch BUNDLE_VIEW_UPDATED - the reducer will update activeFrame.data for root
+    store.dispatch({
+      type: 'BUNDLE_VIEW_UPDATED',
+      payload: { view, version: this.bundleViewVersion },
+    });
   }
 
   private buildTreemap(hotspots: any[]) {
-    // Aggregate churn per folder/file for a simple treemap structure, weight by churn*log(size)
-    const root: any = {};
-    const scores: number[] = [];
+    try {
+      // Guard against excessive size
+      const MAX_HOTSPOTS = 1000;
+      const MAX_DEPTH = 10;
+      const limitedHotspots = hotspots.slice(0, MAX_HOTSPOTS);
 
-    for (const h of hotspots) {
-      if (!h.path) continue;
-      const parts = h.path.split('/').filter(Boolean);
-      let cursor = root;
-      for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
-        const isFile = i === parts.length - 1;
-        if (!cursor[part]) {
-          cursor[part] = {
-            id: parts.slice(0, i + 1).join('/'),
-            name: part,
-            score: 0,
-            added: 0,
-            removed: 0,
-            children: {},
-          };
+      // Aggregate churn per folder/file for a simple treemap structure, weight by churn*log(size)
+      const root: any = {};
+      const scores: number[] = [];
+
+      for (const h of limitedHotspots) {
+        if (!h.path) continue;
+        const parts = h.path.split('/').filter(Boolean);
+
+        // Enforce depth limit
+        if (parts.length > MAX_DEPTH) {
+          logDebug(`[Treemap] Skipping deep path (${parts.length} levels): ${h.path}`);
+          continue;
         }
-        if (isFile) {
-          const sizeWeight = h.size ? Math.log10(h.size + 1) : 1;
-          const churn = h.score || h.count || 0;
-          const changeWeight = (h.added || 0) + (h.removed || 0);
-          cursor[part].score += (churn + changeWeight / 50) * sizeWeight;
-          cursor[part].added += h.added || 0;
-          cursor[part].removed += h.removed || 0;
+
+        let cursor = root;
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i];
+          const isFile = i === parts.length - 1;
+          if (!cursor[part]) {
+            cursor[part] = {
+              id: parts.slice(0, i + 1).join('/'),
+              name: part,
+              score: 0,
+              added: 0,
+              removed: 0,
+              children: {},
+            };
+          }
+          if (isFile) {
+            const sizeWeight = h.size ? Math.log10(h.size + 1) : 1;
+            const churn = h.score || h.count || 0;
+            const changeWeight = (h.added || 0) + (h.removed || 0);
+            cursor[part].score += (churn + changeWeight / 50) * sizeWeight;
+            cursor[part].added += h.added || 0;
+            cursor[part].removed += h.removed || 0;
+          }
+          cursor = cursor[part].children;
         }
-        cursor = cursor[part].children;
       }
+
+      const flatten = (nodeMap: any, depth = 0): any[] => {
+        // Prevent runaway recursion
+        if (depth > MAX_DEPTH) return [];
+
+        return Object.values(nodeMap).map((node: any) => {
+          const children = flatten(node.children, depth + 1);
+          const childrenScore = children.reduce((sum: number, c: any) => sum + c.score, 0);
+          const totalScore = Math.max(node.score, childrenScore);
+          const totalAdded =
+            (node.added || 0) + children.reduce((sum: number, c: any) => sum + (c.added || 0), 0);
+          const totalRemoved =
+            (node.removed || 0) +
+            children.reduce((sum: number, c: any) => sum + (c.removed || 0), 0);
+          scores.push(totalScore);
+          return {
+            id: node.id,
+            name: node.name,
+            value: totalScore, // Satisfy schema
+            score: totalScore,
+            added: totalAdded,
+            removed: totalRemoved,
+            children,
+          };
+        });
+      };
+
+      const tree = flatten(root);
+      const max = scores.length ? Math.max(...scores) : 1;
+      const normalize = (nodes: any[]): any[] =>
+        nodes.map(n => ({
+          ...n,
+          weight: max > 0 ? Math.max(n.score / max, 0.05) : 0.05,
+          children: n.children ? normalize(n.children) : [],
+        }));
+
+      return normalize(tree);
+    } catch (error) {
+      logError('[Treemap] Build failed', error);
+      // Return empty treemap on error to prevent crashes
+      return [];
     }
-
-    const flatten = (nodeMap: any): any[] =>
-      Object.values(nodeMap).map((node: any) => {
-        const children = flatten(node.children);
-        const childrenScore = children.reduce((sum: number, c: any) => sum + c.score, 0);
-        const totalScore = Math.max(node.score, childrenScore);
-        const totalAdded =
-          (node.added || 0) + children.reduce((sum: number, c: any) => sum + (c.added || 0), 0);
-        const totalRemoved =
-          (node.removed || 0) + children.reduce((sum: number, c: any) => sum + (c.removed || 0), 0);
-        scores.push(totalScore);
-        return {
-          id: node.id,
-          name: node.name,
-          value: totalScore, // Satisfy schema
-          score: totalScore,
-          added: totalAdded,
-          removed: totalRemoved,
-          children,
-        };
-      });
-
-    const tree = flatten(root);
-    const max = scores.length ? Math.max(...scores) : 1;
-    const normalize = (nodes: any[]): any[] =>
-      nodes.map(n => ({
-        ...n,
-        weight: max > 0 ? Math.max(n.score / max, 0.05) : 0.05,
-        children: n.children ? normalize(n.children) : [],
-      }));
-
-    return normalize(tree);
   }
 
   /**

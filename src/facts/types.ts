@@ -48,6 +48,13 @@ export interface RefactorBundleFacts {
         dominantConvention: string;
         driftPercent: number;
         driftSymbolCount: number;
+        driftSymbols: Array<{
+          symbolId: string;
+          name: string;
+          convention: string;
+          suggestedName: string;
+          path: string;
+        }>;
         importDrift?: {
           dominantStyle: string;
           driftPercent: number;

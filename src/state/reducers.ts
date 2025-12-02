@@ -1,4 +1,5 @@
-import { CockpitState } from '../types/cockpit';
+import { CockpitState, ContextFrame } from '../types/cockpit';
+import { logWarn } from '../utils/logger';
 import { Action } from './actions';
 
 export const initialState: CockpitState = {
@@ -20,6 +21,7 @@ export const initialState: CockpitState = {
   bundleFacts: null,
   bundleReportId: null,
   bundleView: null,
+  bundleViewVersion: 0,
   symbols: [],
   symbolFilterText: '',
   symbolKindFilter: 'all',
@@ -53,6 +55,7 @@ export const initialState: CockpitState = {
   history: [],
   explorerData: [],
   actionHistory: [],
+  pipelineErrors: [],
 };
 
 export function cockpitReducer(state: CockpitState = initialState, action: Action): CockpitState {
@@ -151,9 +154,53 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         bundleSummary: null,
         bundleReportId: null,
         bundleView: null,
+        bundleViewVersion: 0,
       };
-    case 'BUNDLE_VIEW_UPDATED':
-      return { ...state, bundleView: action.payload.view };
+    case 'BUNDLE_SWITCH_START':
+      // Clear all bundle-related state when switching bundles
+      return {
+        ...state,
+        bundleFacts: null,
+        bundleSummary: null,
+        bundleView: null,
+        explorerData: [],
+        // Reset to bundle root frame
+        activeFrame: {
+          level: 'bundle',
+          id: 'root',
+          name: 'Loading...',
+          status: 'scanning',
+        },
+        history: [],
+      };
+    case 'BUNDLE_VIEW_UPDATED': {
+      // BundleView is global state, separate from frame.data
+      // Stage component will access it via cockpitState.bundleView when needed
+      // If we're at the bundle root, also update activeFrame.data to prevent suspicious_bundle_sync warning
+      const shouldUpdateFrameData =
+        state.activeFrame.level === 'bundle' && state.activeFrame.id === 'root';
+
+      // Check bundleViewVersion to prevent out-of-order updates
+      const incomingVersion = action.payload.version ?? state.bundleViewVersion + 1;
+      if (incomingVersion < state.bundleViewVersion) {
+        logWarn(
+          `[Reducer] Dropping stale bundle view update (version ${incomingVersion} < ${state.bundleViewVersion})`
+        );
+        return state;
+      }
+
+      return {
+        ...state,
+        bundleView: action.payload.view,
+        bundleViewVersion: incomingVersion,
+        activeFrame: shouldUpdateFrameData
+          ? {
+              ...state.activeFrame,
+              data: { ...state.activeFrame.data, ...action.payload.view },
+            }
+          : state.activeFrame,
+      };
+    }
     case 'BUNDLE_VIEW_CLEARED':
       return { ...state, bundleView: null };
     case 'BUNDLE_FACTS_UPDATED':
@@ -187,20 +234,25 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
       return { ...state, repoName: action.payload.repoName, branchName: action.payload.branchName };
 
     // Navigation
-    case 'NAVIGATE_TO':
-      // Persist bundle tiered data when returning to the overview
-      const targetFrame =
-        action.payload.frame.level === 'bundle' && state.bundleView
-          ? {
-              ...action.payload.frame,
-              data: { ...state.bundleView, ...(action.payload.frame.data || {}) },
-            }
-          : action.payload.frame;
+    case 'NAVIGATE_TO': {
+      // Clean frame.data to prevent contamination across different frame levels
+      // Each frame level should have its own isolated data structure
+      const cleanFrame: ContextFrame = {
+        ...action.payload.frame,
+        // Only preserve data if explicitly provided, otherwise start fresh
+        data: action.payload.frame.data || undefined,
+      };
+
+      // Only push to history if we're actually navigating to a different frame
+      // This prevents duplicate entries when navigating to the same frame (e.g., bundle switch)
+      const shouldPushHistory = state.activeFrame.id !== cleanFrame.id;
+
       return {
         ...state,
-        history: [...state.history, state.activeFrame],
-        activeFrame: targetFrame,
+        history: shouldPushHistory ? [...state.history, state.activeFrame] : state.history,
+        activeFrame: cleanFrame,
       };
+    }
     case 'NAVIGATE_BACK': {
       if (state.history.length === 0) return state;
       const previous = state.history[state.history.length - 1];
@@ -217,46 +269,92 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
     case 'FRAME_ANALYSIS_TIER_1_COMPLETE':
     case 'FRAME_ANALYSIS_TIER_2_COMPLETE':
     case 'FRAME_ANALYSIS_TIER_3_COMPLETE': {
-      if (state.activeFrame.id === action.payload.frameId) {
-        return {
-          ...state,
-          activeFrame: {
-            ...state.activeFrame,
-            status: 'ready',
-            data: { ...state.activeFrame.data, ...action.payload.data },
-          },
-        };
+      // Validate frameId to prevent stale updates (user navigated away during analysis)
+      if (state.activeFrame.id !== action.payload.frameId) {
+        logWarn(
+          `[Reducer] Dropping stale tier data for ${action.payload.frameId} (current frame: ${state.activeFrame.id})`
+        );
+        return state;
       }
-      return state;
+
+      // Determine tier level for status tracking
+      const tierNum =
+        action.type === 'FRAME_ANALYSIS_TIER_1_COMPLETE'
+          ? 1
+          : action.type === 'FRAME_ANALYSIS_TIER_2_COMPLETE'
+            ? 2
+            : 3;
+      const tier = tierNum === 1 ? 'structure' : tierNum === 2 ? 'hybrid' : 'semantics';
+
+      return {
+        ...state,
+        activeFrame: {
+          ...state.activeFrame,
+          status: 'ready',
+          tier,
+          data: { ...state.activeFrame.data, ...action.payload.data },
+        },
+      };
     }
     case 'FRAME_ANALYSIS_TIER_FAILED': {
+      // Validate frameId - ignore stale tier failures
+      if (state.activeFrame.id !== action.payload.frameId) {
+        logWarn(
+          `[Reducer] Dropping stale tier failure for ${action.payload.frameId} (current frame: ${state.activeFrame.id})`
+        );
+        return state;
+      }
+
       // Log tier failure but keep existing data
       const nextStatus = action.payload.tier === 1 ? 'error' : 'ready';
-      if (state.activeFrame.id === action.payload.frameId) {
-        const errors = state.activeFrame.data?.errors || [];
-        return {
-          ...state,
-          activeFrame: {
-            ...state.activeFrame,
-            status: nextStatus,
-            data: {
-              ...state.activeFrame.data,
-              errors: [...errors, { tier: action.payload.tier, error: action.payload.error }],
-            },
+      const errors = state.activeFrame.data?.errors || [];
+      return {
+        ...state,
+        activeFrame: {
+          ...state.activeFrame,
+          status: nextStatus,
+          data: {
+            ...state.activeFrame.data,
+            errors: [...errors, { tier: action.payload.tier, error: action.payload.error }],
           },
-        };
-      }
-      return state;
+        },
+      };
     }
     case 'FRAME_DATA_UPDATED': {
-      if (state.activeFrame.id === action.payload.frameId) {
-        return {
-          ...state,
-          activeFrame: { ...state.activeFrame, data: action.payload.data },
-        };
+      // Validate frameId - only update if it's the current frame
+      if (state.activeFrame.id !== action.payload.frameId) {
+        logWarn(
+          `[Reducer] Dropping stale frame data for ${action.payload.frameId} (current frame: ${state.activeFrame.id})`
+        );
+        return state;
       }
-      return state;
+
+      return {
+        ...state,
+        // Merge new data into existing instead of replacing (preserves progressive tier loading)
+        activeFrame: {
+          ...state.activeFrame,
+          data: { ...state.activeFrame.data, ...action.payload.data },
+        },
+      };
     }
+
+    case 'LIVE_ANALYSIS_UPDATED':
+      return {
+        ...state,
+        liveAnalysis: {
+          ...state.liveAnalysis,
+          status: action.payload.status ?? state.liveAnalysis.status,
+          summary:
+            action.payload.summary !== undefined
+              ? action.payload.summary
+              : state.liveAnalysis.summary,
+          facts:
+            action.payload.facts !== undefined ? action.payload.facts : state.liveAnalysis.facts,
+          pendingChanges: action.payload.pendingChanges ?? state.liveAnalysis.pendingChanges,
+          totalEdits: action.payload.totalEdits ?? state.liveAnalysis.totalEdits,
+        },
+      };
 
     case 'LEGACY_STATE_UPDATED':
       return { ...state, ...action.payload.partial };

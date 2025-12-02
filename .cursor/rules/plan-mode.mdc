@@ -1,4 +1,0 @@
----
-alwaysApply: false
----
-If you are in ask mode, consider it as if you were in plan mode. Check the project files throughly to determine if there are any relevant files that could help answer the question. Once you have compiled all of the context you need to understand the question and situation perfectly, compose a comprehensive plan to address the issue or create the new feature. Always provide ample context and code examples in your output.

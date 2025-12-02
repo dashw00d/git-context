@@ -53,6 +53,13 @@ export interface PipelineState {
   currentStepId?: string | null;
   completedSteps: Set<string>;
   errors: Array<{ stepId: string; error: unknown }>;
+
+  // Performance metrics
+  stepTimings?: Record<string, { start: number; end?: number; duration?: number }>;
+  pipelineDuration?: number;
+
+  // Best-effort execution
+  partialReasons?: string[]; // Reasons why bundleFacts is partial (failed steps)
 }
 
 export interface PipelineStep {

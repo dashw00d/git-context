@@ -5,7 +5,7 @@ import { logDebug, logInfo, logWarn } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
 import { GitOperations } from './git';
 import { SemanticChangeDetector } from './semanticChanges';
-import { assignDNAIds } from './symbolDna';
+import { assignDNAIds_v2 } from './symbolDna';
 import { getTreeSitterParser } from './tree-sitter';
 
 export class SymbolExtractor {
@@ -144,7 +144,11 @@ export class SymbolExtractor {
       // Extract symbols from both versions
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
       const bodyTexts = new Map([[file.path, currentContent]]);
-      const currentSymbolsWithDNA = assignDNAIds(currentSymbols, bodyTexts);
+      const currentSymbolsWithDNA = await assignDNAIds_v2(
+        currentSymbols,
+        bodyTexts,
+        detectLanguage(file.path) || undefined
+      );
 
       const previousSymbols = previousContent
         ? await this.extractSymbolsFromContent(previousContent, file.oldPath || file.path)
@@ -158,7 +162,11 @@ export class SymbolExtractor {
         // but let's assume for now we focus on the current commit's DNA.
         // Actually, for diffing, having DNA on both sides helps.
         const bodyTexts = new Map([[file.oldPath || file.path, previousContent]]);
-        previousSymbolsWithDNA = assignDNAIds(previousSymbols, bodyTexts);
+        previousSymbolsWithDNA = await assignDNAIds_v2(
+          previousSymbols,
+          bodyTexts,
+          detectLanguage(file.oldPath || file.path) || undefined
+        );
       }
 
       // Compare and categorize changes using DNA-based symbols for accurate tracking
@@ -254,7 +262,11 @@ export class SymbolExtractor {
       // Extract symbols from both versions
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
       const bodyTexts = new Map([[file.path, currentContent]]);
-      const currentSymbolsWithDNA = assignDNAIds(currentSymbols, bodyTexts);
+      const currentSymbolsWithDNA = await assignDNAIds_v2(
+        currentSymbols,
+        bodyTexts,
+        detectLanguage(file.path) || undefined
+      );
 
       const headSymbols = headContent
         ? await this.extractSymbolsFromContent(headContent, file.path)
@@ -263,7 +275,11 @@ export class SymbolExtractor {
 
       if (headContent) {
         const headBodyTexts = new Map([[file.path, headContent]]);
-        headSymbolsWithDNA = assignDNAIds(headSymbols, headBodyTexts);
+        headSymbolsWithDNA = await assignDNAIds_v2(
+          headSymbols,
+          headBodyTexts,
+          detectLanguage(file.path) || undefined
+        );
       }
 
       // Compare and categorize changes
@@ -511,17 +527,49 @@ export class SymbolExtractor {
     for (const file of stagedChanges) {
       if (file.status === 'M' && (await this.shouldAnalyzeFile(file.path))) {
         try {
-          // TODO: Implement staged content extraction
-          // This requires parsing git diff output to extract the staged version of the file
-          // For now, we mark files as modified but don't extract symbols from staged changes
-          // Future implementation should:
-          // 1. Get staged diff for the file: this.git.getStagedDiff(file.path)
-          // 2. Parse diff to extract staged content
-          // 3. Extract symbols from staged content
-          // 4. Compare with working tree symbols to detect changes
-          logDebug(
-            `[SymbolExtractor] Staged changes in ${file.path} - symbol extraction not yet implemented`
+          // Get staged content from git index
+          const stagedContent = await this.git.safeGetStagedContent(file.path);
+          if (!stagedContent) {
+            logDebug(`[SymbolExtractor] No staged content for ${file.path}`);
+            continue;
+          }
+
+          // Get HEAD content for comparison
+          const headContent = await this.git.safeGetFileContent('HEAD', file.path);
+
+          // Extract symbols from both versions
+          const stagedSymbols = await this.extractSymbolsFromContent(stagedContent, file.path);
+          const bodyTexts = new Map([[file.path, stagedContent]]);
+          const stagedSymbolsWithDNA = await assignDNAIds_v2(
+            stagedSymbols,
+            bodyTexts,
+            detectLanguage(file.path) || undefined
           );
+
+          const headSymbols = headContent
+            ? await this.extractSymbolsFromContent(headContent, file.path)
+            : [];
+          let headSymbolsWithDNA = headSymbols;
+
+          if (headContent) {
+            const headBodyTexts = new Map([[file.path, headContent]]);
+            headSymbolsWithDNA = await assignDNAIds_v2(
+              headSymbols,
+              headBodyTexts,
+              detectLanguage(file.path) || undefined
+            );
+          }
+
+          // Compare and categorize changes
+          const changes = this.compareSymbolSets(
+            headSymbolsWithDNA,
+            stagedSymbolsWithDNA,
+            file.path
+          );
+
+          added.push(...changes.added);
+          removed.push(...changes.removed);
+          modified.push(...changes.modified);
         } catch (error) {
           logDebug(`[SymbolExtractor] Failed to process staged changes for ${file.path}: ${error}`);
         }

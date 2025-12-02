@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { ContextFrame, ExplorerNode } from '../../../types/cockpit';
-import { CockpitState } from '../../../types/cockpit';
-import { Stage } from './Stage';
-import { Inspector } from './Inspector';
+import { CockpitState, ContextFrame, ExplorerNode } from '../../../types/cockpit';
+import { getMessageTracer, postMessageWithTracing } from '../utils/messageUtils';
 import { Assistant } from './Assistant';
+import { Inspector } from './Inspector';
 import { Sidebar } from './Sidebar';
+import { Stage } from './Stage';
 
 const LayoutStyle: React.CSSProperties = {
   display: 'flex',
@@ -47,11 +47,13 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
 
   React.useEffect(() => {
     // Request explorer tree and bundle data on mount
-    vscode.postMessage({ type: 'getExplorerTree' });
-    vscode.postMessage({ type: 'getBundleData' });
+    postMessageWithTracing(vscode, 'getExplorerTree');
+    postMessageWithTracing(vscode, 'getBundleData');
 
     const handler = (event: MessageEvent) => {
       const message = event.data;
+      getMessageTracer().logIncoming(message.type, message.payload, 'extension');
+
       if (message?.type === 'analysisError' && message.payload) {
         console.warn('[SuperWebview] Analysis error', message.payload);
       } else if (message?.type === 'assistantResponse' && message.payload) {
@@ -72,8 +74,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
   }, []);
 
   const handleZoomIn = (frame: ContextFrame) => {
-    vscode.postMessage({
-      type: 'dispatch',
+    postMessageWithTracing(vscode, 'dispatch', {
       action: { type: 'NAVIGATE_TO', payload: { frame } },
     });
     setSelection(null);
@@ -81,12 +82,11 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
 
   const handleSendAssistant = (text: string) => {
     setAssistantMessages(prev => [...prev, { role: 'user', content: text }]);
-    vscode.postMessage({ type: 'askAssistant', payload: { text, frame: activeFrame } });
+    postMessageWithTracing(vscode, 'askAssistant', { text, frame: activeFrame });
   };
 
   const handleZoomOut = () => {
-    vscode.postMessage({
-      type: 'dispatch',
+    postMessageWithTracing(vscode, 'dispatch', {
       action: { type: 'NAVIGATE_BACK' },
     });
     setSelection(null);
@@ -118,7 +118,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
       const bundleId = node.id.replace('bundle-', '');
 
       // Switch active bundle
-      vscode.postMessage({ type: 'switchBundle', id: bundleId });
+      postMessageWithTracing(vscode, 'switchBundle', { id: bundleId });
 
       // Navigate to root of this new bundle
       const newFrame: ContextFrame = {
@@ -129,8 +129,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         parentId: undefined, // It is the root
       };
 
-      vscode.postMessage({
-        type: 'dispatch',
+      postMessageWithTracing(vscode, 'dispatch', {
         action: { type: 'NAVIGATE_TO', payload: { frame: newFrame } },
       });
       return;
@@ -149,8 +148,8 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         level = 'bundle';
     }
 
-    // Trigger analysis for files
-    if (level === 'file') {
+    // Trigger analysis for files and symbols
+    if (level === 'file' || level === 'symbol') {
       // Optimistic update is handled by the reducer responding to NAVIGATE_TO with 'scanning'
       // We dispatch NAVIGATE_TO first, then trigger analysis
       const newFrame: ContextFrame = {
@@ -160,12 +159,11 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         status: 'scanning',
         parentId: 'root',
       };
-      vscode.postMessage({
-        type: 'dispatch',
+      postMessageWithTracing(vscode, 'dispatch', {
         action: { type: 'NAVIGATE_TO', payload: { frame: newFrame } },
       });
 
-      vscode.postMessage({ type: 'analyzeFrame', frameId: node.id });
+      postMessageWithTracing(vscode, 'analyzeFrame', { frameId: node.id });
     } else {
       const newFrame: ContextFrame = {
         level,
@@ -174,8 +172,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         status: 'ready',
         parentId: level === 'bundle' ? undefined : 'root',
       };
-      vscode.postMessage({
-        type: 'dispatch',
+      postMessageWithTracing(vscode, 'dispatch', {
         action: { type: 'NAVIGATE_TO', payload: { frame: newFrame } },
       });
     }

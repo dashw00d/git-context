@@ -5,8 +5,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['benchmarks/**/*.test.ts'],
-    exclude: ['benchmarks/mocks/**/*.test.ts'], // Exclude mock test files that aren't actual test suites
+    include: ['benchmarks/**/*.test.ts', 'tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    exclude: ['benchmarks/mocks/**/*.test.ts', 'tests/mocks/**', 'tests/integration/qdrant.test.ts'],
     outputFile: path.resolve(__dirname, 'benchmarks/output/test-results.json'),
     coverage: {
       provider: 'v8',
@@ -16,9 +16,17 @@ export default defineConfig({
         'node_modules/',
         'out/',
         'benchmarks/',
+        'tests/mocks/',
         '**/*.d.ts'
       ]
-    }
+    },
+    // Environment configuration
+    environmentMatchGlobs: [
+      ['tests/unit/ui/**', 'jsdom'],
+      ['tests/unit/pipeline/**', 'node'],
+      ['tests/integration/**', 'node']
+    ],
+    setupFiles: ['./tests/setup.ts']
   }
 });
 

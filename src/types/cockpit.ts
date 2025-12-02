@@ -180,6 +180,7 @@ export interface CockpitState {
   bundleFacts: BundleFactsDTO; // used by full report webview, not rendered in cockpit
   bundleReportId: string | null; // id of currently active report, if any
   bundleView: BundleView | null;
+  bundleViewVersion: number; // Monotonic version to prevent progressive loading races
 
   /* Symbols section */
   symbols: SymbolDTO[];

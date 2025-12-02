@@ -30,6 +30,9 @@ export class CockpitEffects {
       case 'SELECTION_SET':
       case 'STAGED_SELECTION_UPDATED':
       case 'UNSTAGED_SELECTION_UPDATED':
+        await this.refreshCommits();
+        await this.updateContexts();
+        break;
       case 'COMMITS_FILTER_TEXT_CHANGED':
       case 'COMMITS_FILTER_SCOPES_CHANGED':
       case 'LAST_N_COMMITS_CHANGED':
@@ -41,7 +44,6 @@ export class CockpitEffects {
       case 'ANALYSIS_COMPLETED':
       case 'BUNDLE_CLEARED':
         await this.updateContexts();
-        break;
         break;
       // Add other side effects here
     }
@@ -171,8 +173,8 @@ export class CockpitEffects {
         createdAt: bundleFacts.generated_at,
       };
       this.store.dispatch({
-        type: 'LEGACY_STATE_UPDATED',
-        payload: { partial: { bundleFacts, bundleSummary: summary } },
+        type: 'BUNDLE_FACTS_UPDATED',
+        payload: { facts: bundleFacts, summary },
       });
     }
   }
@@ -231,7 +233,18 @@ export class CockpitEffects {
   }
 
   private mapScope(sha: string): 'staged' | 'unstaged' | 'history' {
-    if (sha.includes('staged')) return 'staged'; // Simplified check, ideally use parseWorkspaceSha
+    // Use proper workspace SHA parsing instead of string matching
+    try {
+      const { parseWorkspaceSha } = require('../utils/workspace');
+      const parsed = parseWorkspaceSha(sha);
+      if (parsed) {
+        return parsed.scope;
+      }
+    } catch {
+      // Fall through to heuristic
+    }
+    // Fallback heuristic
+    if (sha.includes('staged')) return 'staged';
     if (sha.includes('unstaged')) return 'unstaged';
     return 'history';
   }

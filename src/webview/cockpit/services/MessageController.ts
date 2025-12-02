@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
-import { Action } from '../../../state/actions';
 import { CockpitClientMessageSchema } from '../../../state/schemas';
 import { getStore } from '../../../state/store';
-import { CockpitClientMessage } from '../../../types/cockpit';
-import { logError, logInfo, logDebug } from '../../../utils/logger';
+import { logDebug, logError, logInfo } from '../../../utils/logger';
+import { MessageTracer } from '../../../utils/messageTracer';
 import { AnalysisController } from './AnalysisController';
 import { BundleManager } from './BundleManager';
 import { ExplorerController } from './ExplorerController';
 
 export class MessageController {
+  private tracer = new MessageTracer();
+
   constructor(
     private readonly view: vscode.WebviewView,
     private readonly analysisController: AnalysisController,
@@ -17,6 +18,8 @@ export class MessageController {
   ) {}
 
   public async handleMessage(rawMsg: any) {
+    this.tracer.logIncoming(rawMsg.type, rawMsg, 'webview');
+
     let msg;
     try {
       msg = CockpitClientMessageSchema.parse(rawMsg);
@@ -253,16 +256,11 @@ export class MessageController {
             temperature: 0.2,
           });
 
-          // eslint-disable-next-line no-restricted-syntax
-          this.view.webview.postMessage({ type: 'assistantResponse', payload: { text: reply } });
+          this.sendMessage('assistantResponse', { text: reply });
         } catch (err) {
           logError('[Cockpit] Assistant handling failed', err);
-          // eslint-disable-next-line no-restricted-syntax
-          this.view.webview.postMessage({
-            type: 'assistantResponse',
-            payload: {
-              text: `Assistant error: ${err instanceof Error ? err.message : String(err)}`,
-            },
+          this.sendMessage('assistantResponse', {
+            text: `Assistant error: ${err instanceof Error ? err.message : String(err)}`,
           });
         }
         break;
@@ -373,22 +371,23 @@ export class MessageController {
         break;
       case 'switchBundle':
         if (msg.id) {
+          // 1. Clear UI state immediately to show clean slate
+          getStore().dispatch({ type: 'BUNDLE_SWITCH_START' });
+
+          // 2. Switch active bundle in database
           await this.bundleManager.setActiveBundle(msg.id);
 
-          // Load bundle details (config + facts)
+          // 3. Load bundle details (config + facts)
           const bundle = await this.bundleManager.getBundle(msg.id);
 
           if (bundle) {
-            // 1. Update Config
+            // 4. Update config
             getStore().dispatch({
               type: 'BUNDLE_CONFIG_UPDATED',
               payload: { config: bundle.config },
             });
 
-            // 2. Update Facts (if persisted in bundle, otherwise clear)
-            // TODO: We need to persist facts in the bundle record or a separate table linked by bundleId
-            // For now, we'll clear facts to force a re-analysis or load from cache if available
-            // In the future, we should load `bundle.facts` if we decide to store it.
+            // 5. Clear facts (will reload from analysis)
             getStore().dispatch({
               type: 'BUNDLE_FACTS_UPDATED',
               payload: {
@@ -397,12 +396,23 @@ export class MessageController {
               },
             });
 
-            // 3. Trigger updates
+            // 6. Populate skeleton, bundle data, and explorer
             await this.analysisController.updateSkeleton(bundle.config);
-            await this.analysisController.updateBundleData(); // This will likely be empty initially until analysis runs
-
-            // 4. Update Explorer with active bundle context
+            await this.analysisController.updateBundleData();
             await this.explorerController.updateExplorerTree();
+
+            // 7. Navigate to bundle root with proper frame
+            getStore().dispatch({
+              type: 'NAVIGATE_TO',
+              payload: {
+                frame: {
+                  level: 'bundle',
+                  id: 'root',
+                  name: bundle.name,
+                  status: 'ready',
+                },
+              },
+            });
 
             logInfo(`[Cockpit] Switched to bundle ${msg.id}`);
           }
@@ -441,12 +451,18 @@ export class MessageController {
   }
 
   private sendState() {
+    const message = { type: 'updateState', payload: getStore().getState() };
+    this.sendMessage(message.type, message.payload);
+    logInfo('[Cockpit] Sent state update to webview');
+  }
+
+  sendMessage(type: string, payload: any) {
+    this.tracer.logOutgoing(type, payload, 'extension');
     try {
       // eslint-disable-next-line no-restricted-syntax
-      this.view.webview.postMessage({ type: 'updateState', payload: getStore().getState() });
-      logInfo('[Cockpit] Sent state update to webview');
+      this.view.webview.postMessage({ type, payload });
     } catch (error) {
-      logError('[Cockpit] Failed to send state', error);
+      logError('[Cockpit] Failed to send message', error);
     }
   }
 }

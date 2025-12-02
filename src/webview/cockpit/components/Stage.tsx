@@ -57,9 +57,11 @@ export const Stage: React.FC<StageProps & { cockpitState?: CockpitState; vscode?
     });
   };
 
-  const bundleData =
-    frame.level === 'bundle' ? frame.data || cockpitState?.bundleView || undefined : undefined;
-  const frameData = bundleData ?? frame.data;
+  // For bundle frames, prefer bundleView from global state (always up-to-date)
+  // For other frames, use frame.data (populated by tier analysis)
+  const frameData = frame.level === 'bundle'
+    ? cockpitState?.bundleView || frame.data
+    : frame.data;
   const tier = frame.tier || frameData?.tier;
 
   return (
