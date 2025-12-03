@@ -5,6 +5,7 @@ import { resolveEvidencePath } from '../../analysis/llmAnalyst/renderer';
 import { LlmAnalysisSchema } from '../../analysis/llmAnalyst/schemas';
 import { RefactorBundleFacts } from '../../facts/types';
 import { BundleFactsSchema } from '../../state/schemas';
+import { getStore } from '../../state/store';
 import {
   ReportClientMessageSchema,
   ReportHostMessage,
@@ -22,7 +23,9 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
   private _analysis: LlmAnalysis | undefined;
   private _facts: RefactorBundleFacts | undefined;
 
-  constructor(private readonly _extensionUri: vscode.Uri) {}
+  constructor(private readonly _extensionUri: vscode.Uri) {
+    //empty
+  }
 
   /**
    * Set the analysis data and show the webview
@@ -298,7 +301,10 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    this._panel?.webview.postMessage(parsed.data);
+    getStore().dispatch({
+      type: 'WEBVIEW_MESSAGE',
+      payload: { message: parsed.data, target: 'report' },
+    });
   }
 
   private _resolveEvidencePath(
@@ -336,7 +342,9 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
           return { filePath: current.filePath || current.path };
         }
       }
-    } catch (error) {}
+    } catch (error) {
+      //empty
+    }
 
     return null;
   }

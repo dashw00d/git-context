@@ -1,6 +1,15 @@
-import { logWarn } from '../../../utils/logger';
+import { withTimeout } from '../../../utils/async';
+import { logError } from '../../../utils/logger';
 import { BundleStoryEngine } from '../../bundleStoryEngine';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
+
+function updateState<K extends keyof PipelineState>(
+  state: PipelineState,
+  key: K,
+  value: PipelineState[K]
+) {
+  (state as any)[key] = value;
+}
 
 export function createHistoryRetrievalStep(storyEngine: BundleStoryEngine): PipelineStep {
   return {
@@ -10,7 +19,8 @@ export function createHistoryRetrievalStep(storyEngine: BundleStoryEngine): Pipe
 
     async run(state: PipelineState) {
       if (!state.bundleFacts) {
-        throw new Error('Bundle facts required');
+        logError('[HistoryStep] Bundle facts required for history retrieval');
+        return;
       }
 
       const timeoutMs = 15000;
@@ -20,26 +30,18 @@ export function createHistoryRetrievalStep(storyEngine: BundleStoryEngine): Pipe
         state.commitFacts || []
       );
 
-      const historyResult = await Promise.race([
-        historyPromise,
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`retrieve_history timed out after ${timeoutMs}ms`)),
-            timeoutMs
-          )
-        ),
-      ]);
+      const historyResult = await withTimeout(historyPromise, timeoutMs, 'retrieve_history');
 
       const history = (historyResult as any).history;
       const metrics = (historyResult as any).metrics;
 
       if (!history || !metrics) {
-        logWarn('[HistoryStep] Missing history or metrics from story engine');
-        throw new Error('History retrieval returned no data');
+        logError('[HistoryStep] History retrieval returned no data');
+        return;
       }
 
-      state.history = history;
-      state.historyMetrics = metrics;
+      updateState(state, 'history', history);
+      updateState(state, 'historyMetrics', metrics);
     },
   };
 }

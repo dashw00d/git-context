@@ -177,12 +177,55 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
     }
   };
 
-  const handleTimeFilterChange = (value: number) => {
-    postMessageWithTracing(vscode, { type: 'updateTimeFilter', value });
+  // Error banner component
+  const ErrorBanner: React.FC<{ error: string; onDismiss: () => void }> = ({
+    error,
+    onDismiss,
+  }) => (
+    <div
+      style={{
+        padding: '12px 16px',
+        backgroundColor: 'var(--vscode-inputValidation-errorBackground)',
+        color: 'var(--vscode-inputValidation-errorForeground)',
+        borderBottom: '1px solid var(--vscode-inputValidation-errorBorder)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        fontSize: '13px',
+        zIndex: 1000,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+        <span>❌</span>
+        <span>{error}</span>
+      </div>
+      <button
+        onClick={onDismiss}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: 'var(--vscode-inputValidation-errorForeground)',
+          cursor: 'pointer',
+          padding: '4px 8px',
+          fontSize: '16px',
+          lineHeight: 1,
+        }}
+        title="Dismiss error"
+      >
+        ×
+      </button>
+    </div>
+  );
+
+  const handleDismissError = () => {
+    postMessageWithTracing(vscode, { type: 'clearError' });
   };
 
   return (
     <div style={LayoutStyle}>
+      {cockpitState.error && (
+        <ErrorBanner error={cockpitState.error} onDismiss={handleDismissError} />
+      )}
       <div style={MainAreaStyle}>
         {/* Wide: Show Sidebar + Stage + Assistant */}
         {isWide && (
@@ -194,8 +237,6 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
               repoName={cockpitState.repoName || undefined}
               branchName={cockpitState.branchName || undefined}
               allMetrics={cockpitState.nodeMetrics}
-              currentTimeFilter={cockpitState.currentTimeFilter}
-              onTimeFilterChange={handleTimeFilterChange}
             />
             <Stage
               frame={activeFrame}
@@ -258,8 +299,6 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
                     repoName={cockpitState.repoName || undefined}
                     branchName={cockpitState.branchName || undefined}
                     allMetrics={cockpitState.nodeMetrics}
-                    currentTimeFilter={cockpitState.currentTimeFilter}
-                    onTimeFilterChange={handleTimeFilterChange}
                   />
                   <Stage
                     frame={activeFrame}
@@ -347,8 +386,6 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
                   repoName={cockpitState.repoName || undefined}
                   branchName={cockpitState.branchName || undefined}
                   allMetrics={cockpitState.nodeMetrics}
-                  currentTimeFilter={cockpitState.currentTimeFilter}
-                  onTimeFilterChange={handleTimeFilterChange}
                 />
               )}
               {activeTab === 'stage' && (

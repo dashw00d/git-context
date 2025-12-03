@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import simpleGit, { SimpleGit } from 'simple-git';
 import { CommitInfo, FileChange } from '../types';
+import { withTimeout } from '../utils/async';
 import { getGitRoot } from '../utils/config';
 import { logDebug, logError, logWarn } from '../utils/logger';
 
@@ -9,14 +10,28 @@ export class GitOperations {
   private gitRoot: string;
   private git: SimpleGit;
   private static hotspotCache: Map<string, { expires: number; data: HotspotStat[] }> = new Map();
+  private headShaCache?: { value: string; expires: number };
+  private statusCache?: { output: string; expires: number };
+  private untrackedCache?: { files: string[]; expires: number };
+
+  private static gitInstances: Map<string, SimpleGit> = new Map();
 
   constructor() {
     const root = getGitRoot();
     if (!root) {
-      throw new Error('Not in a git repository');
+      logError('GitOperations: Not in a git repository');
+      this.gitRoot = '';
+      if (!GitOperations.gitInstances.has('')) {
+        GitOperations.gitInstances.set('', simpleGit('', { maxConcurrentProcesses: 10 }));
+      }
+      this.git = GitOperations.gitInstances.get('')!;
+      return;
     }
     this.gitRoot = root;
-    this.git = simpleGit(root);
+    if (!GitOperations.gitInstances.has(root)) {
+      GitOperations.gitInstances.set(root, simpleGit(root, { maxConcurrentProcesses: 10 }));
+    }
+    this.git = GitOperations.gitInstances.get(root)!;
   }
 
   public getRoot(): string {
@@ -29,7 +44,11 @@ export class GitOperations {
   async getCommitInfo(sha: string): Promise<CommitInfo> {
     try {
       const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
-      const output = await this.git.raw(['show', '--no-patch', '--date=iso', format, sha]);
+      const output = await withTimeout(
+        this.git.raw(['show', '--no-patch', '--date=iso', format, sha]),
+        30000,
+        'Git show commit info'
+      );
 
       const lines = output.split('\n');
       if (lines.length < 4) {
@@ -56,7 +75,11 @@ export class GitOperations {
   async getRecentCommits(count: number = 5): Promise<CommitInfo[]> {
     try {
       const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
-      const output = await this.git.raw(['log', '--no-merges', `-${count}`, '--date=iso', format]);
+      const output = await withTimeout(
+        this.git.raw(['log', '--no-merges', `-${count}`, '--date=iso', format]),
+        30000,
+        'Git log recent commits'
+      );
 
       const commits: CommitInfo[] = [];
       const lines = output.split('\n');
@@ -81,6 +104,39 @@ export class GitOperations {
     }
   }
 
+  private async getSharedStatus(ttlMs = 2000): Promise<string> {
+    const now = Date.now();
+    if (this.statusCache && this.statusCache.expires > now) {
+      return this.statusCache.output;
+    }
+
+    const output = await withTimeout(
+      this.git.raw(['status', '--porcelain']),
+      30000,
+      'Git status porcelain'
+    );
+
+    this.statusCache = { output, expires: now + ttlMs };
+    this.untrackedCache = undefined;
+    return output;
+  }
+
+  private async getSharedUntracked(ttlMs = 2000): Promise<string[]> {
+    const now = Date.now();
+    if (this.untrackedCache && this.untrackedCache.expires > now) {
+      return this.untrackedCache.files;
+    }
+
+    const output = await withTimeout(
+      this.git.raw(['ls-files', '--others', '--exclude-standard']),
+      30000,
+      'Git ls-files untracked'
+    );
+    const files = this.parseFileList(output);
+    this.untrackedCache = { files, expires: now + ttlMs };
+    return files;
+  }
+
   /**
    * Get file changes for a commit
    */
@@ -88,17 +144,25 @@ export class GitOperations {
     try {
       let output: string;
       try {
-        output = await this.git.raw(['diff-tree', '-r', '--no-commit-id', '--name-status', sha]);
+        output = await withTimeout(
+          this.git.raw(['diff-tree', '-r', '--no-commit-id', '--name-status', sha]),
+          30000,
+          'Git diff-tree'
+        );
       } catch (e) {
         try {
-          output = await this.git.raw([
-            'diff-tree',
-            '-r',
-            '--no-commit-id',
-            '--name-status',
-            '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
-            sha,
-          ]);
+          output = await withTimeout(
+            this.git.raw([
+              'diff-tree',
+              '-r',
+              '--no-commit-id',
+              '--name-status',
+              '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+              sha,
+            ]),
+            30000,
+            'Git diff-tree empty fallback'
+          );
         } catch (innerError) {
           logWarn(
             `Failed to get file changes for ${sha} (even with empty tree fallback): ${innerError}`
@@ -141,7 +205,11 @@ export class GitOperations {
    */
   async getCommitDiff(sha: string): Promise<string> {
     try {
-      return await this.git.show([sha, '--pretty=format:']);
+      return await withTimeout(
+        this.git.show([sha, '--pretty=format:']),
+        30000,
+        'Git show commit diff'
+      );
     } catch (error: any) {
       logError(`Failed to get commit diff for ${sha}: ${error.message}`);
       return '';
@@ -153,7 +221,11 @@ export class GitOperations {
    */
   async getFileDiff(sha: string, filePath: string): Promise<string> {
     try {
-      return await this.git.show([sha, '--pretty=format:', '--patch', '--', filePath]);
+      return await withTimeout(
+        this.git.show([sha, '--pretty=format:', '--patch', '--', filePath]),
+        30000,
+        'Git show file diff'
+      );
     } catch (error: any) {
       logError(`Failed to get file diff for ${filePath} at ${sha}: ${error.message}`);
       return '';
@@ -165,10 +237,18 @@ export class GitOperations {
    */
   async getBundleDiff(startSha: string, endSha: string, filePath: string): Promise<string> {
     try {
-      return await this.git.diff([`${startSha}~1..${endSha}`, '--', filePath]);
+      return await withTimeout(
+        this.git.diff([`${startSha}~1..${endSha}`, '--', filePath]),
+        30000,
+        'Git diff bundle'
+      );
     } catch (e) {
       try {
-        return await this.git.diff([`${startSha}..${endSha}`, '--', filePath]);
+        return await withTimeout(
+          this.git.diff([`${startSha}..${endSha}`, '--', filePath]),
+          30000,
+          'Git diff bundle fallback'
+        );
       } catch (error: any) {
         logError(`Failed to get bundle diff for ${filePath}: ${error.message}`);
         return '';
@@ -181,7 +261,7 @@ export class GitOperations {
    */
   async getStagedDiff(): Promise<string> {
     try {
-      return await this.git.diff(['--cached']);
+      return await withTimeout(this.git.diff(['--cached']), 30000, 'Git diff staged');
     } catch (error: any) {
       logError(`Failed to get staged diff: ${error.message}`);
       return '';
@@ -193,7 +273,11 @@ export class GitOperations {
    */
   async getFileContent(sha: string, filePath: string): Promise<string> {
     try {
-      return await this.git.show([`${sha}:${filePath}`]);
+      return await withTimeout(
+        this.git.show([`${sha}:${filePath}`]),
+        30000,
+        'Git show file content'
+      );
     } catch (error: any) {
       logError(`Failed to get file content for ${filePath} at ${sha}: ${error.message}`);
       return '';
@@ -205,7 +289,11 @@ export class GitOperations {
    */
   async safeGetFileContent(sha: string, filePath: string): Promise<string> {
     try {
-      return await this.git.show([`${sha}:${filePath}`]);
+      return await withTimeout(
+        this.git.show([`${sha}:${filePath}`]),
+        30000,
+        'Git show safe file content'
+      );
     } catch (error: any) {
       if (this.isGitPathMissing(error)) {
         return '';
@@ -220,7 +308,7 @@ export class GitOperations {
    */
   async getStagedContent(filePath: string): Promise<string> {
     try {
-      return await this.git.show([`:${filePath}`]);
+      return await withTimeout(this.git.show([`:${filePath}`]), 30000, 'Git show staged content');
     } catch (error: any) {
       logError(`Failed to get staged content for ${filePath}: ${error.message}`);
       return '';
@@ -266,7 +354,7 @@ export class GitOperations {
    */
   async isIgnored(filePath: string): Promise<boolean> {
     try {
-      const result = await this.git.checkIgnore([filePath]);
+      const result = await withTimeout(this.git.checkIgnore([filePath]), 5000, 'Git check ignore');
       if (result.length > 0) {
         logDebug(`${filePath} IS IGNORED. Result: ${JSON.stringify(result)}`);
       }
@@ -282,7 +370,15 @@ export class GitOperations {
 
   async getHeadSha(): Promise<string> {
     try {
-      return await this.git.revparse(['HEAD']);
+      const now = Date.now();
+      if (this.headShaCache && this.headShaCache.expires > now) {
+        return this.headShaCache.value;
+      }
+
+      const result = await withTimeout(this.git.revparse(['HEAD']), 5000, 'Git revparse HEAD');
+
+      this.headShaCache = { value: result, expires: now + 5000 };
+      return result;
     } catch (error: any) {
       logError(`Failed to get HEAD SHA: ${error.message}`);
       return '';
@@ -291,7 +387,11 @@ export class GitOperations {
 
   async getBlobSha(sha: string, filePath: string): Promise<string> {
     try {
-      const output = await this.git.raw(['ls-tree', '-r', sha, '--', filePath]);
+      const output = await withTimeout(
+        this.git.raw(['ls-tree', '-r', sha, '--', filePath]),
+        30000,
+        'Git ls-tree'
+      );
       const lines = output
         .trim()
         .split('\n')
@@ -314,7 +414,11 @@ export class GitOperations {
 
   async getBlobSize(sha: string, filePath: string): Promise<number> {
     try {
-      const output = await this.git.raw(['cat-file', '-s', `${sha}:${filePath}`]);
+      const output = await withTimeout(
+        this.git.raw(['cat-file', '-s', `${sha}:${filePath}`]),
+        5000,
+        'Git cat-file size'
+      );
       return parseInt(output.trim(), 10) || 0;
     } catch (error) {
       return 0;
@@ -323,7 +427,11 @@ export class GitOperations {
 
   async getCurrentBranch(): Promise<string | null> {
     try {
-      const branch = await this.git.revparse(['--abbrev-ref', 'HEAD']);
+      const branch = await withTimeout(
+        this.git.revparse(['--abbrev-ref', 'HEAD']),
+        5000,
+        'Git revparse branch'
+      );
       if (!branch || branch === 'HEAD') {
         return null;
       }
@@ -335,13 +443,17 @@ export class GitOperations {
 
   async getBranchCommits(branch: string, limit: number = 100): Promise<string[]> {
     try {
-      const log = await this.git.log({
-        from: branch,
-        maxCount: limit,
-        format: {
-          hash: '%H',
-        },
-      });
+      const log = await withTimeout(
+        this.git.log({
+          from: branch,
+          maxCount: limit,
+          format: {
+            hash: '%H',
+          },
+        }),
+        30000,
+        'Git log branch commits'
+      );
       return log.all.map(commit => commit.hash);
     } catch {
       return [];
@@ -350,8 +462,8 @@ export class GitOperations {
 
   async isClean(): Promise<boolean> {
     try {
-      await this.git.diff(['--quiet']);
-      await this.git.diff(['--cached', '--quiet']);
+      await withTimeout(this.git.diff(['--quiet']), 5000, 'Git diff quiet');
+      await withTimeout(this.git.diff(['--cached', '--quiet']), 5000, 'Git diff cached quiet');
       return true;
     } catch {
       return false;
@@ -360,7 +472,7 @@ export class GitOperations {
 
   async getWorkingDirectoryChanges(): Promise<FileChange[]> {
     try {
-      const output = await this.git.raw(['status', '--porcelain']);
+      const output = await this.getSharedStatus();
 
       const changes: FileChange[] = [];
       const lines = output.split('\n').filter(line => line.trim());
@@ -445,7 +557,7 @@ export class GitOperations {
 
   async getStagedFiles(): Promise<FileChange[]> {
     try {
-      const output = await this.git.raw(['status', '--porcelain']);
+      const output = await this.getSharedStatus();
 
       const staged: FileChange[] = [];
       const lines = output.split('\n').filter(line => line.trim());
@@ -484,7 +596,7 @@ export class GitOperations {
 
   async getUnstagedFiles(): Promise<FileChange[]> {
     try {
-      const output = await this.git.raw(['status', '--porcelain']);
+      const output = await this.getSharedStatus();
 
       const unstaged: FileChange[] = [];
       const lines = output.split('\n').filter(line => line.trim());
@@ -517,8 +629,7 @@ export class GitOperations {
       }
 
       try {
-        const untrackedOutput = await this.git.raw(['ls-files', '--others', '--exclude-standard']);
-        const untrackedFiles = this.parseFileList(untrackedOutput);
+        const untrackedFiles = await this.getSharedUntracked();
         for (const filePath of untrackedFiles) {
           if (!unstaged.some(f => f.path === filePath)) {
             unstaged.push({
@@ -527,7 +638,9 @@ export class GitOperations {
             });
           }
         }
-      } catch (error) {}
+      } catch (error) {
+        //empty
+      }
 
       return unstaged;
     } catch (error) {
@@ -544,7 +657,7 @@ export class GitOperations {
       const args = staged
         ? ['diff', '--cached', '--numstat', '--', filePath]
         : ['diff', '--numstat', '--', filePath];
-      const output = await this.git.raw(args);
+      const output = await withTimeout(this.git.raw(args), 30000, 'Git diff numstat');
 
       if (!output.trim()) {
         return { added: 0, removed: 0 };
@@ -565,7 +678,11 @@ export class GitOperations {
 
   async getAllFiles(): Promise<string[]> {
     try {
-      const output = await this.git.raw(['ls-files', '--cached', '--exclude-standard']);
+      const output = await withTimeout(
+        this.git.raw(['ls-files', '--cached', '--exclude-standard']),
+        30000,
+        'Git ls-files all'
+      );
       return this.parseFileList(output);
     } catch (error: any) {
       logError(`Failed to get all files: ${error.message}`);
@@ -637,6 +754,77 @@ export class GitOperations {
       return entries;
     } catch (error: any) {
       logError(`Failed to get file history with stats for ${filePath}: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get line-by-line commit information using git blame
+   * Returns array of { line, commitSha, author, date } for each line
+   */
+  async getFileBlame(
+    filePath: string
+  ): Promise<Array<{ line: number; commitSha: string; author: string; date: string }>> {
+    try {
+      const { stdout } = await this.spawnGit(['blame', '-l', '--line-porcelain', '--', filePath]);
+
+      const lines = stdout.trim().split('\n');
+      const result: Array<{ line: number; commitSha: string; author: string; date: string }> = [];
+      let currentLineNumber = 1;
+      let currentCommitSha = '';
+      let currentAuthor = '';
+      let currentDate = '';
+      let inMetadata = false;
+
+      for (const line of lines) {
+        // Check if this is a header line: <commit-sha> <original-line> <final-line> <num-lines>
+        const headerMatch = line.match(/^([0-9a-f]{40})\s+(\d+)\s+(\d+)\s+(\d+)$/);
+        if (headerMatch) {
+          // Save previous commit's data if we have it
+          if (currentCommitSha && currentLineNumber > 0) {
+            // We'll add this when we see the content line
+          }
+          currentCommitSha = headerMatch[1];
+          currentLineNumber = parseInt(headerMatch[3], 10); // final-line is the current line number
+          inMetadata = true;
+          // Reset metadata
+          currentAuthor = '';
+          currentDate = '';
+        } else if (inMetadata) {
+          if (line.startsWith('author ')) {
+            currentAuthor = line.substring(7).trim();
+          } else if (line.startsWith('author-time ')) {
+            const timestamp = parseInt(line.substring(12).trim(), 10);
+            if (!isNaN(timestamp)) {
+              currentDate = new Date(timestamp * 1000).toISOString();
+            }
+          } else if (line.startsWith('\t')) {
+            // Content line starts with tab - this means we're done with metadata
+            // Add the current line to results
+            result.push({
+              line: currentLineNumber,
+              commitSha: currentCommitSha,
+              author: currentAuthor,
+              date: currentDate,
+            });
+            currentLineNumber++;
+            inMetadata = false;
+          }
+        } else if (line.startsWith('\t')) {
+          // Continuation of previous commit's lines (same commit, next line)
+          result.push({
+            line: currentLineNumber,
+            commitSha: currentCommitSha,
+            author: currentAuthor,
+            date: currentDate,
+          });
+          currentLineNumber++;
+        }
+      }
+
+      return result;
+    } catch (error: any) {
+      logError(`Failed to get file blame for ${filePath}: ${error.message}`);
       return [];
     }
   }
@@ -761,7 +949,7 @@ export class GitOperations {
 
   async spawnGit(args: string[]): Promise<{ stdout: string; stderr: string }> {
     try {
-      const stdout = await this.git.raw(args);
+      const stdout = await withTimeout(this.git.raw(args), 60000, `Git raw ${args[0]}`);
       return { stdout, stderr: '' };
     } catch (error: any) {
       return { stdout: '', stderr: error.message || String(error) };
@@ -776,7 +964,9 @@ export class GitOperations {
         if (stat.isFile()) {
           sizes.set(p, stat.size);
         }
-      } catch {}
+      } catch {
+        //empty
+      }
     }
     return sizes;
   }

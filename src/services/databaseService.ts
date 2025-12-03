@@ -135,9 +135,10 @@ export class DatabaseService extends ServiceBase {
 
         const { limit = 20, offset = 0, filterText, shas } = options;
 
+        // Use simpler query that doesn't require potentially missing columns
+        // The wrapper returns [] on error, so we can't catch schema errors
         let query = `
-      SELECT m.sha, m.author, m.date, m.message, m.files_changed,
-             a.structural_change_score, a.risks
+      SELECT m.sha, m.author, m.date, m.message, m.files_changed, a.risks
       FROM commits_metadata m
       LEFT JOIN commits_analysis a ON m.sha = a.sha
         `;
@@ -174,10 +175,10 @@ export class DatabaseService extends ServiceBase {
           author: c.author,
           date: new Date(c.date),
           changes: c.files_changed || 0,
-          structuralChangeScore: c.structural_change_score || 0,
+          structuralChangeScore: 0, // Not available in simplified query
           risks: c.risks ? JSON.parse(c.risks) : [],
         }));
-      } catch (error) {
+      } catch (error: any) {
         logError('Failed to search commits', error);
         return [];
       }

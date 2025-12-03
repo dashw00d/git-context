@@ -1,9 +1,9 @@
-import type { ScopeSet } from '../facts/scope';
 import { getDatabase } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
 import { DeltaChange, HybridFact, isCstFact } from '../types/cstFacts';
 import { logDebug, logError } from '../utils/logger';
 import { computeHybridDna } from './symbolDna';
+import type { ScopeSet } from '../facts/scope';
 
 /**
  * Manager for CST timeline tracking (hybrid facts evolution)
@@ -30,10 +30,12 @@ export class CstTimelineManager {
 
     const priorFacts = prevHash ? await this.getFactsByHash(filePath, prevHash) : null;
 
-    const factsWithDeltas = facts.map(fact => {
-      const delta = this.computeDelta(fact, priorFacts);
-      return { fact, delta };
-    });
+    const factsWithDeltas = await Promise.all(
+      facts.map(async fact => {
+        const delta = await this.computeDelta(fact, priorFacts);
+        return { fact, delta };
+      })
+    );
 
     for (const { fact, delta } of factsWithDeltas) {
       await this.appendToTimeline(filePath, commitSha, fact, delta, fileHash);
@@ -178,7 +180,7 @@ export class CstTimelineManager {
     const db = getDatabase();
     if (!db) return;
 
-    const dnaId = computeHybridDna(fact);
+    const dnaId = await computeHybridDna(fact);
     const timelineEntry = {
       version,
       dna: dnaId,
@@ -214,11 +216,14 @@ export class CstTimelineManager {
   /**
    * Compute delta between current fact and prior facts
    */
-  private computeDelta(fact: HybridFact, priorFacts: HybridFact[] | null): DeltaChange {
+  private async computeDelta(
+    fact: HybridFact,
+    priorFacts: HybridFact[] | null
+  ): Promise<DeltaChange> {
     if (!priorFacts || priorFacts.length === 0) {
       return {
         type: 'added',
-        newDna: computeHybridDna(fact),
+        newDna: await computeHybridDna(fact),
       };
     }
 
@@ -229,7 +234,7 @@ export class CstTimelineManager {
     if (!priorFact) {
       return {
         type: 'added',
-        newDna: computeHybridDna(fact),
+        newDna: await computeHybridDna(fact),
       };
     }
 

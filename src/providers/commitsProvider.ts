@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { GitOperations } from '../analysis/git';
 import { getStore } from '../state/store';
 import { BranchManager } from '../storage/branchManager';
+import { withTimeout } from '../utils/async';
 import { logError, logInfo, logWarn } from '../utils/logger';
 import { isWorkspaceSha, makeWorkspaceSha } from '../utils/workspace';
 import { ActiveBundleProvider } from './activeBundleProvider';
@@ -37,7 +38,7 @@ export class CommitsProvider {
   }
 
   async refresh(): Promise<void> {
-    await this.updateBranchCursor();
+    await withTimeout(this.updateBranchCursor(), 30000, 'Refresh commits');
   }
 
   private async updateBranchCursor() {
@@ -208,7 +209,7 @@ export class CommitsProvider {
 
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
-      const branch = this.currentBranch || git.getCurrentBranch();
+      const branch = this.currentBranch || (await git.getCurrentBranch());
 
       const result: Array<{
         sha: string;
@@ -280,7 +281,9 @@ export class CommitsProvider {
             changes: 0,
             files: [],
           });
-        } catch {}
+        } catch {
+          //empty
+        }
       }
 
       const searchOptions = {
@@ -289,7 +292,11 @@ export class CommitsProvider {
         filterText: filterText?.trim(),
       };
 
-      const commits = await commitService.searchCommits(searchOptions);
+      const commits = await withTimeout(
+        commitService.searchCommits(searchOptions),
+        30000,
+        'Search commits'
+      );
 
       const historyCommits = await Promise.all(
         commits
@@ -364,8 +371,16 @@ export class CommitsProvider {
     try {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
-      const stagedList = await git.getStagedFiles();
-      const unstagedList = await git.getUnstagedFiles();
+      const stagedList = (await withTimeout(
+        git.getStagedFiles(),
+        30000,
+        'Get staged files'
+      )) as any[];
+      const unstagedList = (await withTimeout(
+        git.getUnstagedFiles(),
+        30000,
+        'Get unstaged files'
+      )) as any[];
       const staged = stagedList.map((f: { path: string; status: any }) => ({
         path: f.path,
         status: f.status,

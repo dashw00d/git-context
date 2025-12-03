@@ -3,7 +3,6 @@ import type { IntendedState } from '../../facts/intendedMap';
 import type { LegacyAuditResult } from '../../facts/legacyAudit';
 import type { ScopeSet } from '../../facts/scope';
 import type { WorkingSnapshot } from '../../facts/workingSnapshot';
-
 import type { CrossVersionSymbolLineage, MovedBlock } from '../movedBlockDetector';
 import type { WorkspaceFacts } from '../workspaceIndexer';
 import type { EmbeddingMetrics, HistoryMetrics, LlmMetrics } from './pipelineMetrics';
@@ -55,6 +54,7 @@ export interface PipelineState {
   pipelineDuration?: number;
 
   partialReasons?: string[];
+  onEvent?: PipelineEventHandler;
 }
 
 export interface PipelineStep {
@@ -83,7 +83,14 @@ export type PipelineEvent =
       stepError?: { message: string; stack?: string };
       timestamp: string;
     }
-  | { type: 'finished'; state: PipelineState; timestamp: string };
+  | { type: 'finished'; state: PipelineState; timestamp: string }
+  | {
+      type: 'progress';
+      step: PipelineStep;
+      state: PipelineState;
+      data: any;
+      timestamp: string;
+    };
 
 export type PipelineEventHandler = (event: PipelineEvent) => void;
 

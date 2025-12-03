@@ -2,15 +2,15 @@ import * as React from 'react';
 import { CockpitState, ContextFrame } from '../../../types/cockpit';
 import { BlastRadiusStage } from './stages/BlastRadiusStage';
 import { BundleStage } from './stages/BundleStage';
-import { FolderStage } from './stages/FolderStage';
-import { ReportsStage } from './stages/ReportsStage';
-import { SymbolStage } from './stages/SymbolStage';
-
 import { CodeEditor } from './stages/CodeEditor';
+import { FolderStage } from './stages/FolderStage';
 import { PortalsRail } from './stages/PortalsRail';
+import { ReportsStage } from './stages/ReportsStage';
 import { SedimentGutter } from './stages/SedimentGutter';
+import { SignatureView } from './stages/SignatureView';
 import { StageHeader } from './stages/StageHeader';
 import { SymbolBlock } from './stages/SymbolBlock';
+import { SymbolStage } from './stages/SymbolStage';
 import { TimeScrubber } from './stages/TimeScrubber';
 
 interface CodeMicroscopeProps {
@@ -51,19 +51,26 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     });
   };
 
-  const handleTimeFilterChange = (value: number) => {
-    vscode.postMessage({ type: 'updateTimeFilter', value });
+  const handleCommitIndexChange = (index: number) => {
+    vscode.postMessage({ type: 'updateCommitIndex', value: index });
   };
 
   const frameData = frame.level === 'bundle' ? cockpitState?.bundleView || frame.data : frame.data;
   const renderFrame = frame.level === 'bundle' ? { ...frame, data: frameData } : frame;
 
   const [zoomLevel, setZoomLevel] = React.useState<'focus' | 'normal' | 'overview'>('focus');
+  const [focusedSymbolId, setFocusedSymbolId] = React.useState<string | null>(null);
 
   const handleWheel = (e: React.WheelEvent) => {
     if (e.ctrlKey) {
       if (e.deltaY > 0) {
-        setZoomLevel(prev => (prev === 'focus' ? 'normal' : 'overview'));
+        setZoomLevel(prev => {
+          if (prev === 'focus') {
+            setFocusedSymbolId(null); // Clear focus when zooming out
+            return 'normal';
+          }
+          return 'overview';
+        });
       } else {
         setZoomLevel(prev => (prev === 'overview' ? 'normal' : 'focus'));
       }
@@ -74,13 +81,55 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     const metrics = cockpitState?.nodeMetrics?.[renderFrame.id] || renderFrame.data?.metrics;
     const content = renderFrame.data?.content || '';
     const lineCount = renderFrame.data?.lineCount || content.split('\n').length;
-
-    // Mock symbols for zoom view (in real app, get from frame.data.symbols)
     const symbols = renderFrame.data?.symbols || [];
+    const lineCommits = renderFrame.data?.lineCommits || [];
+    const blastRadius = renderFrame.data?.blastRadius;
+    const driftIssues = renderFrame.data?.drift || [];
+
+    // Get ordered commits from state (for commit index calculation)
+    const orderedCommits = cockpitState?.selectedCommitShas || [];
+    const currentCommitIndex = cockpitState?.currentCommitIndex;
+
+    // Build commits array for TimeScrubber from state commits
+    const commits = (cockpitState?.commits || [])
+      .filter(c => orderedCommits.includes(c.sha))
+      .sort((a, b) => {
+        const aIndex = orderedCommits.indexOf(a.sha);
+        const bIndex = orderedCommits.indexOf(b.sha);
+        return aIndex - bIndex;
+      })
+      .map(c => ({
+        sha: c.sha,
+        date: c.authoredAt,
+        message: c.message,
+        author: c.author,
+      }));
+
+    const handleNeighborClick = (filePath: string) => {
+      if (vscode) {
+        const neighborFrame: ContextFrame = {
+          level: 'file',
+          id: filePath,
+          name: filePath.split('/').pop() || filePath,
+          status: 'scanning',
+          parentId: frame.id,
+        };
+        vscode.postMessage({ type: 'navigateToFrame', frame: neighborFrame });
+        vscode.postMessage({ type: 'analyzeFrame', frameId: filePath });
+      }
+    };
 
     return (
       <div style={MicroscopeContainer} onWheel={handleWheel}>
-        <StageHeader fileName={renderFrame.name} metrics={metrics} onNavigate={() => {}} />
+        <StageHeader
+          fileName={renderFrame.name}
+          filePath={renderFrame.id}
+          metrics={metrics}
+          onNavigate={() => onZoomOut()}
+          explorerData={cockpitState?.explorerData}
+          bundleFacts={cockpitState?.bundleFacts}
+          onNeighborClick={handleNeighborClick}
+        />
 
         {/* Zoom Controls (Temporary UI) */}
         <div
@@ -116,23 +165,70 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
         <div style={DeepEditorLayout}>
           <SedimentGutter
             lineCount={lineCount}
-            currentTimeFilter={cockpitState?.currentTimeFilter}
+            lineCommits={lineCommits}
+            orderedCommits={orderedCommits}
+            currentCommitIndex={currentCommitIndex}
           />
 
           {zoomLevel === 'focus' ? (
-            <CodeEditor content={content} language={renderFrame.data?.language || 'text'} />
+            <CodeEditor
+              content={content}
+              language={renderFrame.data?.language || 'text'}
+              driftIssues={driftIssues}
+              symbols={symbols}
+              focusedSymbolId={focusedSymbolId}
+              onSymbolClick={(symbolId: string) => setFocusedSymbolId(symbolId)}
+              onClearFocus={() => setFocusedSymbolId(null)}
+              lineCommits={lineCommits}
+              orderedCommits={orderedCommits}
+              currentCommitIndex={currentCommitIndex}
+            />
+          ) : zoomLevel === 'overview' ? (
+            <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
+              {symbols.length > 0 ? (
+                symbols.map((sym: any) => {
+                  const symbolDriftIssues = driftIssues.filter(
+                    (issue: any) => issue.symbol === sym.name
+                  );
+                  const hasDrift = symbolDriftIssues.length > 0;
+                  return (
+                    <SignatureView
+                      key={sym.id || sym.name}
+                      name={sym.name}
+                      kind={sym.kind}
+                      signature={sym.signature}
+                      startLine={sym.location?.start?.line || sym.startLine || 0}
+                      endLine={sym.location?.end?.line || sym.endLine || 0}
+                      hasDrift={hasDrift}
+                      riskScore={metrics?.riskScore}
+                      onClick={() => {
+                        setZoomLevel('focus');
+                        setFocusedSymbolId(sym.id || sym.name);
+                      }}
+                    />
+                  );
+                })
+              ) : (
+                <div style={{ opacity: 0.5, textAlign: 'center', marginTop: '40px' }}>
+                  No symbols found. Switch to Focus view.
+                </div>
+              )}
+            </div>
           ) : (
             <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
               {symbols.length > 0 ? (
                 symbols.map((sym: any) => (
                   <SymbolBlock
-                    key={sym.id}
+                    key={sym.id || sym.name}
                     name={sym.name}
                     kind={sym.kind}
-                    startLine={sym.startLine}
-                    endLine={sym.endLine}
+                    startLine={sym.location?.start?.line || sym.startLine || 0}
+                    endLine={sym.location?.end?.line || sym.endLine || 0}
                     complexity={metrics?.complexity || 0} // Mock
-                    onClick={() => setZoomLevel('focus')}
+                    onClick={() => {
+                      setZoomLevel('focus');
+                      setFocusedSymbolId(sym.id || sym.name);
+                    }}
                   />
                 ))
               ) : (
@@ -143,12 +239,21 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
             </div>
           )}
 
-          <PortalsRail incomingRefs={metrics?.incomingRefs} outgoingRefs={metrics?.outgoingRefs} />
+          <PortalsRail
+            incomingRefs={metrics?.incomingRefs}
+            outgoingRefs={metrics?.outgoingRefs}
+            blastRadius={blastRadius}
+            focusedSymbolId={focusedSymbolId}
+            currentFilePath={renderFrame.id}
+            currentCommitIndex={currentCommitIndex}
+            orderedCommits={orderedCommits}
+          />
         </div>
 
         <TimeScrubber
-          currentTimeFilter={cockpitState?.currentTimeFilter}
-          onTimeFilterChange={handleTimeFilterChange}
+          commits={commits}
+          currentCommitIndex={currentCommitIndex}
+          onCommitIndexChange={handleCommitIndexChange}
         />
       </div>
     );

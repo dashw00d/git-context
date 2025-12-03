@@ -5,6 +5,8 @@
  * Enable in VSCode settings: git-context.debugMode (default: true)
  */
 
+import { logDebug } from './logger';
+
 let debugMode = true;
 
 let vscode: any;
@@ -28,5 +30,5 @@ export function getDebugMode(): boolean {
 export function setDebugMode(enabled: boolean): void {
   debugMode = enabled;
 
-  console.log(`[DebugConfig] Debug mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
+  logDebug(`[DebugConfig] Debug mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
 }

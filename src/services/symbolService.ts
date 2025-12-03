@@ -1,8 +1,8 @@
 import { ensureDatabaseInitialized } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
-import type { SymbolInfo } from '../types';
 import { logDebug } from '../utils/logger';
 import { ServiceBase, ServiceConfig } from './base/ServiceBase';
+import type { SymbolInfo } from '../types';
 import type { SymbolHistory, SymbolWithDNA } from './databaseService';
 
 /**

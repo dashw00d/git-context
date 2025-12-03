@@ -18,7 +18,9 @@ export class PipelineFactory {
   private static instance: PipelineFactory;
   private pipeline: RefactorPipeline | null = null;
 
-  private constructor() {}
+  private constructor() {
+    //empty
+  }
 
   static getInstance(): PipelineFactory {
     if (!PipelineFactory.instance) {
@@ -68,7 +70,8 @@ export class PipelineFactory {
         commitIndexer,
         workspaceIndexer,
         embeddingIndexer,
-        storyEngine
+        storyEngine,
+        git
       );
 
       if (db) {

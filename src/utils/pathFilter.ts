@@ -1,6 +1,6 @@
 import * as fs from 'fs';
-import { LRUCache } from 'lru-cache';
 import * as path from 'path';
+import { LRUCache } from 'lru-cache';
 import { GitOperations } from '../analysis/git';
 import { createCustomIgnoreMatcher, getExtensionConfig, getSupportedExtensions } from './config';
 import { logDebug } from './logger';
@@ -39,7 +39,9 @@ const filterCache = new LRUCache<string, boolean>({
  */
 export async function shouldProcessPath(
   filePath: string,
-  options: PathFilterOptions = {}
+  options: PathFilterOptions = {
+    //empty
+  }
 ): Promise<PathFilterResult> {
   if (!filePath || typeof filePath !== 'string' || filePath.trim() === '') {
     return { shouldProcess: false, reason: 'invalid path' };
@@ -114,50 +116,45 @@ export async function shouldProcessPath(
 
     if (options.commitSha && options.git) {
       const cacheKey = `${filePath}:${options.commitSha}:size`;
-      const cachedSize = filterCache.get(cacheKey);
+      const cachedResult = filterCache.get(cacheKey);
 
-      if (cachedSize !== undefined) {
-        try {
-          fileSize = await options.git.getBlobSize(options.commitSha, filePath);
+      if (cachedResult === true) {
+        // Cached as allowed (size <= max)
+        return { shouldProcess: true };
+      } else if (cachedResult === false) {
+        // Cached as rejected (size > max)
+        return { shouldProcess: false, reason: `size > ${maxFileSize}` };
+      }
 
-          filterCache.set(cacheKey, fileSize <= maxFileSize);
-        } catch (e) {
-          fileSize = null;
-        }
-      } else {
-        try {
-          fileSize = await options.git.getBlobSize(options.commitSha, filePath);
-          filterCache.set(cacheKey, fileSize <= maxFileSize);
-        } catch (e) {
-          fileSize = null;
-        }
+      // Not cached, fetch and cache
+      try {
+        fileSize = await options.git.getBlobSize(options.commitSha, filePath);
+        const allowed = fileSize <= maxFileSize;
+        filterCache.set(cacheKey, allowed);
+      } catch (e) {
+        fileSize = null;
       }
     } else if (options.gitRoot) {
       const cacheKey = `${filePath}:workspace:size`;
-      const cached = filterCache.get(cacheKey);
+      const cachedResult = filterCache.get(cacheKey);
 
-      if (cached !== undefined) {
-        try {
-          const fullPath = path.join(options.gitRoot, filePath);
-          if (fs.existsSync(fullPath)) {
-            const stats = fs.statSync(fullPath);
-            fileSize = stats.size;
-            filterCache.set(cacheKey, fileSize <= maxFileSize);
-          }
-        } catch (e) {
-          fileSize = null;
+      if (cachedResult === true) {
+        return { shouldProcess: true };
+      } else if (cachedResult === false) {
+        return { shouldProcess: false, reason: `size > ${maxFileSize}` };
+      }
+
+      // Not cached, fetch and cache
+      try {
+        const fullPath = path.join(options.gitRoot, filePath);
+        if (fs.existsSync(fullPath)) {
+          const stats = fs.statSync(fullPath);
+          fileSize = stats.size;
+          const allowed = fileSize <= maxFileSize;
+          filterCache.set(cacheKey, allowed);
         }
-      } else {
-        try {
-          const fullPath = path.join(options.gitRoot, filePath);
-          if (fs.existsSync(fullPath)) {
-            const stats = fs.statSync(fullPath);
-            fileSize = stats.size;
-            filterCache.set(cacheKey, fileSize <= maxFileSize);
-          }
-        } catch (e) {
-          fileSize = null;
-        }
+      } catch (e) {
+        fileSize = null;
       }
     }
 
@@ -174,7 +171,9 @@ export async function shouldProcessPath(
  */
 export async function filterPath(
   filePath: string,
-  options: PathFilterOptions = {}
+  options: PathFilterOptions = {
+    //empty
+  }
 ): Promise<boolean> {
   const result = await shouldProcessPath(filePath, options);
   return result.shouldProcess;

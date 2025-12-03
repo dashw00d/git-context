@@ -1,4 +1,5 @@
 /* eslint-disable no-restricted-syntax */
+import { withTimeout } from '../../utils/async';
 import { logDebug, logInfo } from '../../utils/logger';
 import { PipelineEventHandler, PipelineState, PipelineStep } from './pipelineTypes';
 
@@ -81,6 +82,7 @@ export async function runPipeline(
     errors: [],
     stepTimings: {},
     partialReasons: [],
+    onEvent,
   };
 
   const pipelineStartTime = Date.now();
@@ -89,11 +91,16 @@ export async function runPipeline(
   const depGraph = buildDepGraph(steps);
   const levels = topologicalSort(depGraph);
 
+  console.error(`🚀 [Pipeline] runPipeline called with ${steps.length} steps`);
+  console.error(`🚀 [Pipeline] Step IDs: ${steps.map(s => s.id).join(', ')}`);
+  console.error(`🚀 [Pipeline] Levels: ${levels.length}`, levels);
+
   logInfo(
     `[Pipeline] Starting pipeline execution with ${levels.length} levels and ${steps.length} steps`
   );
 
   for (const level of levels) {
+    console.error(`🔵 [Pipeline] Processing level with ${level.length} steps: ${level.join(', ')}`);
     const promises = level.map(stepId => {
       const step = steps.find(s => s.id === stepId)!;
       const startTime = Date.now();
@@ -102,11 +109,19 @@ export async function runPipeline(
 
       return Promise.resolve()
         .then(() => {
+          console.error(`⏩ [Pipeline] About to run step: ${step.id}`);
           state.currentStepId = step.id;
           const timestamp = new Date().toISOString();
           onEvent?.({ type: 'start', step, state, timestamp });
           logDebug(`[Pipeline] Started step: ${step.label}`);
-          return step.run(state);
+          console.error(`▶️  [Pipeline] Calling step.run() for: ${step.id}`);
+          const runPromise = step.run(state);
+          console.error(`⏱️  [Pipeline] step.run() returned promise for: ${step.id}`);
+          return withTimeout(
+            Promise.resolve(runPromise),
+            300000, // 5 minutes default timeout for pipeline steps
+            `Pipeline step '${step.id}'`
+          );
         })
         .then(() => {
           const endTime = Date.now();
@@ -121,6 +136,7 @@ export async function runPipeline(
           let cacheMisses: number | undefined;
 
           if (step.id === 'bundle_facts' && state.commitFacts) {
+            // empty
           }
 
           const timestamp = new Date().toISOString();

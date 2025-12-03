@@ -360,7 +360,9 @@ export async function registerCommands(
               try {
                 const files = await git.getFileChanges(sha);
                 estFiles += files.length;
-              } catch (error) {}
+              } catch (error) {
+                //empty
+              }
             }
             if (estFiles < 10) {
               try {
@@ -374,7 +376,9 @@ export async function registerCommands(
                   );
                   shas.push(headSha);
                 }
-              } catch (error) {}
+              } catch (error) {
+                //empty
+              }
             }
           }
 

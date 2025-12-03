@@ -284,7 +284,7 @@ export class StateDebugger {
       const dataKeys = Object.keys(payload.data);
       trimmed.data = {
         keys: dataKeys.slice(0, 5).join(', ') + (dataKeys.length > 5 ? '...' : ''),
-        size: JSON.stringify(payload.data).length + ' bytes',
+        size: 'large object (truncated)',
       };
     }
 
@@ -323,11 +323,36 @@ export class StateDebugger {
       trimmed.action = payload.action.type;
     }
 
-    if (Object.keys(trimmed).length === 0) {
-      return `{${Object.keys(payload).join(', ')}} (${JSON.stringify(payload).length} bytes)`;
+    if (payload.message) {
+      trimmed.message = {
+        type: payload.message.type,
+        hasPayload: !!payload.message.payload,
+      };
     }
 
-    return JSON.stringify(trimmed);
+    if (Object.keys(trimmed).length === 0) {
+      try {
+        const seen = new WeakSet();
+        const str = JSON.stringify(payload, (_key, value) => {
+          if (typeof value === 'object' && value !== null) {
+            if (seen.has(value)) {
+              return '[Circular]';
+            }
+            seen.add(value);
+          }
+          return value;
+        });
+        return str.length > 1000 ? `${str.slice(0, 1000)}...` : str;
+      } catch (e) {
+        return `[Complex payload: ${Object.keys(payload).join(', ')}]`;
+      }
+    }
+
+    try {
+      return JSON.stringify(trimmed);
+    } catch (e) {
+      return `[Trimmed payload: ${Object.keys(trimmed).join(', ')}]`;
+    }
   }
 
   exportHistory(): string {

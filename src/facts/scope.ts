@@ -72,6 +72,7 @@ async function computeBlastRadiusNeighbors(
   }
 
   const adjacencyMap = new Map<string, Array<{ neighborId: string; confidence: number }>>();
+  console.error('🟩 [computeBlastRadius] Querying edges table...');
   const edgesStmt = prepare(`
     SELECT from_symbol_id, to_symbol_id, confidence
     FROM edges
@@ -79,6 +80,7 @@ async function computeBlastRadiusNeighbors(
     LIMIT 5000  -- Reasonable limit for full repo analysis
   `);
   const allEdges = edgesStmt.all() as any[];
+  console.error(`🟩 [computeBlastRadius] Got ${allEdges.length} edges`);
 
   for (const edge of allEdges) {
     const fromId = edge.from_symbol_id;
@@ -140,12 +142,13 @@ export async function computeScope(
   commitShas: string[],
   workspaceParts?: Set<'staged' | 'unstaged'>,
   explicitTimeline?: string[],
-  liveOverridePaths?: Iterable<string>
+  liveOverridePaths?: Iterable<string>,
+  gitInstance?: GitOperations
 ): Promise<ScopeSet> {
   const { ensureDatabaseInitialized } = await import('../storage/database');
 
   await ensureDatabaseInitialized();
-  const git = new GitOperations();
+  const git = gitInstance ?? new GitOperations();
 
   const scope: ScopeSet = {
     commitFiles: new Set(),
@@ -197,12 +200,14 @@ export async function computeScope(
     }
   }
 
+  console.error('🟩 [computeScope] Calling computeBlastRadiusNeighbors...');
   const blastRadiusFiles = await computeBlastRadiusNeighbors(
     commitShas,
     scope.commitFiles,
     scope.workingChanged,
     20
   );
+  console.error('🟩 [computeScope] computeBlastRadiusNeighbors returned');
   blastRadiusFiles.forEach(f => scope.blastRadius.add(f));
 
   const allPaths = new Set([...scope.commitFiles, ...scope.workingChanged, ...scope.blastRadius]);
@@ -231,7 +236,6 @@ export async function computeScope(
       } else if (version === 'HEAD') {
         versionFiles = scope.commitFiles;
       } else {
-        const git = new GitOperations();
         const commitFiles = await git.getFileChanges(version);
         versionFiles = new Set(commitFiles.map(f => f.path));
       }

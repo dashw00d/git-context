@@ -52,7 +52,9 @@ export class CockpitStore extends EventEmitter {
           stateBefore: prevState,
           stateAfter: nextState,
         });
-      } catch (e) {}
+      } catch (e) {
+        //empty
+      }
 
       const payloadKeys = Object.keys((action as any).payload || {});
       console.log(

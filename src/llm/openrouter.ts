@@ -12,7 +12,7 @@ export class LLMClient {
 
     const isOpenRouter = config.apiEndpoint.includes('openrouter.ai');
     if (isOpenRouter && !config.openRouterApiKey) {
-      throw new Error(
+      logError(
         'OpenRouter API key not configured. Please set OPENROUTER_API_KEY environment variable or configure it in VS Code settings.'
       );
     }
@@ -36,7 +36,9 @@ export class LLMClient {
       maxTokens?: number;
       jsonMode?: boolean;
       maxRetries?: number;
-    } = {}
+    } = {
+      //empty
+    }
   ): Promise<string> {
     const maxRetries = options.maxRetries ?? 3;
     let lastError: Error | null = null;

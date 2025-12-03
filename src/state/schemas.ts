@@ -75,7 +75,10 @@ export const BundleFactsSchema = z
             missing: z.number(),
             zombies: z.number(),
             divergent: z.number(),
+            missing_edges: z.number().optional(),
+            zombie_edges: z.number().optional(),
           })
+          .passthrough()
           .optional(),
         patternDrift: z
           .object({
@@ -180,7 +183,7 @@ export const BundleConfigSchema = z.object({
 });
 
 export const ContextFrameSchema = z.object({
-  level: z.enum(['bundle', 'blast_radius', 'file', 'symbol']),
+  level: z.enum(['bundle', 'blast_radius', 'file', 'symbol', 'folder']),
   id: z.string(),
   name: z.string(),
   description: z.string().optional(),
@@ -210,7 +213,7 @@ export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('resetAll') }),
   z.object({
     type: z.literal('generateReport'),
-    mode: z.enum(['selection', 'lastN', 'staged', 'unstaged']),
+    mode: z.enum(['selection', 'lastN', 'staged', 'unstaged', 'changes']),
     lastN: z.number().optional(),
     force: z.boolean().optional(),
   }),
@@ -278,7 +281,7 @@ export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('clearError') }),
   z.object({ type: z.literal('navigateToFrame'), frame: ContextFrameSchema }),
   z.object({ type: z.literal('navigateBack') }),
-  z.object({ type: z.literal('updateTimeFilter'), value: z.number() }),
+  z.object({ type: z.literal('updateCommitIndex'), value: z.number() }),
 ]);
 
 export const CockpitStateSchema = z

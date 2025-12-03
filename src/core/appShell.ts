@@ -6,8 +6,8 @@ import {
   CockpitStateChange,
   getCockpitOrchestrator,
 } from '../state/cockpitOrchestrator';
-import type { CockpitState } from '../types/cockpit';
 import { logError } from '../utils/logger';
+import type { CockpitState } from '../types/cockpit';
 
 export type CommandHandler = (context: vscode.ExtensionContext, ...args: any[]) => any;
 export type WatcherFactory = (

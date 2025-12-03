@@ -4,20 +4,16 @@ import { HybridFact, isCstFact } from '../types/cstFacts';
 import { getTreeSitterParser } from './tree-sitter';
 
 /**
- * DNA Configuration (Feature Flags)
+ * DNA Configuration
  */
 export interface DnaConfig {
-  enableV2: boolean;
-  preferV2: boolean;
-  v2MaxDepth: number;
-  v2NgramSizes: number[];
+  maxDepth: number;
+  ngramSizes: number[];
 }
 
 const DEFAULT_DNA_CONFIG: DnaConfig = {
-  enableV2: false,
-  preferV2: false,
-  v2MaxDepth: 5,
-  v2NgramSizes: [2, 3],
+  maxDepth: 5,
+  ngramSizes: [2, 3],
 };
 
 let dnaConfig: DnaConfig = { ...DEFAULT_DNA_CONFIG };
@@ -31,23 +27,9 @@ export function getDNAConfig(): DnaConfig {
 }
 
 /**
- * Generate stable DNA hash for symbol (survives renames, moves)
+ * Generate DNA hash for symbol using AST n-grams
  */
-export function computeSymbolDNA(symbol: SymbolInfo, bodyText?: string): string {
-
-  const parts = [
-    symbol.kind,
-    normalizeSignature(symbol.signature),
-    bodyText ? computeBodyShape(bodyText) : '',
-  ];
-
-  return crypto.createHash('sha256').update(parts.join('::')).digest('hex').substring(0, 16);
-}
-
-/**
- * Generate enhanced DNA hash using AST n-grams (v2)
- */
-export async function computeSymbolDNA_v2(
+export async function computeSymbolDNA(
   symbol: SymbolInfo,
   bodyText?: string,
   language?: string
@@ -55,17 +37,18 @@ export async function computeSymbolDNA_v2(
   const parts = [symbol.kind, normalizeSignature(symbol.signature)];
 
   if (bodyText && language) {
-
     const ngrams = await extractAstNgrams(bodyText, language, {
-      n: dnaConfig.v2NgramSizes,
-      maxDepth: dnaConfig.v2MaxDepth,
+      n: dnaConfig.ngramSizes,
+      maxDepth: dnaConfig.maxDepth,
     });
     const astFingerprint = computeAstFingerprint(ngrams);
     parts.push(astFingerprint);
 
-
-    const legacyShape = computeBodyShape(bodyText);
-    parts.push(legacyShape);
+    const bodyShape = computeBodyShape(bodyText);
+    parts.push(bodyShape);
+  } else if (bodyText) {
+    const bodyShape = computeBodyShape(bodyText);
+    parts.push(bodyShape);
   }
 
   return crypto.createHash('sha256').update(parts.join('::')).digest('hex').substring(0, 16);
@@ -82,12 +65,7 @@ async function extractAstNgrams(
   const parser = getTreeSitterParser();
 
   try {
-
-
     const facts = await parser.extractHybridFacts(bodyText, 'temp.ts', language);
-
-
-
 
     const nodeTypes: string[] = [];
     const skipTypes = new Set(options.skipTypes || ['comment', 'whitespace']);
@@ -98,7 +76,6 @@ async function extractAstNgrams(
       }
     }
 
-
     const ngrams: string[] = [];
     for (const n of options.n) {
       for (let i = 0; i <= nodeTypes.length - n; i++) {
@@ -107,10 +84,8 @@ async function extractAstNgrams(
       }
     }
 
-
     return [...new Set(ngrams)].sort();
   } catch (error) {
-
     return [];
   }
 }
@@ -118,12 +93,10 @@ async function extractAstNgrams(
 function computeAstFingerprint(ngrams: string[]): string {
   if (ngrams.length === 0) return '';
 
-
   const freq = new Map<string, number>();
   for (const gram of ngrams) {
     freq.set(gram, (freq.get(gram) || 0) + 1);
   }
-
 
   const serialized = Array.from(freq.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -134,9 +107,8 @@ function computeAstFingerprint(ngrams: string[]): string {
 }
 
 export function computeBodyHash(bodyText: string): string {
-
   const normalized = bodyText
-    .replace(/\/\*[\s\S]*?\*\
+    .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\/\/.*/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -145,8 +117,6 @@ export function computeBodyHash(bodyText: string): string {
 }
 
 function computeBodyShape(bodyText: string): string {
-
-
   const tokens = bodyText
     .replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, 'ID')
     .replace(/\d+/g, 'NUM')
@@ -157,29 +127,16 @@ function computeBodyShape(bodyText: string): string {
 }
 
 function normalizeSignature(sig: string): string {
-
   return sig
     .replace(/\w+\s*:/g, ':')
     .replace(/\s+/g, '')
     .toLowerCase();
 }
 
-export function assignDNAIds(symbols: SymbolInfo[], bodyTexts?: Map<string, string>): SymbolInfo[] {
-  return symbols.map(symbol => {
-    const bodyText = bodyTexts?.get(symbol.id);
-    const dnaId = computeSymbolDNA(symbol, bodyText);
-    const bodyHash = bodyText ? computeBodyHash(bodyText) : undefined;
-
-    return {
-      ...symbol,
-      dnaId,
-      bodyHash,
-      dnaVersion: 1,
-    };
-  });
-}
-
-export async function assignDNAIds_v2(
+/**
+ * Assign DNA IDs to symbols
+ */
+export async function assignDNAIds(
   symbols: SymbolInfo[],
   bodyTexts?: Map<string, string>,
   language?: string
@@ -188,31 +145,16 @@ export async function assignDNAIds_v2(
 
   for (const symbol of symbols) {
     const bodyText = bodyTexts?.get(symbol.id);
-
-
-    const dnaId = computeSymbolDNA(symbol, bodyText);
     const bodyHash = bodyText ? computeBodyHash(bodyText) : undefined;
 
-    let enhanced: SymbolInfo = {
+    const dnaId = await computeSymbolDNA(symbol, bodyText, language);
+
+    const enhanced: SymbolInfo = {
       ...symbol,
       dnaId,
       bodyHash,
+      dnaVersion: 2,
     };
-
-
-    if (dnaConfig.enableV2 && bodyText && language) {
-      const dnaIdV2 = await computeSymbolDNA_v2(symbol, bodyText, language);
-      enhanced = {
-        ...enhanced,
-        dnaIdV2,
-        dnaVersion: 2,
-      };
-    } else {
-      enhanced = {
-        ...enhanced,
-        dnaVersion: 1,
-      };
-    }
 
     results.push(enhanced);
   }
@@ -220,9 +162,12 @@ export async function assignDNAIds_v2(
   return results;
 }
 
-export function computeHybridDna(fact: HybridFact, bodyText?: string): string {
+export async function computeHybridDna(
+  fact: HybridFact,
+  bodyText?: string,
+  language?: string
+): Promise<string> {
   if (isCstFact(fact)) {
-
     const parts = [
       fact.kind,
       fact.name,
@@ -232,7 +177,6 @@ export function computeHybridDna(fact: HybridFact, bodyText?: string): string {
     ];
     return crypto.createHash('sha256').update(parts.join('::')).digest('hex').substring(0, 16);
   } else {
-
-    return computeSymbolDNA(fact, bodyText);
+    return computeSymbolDNA(fact, bodyText, language);
   }
 }

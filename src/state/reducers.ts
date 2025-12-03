@@ -1,10 +1,28 @@
-import { CockpitState, ContextFrame } from '../types/cockpit';
+import { CockpitState, ContextFrame, ExplorerNode } from '../types/cockpit';
 import { logWarn } from '../utils/logger';
 import { Action } from './actions';
+import { normalizeBundleConfig } from './bundleConfig';
+
+function updateNodeStatus(
+  nodes: ExplorerNode[],
+  id: string,
+  status: 'scanning' | 'analyzing' | 'ready' | 'error'
+): ExplorerNode[] {
+  return nodes.map(node => {
+    if (node.id === id) {
+      return { ...node, status };
+    }
+    if (node.children) {
+      return { ...node, children: updateNodeStatus(node.children, id, status) };
+    }
+    return node;
+  });
+}
 
 export const initialState: CockpitState = {
   repoName: null,
   branchName: null,
+  workspaceScope: 'workspace',
   activeSection: 'commits',
   isAnalyzing: false,
   selectedCommitShas: [],
@@ -58,7 +76,7 @@ export const initialState: CockpitState = {
   pipelineErrors: [],
   pipelineStepTimings: {},
   nodeMetrics: {},
-  currentTimeFilter: Date.now(),
+  currentCommitIndex: undefined,
 };
 
 export function cockpitReducer(state: CockpitState = initialState, action: Action): CockpitState {
@@ -214,7 +232,7 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         bundleSummary: action.payload.summary ?? state.bundleSummary,
       };
     case 'BUNDLE_CONFIG_UPDATED':
-      return { ...state, bundleConfig: action.payload.config };
+      return { ...state, bundleConfig: normalizeBundleConfig(action.payload.config) };
 
     case 'SYMBOLS_UPDATED':
       return { ...state, symbols: action.payload.symbols };
@@ -263,6 +281,15 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
     }
     case 'EXPLORER_UPDATED':
       return { ...state, explorerData: action.payload.nodes };
+    case 'EXPLORER_NODE_UPDATED':
+      return {
+        ...state,
+        explorerData: updateNodeStatus(
+          state.explorerData,
+          action.payload.id,
+          action.payload.status
+        ),
+      };
     case 'PIPELINE_HEALTH_UPDATED': {
       const nextTimings = action.payload.stepTimings
         ? { ...(state as any).pipelineStepTimings, ...action.payload.stepTimings }
@@ -377,8 +404,8 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
 
     case 'NODE_METRICS_UPDATED':
       return { ...state, nodeMetrics: action.payload.metrics };
-    case 'TIME_FILTER_UPDATED':
-      return { ...state, currentTimeFilter: action.payload.timestamp };
+    case 'COMMIT_INDEX_UPDATED':
+      return { ...state, currentCommitIndex: action.payload.index };
 
     default:
       return state;

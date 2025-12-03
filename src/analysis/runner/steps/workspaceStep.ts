@@ -1,6 +1,14 @@
 import { WorkspaceIndexer } from '../../workspaceIndexer';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 
+function updateState<K extends keyof PipelineState>(
+  state: PipelineState,
+  key: K,
+  value: PipelineState[K]
+) {
+  (state as any)[key] = value;
+}
+
 export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): PipelineStep {
   return {
     id: 'workspace_overlay',
@@ -8,8 +16,10 @@ export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): 
     deps: [],
 
     async run(state: PipelineState) {
+      console.error('🟦 [WorkspaceStep] Starting run');
       if (!state.includeWorkspace) {
-        state.workspaceFacts = { staged: null, unstaged: null };
+        console.error('🟦 [WorkspaceStep] No workspace, skipping');
+        updateState(state, 'workspaceFacts', { staged: null, unstaged: null });
         return;
       }
 
@@ -18,7 +28,7 @@ export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): 
       const shouldProcessStaged = timeline.includes('workspace-staged');
 
       if (!shouldProcessUnstaged && !shouldProcessStaged) {
-        state.workspaceFacts = { staged: null, unstaged: null };
+        updateState(state, 'workspaceFacts', { staged: null, unstaged: null });
         return;
       }
 
@@ -37,10 +47,11 @@ export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): 
         }
       }
 
-      state.workspaceFacts = {
+      updateState(state, 'workspaceFacts', {
         staged: stagedFacts,
         unstaged: unstagedFacts,
-      };
+      });
+      console.error('🟦 [WorkspaceStep] Completed successfully');
     },
   };
 }

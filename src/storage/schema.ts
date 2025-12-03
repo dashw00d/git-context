@@ -575,7 +575,7 @@ CREATE INDEX IF NOT EXISTS idx_commit_branches_sha ON commit_branches(sha);
 CREATE INDEX IF NOT EXISTS idx_branches_parent ON branches(parent_branch);
 CREATE INDEX IF NOT EXISTS idx_squash_mappings_squash ON squash_mappings(squash_sha);`,
     migrations: [],
-    currentVersion: 2,
+    currentVersion: 1,
   },
 
   // Symbols Module: symbols, symbol_dna, symbol_versions, symbol_history, dna_decision_log
@@ -656,26 +656,11 @@ CREATE INDEX IF NOT EXISTS idx_symbol_history_dna ON symbol_history(symbol_dna_i
 CREATE INDEX IF NOT EXISTS idx_symbol_history_sha ON symbol_history(sha);
 CREATE INDEX IF NOT EXISTS idx_symbol_history_dna_sha ON symbol_history(symbol_dna_id, sha);
 CREATE INDEX IF NOT EXISTS idx_dna_decision_log_sha ON dna_decision_log(sha);`,
-    migrations: [
-      {
-        name: 'add_conventions',
-        sql: `ALTER TABLE symbols ADD COLUMN naming_convention TEXT; ALTER TABLE symbols ADD COLUMN convention_confidence REAL;`,
-        safe: true,
-      },
-      {
-        name: 'add_dna_v2',
-        sql: `ALTER TABLE symbol_versions ADD COLUMN dna_id_v2 TEXT;
-ALTER TABLE symbol_versions ADD COLUMN dna_version INTEGER DEFAULT 1;
-CREATE INDEX IF NOT EXISTS idx_symbol_versions_dna_v2 ON symbol_versions(dna_id_v2);`,
-        safe: true,
-        requiresReindex: false,
-      },
-    ],
-    currentVersion: 3,
+    migrations: [],
+    currentVersion: 1,
   },
 
   // Edges Module: edges, renames, import_conventions
-  // CRITICAL FIX: edge_type column added
   edges: {
     schema: `CREATE TABLE IF NOT EXISTS edges (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -720,16 +705,8 @@ CREATE INDEX IF NOT EXISTS idx_renames_new_path ON renames(new_path);
 CREATE INDEX IF NOT EXISTS idx_import_conventions_sha ON import_conventions(sha);
 CREATE INDEX IF NOT EXISTS idx_import_conventions_path ON import_conventions(path);
 CREATE INDEX IF NOT EXISTS idx_import_conventions_style ON import_conventions(import_style);`,
-    migrations: [
-      {
-        name: 'add_edge_type',
-        sql: `ALTER TABLE edges ADD COLUMN edge_type TEXT DEFAULT 'unknown';
-UPDATE commits_analysis SET analysis_version = '2.0-legacy_edges' WHERE analysis_version < '2.0';`,
-        safe: true,
-        requiresReindex: true,
-      },
-    ],
-    currentVersion: 2,
+    migrations: [],
+    currentVersion: 1,
   },
 
   // Conventions Module: file_conventions
@@ -815,38 +792,8 @@ CREATE INDEX IF NOT EXISTS idx_workspace_head ON workspace_analysis(head_sha);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version ON hybrid_facts(file_path, version);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_dna ON hybrid_facts(dna_id);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash);`,
-    migrations: [
-      {
-        name: 'add_body_hash_edges',
-        sql: `ALTER TABLE file_snapshots ADD COLUMN body_hash TEXT; ALTER TABLE workspace_analysis ADD COLUMN edges_added INTEGER DEFAULT 0; ALTER TABLE workspace_analysis ADD COLUMN edges_removed INTEGER DEFAULT 0;`,
-        safe: true,
-      },
-      {
-        name: 'add_hybrid_facts_table',
-        sql: `CREATE TABLE IF NOT EXISTS hybrid_facts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  file_path TEXT NOT NULL,
-  version TEXT NOT NULL,
-  fact_id TEXT NOT NULL,
-  dna_id TEXT NOT NULL,
-  serialized_fact TEXT NOT NULL,
-  timeline_json TEXT NOT NULL,
-  hash TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  UNIQUE(file_path, version, fact_id)
-);
-CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version ON hybrid_facts(file_path, version);
-CREATE INDEX IF NOT EXISTS idx_hybrid_facts_dna ON hybrid_facts(dna_id);
-CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash);`,
-        safe: true,
-      },
-      {
-        name: 'rename_workspace_to_unstaged',
-        sql: `UPDATE hybrid_facts SET version='workspace-unstaged' WHERE version='workspace'`,
-        safe: true, // UPDATE is safe
-      },
-    ],
-    currentVersion: 4,
+    migrations: [],
+    currentVersion: 1,
   },
 
   // Bundles Module: bundles, bundle_files

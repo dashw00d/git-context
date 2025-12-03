@@ -21,7 +21,9 @@ import {
 let vscode: any;
 try {
   vscode = require('vscode');
-} catch {}
+} catch {
+  //empty
+}
 
 let cachedPackageJson: any = null;
 function getPackageJson(): any {
@@ -379,7 +381,9 @@ export async function getProjectId(): Promise<string | undefined> {
         const hash = crypto.createHash('sha256').update(remoteUrl).digest('hex').substring(0, 16);
         return `project_${hash}`;
       }
-    } catch {}
+    } catch {
+      //empty
+    }
 
     const folderName = path.basename(gitRoot.replace(/[/\\]$/, ''));
     const rootHash = crypto.createHash('sha256').update(gitRoot).digest('hex').substring(0, 12);

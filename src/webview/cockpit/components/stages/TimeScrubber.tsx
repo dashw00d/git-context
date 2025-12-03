@@ -1,10 +1,16 @@
 import * as React from 'react';
 
+interface CommitInfo {
+  sha: string;
+  date: string;
+  message: string;
+  author?: string;
+}
+
 interface TimeScrubberProps {
-  currentTimeFilter?: number;
-  onTimeFilterChange: (timestamp: number) => void;
-  startTime?: number;
-  endTime?: number;
+  commits?: CommitInfo[];
+  currentCommitIndex?: number;
+  onCommitIndexChange: (index: number) => void;
 }
 
 const ScrubberContainer: React.CSSProperties = {
@@ -24,50 +30,70 @@ const SliderStyle: React.CSSProperties = {
 };
 
 export const TimeScrubber: React.FC<TimeScrubberProps> = ({
-  currentTimeFilter,
-  onTimeFilterChange,
-  startTime = Date.now() - 30 * 24 * 60 * 60 * 1000,
-  endTime = Date.now(),
+  commits = [],
+  currentCommitIndex,
+  onCommitIndexChange,
 }) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
-  const [currentValue, setCurrentValue] = React.useState(currentTimeFilter || endTime);
+  const maxIndex = commits.length > 0 ? commits.length - 1 : 0;
+  const effectiveIndex = currentCommitIndex !== undefined ? currentCommitIndex : maxIndex;
+  const [currentIndex, setCurrentIndex] = React.useState(effectiveIndex);
 
   React.useEffect(() => {
-    if (currentTimeFilter) {
-      setCurrentValue(currentTimeFilter);
+    if (currentCommitIndex !== undefined) {
+      setCurrentIndex(currentCommitIndex);
     }
-  }, [currentTimeFilter]);
+  }, [currentCommitIndex]);
 
   React.useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (isPlaying) {
+    if (isPlaying && commits.length > 0) {
       interval = setInterval(() => {
-        setCurrentValue(prev => {
-          const next = prev + (endTime - startTime) / 100;
-          if (next >= endTime) {
+        setCurrentIndex(prev => {
+          if (prev >= maxIndex) {
             setIsPlaying(false);
-            return endTime;
+            return maxIndex;
           }
+          const next = prev + 1;
+          onCommitIndexChange(next);
           return next;
         });
-      }, 100);
+      }, 500); // Step through commits every 500ms
     }
     return () => clearInterval(interval);
-  }, [isPlaying, startTime, endTime]);
+  }, [isPlaying, maxIndex, commits.length, onCommitIndexChange]);
 
   React.useEffect(() => {
-    if (Math.abs(currentValue - (currentTimeFilter || endTime)) > 1000) {
-      onTimeFilterChange(currentValue);
+    if (currentIndex !== effectiveIndex) {
+      onCommitIndexChange(currentIndex);
     }
-  }, [currentValue]);
+  }, [currentIndex]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
-    setCurrentValue(val);
-    onTimeFilterChange(val);
+    setCurrentIndex(val);
+    onCommitIndexChange(val);
   };
 
-  const formatTime = (ts: number) => new Date(ts).toLocaleDateString();
+  const formatCommit = (index: number) => {
+    if (commits.length === 0 || index < 0 || index >= commits.length) {
+      return 'No commits';
+    }
+    const commit = commits[index];
+    const shortSha = commit.sha.substring(0, 8);
+    const date = commit.date ? new Date(commit.date).toLocaleDateString() : '';
+    const message = commit.message || 'No message';
+    const shortMessage = message.length > 40 ? message.substring(0, 40) + '...' : message;
+    return `${shortSha} - ${shortMessage}${date ? ` (${date})` : ''}`;
+  };
+
+  if (commits.length === 0) {
+    return (
+      <div style={ScrubberContainer}>
+        <span style={{ fontSize: '11px', opacity: 0.7 }}>No commits available</span>
+      </div>
+    );
+  }
 
   return (
     <div style={ScrubberContainer}>
@@ -81,27 +107,42 @@ export const TimeScrubber: React.FC<TimeScrubberProps> = ({
           fontSize: '16px',
         }}
         title={isPlaying ? 'Pause' : 'Play History'}
+        disabled={commits.length === 0}
       >
         {isPlaying ? '⏸' : '▶'}
       </button>
 
-      <span style={{ fontSize: '11px', opacity: 0.7, minWidth: '70px' }}>
-        {formatTime(currentValue)}
+      <span
+        style={{
+          fontSize: '11px',
+          opacity: 0.7,
+          minWidth: '200px',
+          maxWidth: '300px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {formatCommit(currentIndex)}
       </span>
 
       <input
         type="range"
-        min={startTime}
-        max={endTime}
-        value={currentValue}
+        min={0}
+        max={maxIndex}
+        value={currentIndex}
         onChange={handleChange}
         style={SliderStyle}
+        disabled={commits.length === 0}
       />
+
+      <span style={{ fontSize: '11px', opacity: 0.7, minWidth: '50px', textAlign: 'right' }}>
+        {currentIndex + 1} / {commits.length}
+      </span>
 
       <button
         onClick={() => {
-          setCurrentValue(endTime);
-          onTimeFilterChange(endTime);
+          setCurrentIndex(maxIndex);
+          onCommitIndexChange(maxIndex);
         }}
         style={{
           fontSize: '11px',
@@ -112,6 +153,7 @@ export const TimeScrubber: React.FC<TimeScrubberProps> = ({
           color: 'var(--vscode-foreground)',
           cursor: 'pointer',
         }}
+        disabled={commits.length === 0}
       >
         Reset
       </button>

@@ -1,8 +1,8 @@
 import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
-import type { CstDiffResult } from './cstDiff';
 import { getCstDiffManager } from './cstDiff';
 import { getDifftasticIntegration } from './difftastic';
+import type { CstDiffResult } from './cstDiff';
 
 export interface StructuralDiffMetrics {
   structuralChangeScore: number;
@@ -27,7 +27,9 @@ export class StructuralDiffManager {
   private writeQueue: QueuedDiff[] = [];
   private readonly BATCH_SIZE = 50;
 
-  constructor(private db: any) {}
+  constructor(private db: any) {
+    //empty
+  }
 
   /**
    * Get or create structural diff (content-addressed caching)

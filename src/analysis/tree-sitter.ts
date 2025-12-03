@@ -49,6 +49,7 @@ export class TreeSitterParser {
 
       worker.on('message', msg => {
         if (msg.type === 'initialized') {
+          // empty
         } else if (msg.type === 'result') {
           const task = this.activeTasks.get(msg.id);
           if (task) {

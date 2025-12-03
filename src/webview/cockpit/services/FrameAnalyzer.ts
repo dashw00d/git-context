@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { getTreeSitterParser } from '../../../analysis/tree-sitter';
 import { BundleFactsDTO } from '../../../types/cockpit';
+import { detectLanguage } from '../../../utils/config';
 import { logDebug, logError } from '../../../utils/logger';
 
 type Tier1Data = {
@@ -10,6 +12,7 @@ type Tier1Data = {
   language: string;
   filePath: string;
   fileExists: boolean;
+  symbols?: any[];
 };
 
 type Tier2Data = {
@@ -19,6 +22,7 @@ type Tier2Data = {
   hotspotScore?: number;
   history?: any;
   diff?: any;
+  lineCommits?: Array<{ line: number; commitSha: string; author: string; date: string }>;
 };
 
 type Tier3Data = {
@@ -31,13 +35,16 @@ type Tier3Data = {
  * Follows the pipeline pattern with best-effort error handling
  */
 export class FrameAnalyzer {
-  constructor(private view?: vscode.WebviewView) {}
+  constructor(private view?: vscode.WebviewView) {
+    //empty
+  }
 
   /**
    * Tier 1: Structure (Always succeeds)
    * - File content
    * - Line count
    * - Language detection
+   * - Symbol extraction
    */
   async analyzeTier1(
     frameId: string,
@@ -45,11 +52,39 @@ export class FrameAnalyzer {
     workspaceRoot: string
   ): Promise<Tier1Data> {
     const fullPath = path.join(workspaceRoot, targetPath);
-    const language = path.extname(fullPath).toLowerCase().replace('.', '') || 'unknown';
+    const language =
+      detectLanguage(targetPath) ||
+      path.extname(fullPath).toLowerCase().replace('.', '') ||
+      'unknown';
 
     try {
       const content = fs.readFileSync(fullPath, 'utf8');
       const lineCount = content.split('\n').length;
+
+      // Extract symbols if language is supported
+      let symbols: any[] = [];
+      if (language && language !== 'unknown') {
+        try {
+          const parser = getTreeSitterParser();
+          const hybridFacts = await parser.extractHybridFacts(content, targetPath, language);
+          // Filter to only symbol kinds (functions, classes, etc.)
+          const symbolKinds = new Set([
+            'function',
+            'method',
+            'class',
+            'const',
+            'variable',
+            'interface',
+            'enum',
+            'module',
+            'type',
+            'type_alias',
+          ]);
+          symbols = hybridFacts.filter((f: any) => symbolKinds.has(f.kind));
+        } catch (error) {
+          logDebug(`FrameAnalyzer: Failed to extract symbols for ${frameId}: ${error}`);
+        }
+      }
 
       return {
         content,
@@ -57,6 +92,7 @@ export class FrameAnalyzer {
         language,
         filePath: targetPath,
         fileExists: true,
+        symbols,
       };
     } catch (error) {
       logError(`FrameAnalyzer: Tier 1 analysis failed for ${frameId}`, error);
@@ -66,6 +102,7 @@ export class FrameAnalyzer {
         language,
         filePath: targetPath,
         fileExists: false,
+        symbols: [],
       };
     }
   }
@@ -175,6 +212,16 @@ export class FrameAnalyzer {
         data.diff = diff;
       } catch (e) {
         logDebug(`FrameAnalyzer: Failed to get diff for ${frameId}: ${e}`);
+      }
+
+      // Fetch line-by-line commit information (blame)
+      try {
+        const { GitOperations } = require('../../../analysis/git');
+        const gitOps = new GitOperations();
+        const lineCommits = await gitOps.getFileBlame(targetPath);
+        data.lineCommits = lineCommits;
+      } catch (e) {
+        logDebug(`FrameAnalyzer: Failed to get blame for ${frameId}: ${e}`);
       }
 
       return data;

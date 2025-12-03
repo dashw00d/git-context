@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { ZodError } from 'zod';
 import {
   analysisActions,
   bundleActions,
@@ -7,18 +8,37 @@ import {
   metricsActions,
   navigationActions,
   reportActions,
+  selectionActions,
   symbolActions,
   uiActions,
 } from '../../../state/actionCreators';
+import { normalizeBundleConfig } from '../../../state/bundleConfig';
 import { CockpitClientMessageSchema, CockpitHostMessageSchema } from '../../../state/schemas';
 import { selectSelection } from '../../../state/selectors';
 import { getStore } from '../../../state/store';
 import { CockpitHostMessage } from '../../../types/cockpit';
-import { logDebug, logError, logInfo } from '../../../utils/logger';
+import { withTimeout } from '../../../utils/async';
+import { logError, logInfo } from '../../../utils/logger';
 import { MessageTracer } from '../../../utils/messageTracer';
+import { deriveWorkspaceScopeFromMode } from '../../../utils/scopeUtils';
 import { AnalysisController } from './AnalysisController';
 import { BundleManager } from './BundleManager';
 import { ExplorerController } from './ExplorerController';
+
+function formatZodIssues(error: ZodError): string {
+  return error.issues
+    .map(issue => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+    .join('; ');
+}
+
+let hostValidationNotified = false;
+const notifyHostValidationError = (message: string) => {
+  logError(message);
+  if (!hostValidationNotified) {
+    hostValidationNotified = true;
+    void vscode.window.showErrorMessage(`Git Context Cockpit failed to render: ${message}`);
+  }
+};
 
 export class MessageController {
   private tracer = new MessageTracer();
@@ -28,7 +48,9 @@ export class MessageController {
     private readonly analysisController: AnalysisController,
     private readonly explorerController: ExplorerController,
     private readonly bundleManager: BundleManager
-  ) {}
+  ) {
+    //empty
+  }
 
   public async handleMessage(rawMsg: any) {
     this.tracer.logIncoming(rawMsg.type, rawMsg, 'webview');
@@ -55,16 +77,30 @@ export class MessageController {
         break;
       case 'generateLiveReport':
         getStore().dispatch(liveActions.updateLegacy({ status: 'analyzing' }));
-        await vscode.commands.executeCommand('git-context.generateLiveReport');
+        await withTimeout(
+          Promise.resolve(vscode.commands.executeCommand('git-context.generateLiveReport')),
+          30000,
+          'Generate live report'
+        );
         break;
       case 'startLiveAnalysis':
-        await vscode.commands.executeCommand('git-context.startLiveAnalysis');
+        await withTimeout(
+          Promise.resolve(vscode.commands.executeCommand('git-context.startLiveAnalysis')),
+          30000,
+          'Start live analysis'
+        );
         break;
       case 'generateReport': {
-        const mode = msg.mode as 'selection' | 'lastN' | undefined;
-        const force = msg.force as boolean | undefined;
         try {
           const state = getStore().getState();
+          const mode = msg.mode as
+            | 'selection'
+            | 'lastN'
+            | 'staged'
+            | 'unstaged'
+            | 'changes'
+            | undefined;
+          const force = msg.force as boolean | undefined;
           logInfo(
             `[Cockpit] generateReport message received (mode=${mode || 'selection'}, force=${!!force}, lastN=${msg.lastN ?? state.lastNCommits})`
           );
@@ -72,6 +108,27 @@ export class MessageController {
           if (typeof msg.lastN === 'number') {
             getStore().dispatch(commitActions.setLastN(msg.lastN));
           }
+
+          // Update bundleConfig.mode when mode is specified to ensure state consistency
+          if (mode === 'changes' || mode === 'staged' || mode === 'unstaged') {
+            const currentConfig = state.bundleConfig || {
+              mode: 'repo',
+              roots: [],
+              includeConnected: false,
+              exclusions: [],
+            };
+            const modeToSet = mode === 'changes' ? 'changes' : currentConfig.mode;
+            if (modeToSet !== currentConfig.mode) {
+              getStore().dispatch(
+                bundleActions.configUpdated({
+                  ...currentConfig,
+                  mode: modeToSet,
+                })
+              );
+            }
+          }
+
+          const workspaceScope = deriveWorkspaceScopeFromMode(mode);
 
           if (mode === 'lastN') {
             const { getExtensionConfig } = await import('../../../utils/config');
@@ -97,15 +154,27 @@ export class MessageController {
           }
 
           const selection = selectSelection(state).commits;
+          getStore().dispatch(
+            selectionActions.update(
+              state.selectedCommitShas,
+              state.selectedStagedPaths,
+              state.selectedUnstagedPaths,
+              workspaceScope,
+              state.selectedFiles
+            )
+          );
           getStore().dispatch(analysisActions.request(selection, force));
 
+          logInfo('[Cockpit] Starting skeleton and hybrid updates...');
           this.analysisController
             .sendSkeletonProgress()
-            .catch(err => logDebug(`[Cockpit] Skeleton resolution failed: ${err}`));
+            .then(() => logInfo('[Cockpit] sendSkeletonProgress completed'))
+            .catch(err => logError(`[Cockpit] Skeleton resolution failed: ${err}`));
 
           this.analysisController
             .sendHybridProgress()
-            .catch(err => logDebug(`[Cockpit] Hybrid update failed: ${err}`));
+            .then(() => logInfo('[Cockpit] sendHybridProgress completed'))
+            .catch(err => logError(`[Cockpit] Hybrid update failed: ${err}`));
 
           getStore().dispatch(analysisActions.progress(true));
           getStore().dispatch(analysisActions.clearError());
@@ -248,10 +317,14 @@ export class MessageController {
 
           const { getLLMClient } = await import('../../../llm/openrouter');
           const client = getLLMClient();
-          const reply = await client.complete(messages as any, {
-            maxTokens: 600,
-            temperature: 0.2,
-          });
+          const reply = await withTimeout(
+            client.complete(messages as any, {
+              maxTokens: 600,
+              temperature: 0.2,
+            }),
+            60000,
+            'Assistant response'
+          );
 
           this.sendMessage({ type: 'assistantResponse', payload: { text: reply } });
         } catch (err) {
@@ -322,7 +395,8 @@ export class MessageController {
         break;
       case 'analyzeFrame':
         if (msg.frameId) {
-          await this.analysisController.analyzeFrame(msg.frameId);
+          const { getAnalysisService } = await import('../../../services/analysisService');
+          await getAnalysisService().analyzeFrame(msg.frameId, this.view);
         }
         break;
       case 'getBundleData':
@@ -394,21 +468,26 @@ export class MessageController {
             includeConnected: false,
             exclusions: [],
           };
-          const newConfig = { ...currentConfig, ...msg.config };
-          getStore().dispatch(bundleActions.configUpdated(newConfig));
+          const mergedConfig = { ...currentConfig, ...msg.config };
+          const normalizedConfig = normalizeBundleConfig(mergedConfig);
+          getStore().dispatch(bundleActions.configUpdated(normalizedConfig));
 
-          await this.analysisController.updateSkeleton(newConfig);
+          await this.analysisController.updateSkeleton(normalizedConfig);
 
           await vscode.workspace
             .getConfiguration('git-context')
-            .update('bundleConfig', newConfig, vscode.ConfigurationTarget.Workspace);
+            .update('bundleConfig', normalizedConfig, vscode.ConfigurationTarget.Workspace);
 
           await this.analysisController.updateBundleData();
         }
         break;
-      case 'updateTimeFilter':
-        getStore().dispatch(metricsActions.setTimeFilter(msg.value));
+      case 'updateCommitIndex':
+        getStore().dispatch(metricsActions.setCommitIndex(msg.value));
         break;
+      case 'clearError':
+        getStore().dispatch({ type: 'ERROR_CLEARED' });
+        break;
+
       default:
         break;
     }
@@ -423,7 +502,20 @@ export class MessageController {
         scope: c.scope || ('history' as const),
       })),
     };
-    const message: CockpitHostMessage = { type: 'updateState', payload: sanitizedState };
+    const message: CockpitHostMessage = {
+      type: 'updateState',
+      payload: sanitizedState,
+    };
+    const validation = CockpitHostMessageSchema.safeParse(message);
+    if (!validation.success) {
+      const detail = formatZodIssues(validation.error);
+      const msg = `[Cockpit] Host message validation failed: ${detail}`;
+      notifyHostValidationError(msg);
+      logError(msg);
+      // Don't throw - log error and return to avoid breaking the UI
+      return;
+    }
+
     this.sendMessage(message);
     logInfo('[Cockpit] Sent state update to webview');
   }
@@ -432,7 +524,10 @@ export class MessageController {
     const parsed = CockpitHostMessageSchema.parse(message);
     this.tracer.logOutgoing(parsed.type, parsed.payload, 'extension');
     try {
-      this.view.webview.postMessage(parsed);
+      getStore().dispatch({
+        type: 'WEBVIEW_MESSAGE',
+        payload: { message: parsed, target: 'cockpit' },
+      });
     } catch (error) {
       logError('[Cockpit] Failed to send message', error);
     }
