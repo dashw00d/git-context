@@ -1,6 +1,6 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { debounce } from 'lodash';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { GitOperations } from '../analysis/git';
 import { RefactorPipeline } from '../analysis/refactorPipeline';
@@ -36,8 +36,6 @@ export class GitCommitWatcher implements vscode.Disposable {
 
   private async handleCommit(): Promise<void> {
     try {
-      // No migration needed in new architecture - workspace SHA is separate
-      // Just re-index the new commit
       const git = new GitOperations();
       const newSha = await git.getHeadSha();
 

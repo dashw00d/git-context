@@ -1,103 +1,86 @@
-/**
- * Typed structures for LLM analyst output
- * Evidence-linked blocks that can be rendered with clickable references
- */
-
 export interface EvidenceLink {
-  /** JSON path in facts (e.g., "findings.legacyAudit.dead[2]") */
   path: string;
-  /** Human-readable description */
+
   description: string;
-  /** Optional symbol/file reference for UI linking */
+
   symbolId?: string;
-  /** Optional file path for opening */
+
   filePath?: string;
-  /** Optional line number */
+
   lineNumber?: number;
-  /** Optional origin tag (workspace-unstaged/staged/commit) */
+
   origin?: string;
 }
 
 export interface Claim {
-  /** The claim or finding */
   text: string;
-  /** Confidence level (0.0-1.0) */
+
   confidence: number;
-  /** Evidence supporting this claim */
+
   evidence: EvidenceLink[];
-  /** Severity level */
+
   severity: 'low' | 'medium' | 'high' | 'critical';
 }
 
 export interface Action {
-  /** Actionable task description */
   description: string;
-  /** Priority level */
+
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  /** Evidence this action addresses */
+
   evidence: EvidenceLink[];
-  /** Estimated effort (story points or time) */
+
   effort: 'xs' | 's' | 'm' | 'l' | 'xl';
-  /** Risk level of implementing this action */
+
   risk: 'low' | 'medium' | 'high';
-  /** Dependencies on other actions */
+
   dependsOn?: string[];
 }
 
 export interface AnalysisBlock {
-  /** Unique identifier for this block */
   id: string;
-  /** Human-readable title */
+
   title: string;
-  /** Block type */
+
   type: 'intent' | 'drift' | 'cleanup' | 'summary' | 'discovery';
-  /** Claims made in this block */
+
   claims: Claim[];
-  /** Recommended actions */
+
   actions: Action[];
-  /** Overall confidence in this analysis */
+
   confidence: number;
-  /** When this analysis was generated */
+
   timestamp: string;
 }
 
 export interface LlmAnalysis {
-  /** Overall analysis summary */
   summary: string;
-  /** Structured analysis blocks */
+
   blocks: AnalysisBlock[];
-  /** Generation metadata */
+
   metadata: {
-    /** Total LLM calls made */
     totalCalls: number;
-    /** Total tokens used */
+
     totalTokens: number;
-    /** Total duration in milliseconds */
+
     durationMs?: number;
-    /** Model used */
+
     model: string;
-    /** Generation timestamp */
+
     timestamp: string;
-    /** Refactor health score (0-100) */
+
     healthScore?: number;
-    /** Number of validated evidence items */
+
     validatedEvidenceCount?: number;
-    /** Indicates analysis was skipped/fallback */
+
     skipped?: boolean;
-    /** Optional reason when skipped */
+
     reason?: string;
   };
-  /** Rendered markdown version */
+
   markdown: string;
 }
 
-/**
- * Utility functions for working with analysis blocks
- */
 export class AnalysisBlockUtils {
-  /**
-   * Create a new analysis block
-   */
   static createBlock(
     id: string,
     title: string,
@@ -111,28 +94,19 @@ export class AnalysisBlockUtils {
       type,
       claims,
       actions,
-      confidence: 0.8, // Default confidence
+      confidence: 0.8,
       timestamp: new Date().toISOString(),
     };
   }
 
-  /**
-   * Add a claim to a block
-   */
   static addClaim(block: AnalysisBlock, claim: Claim): void {
     block.claims.push(claim);
   }
 
-  /**
-   * Add an action to a block
-   */
   static addAction(block: AnalysisBlock, action: Action): void {
     block.actions.push(action);
   }
 
-  /**
-   * Create an evidence link
-   */
   static createEvidence(
     path: string,
     description: string,
@@ -149,11 +123,6 @@ export class AnalysisBlockUtils {
     };
   }
 
-  /**
-   * Create an evidence link with auto-generated readable description
-   * Parses the evidence path to generate human-readable text
-   * @param knownFiles Optional set of known file paths to validate against (prevents hallucinated files)
-   */
   static createEvidenceAuto(
     path: string,
     context?: string,
@@ -170,16 +139,14 @@ export class AnalysisBlockUtils {
       lineNumber: parsed.lineNumber,
     };
 
-    // Validate filePath against known files if provided
     if (parsed.filePath && knownFiles) {
       const knownFilesSet = knownFiles instanceof Set ? knownFiles : new Set(knownFiles);
       if (!knownFilesSet.has(parsed.filePath)) {
-        // File path not in known files - potentially hallucinated
         return {
           path,
           description: `${description} (validate existence)`,
           symbolId: parsed.symbolId,
-          filePath: undefined, // Remove invalid file path
+          filePath: undefined,
           lineNumber: parsed.lineNumber,
         };
       }
@@ -188,32 +155,20 @@ export class AnalysisBlockUtils {
     return evidence;
   }
 
-  /**
-   * Parse evidence path into human-readable description
-   * Handles various path formats:
-   * - diff[file.php] (code snippet)
-   * - ast[file.php].method_name
-   * - graph.nodes[symbol_id]
-   * - graph.edges[from -> to]
-   * - findings.incompleteness.missing[0]
-   */
   static parseEvidencePathToDescription(path: string, context?: string): string {
     if (!path) return context || 'Evidence';
 
-    // Handle diff paths: diff[file.php] (code snippet)
     const diffMatch = path.match(/^diff\[([^\]]+)\]\s*(?:\(([^)]+)\))?/);
     if (diffMatch) {
       const file = diffMatch[1].split('/').pop() || diffMatch[1];
       const snippet = diffMatch[2];
       if (snippet) {
-        // Clean up the snippet - show first meaningful part
         const cleanSnippet = snippet.replace(/\s+/g, ' ').trim();
         return `Diff: ${file} - "${cleanSnippet.substring(0, 40)}${cleanSnippet.length > 40 ? '...' : ''}"`;
       }
       return `Diff: ${file}`;
     }
 
-    // Handle AST paths: ast[file.php].method_name
     const astMatch = path.match(/^ast\[([^\]]+)\]\.?(\w+)?/);
     if (astMatch) {
       const file = astMatch[1].split('/').pop() || astMatch[1];
@@ -225,7 +180,6 @@ export class AnalysisBlockUtils {
       return `AST: ${file}`;
     }
 
-    // Handle graph node paths: graph.nodes[symbol_id]
     const nodeMatch = path.match(/^graph\.nodes\[([^\]]+)\]/);
     if (nodeMatch) {
       const symbolId = nodeMatch[1];
@@ -238,21 +192,17 @@ export class AnalysisBlockUtils {
       return `Graph node: ${symbolId}`;
     }
 
-    // Handle graph edge paths: graph.edges[from -> to]
     const edgeMatch = path.match(/^graph\.edges\[([^\]]+)\]/);
     if (edgeMatch) {
       const edge = edgeMatch[1];
       return `Graph edge: ${edge.replace(/ -> /g, ' → ')}`;
     }
 
-    // Handle JSON paths: findings.incompleteness.missing
     const jsonPathMatch = path.match(/^(findings|intended|working|scope|bundle|evidence)\.(.+)/);
     if (jsonPathMatch) {
       const section = jsonPathMatch[1];
       const subpath = jsonPathMatch[2];
 
-      // Group evidence by section for better organization
-      // Sections: findings, intended, working, scope, bundle, evidence
       const sectionGroups: Record<string, string[]> = {
         findings: ['incompleteness', 'legacy', 'drift'],
         intended: ['symbols', 'edges'],
@@ -262,16 +212,13 @@ export class AnalysisBlockUtils {
         evidence: ['claims', 'actions'],
       };
 
-      // Validate section is recognized
       if (!Object.keys(sectionGroups).includes(section)) {
-        return `Unknown section: ${section}`; // Unknown section
+        return `Unknown section: ${section}`;
       }
 
-      // Clean up the subpath for display
       const parts = subpath.split('.');
       const lastPart = parts[parts.length - 1].replace(/\[\d+\]$/, '');
 
-      // Generate human-readable names
       const readableNames: Record<string, string> = {
         'incompleteness.missing': 'Missing symbols',
         'incompleteness.zombies': 'Zombie symbols',
@@ -300,12 +247,10 @@ export class AnalysisBlockUtils {
       return `${readableName}`;
     }
 
-    // Fallback: clean up raw path
     if (context) {
       return context;
     }
 
-    // Try to make the path more readable
     return path
       .replace(/\[/g, ': ')
       .replace(/\]/g, '')
@@ -314,9 +259,6 @@ export class AnalysisBlockUtils {
       .replace(/([a-z])([A-Z])/g, '$1 $2');
   }
 
-  /**
-   * Parse evidence path to extract file/symbol info
-   */
   static parseEvidencePath(path: string): {
     filePath?: string;
     symbolId?: string;
@@ -324,11 +266,10 @@ export class AnalysisBlockUtils {
   } {
     const result: { filePath?: string; symbolId?: string; lineNumber?: number } = {};
 
-    // Extract file path from various formats
     const filePatterns = [
-      /diff\[([^\]]+)\]/, // diff[file.php]
-      /ast\[([^\]]+)\]/, // ast[file.php]
-      /^([^:]+\.(?:php|ts|js|tsx|jsx)):/, // file.php:symbol
+      /diff\[([^\]]+)\]/,
+      /ast\[([^\]]+)\]/,
+      /^([^:]+\.(?:php|ts|js|tsx|jsx)):/,
     ];
 
     for (const pattern of filePatterns) {
@@ -339,11 +280,7 @@ export class AnalysisBlockUtils {
       }
     }
 
-    // Extract symbol ID
-    const symbolPatterns = [
-      /graph\.nodes\[([^\]]+)\]/, // graph.nodes[symbol_id]
-      /([^:]+):(\w+)$/, // file:symbol
-    ];
+    const symbolPatterns = [/graph\.nodes\[([^\]]+)\]/, /([^:]+):(\w+)$/];
 
     for (const pattern of symbolPatterns) {
       const match = path.match(pattern);
@@ -356,48 +293,31 @@ export class AnalysisBlockUtils {
     return result;
   }
 
-  /**
-   * Extract file path from symbol ID
-   */
   static extractFilePath(symbolId: string): string {
     return symbolId.split(':')[0];
   }
 
-  /**
-   * Extract symbol name from symbol ID
-   */
   static extractSymbolName(symbolId: string): string {
     const parts = symbolId.split(':');
     return parts.length > 1 ? parts[parts.length - 1] : symbolId;
   }
 
-  /**
-   * Sort actions by priority and dependencies
-   */
   static sortActions(actions: Action[]): Action[] {
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
 
     return actions.sort((a, b) => {
-      // Sort by priority first
       const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
       if (priorityDiff !== 0) return priorityDiff;
 
-      // Then by effort (smaller first)
       const effortOrder = { xs: 0, s: 1, m: 2, l: 3, xl: 4 };
       return effortOrder[a.effort] - effortOrder[b.effort];
     });
   }
 
-  /**
-   * Filter blocks by type
-   */
   static filterByType(blocks: AnalysisBlock[], type: AnalysisBlock['type']): AnalysisBlock[] {
     return blocks.filter(block => block.type === type);
   }
 
-  /**
-   * Get all evidence links from blocks
-   */
   static getAllEvidence(blocks: AnalysisBlock[]): EvidenceLink[] {
     const evidence: EvidenceLink[] = [];
     for (const block of blocks) {

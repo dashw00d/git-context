@@ -23,16 +23,14 @@ export class LLMSummarizer {
    */
   async summarizeCommit(analysis: AnalysisResult): Promise<LLMResponse> {
     try {
-      // Stage 1: Compress the analysis data
       const stage1Data = await this.stage1Compression(analysis);
 
-      // Stage 2: Generate final structured summary
       const summary = await this.stage2Summary(analysis, stage1Data);
 
       return summary;
     } catch (error) {
       logError('LLM summarization failed:', error);
-      // Return minimal fallback response
+
       return {
         summary_md: `- Commit analysis failed: ${error}\n- Files changed: ${analysis.files.length}\n- Symbols modified: ${analysis.symbols.modified.length}`,
         breaking_changes: [],
@@ -51,7 +49,7 @@ export class LLMSummarizer {
     const symbolsAdded = analysis.symbols.added.map(s => ({
       name: s.name,
       type: s.kind,
-      signature: s.signature.substring(0, 100), // Truncate long signatures
+      signature: s.signature.substring(0, 100),
     }));
 
     const symbolsModified = analysis.symbols.modified.map(s => ({
@@ -68,7 +66,6 @@ export class LLMSummarizer {
     const edgesAdded = analysis.edges.added.map(e => `${e.from} -> ${e.to} (${e.type})`);
     const edgesRemoved = analysis.edges.removed.map(e => `${e.from} -> ${e.to} (${e.type})`);
 
-    // Fetch snippets for breaking changes only (limit to 3)
     let snippetsJson = '(none)';
     if (analysis.drift?.missing_symbols && analysis.drift.missing_symbols.length > 0) {
       const topMissing = analysis.drift.missing_symbols.slice(0, 3);
@@ -90,7 +87,7 @@ export class LLMSummarizer {
           analysis.symbols.removed.length
         }`
       )
-      .replace('{symbols_added}', JSON.stringify(symbolsAdded.slice(0, 10))) // Limit for token efficiency
+      .replace('{symbols_added}', JSON.stringify(symbolsAdded.slice(0, 10)))
       .replace('{symbols_modified}', JSON.stringify(symbolsModified.slice(0, 10)))
       .replace('{symbols_removed}', JSON.stringify(symbolsRemoved.slice(0, 10)))
       .replace('{edges_added}', JSON.stringify(edgesAdded.slice(0, 5)))
@@ -115,7 +112,6 @@ export class LLMSummarizer {
     try {
       return JSON.parse(response);
     } catch {
-      // Fallback if JSON parsing fails
       return {
         summary_points: ['Analysis compression failed'],
         breaking_changes: [],
@@ -130,7 +126,6 @@ export class LLMSummarizer {
    * Stage 2: Generate final structured summary
    */
   private async stage2Summary(analysis: AnalysisResult, stage1Data: any): Promise<LLMResponse> {
-    // Extract a small sample of the raw diff for context
     const diffSample = this.extractDiffSample(analysis);
 
     const prompt = STAGE_2_SUMMARY_PROMPT.replace(
@@ -158,7 +153,7 @@ export class LLMSummarizer {
       return JSON.parse(response) as LLMResponse;
     } catch (error) {
       logError(`Failed to parse LLM response: ${error}`);
-      // Return default response instead of throwing
+
       return {
         summary_md: 'Failed to parse LLM response',
         breaking_changes: [],
@@ -174,8 +169,6 @@ export class LLMSummarizer {
    * Extract a representative sample from the commit diff
    */
   private extractDiffSample(analysis: AnalysisResult): string {
-    // In a real implementation, we'd get the actual diff
-    // For now, create a summary based on the analysis
     const lines: string[] = [];
 
     lines.push(`Files changed: ${analysis.files.length}`);
@@ -214,13 +207,11 @@ export class LLMSummarizer {
 
     for (const missing of missingSymbols.slice(0, 3)) {
       const lastSha = missing.expected?.lastSha;
-      // Extract file path from symbol_id (format: "path/to/file.ts:SymbolName") or use lastPath
+
       const filePath = missing.expected?.lastPath || missing.symbol_id?.split(':')[0];
       if (!lastSha || !filePath) continue;
 
       try {
-        // Get diff context around missing symbol
-        // Use parent commit for "before" and the commit where it was last seen for "after"
         const beforeContent = (await git.safeGetFileContent(`${lastSha}~1`, filePath)) || '';
         const afterContent = (await git.safeGetFileContent(lastSha, filePath)) || '';
 
@@ -228,13 +219,12 @@ export class LLMSummarizer {
           snippets.push({
             symbol: missing.symbol_id,
             file: filePath,
-            before: beforeContent.substring(0, 500), // Truncate
+            before: beforeContent.substring(0, 500),
             after: afterContent.substring(0, 500),
             version: missing.introducedAtVersion || lastSha,
           });
         }
       } catch (error) {
-        // Skip if file doesn't exist in that commit
         continue;
       }
     }

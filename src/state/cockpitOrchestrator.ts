@@ -20,7 +20,7 @@ export type StateChangeHandler = (change: CockpitStateChange) => void | Promise<
 export type StateEffect<T extends keyof CockpitState = keyof CockpitState> = {
   key?: T | T[];
   handler: StateChangeHandler;
-  priority?: number; // Lower = higher priority
+  priority?: number;
 };
 
 /**
@@ -39,7 +39,6 @@ export class CockpitOrchestrator extends EventEmitter {
   private store: CockpitStore;
   private effects: StateEffect[] = [];
 
-  // Debouncing for UI updates
   private pendingPartial: Partial<CockpitState> | null = null;
   private flushTimeout: NodeJS.Timeout | null = null;
   private readonly debounceMs: number;
@@ -49,12 +48,10 @@ export class CockpitOrchestrator extends EventEmitter {
     this.debounceMs = debounceMs;
     this.store = getStore();
 
-    // Subscribe to store changes to propagate to listeners
     this.store.subscribe((state, action) => {
       let partial: Partial<CockpitState> = {};
       const reason: string = action.type;
 
-      // Quick mapping for common actions:
       if (action.type === 'ANALYSIS_STARTED')
         partial = { isAnalyzing: true, analysisStep: action.payload.step };
       else if (action.type === 'ANALYSIS_COMPLETED')
@@ -114,7 +111,6 @@ export class CockpitOrchestrator extends EventEmitter {
   }
 
   updateState(_partial?: Partial<CockpitState>, _reason = 'updateState'): void {
-    // Explicitly avoid legacy partial merges; log for visibility.
     logDebug('[CockpitOrchestrator] updateState is removed; ignoring call');
   }
 
@@ -127,7 +123,6 @@ export class CockpitOrchestrator extends EventEmitter {
   }
 
   updateLiveState(partial: Partial<CockpitState['liveAnalysis']>, _reason = 'live:update'): void {
-    // Use the new LIVE_ANALYSIS_UPDATED action instead of LEGACY_STATE_UPDATED
     this.store.dispatch({
       type: 'LIVE_ANALYSIS_UPDATED',
       payload: partial,
@@ -163,7 +158,6 @@ export class CockpitOrchestrator extends EventEmitter {
   ): void {
     this.pendingPartial = { ...(this.pendingPartial ?? {}), ...partial };
 
-    // If we have a timeout, just update the pending partial
     if (this.flushTimeout) return;
 
     this.flushTimeout = setTimeout(() => {

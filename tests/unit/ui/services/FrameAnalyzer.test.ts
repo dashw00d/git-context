@@ -1,29 +1,29 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { FrameAnalyzer } from '../../../../src/webview/cockpit/services/FrameAnalyzer';
 import * as fs from 'fs';
 import * as path from 'path';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { FrameAnalyzer } from '../../../../src/webview/cockpit/services/FrameAnalyzer';
 
 // Mock dependencies
 vi.mock('fs');
 vi.mock('path');
 vi.mock('vscode', () => ({
-  WebviewView: class {}
+  WebviewView: class {},
 }));
 vi.mock('../../../../../src/analysis/tree-sitter', () => ({
-  getTreeSitterParser: vi.fn()
+  getTreeSitterParser: vi.fn(),
 }));
 vi.mock('../../../../../src/analysis/git', () => ({
   GitOperations: class {
     getHistory = vi.fn().mockResolvedValue([]);
-  }
+  },
 }));
 vi.mock('../../../../../src/utils/logger', () => ({
   logDebug: vi.fn(),
   logError: vi.fn(),
-  logInfo: vi.fn()
+  logInfo: vi.fn(),
 }));
 vi.mock('../../../../../src/utils/supportedLanguages', () => ({
-  detectLanguage: vi.fn().mockReturnValue('typescript')
+  detectLanguage: vi.fn().mockReturnValue('typescript'),
 }));
 
 describe('FrameAnalyzer', () => {
@@ -33,8 +33,7 @@ describe('FrameAnalyzer', () => {
   beforeEach(() => {
     analyzer = new FrameAnalyzer();
     vi.clearAllMocks();
-    
-    // Setup path mocks
+
     (path.join as any).mockImplementation((...args: string[]) => args.join('/'));
     (path.extname as any).mockReturnValue('.ts');
   });
@@ -51,7 +50,7 @@ describe('FrameAnalyzer', () => {
         lineCount: 3,
         language: 'ts',
         filePath: 'src/test.ts',
-        fileExists: true
+        fileExists: true,
       });
       expect(fs.readFileSync).toHaveBeenCalledWith('/mock/root/src/test.ts', 'utf8');
     });
@@ -65,10 +64,10 @@ describe('FrameAnalyzer', () => {
 
       expect(result).toEqual({
         content: '[File not found on disk]',
-        lineCount: 1, // One line for the error message
+        lineCount: 1,
         language: 'ts',
         filePath: 'src/missing.ts',
-        fileExists: false
+        fileExists: false,
       });
     });
   });
@@ -77,10 +76,8 @@ describe('FrameAnalyzer', () => {
     it('should extract hotspot score from facts', async () => {
       const facts = {
         evidence: {
-          hotspots: [
-            { path: 'src/test.ts', score: 10 }
-          ]
-        }
+          hotspots: [{ path: 'src/test.ts', score: 10 }],
+        },
       } as any;
 
       const result = await analyzer.analyzeTier2('frame1', 'src/test.ts', facts);
@@ -93,12 +90,10 @@ describe('FrameAnalyzer', () => {
         findings: {
           patternDrift: {
             conventionDrift: {
-              driftSymbols: [
-                { path: 'src/test.ts', name: 'badName', suggestedName: 'goodName' }
-              ]
-            }
-          }
-        }
+              driftSymbols: [{ path: 'src/test.ts', name: 'badName', suggestedName: 'goodName' }],
+            },
+          },
+        },
       } as any;
 
       const result = await analyzer.analyzeTier2('frame1', 'src/test.ts', facts);
@@ -108,7 +103,7 @@ describe('FrameAnalyzer', () => {
         issue: 'Naming drift',
         severity: 'warning',
         symbol: 'badName',
-        detail: 'Suggested: goodName'
+        detail: 'Suggested: goodName',
       });
     });
 
@@ -116,17 +111,17 @@ describe('FrameAnalyzer', () => {
       const facts = {
         evidence: {
           'working.edges': [
-            'src/test.ts: funcA -> src/other.ts: funcB (calls)', // Outgoing
-            'src/caller.ts: funcC -> src/test.ts: funcA (calls)'  // Incoming
-          ]
-        }
+            'src/test.ts: funcA -> src/other.ts: funcB (calls)',
+            'src/caller.ts: funcC -> src/test.ts: funcA (calls)',
+          ],
+        },
       } as any;
 
       const result = await analyzer.analyzeTier2('frame1', 'src/test.ts', facts);
 
       expect(result.blastRadius.outgoing).toHaveLength(1);
       expect(result.blastRadius.outgoing[0].to).toBe('src/other.ts: funcB');
-      
+
       expect(result.blastRadius.incoming).toHaveLength(1);
       expect(result.blastRadius.incoming[0].from).toBe('src/caller.ts: funcC');
     });

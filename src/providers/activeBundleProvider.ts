@@ -10,7 +10,6 @@ export class ActiveBundleProvider {
   private bundleExpandedState = vscode.TreeItemCollapsibleState.Expanded;
 
   constructor(private context: vscode.ExtensionContext) {
-    // Load bundle facts from file if available
     this.loadBundleFacts();
   }
 
@@ -31,7 +30,6 @@ export class ActiveBundleProvider {
 
   refresh(): void {
     this.loadBundleFacts();
-    // TreeView removed - no event firing needed
   }
 
   exportBundleFacts(): RefactorBundleFacts | null {

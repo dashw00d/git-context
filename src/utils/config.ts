@@ -21,14 +21,8 @@ import {
 let vscode: any;
 try {
   vscode = require('vscode');
-} catch {
-  // Ignore, running in CLI
-}
+} catch {}
 
-/**
- * Get default value from package.json configuration schema
- * Reads package.json at runtime to avoid TypeScript rootDir issues
- */
 let cachedPackageJson: any = null;
 function getPackageJson(): any {
   if (!cachedPackageJson) {
@@ -44,10 +38,6 @@ function getPackageJson(): any {
   return cachedPackageJson;
 }
 
-/**
- * Get default value from package.json configuration schema
- * Exported for use in other modules
- */
 export function getPackageJsonDefault(key: string): any {
   const packageJson = getPackageJson();
   const props = packageJson?.contributes?.configuration?.properties || {};
@@ -55,13 +45,9 @@ export function getPackageJsonDefault(key: string): any {
   return (props as Record<string, any>)[fullKey]?.default;
 }
 
-/**
- * Load configuration from file if it exists
- */
 let cachedFileConfig: Partial<ExtensionConfig> | null | undefined = undefined;
 
 function loadConfigFile(): Partial<ExtensionConfig> | null {
-  // Return cached value if already loaded
   if (cachedFileConfig !== undefined) {
     return cachedFileConfig;
   }
@@ -83,20 +69,6 @@ function loadConfigFile(): Partial<ExtensionConfig> | null {
   return null;
 }
 
-/**
- * Create a matcher function for custom ignore paths using gitignore syntax
- * Uses the 'ignore' package which implements the .gitignore spec
- *
- * Supports all standard gitignore patterns:
- * - Negation: !pattern (un-ignore, overrides earlier matches)
- * - Recursive directory: path/** (matches everything inside recursively)
- * - Wildcards: *.js, test?.js
- * - Directory patterns: /path/ or path/
- * - And more...
- *
- * @param ignorePaths - Array of gitignore patterns
- * @returns Function that returns true if filePath should be ignored
- */
 export function createCustomIgnoreMatcher(
   ignorePaths: string[] | null | undefined
 ): (filePath: string) => boolean {
@@ -104,11 +76,9 @@ export function createCustomIgnoreMatcher(
     return () => false;
   }
 
-  // Use the 'ignore' package for proper gitignore pattern matching
   const ignore = require('ignore');
   const ig = ignore();
 
-  // Add patterns (trim and filter empty)
   const cleanedPatterns = ignorePaths.map(pattern => pattern.trim()).filter(Boolean);
 
   if (cleanedPatterns.length === 0) {
@@ -118,19 +88,17 @@ export function createCustomIgnoreMatcher(
   ig.add(cleanedPatterns);
 
   return (filePath: string): boolean => {
-    // Normalize path (use forward slashes, remove leading slash if present)
     const normalizedPath = filePath.replace(/\\/g, '/').replace(/^\/+/, '');
     return ig.ignores(normalizedPath);
   };
 }
 
 export function getExtensionConfig(): ExtensionConfig {
-  // Priority: 1. Local config file, 2. VS Code settings (with package.json defaults), 3. Environment variables
   const fileConfig = loadConfigFile();
 
   if (vscode) {
     const config = vscode.workspace.getConfiguration('git-context');
-    // VS Code automatically uses package.json defaults when calling config.get() without a default parameter
+
     const apiEndpoint = fileConfig?.apiEndpoint || config.get('apiEndpoint');
     const embeddingProvider =
       fileConfig?.embeddingProvider || config.get('embeddingProvider') || apiEndpoint;
@@ -149,14 +117,14 @@ export function getExtensionConfig(): ExtensionConfig {
       customPrompts: fileConfig?.customPrompts || config.get('customPrompts'),
       customIgnorePaths: fileConfig?.customIgnorePaths || config.get('customIgnorePaths'),
       rerankingWeights: fileConfig?.rerankingWeights || config.get('rerankingWeights'),
-      // Qdrant config
+
       qdrantUrl:
         fileConfig?.qdrantUrl || config.get('qdrantUrl') || getPackageJsonDefault('qdrantUrl'),
       qdrantApiKey:
         fileConfig?.qdrantApiKey ||
         config.get('qdrantApiKey') ||
         getPackageJsonDefault('qdrantApiKey'),
-      // Embedding config
+
       embeddingProvider,
       embeddingModel:
         fileConfig?.embeddingModel ||
@@ -164,27 +132,26 @@ export function getExtensionConfig(): ExtensionConfig {
         getPackageJsonDefault('embeddingModel'),
       allowedExtensions: fileConfig?.allowedExtensions || config.get('allowedExtensions'),
       maxFileSize: fileConfig?.maxFileSize || config.get('maxFileSize'),
-      // Qdrant isolation config
+
       perProjectQdrantCollections:
         fileConfig?.perProjectQdrantCollections || config.get('perProjectQdrantCollections'),
-      // CST tracking config
+
       enableCstTracking: fileConfig?.enableCstTracking ?? config.get('enableCstTracking') ?? true,
       enableCstAugmentation:
         fileConfig?.enableCstAugmentation ?? config.get('enableCstAugmentation') ?? false,
       cstLanguages: fileConfig?.cstLanguages ||
         config.get('cstLanguages') || ['markdown', 'json', 'yaml', 'css'],
-      // Snapshot cache config
+
       snapshotCacheEnabled:
         fileConfig?.snapshotCacheEnabled ?? config.get('snapshotCacheEnabled') ?? true,
       snapshotCacheSize: fileConfig?.snapshotCacheSize || config.get('snapshotCacheSize') || 50,
       snapshotCacheTTL: fileConfig?.snapshotCacheTTL || config.get('snapshotCacheTTL') || 3600,
-      // Path filtering config
+
       excludedPrefixes: fileConfig?.excludedPrefixes || config.get('excludedPrefixes'),
-      // Detector thresholds config
+
       detectorThresholds: fileConfig?.detectorThresholds || config.get('detectorThresholds'),
     };
   } else {
-    // CLI/Test fallback: config file > environment variables > package.json defaults
     const apiEndpoint =
       fileConfig?.apiEndpoint || process.env.API_ENDPOINT || getPackageJsonDefault('apiEndpoint');
     const embeddingProvider =
@@ -235,14 +202,14 @@ export function getExtensionConfig(): ExtensionConfig {
               .map(s => s.trim())
               .filter(Boolean)
           : getPackageJsonDefault('customIgnorePaths')),
-      // Qdrant config
+
       qdrantUrl:
         fileConfig?.qdrantUrl || process.env.QDRANT_URL || getPackageJsonDefault('qdrantUrl'),
       qdrantApiKey:
         fileConfig?.qdrantApiKey ||
         process.env.QDRANT_API_KEY ||
         getPackageJsonDefault('qdrantApiKey'),
-      // Embedding config
+
       embeddingProvider,
       embeddingModel:
         fileConfig?.embeddingModel ||
@@ -258,12 +225,12 @@ export function getExtensionConfig(): ExtensionConfig {
         (process.env.MAX_FILE_SIZE
           ? parseInt(process.env.MAX_FILE_SIZE)
           : getPackageJsonDefault('maxFileSize')),
-      // Qdrant isolation config
+
       perProjectQdrantCollections:
         fileConfig?.perProjectQdrantCollections ||
         process.env.PER_PROJECT_QDRANT_COLLECTIONS === 'true' ||
         getPackageJsonDefault('perProjectQdrantCollections'),
-      // CST tracking config
+
       enableCstTracking:
         fileConfig?.enableCstTracking ??
         (process.env.ENABLE_CST_TRACKING === 'false'
@@ -277,7 +244,7 @@ export function getExtensionConfig(): ExtensionConfig {
         (process.env.CST_LANGUAGES
           ? process.env.CST_LANGUAGES.split(',')
           : getPackageJsonDefault('cstLanguages') || ['markdown', 'json', 'yaml', 'css']),
-      // Snapshot cache config
+
       snapshotCacheEnabled:
         fileConfig?.snapshotCacheEnabled ??
         (process.env.SNAPSHOT_CACHE_ENABLED === 'false'
@@ -295,7 +262,7 @@ export function getExtensionConfig(): ExtensionConfig {
         (process.env.SNAPSHOT_CACHE_TTL
           ? parseInt(process.env.SNAPSHOT_CACHE_TTL)
           : getPackageJsonDefault('snapshotCacheTTL') || 3600),
-      // Path filtering config
+
       excludedPrefixes:
         fileConfig?.excludedPrefixes ||
         (process.env.EXCLUDED_PREFIXES
@@ -303,7 +270,7 @@ export function getExtensionConfig(): ExtensionConfig {
               .map(s => s.trim())
               .filter(Boolean)
           : getPackageJsonDefault('excludedPrefixes')),
-      // Detector thresholds config
+
       detectorThresholds:
         fileConfig?.detectorThresholds ||
         (process.env.DETECTOR_THRESHOLDS
@@ -313,7 +280,6 @@ export function getExtensionConfig(): ExtensionConfig {
   }
 }
 
-// Setup config change listener (VS Code only)
 if (vscode) {
   vscode.workspace.onDidChangeConfiguration((e: any) => {
     if (
@@ -324,7 +290,6 @@ if (vscode) {
     ) {
       invalidateSupportedLanguagesCache();
 
-      // Check if WASM files are missing for new extensions (async check)
       (async () => {
         try {
           const { getSupportedExtensions, getRequiredLanguagesForExtensions } =
@@ -338,7 +303,7 @@ if (vscode) {
 
           const missingLangs = requiredLangs.filter((lang: string) => {
             const wasmPath = path.join(wasmDir, `tree-sitter-${lang}.wasm`);
-            // Also check old location for migration
+
             const oldWasmPath = path.join(__dirname, '..', '..', 'out', `tree-sitter-${lang}.wasm`);
             return !fs.existsSync(wasmPath) && !fs.existsSync(oldWasmPath);
           });
@@ -357,7 +322,6 @@ if (vscode) {
             }
           }
         } catch (error) {
-          // Silently fail - this is a convenience feature
           logError('[Config] Failed to check for missing WASM files', error);
         }
       })();
@@ -365,7 +329,6 @@ if (vscode) {
   });
 }
 
-// Re-export supportedLanguages functions and types for convenience
 export {
   detectLanguage,
   getAugmentableLanguages,
@@ -391,28 +354,21 @@ export function getWorkspaceRoot(): string | undefined {
 
 export function getGitRoot(): string | undefined {
   if (vscode && vscode.workspace.workspaceFolders) {
-    // Check all workspace folders
     for (const folder of vscode.workspace.workspaceFolders) {
       const root = findGitRootForPath(folder.uri.fsPath);
       if (root) return root;
     }
     return undefined;
   } else {
-    // CLI fallback
     return findGitRootForPath(process.cwd());
   }
 }
 
-/**
- * Get a unique project identifier for Qdrant isolation
- * Uses git remote URL if available, otherwise folder name + hash
- */
 export async function getProjectId(): Promise<string | undefined> {
   const gitRoot = getGitRoot();
   if (!gitRoot) return undefined;
 
   try {
-    // Try to get git remote URL (most unique identifier)
     const simpleGit = require('simple-git');
     const git = simpleGit(gitRoot);
     try {
@@ -420,20 +376,15 @@ export async function getProjectId(): Promise<string | undefined> {
       const remoteUrl = config.value || '';
 
       if (remoteUrl) {
-        // Hash the remote URL for a stable, unique ID
         const hash = crypto.createHash('sha256').update(remoteUrl).digest('hex').substring(0, 16);
         return `project_${hash}`;
       }
-    } catch {
-      // No remote configured, fall through
-    }
+    } catch {}
 
-    // Fallback: folder name + hash of git root
-    const folderName = path.basename(gitRoot.replace(/[/\\]$/, '')); // Remove trailing separator
+    const folderName = path.basename(gitRoot.replace(/[/\\]$/, ''));
     const rootHash = crypto.createHash('sha256').update(gitRoot).digest('hex').substring(0, 12);
     return `project_${folderName}_${rootHash}`;
   } catch {
-    // Final fallback: just hash of git root
     const hash = crypto.createHash('sha256').update(gitRoot).digest('hex').substring(0, 16);
     return `project_${hash}`;
   }
@@ -446,18 +397,15 @@ function findGitRootForPath(startPath: string): string | undefined {
   while (currentPath !== rootPath) {
     const gitPath = path.join(currentPath, '.git');
 
-    // Check if .git exists (as directory or file for worktrees/submodules)
     if (fs.existsSync(gitPath)) {
-      // Normalize: ensure trailing path separator and consistent casing
       const normalized = path.resolve(currentPath);
-      // Add trailing separator if not root
+
       if (normalized !== path.parse(normalized).root) {
         return normalized + path.sep;
       }
       return normalized;
     }
 
-    // Move up one directory
     const parentPath = path.dirname(currentPath);
     if (parentPath === currentPath) {
       break;

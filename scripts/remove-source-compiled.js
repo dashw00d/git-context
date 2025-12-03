@@ -1,9 +1,3 @@
-// Use this script to remove all .js files in the src directory that have a corresponding .ts file.
-
-
-// node scripts/remove-source-compiled.js
-
-
 const fs = require('fs');
 const path = require('path');
 
@@ -40,13 +34,11 @@ function main() {
     const tsFile = path.join(dir, `${basename}.ts`);
 
     if (fs.existsSync(tsFile)) {
-      // Both .js and .ts exist - delete the .js file
       const relativePath = path.relative(projectRoot, jsFile);
       console.log(`Deleting: ${relativePath} (matching .ts file exists)`);
       fs.unlinkSync(jsFile);
       deletedCount++;
     } else {
-      // .js file exists but no matching .ts - keep it
       const relativePath = path.relative(projectRoot, jsFile);
       console.log(`Keeping: ${relativePath} (no matching .ts file)`);
       skippedCount++;

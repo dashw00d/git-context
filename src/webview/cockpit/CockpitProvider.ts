@@ -27,14 +27,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
   private state: CockpitState;
   private unsubscribe?: () => void;
 
-  // Services & Controllers
   private bundleManager: BundleManager;
   private explorerController?: ExplorerController;
   private analysisController?: AnalysisController;
   private messageController?: MessageController;
 
   constructor(private readonly extensionUri: vscode.Uri) {
-    this.state = getStore().getState(); // Initialize state directly from store
+    this.state = getStore().getState();
     this.bundleManager = new BundleManager();
   }
 
@@ -44,24 +43,22 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     _token: vscode.CancellationToken
   ): void {
     this.unsubscribe?.();
-    // Subscribe to store changes and pass the relevant cockpit state to handleStateChange
+
     let previousCockpitState = getStore().getState();
     this.unsubscribe = getStore().subscribe(() => {
       const currentCockpitState = getStore().getState();
-      // Only trigger handleStateChange if the cockpit state itself has changed
+
       if (currentCockpitState !== previousCockpitState) {
-        // Capture old state for diffing
         const oldState = previousCockpitState;
-        // Update reference immediately to prevent infinite recursion if handleStateChange triggers a synchronous dispatch
+
         previousCockpitState = currentCockpitState;
 
-        // Construct a CockpitStateChange object for compatibility
         const change: any = {
           full: currentCockpitState,
-          partial: {}, // We don't have granular partial changes from direct store subscription
+          partial: {},
           reason: 'store_update',
         };
-        // Attempt to infer partial changes for logging/conditional updates
+
         for (const key in currentCockpitState) {
           if (
             Object.prototype.hasOwnProperty.call(currentCockpitState, key) &&
@@ -76,9 +73,8 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     });
 
     this.view = webviewView;
-    this.state = getStore().getState(); // Ensure state is up-to-date
+    this.state = getStore().getState();
 
-    // Initialize Services & Controllers
     this.explorerController = new ExplorerController(webviewView, this.bundleManager);
     this.analysisController = new AnalysisController(webviewView);
     this.messageController = new MessageController(
@@ -101,12 +97,11 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       this.analysisController = undefined;
       this.messageController = undefined;
     });
-    // If we have no bundle facts in state, try to hydrate from last persisted bundle facts
+
     this.analysisController
       .hydrateFromPersistedFacts()
       .catch(err => logDebug(`[Cockpit] Failed to hydrate persisted facts: ${err}`));
 
-    // Load bundle config from workspace settings
     const savedConfig = vscode.workspace.getConfiguration('git-context').get('bundleConfig');
     if (savedConfig) {
       getStore().dispatch({
@@ -115,7 +110,6 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       });
     }
 
-    // Ensure explorer tree is initialized even if no facts (for static nodes)
     if (!this.state.bundleFacts) {
       this.updateExplorerTree();
     }
@@ -124,12 +118,10 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
   }
 
   private handleStateChange(change: any) {
-    // CockpitStateChange type is internal to orchestrator, using any for now
     logDebug(`[Cockpit] Applying state change (${change.reason ?? 'unspecified'})`);
     this.state = change.full;
     this.sendState();
 
-    // Only update derived data if relevant parts of state changed
     const partialKeys = Object.keys(change.partial);
     const factsChanged = partialKeys.includes('bundleFacts');
     const configChanged = partialKeys.includes('bundleConfig');
@@ -149,7 +141,6 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
 
     if (factsChanged || configChanged) {
       if (configChanged) {
-        // Invalidate ALL caches on config change to ensure fresh data
         if (this.analysisController) {
           this.analysisController.hotspotCache.clear();
           this.analysisController.clearSkeletonCache();
@@ -158,15 +149,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       }
 
       if (factsChanged) {
-        // Clear skeleton cache when we have fresh facts so we render the full tree
         if (this.analysisController) {
           this.analysisController.skeletonCache = null;
           this.analysisController.updateBundleData();
         }
       }
-    // Always update explorer tree if facts or config changed
+
       this.updateExplorerTree().then(() => {
-        // After explorer tree updates, refresh metrics for the visible nodes
         this.refreshNodeMetrics();
       });
     }
@@ -180,24 +169,26 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     try {
       const { MetricsService } = await import('../../services/metricsService');
       const { metricsActions } = await import('../../state/actionCreators');
-      
-      // Collect all file paths from explorer data
+
       const paths: string[] = [];
       const traverse = (nodes: any[]) => {
         for (const node of nodes) {
           if (node.type === 'file') {
-            paths.push(node.id); // Assuming id is the file path for files
+            paths.push(node.id);
           }
           if (node.children) {
             traverse(node.children);
           }
         }
       };
-      
+
       traverse(this.state.explorerData || []);
 
       if (paths.length > 0) {
-        const metrics = await MetricsService.getInstance().getNodeMetrics(paths, this.state.currentTimeFilter);
+        const metrics = await MetricsService.getInstance().getNodeMetrics(
+          paths,
+          this.state.currentTimeFilter
+        );
         getStore().dispatch(metricsActions.update(metrics));
       }
     } catch (error) {
@@ -293,23 +284,19 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       return;
     }
     try {
-      // Sanitize state to ensure all required fields are present
       const sanitizedState = {
         ...this.state,
-        // Ensure commits have scope field (backward compatibility)
+
         commits: this.state.commits.map(c => ({
           ...c,
           scope: c.scope || ('history' as const),
         })),
       };
 
-      // Validate state before sending
       try {
         CockpitStateSchema.parse(sanitizedState);
       } catch (validationError) {
         logError('[Cockpit] State validation failed!', validationError);
-        // We still send the state so the UI doesn't freeze, but the error is logged.
-        // In strict mode, we might want to block this.
       }
 
       const message: CockpitHostMessage = { type: 'updateState', payload: sanitizedState };
@@ -318,7 +305,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       } catch (validationError) {
         logError('[Cockpit] Host message validation failed!', validationError);
       }
-      // eslint-disable-next-line no-restricted-syntax
+
       this.view.webview.postMessage(message);
       logInfo('[Cockpit] Sent state update to webview');
     } catch (error) {

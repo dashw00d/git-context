@@ -43,23 +43,19 @@ export class LiveAnalysisEngine {
       logInfo('[LiveAnalysis] Starting live analysis...');
       const startTime = Date.now();
 
-      // 1. Get Live Content
       const liveOverrides = this.tracker.getDirtyContent();
 
-      // 2. Run Analysis via Pipeline
       const pipeline = await getRefactorPipeline();
       const result = await pipeline.analyzeLive(liveOverrides, state.bundleFacts);
 
-      // 3. Extract Results
       const drift = result.drift;
       const legacy = result.legacy;
 
       if (!drift || !legacy) {
         logError('Pipeline failed to produce drift/legacy results');
-        return; // Return early instead of throwing
+        return;
       }
 
-      // 4. Update State
       this.orchestrator.updateLiveState({
         status: 'idle',
         summary: {

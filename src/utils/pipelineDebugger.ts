@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { logDebug, logWarn, logError } from './logger';
+import { logDebug, logError, logWarn } from './logger';
 
 interface TierTrace {
   frameId: string;
@@ -58,7 +58,6 @@ export class PipelineDebugger {
 
     const frameMismatch = trace.activeFrameAtStart !== trace.activeFrameAtEnd;
 
-    // Log completion
     logDebug(
       `✅ Tier ${tier} COMPLETE for ${frameId} (${trace.duration}ms, ${trace.dataSize} bytes)`
     );
@@ -68,14 +67,11 @@ export class PipelineDebugger {
       logWarn(`🚨 STALE UPDATE DETECTED: Tier ${tier} data for ${frameId} will be dropped!`);
     }
 
-    // Check for slow tier performance
     if (trace.duration && trace.duration > 2000) {
       logWarn(`⏱️  SLOW TIER: Tier ${tier} took ${trace.duration}ms for ${frameId}`);
     }
 
-    // Check data size
     if (trace.dataSize && trace.dataSize > 1000000) {
-      // 1MB
       logWarn(`📦 LARGE DATA: Tier ${tier} returned ${trace.dataSize} bytes for ${frameId}`);
     }
   }
@@ -132,9 +128,7 @@ export class PipelineDebugger {
     return JSON.stringify(allTraces, null, 2);
   }
 
-  // Cleanup old traces to prevent memory leak
   cleanup(olderThanMs: number = 300000): void {
-    // 5 minutes
     const cutoff = Date.now() - olderThanMs;
     let cleaned = 0;
 

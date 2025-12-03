@@ -1,12 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommitIndexer } from '../../../src/analysis/commitIndexer';
-import { GitOperations } from '../../../src/analysis/git';
-import { SnapshotManager } from '../../../src/analysis/snapshotManager';
-import { StructuralDiffManager } from '../../../src/analysis/structuralDiffManager';
-import { RiskDetector } from '../../../src/analysis/heuristics';
 import { DependencyExtractor } from '../../../src/analysis/dependencies';
+import { GitOperations } from '../../../src/analysis/git';
 import { HotspotDetectorV2 } from '../../../src/analysis/hotspotDetector';
 import { MovedBlockDetectorV2 } from '../../../src/analysis/movedBlockDetector';
+import { SnapshotManager } from '../../../src/analysis/snapshotManager';
+import { StructuralDiffManager } from '../../../src/analysis/structuralDiffManager';
 
 // Mock dependencies
 vi.mock('../../../src/analysis/git');
@@ -49,7 +48,7 @@ describe('CommitIndexer', () => {
   beforeEach(() => {
     mockDb = {
       prepare: vi.fn().mockReturnValue({ run: vi.fn(), get: vi.fn() }),
-      transaction: vi.fn((cb) => cb()),
+      transaction: vi.fn(cb => cb()),
     };
     mockGit = new GitOperations();
     mockDependencyExtractor = new DependencyExtractor();
@@ -74,6 +73,4 @@ describe('CommitIndexer', () => {
   it('should be defined', () => {
     expect(commitIndexer).toBeDefined();
   });
-
-  // Add more tests here...
 });

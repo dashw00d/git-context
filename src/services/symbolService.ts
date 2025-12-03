@@ -1,8 +1,8 @@
 import { ensureDatabaseInitialized } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
+import type { SymbolInfo } from '../types';
 import { logDebug } from '../utils/logger';
 import { ServiceBase, ServiceConfig } from './base/ServiceBase';
-import type { SymbolInfo } from '../types';
 import type { SymbolHistory, SymbolWithDNA } from './databaseService';
 
 /**
@@ -11,11 +11,10 @@ import type { SymbolHistory, SymbolWithDNA } from './databaseService';
  */
 export class SymbolService extends ServiceBase {
   constructor(config: ServiceConfig = {}) {
-    // Symbol operations are more cache-heavy due to frequent lookups
     super({
       enableCache: true,
-      cacheSize: 2000, // Larger cache for symbols
-      cacheTTL: 1800000, // 30 minutes for symbol data
+      cacheSize: 2000,
+      cacheTTL: 1800000,
       enableTransactions: true,
       ...config,
     });
@@ -30,7 +29,6 @@ export class SymbolService extends ServiceBase {
       try {
         await ensureDatabaseInitialized();
 
-        // Get latest version of each symbol with this DNA
         const stmt = prepare(`
           SELECT s.*, sv.dna_id as dna, sv.sha, sv.path, sv.name, sv.kind,
                  sv.signature_hash, sv.body_hash,
@@ -44,7 +42,7 @@ export class SymbolService extends ServiceBase {
         stmt.free?.();
 
         return results
-          .filter(row => row.rn === 1) // Only latest version
+          .filter(row => row.rn === 1)
           .map(row => ({
             id: row.symbol_id,
             dnaId: row.dna_id,
@@ -187,7 +185,6 @@ export class SymbolService extends ServiceBase {
       try {
         await ensureDatabaseInitialized();
 
-        // Get recent commits first
         const commitStmt = prepare(`
           SELECT sha FROM commits_metadata
           ORDER BY date DESC
@@ -201,7 +198,6 @@ export class SymbolService extends ServiceBase {
         const shaList = commits.map(c => c.sha);
         const placeholders = shaList.map(() => '?').join(',');
 
-        // Get symbols from these commits
         const symbolStmt = prepare(`
           SELECT DISTINCT s.*, sv.dna_id as dna
           FROM symbols s
@@ -270,9 +266,6 @@ export class SymbolService extends ServiceBase {
     });
   }
 
-  /**
-   * Get symbol statistics for dashboard/metrics
-   */
   async getSymbolStats(): Promise<{
     totalSymbols: number;
     uniqueDNA: number;
@@ -282,17 +275,14 @@ export class SymbolService extends ServiceBase {
       try {
         await ensureDatabaseInitialized();
 
-        // Total symbols
         const totalStmt = prepare('SELECT COUNT(*) as count FROM symbols');
         const total = (totalStmt.get() as { count: number }).count;
         totalStmt.free?.();
 
-        // Unique DNA
         const dnaStmt = prepare('SELECT COUNT(DISTINCT dna_id) as count FROM symbol_versions');
         const dna = (dnaStmt.get() as { count: number }).count;
         dnaStmt.free?.();
 
-        // Most common kinds
         const kindsStmt = prepare(`
           SELECT kind, COUNT(*) as count
           FROM symbols
@@ -316,7 +306,6 @@ export class SymbolService extends ServiceBase {
   }
 }
 
-// Singleton instance
 let symbolServiceInstance: SymbolService | null = null;
 
 export function getSymbolService(): SymbolService {

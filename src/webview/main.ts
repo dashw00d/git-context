@@ -6,9 +6,6 @@ import { ReportHostMessage } from '../types/reportWebview';
 import { RefactorReportView } from './RefactorReportView';
 import { postReportMessage, validateHostMessage } from './reports/messageUtils';
 
-/**
- * Main entry point for the webview
- */
 declare global {
   interface Window {
     acquireVsCodeApi(): any;
@@ -17,13 +14,9 @@ declare global {
 
 const vscode = window.acquireVsCodeApi();
 
-// State
 let analysis: LlmAnalysis | undefined;
 let facts: RefactorBundleFacts | undefined;
 
-/**
- * Handle messages from the extension
- */
 window.addEventListener('message', event => {
   const message = validateHostMessage(event.data) as ReportHostMessage | null;
   if (!message) return;
@@ -49,23 +42,14 @@ window.addEventListener('message', event => {
   }
 });
 
-/**
- * Handle evidence clicks
- */
 const handleEvidenceClick = (evidence: EvidenceLink) => {
   postReportMessage(vscode, { type: 'evidenceClick', evidence: evidence as any });
 };
 
-/**
- * Handle actions
- */
 const handleAction = (action: string, data: any) => {
   postReportMessage(vscode, { type: 'action', action, data });
 };
 
-/**
- * Render the app
- */
 function renderApp() {
   const rootElement = document.getElementById('root');
   if (!rootElement || !analysis || !facts) return;
@@ -81,7 +65,4 @@ function renderApp() {
   );
 }
 
-/**
- * Signal that the webview is ready
- */
 postReportMessage(vscode, { type: 'ready' });

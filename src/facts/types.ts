@@ -1,19 +1,14 @@
 import type { HybridFact } from '../types/cstFacts';
 
-/**
- * Single source of truth for RefactorBundleFacts interface
- * This is the canonical schema for v2.0 facts JSON
- */
-
 export interface RefactorBundleFacts {
   version: '2.0';
   generated_at: string;
-  confidence: number; // 0-1: completeness of available data
+  confidence: number;
   bundle: {
     oldestSha: string;
     newestSha?: string;
     shas: string[];
-    timeline?: string[]; // Explicit timeline chain: newest → oldest
+    timeline?: string[];
     movedLineage?: Array<{
       symbolId: string;
       previousSymbolId: string;
@@ -82,16 +77,9 @@ export interface RefactorBundleFacts {
     };
   };
   evidence: Record<string, any>;
-  /**
-   * Hybrid facts: semantic symbols + CST facts, keyed by file path
-   * For CST-only languages (markdown, json, yaml, css) and hybrid augmentation
-   * on supported languages (php, js/ts) to layer structural facts on top
-   */
+
   hybridFacts?: Record<string, HybridFact[]>;
 
-  /**
-   * Summary of hybrid facts analysis
-   */
   hybridSummary?: {
     totalFacts: number;
     fileCount: number;
@@ -99,9 +87,6 @@ export interface RefactorBundleFacts {
     sampleFacts: Array<{ file: string; sample: string[] }>;
   };
 
-  /**
-   * Summarized evidence for LLM context
-   */
   evidenceSummary?: {
     missing?: any[];
     zombies?: any[];
@@ -119,9 +104,6 @@ export interface RefactorBundleFacts {
     };
   };
 
-  /**
-   * Caps applied to evidence arrays during summarization
-   */
   llmCapsApplied?: {
     missing: number;
     zombies: number;
@@ -135,12 +117,12 @@ export interface RefactorBundleFacts {
 }
 
 export interface RefactorPattern {
-  id: string; // Hash of name + examples
+  id: string;
   name: string;
   description: string;
   examples: string[];
   count: number;
   pct: number;
-  bundleShas: string[]; // Which commit bundles discovered this pattern
-  refactorType?: string; // auth, api, migration, etc. (extracted from context)
+  bundleShas: string[];
+  refactorType?: string;
 }

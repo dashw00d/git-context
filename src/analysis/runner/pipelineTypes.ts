@@ -3,20 +3,18 @@ import type { IntendedState } from '../../facts/intendedMap';
 import type { LegacyAuditResult } from '../../facts/legacyAudit';
 import type { ScopeSet } from '../../facts/scope';
 import type { WorkingSnapshot } from '../../facts/workingSnapshot';
-// import type { FileHotspot, SymbolHotspot } from '../hotspotDetector'; // Removed unused imports
+
 import type { CrossVersionSymbolLineage, MovedBlock } from '../movedBlockDetector';
 import type { WorkspaceFacts } from '../workspaceIndexer';
 import type { EmbeddingMetrics, HistoryMetrics, LlmMetrics } from './pipelineMetrics';
 
 export interface PipelineState {
-  // Inputs
   selectedCommitShas: string[];
   includeWorkspace: boolean;
-  workspaceParts?: Set<'staged' | 'unstaged'>; // Which workspace parts to include
-  explicitTimeline?: string[]; // Explicit timeline chain: newest → oldest (e.g. ['workspace-unstaged', 'workspace-staged', 'HEAD', 'abc123'])
-  liveOverrides?: Map<string, string>; // In-memory content overrides for live analysis
+  workspaceParts?: Set<'staged' | 'unstaged'>;
+  explicitTimeline?: string[];
+  liveOverrides?: Map<string, string>;
 
-  // Intermediates
   commitFacts?: any[];
   workspaceFacts?: {
     staged: WorkspaceFacts | null;
@@ -27,7 +25,6 @@ export interface PipelineState {
   history?: any;
   llmOutputs?: any;
 
-  // New facts fields (populated by independent steps)
   scope?: ScopeSet;
   intended?: Map<string, IntendedState>;
   working?: WorkingSnapshot;
@@ -41,7 +38,7 @@ export interface PipelineState {
     removed?: number;
     touchedInVersions?: string[];
     touchedInVersionsDescription?: string;
-    [key: string]: any; // Allow other props for now
+    [key: string]: any;
   }>;
   movedBlocks?: MovedBlock[];
   movedLineage?: CrossVersionSymbolLineage[];
@@ -50,23 +47,20 @@ export interface PipelineState {
   historyMetrics?: HistoryMetrics;
   llmMetrics?: LlmMetrics;
 
-  // Progress tracking
   currentStepId?: string | null;
   completedSteps: Set<string>;
   errors: Array<{ stepId: string; error: unknown }>;
 
-  // Performance metrics
   stepTimings?: Record<string, { start: number; end?: number; duration?: number }>;
   pipelineDuration?: number;
 
-  // Best-effort execution
-  partialReasons?: string[]; // Reasons why bundleFacts is partial (failed steps)
+  partialReasons?: string[];
 }
 
 export interface PipelineStep {
   id: string;
   label: string;
-  deps?: string[]; // Array of step IDs this step depends on
+  deps?: string[];
   run: (state: PipelineState) => Promise<void> | void;
 }
 
@@ -97,10 +91,10 @@ export type PipelineEventHandler = (event: PipelineEvent) => void;
  * Configuration options for pipeline execution
  */
 export interface PipelineConfig {
-  concurrency: number; // Commit indexing concurrency
-  skipEmbedding?: boolean; // Skip embedding generation for faster execution
-  skipLLM?: boolean; // Skip LLM story generation
-  maxRetries?: number; // Maximum retry attempts for transient failures
-  enableCacheStats?: boolean; // Enable cache performance logging
-  cacheTTL?: number; // Cache TTL in seconds (default 3600)
+  concurrency: number;
+  skipEmbedding?: boolean;
+  skipLLM?: boolean;
+  maxRetries?: number;
+  enableCacheStats?: boolean;
+  cacheTTL?: number;
 }

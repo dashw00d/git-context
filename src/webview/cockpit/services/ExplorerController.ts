@@ -21,8 +21,6 @@ export class ExplorerController {
 
       const activeBundleId = this.bundleManager.getActiveBundleId();
 
-      // Pass bundles to ExplorerService (which we'll update next)
-      // For now, we'll just pass the current facts/skeleton logic but wrapped
       const nodes = ExplorerService.getInstance().getExplorerTree(
         facts,
         null,
@@ -30,7 +28,6 @@ export class ExplorerController {
         activeBundleId
       );
 
-      // Sync with store
       getStore().dispatch({ type: 'EXPLORER_UPDATED', payload: { nodes } });
 
       logInfo(`[ExplorerController] Updated explorer tree with ${nodes.length} root nodes`);

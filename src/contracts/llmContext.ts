@@ -22,13 +22,12 @@ export interface Loc {
 
 export interface LlmContextReport {
   version: LlmContextVersion;
-  generated_at: string; // ISO
+  generated_at: string;
   repo: { root: string; head_sha: string; branch: string };
 
   commits: CommitContext[];
   global_risks: RiskItem[];
 
-  // optional: cross-commit rollups
   rollups?: {
     hotspots: Hotspot[];
     top_changed_files: FileRollup[];
@@ -37,23 +36,21 @@ export interface LlmContextReport {
     expected_present_but_missing_count?: number;
   };
 
-  // optional: graph visualizations
   graphs?: {
-    dependency_graph?: string; // Mermaid graph
-    blast_radius_graph?: string; // Mermaid graph
+    dependency_graph?: string;
+    blast_radius_graph?: string;
   };
 
-  // optional: drift audit
   legacy_audit?: LegacyAuditReport;
 }
 
 export interface LegacyAuditReport {
-  missing_symbols: string[]; // Expected present but missing (incomplete migration)
-  zombie_symbols: string[]; // Expected absent but present (dead code)
-  replaced_leftover: string[]; // Old version of renamed symbol still exists
-  dead_candidates: string[]; // Symbols with no incoming edges in working tree
-  drift_edges: EdgeContext[]; // Edges that exist in working tree but not in intended state
-  hotspots: string[]; // Files with high drift
+  missing_symbols: string[];
+  zombie_symbols: string[];
+  replaced_leftover: string[];
+  dead_candidates: string[];
+  drift_edges: EdgeContext[];
+  hotspots: string[];
 }
 
 export interface CommitContext {
@@ -68,7 +65,7 @@ export interface CommitContext {
   files: FileContext[];
   risks: RiskItem[];
   edges: EdgeContext[];
-  llm_summary?: string; // your model output
+  llm_summary?: string;
 }
 
 export interface FileContext {
@@ -76,7 +73,7 @@ export interface FileContext {
   language: string;
   stats: { added: number; modified: number; removed: number; renamed?: boolean };
 
-  hunks?: DiffHunk[]; // optional, truncated
+  hunks?: DiffHunk[];
   symbols: {
     added: SymbolContext[];
     modified: SymbolContext[];
@@ -86,12 +83,12 @@ export interface FileContext {
 }
 
 export interface SymbolContext {
-  id: number; // row pk
-  symbol_id: string; // semantic id for edges
+  id: number;
+  symbol_id: string;
   name: string;
-  kind: string; // "class" | "method" | "function" | ...
+  kind: string;
   signature?: string;
-  dnaId?: string; // DNA hash for similarity clustering
+  dnaId?: string;
   loc_pre?: Loc;
   loc_post?: Loc;
   mod_reason?: ModReason;
@@ -104,7 +101,7 @@ export interface EdgeContext {
   to_symbol_id: string;
   edge_type: EdgeType;
   change_type: ChangeType;
-  confidence: number; // 0.0 to 1.0
+  confidence: number;
   is_resolved: boolean;
 }
 
@@ -117,10 +114,10 @@ export interface RenameContext {
 }
 
 export interface RiskItem {
-  type: string; // "breaking-api" | "schema-migration" | "refactor" | "security" | "performance" | "auth" | "payment"
+  type: string;
   description: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
-  symbols?: string[]; // affected symbol_ids
+  symbols?: string[];
 }
 
 export interface DiffHunk {
@@ -128,7 +125,7 @@ export interface DiffHunk {
   old_lines: number;
   new_start: number;
   new_lines: number;
-  content: string; // truncated diff content
+  content: string;
 }
 
 export interface Hotspot {

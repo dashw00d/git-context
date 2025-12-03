@@ -14,7 +14,6 @@ import {
 } from '../types/cockpit';
 
 export type Action =
-  // Analysis
   | { type: 'ANALYSIS_REQUESTED'; payload: { selection: string[]; force?: boolean } }
   | { type: 'ANALYSIS_STARTED'; payload: { step: string } }
   | { type: 'ANALYSIS_STEP_UPDATED'; payload: { step: string; progress?: number } }
@@ -35,8 +34,6 @@ export type Action =
     }
   | { type: 'ERROR_CLEARED' }
   | { type: 'ERROR_SET'; payload: { error: string } }
-
-  // Selection
   | { type: 'SELECTION_TOGGLED'; payload: { sha: string } }
   | { type: 'SELECTION_CLEARED' }
   | { type: 'SELECTION_SET'; payload: { shas: string[] } }
@@ -52,8 +49,6 @@ export type Action =
         workspaceScope: 'workspace' | 'staged' | 'unstaged' | undefined;
       };
     }
-
-  // Commits Data
   | { type: 'COMMITS_UPDATED'; payload: { commits: CommitDTO[]; hasMore: boolean } }
   | { type: 'COMMITS_DATA_UPDATED'; payload: { commits: CommitDTO[] } }
   | {
@@ -61,8 +56,6 @@ export type Action =
       payload: { staged: StagedFileDTO[]; unstaged: UnstagedFileDTO[] };
     }
   | { type: 'WORKSPACE_FACTS_UPDATED'; payload: { workspaceFacts: any } }
-
-  // UI State
   | { type: 'SECTION_CHANGED'; payload: { section: CockpitSectionKey } }
   | { type: 'COMMITS_FILTER_TEXT_CHANGED'; payload: { text: string } }
   | {
@@ -70,8 +63,6 @@ export type Action =
       payload: { scopes: { staged: boolean; unstaged: boolean; history: boolean } };
     }
   | { type: 'LAST_N_COMMITS_CHANGED'; payload: { n: number } }
-
-  // Bundle
   | { type: 'BUNDLE_CLEARED' }
   | { type: 'BUNDLE_VIEW_UPDATED'; payload: { view: BundleView; version?: number } }
   | { type: 'BUNDLE_VIEW_CLEARED' }
@@ -84,26 +75,18 @@ export type Action =
     }
   | { type: 'BUNDLE_CONFIG_UPDATED'; payload: { config: any } }
   | { type: 'BUNDLE_SWITCH_START' }
-
-  // Symbols
   | { type: 'SYMBOLS_UPDATED'; payload: { symbols: SymbolDTO[] } }
   | { type: 'SYMBOL_FILTER_TEXT_CHANGED'; payload: { text: string } }
   | { type: 'SYMBOL_KIND_FILTER_CHANGED'; payload: { kind: string } }
   | { type: 'SYMBOL_CHANGE_FILTER_CHANGED'; payload: { change: SymbolChangeType | 'all' } }
-
-  // Reports
   | { type: 'REPORTS_UPDATED'; payload: { reports: ReportDTO[] } }
   | { type: 'REPORTS_FILTER_TEXT_CHANGED'; payload: { text: string } }
   | { type: 'REPORTS_BRANCH_FILTER_CHANGED'; payload: { branch: string } }
   | { type: 'REPORTS_PINNED_FILTER_CHANGED'; payload: { showPinnedOnly: boolean } }
-
-  // Context
   | {
       type: 'REPO_CONTEXT_UPDATED';
       payload: { repoName: string | null; branchName: string | null };
     }
-
-  // Live Analysis
   | {
       type: 'LIVE_ANALYSIS_UPDATED';
       payload: {
@@ -114,8 +97,6 @@ export type Action =
         totalEdits?: number;
       };
     }
-
-  // Refresh
   | {
       type: 'REFRESH_REQUESTED';
       payload: { scope: 'all' | 'commits' | 'bundle' | 'symbols' | 'reports' };
@@ -133,14 +114,10 @@ export type Action =
         stepTimings?: Record<string, number>;
       };
     }
-
-  // Navigation (Centralized)
   | { type: 'NAVIGATE_TO'; payload: { frame: ContextFrame } }
   | { type: 'NAVIGATE_BACK' }
   | { type: 'EXPLORER_UPDATED'; payload: { nodes: ExplorerNode[] } }
   | { type: 'FRAME_DATA_UPDATED'; payload: { frameId: string; data: any } }
-
-  // Frame Analysis (Tiered Loading)
   | { type: 'FRAME_ANALYSIS_TIER_1_COMPLETE'; payload: { frameId: string; data: any } }
   | { type: 'FRAME_ANALYSIS_TIER_2_COMPLETE'; payload: { frameId: string; data: any } }
   | { type: 'FRAME_ANALYSIS_TIER_3_COMPLETE'; payload: { frameId: string; data: any } }

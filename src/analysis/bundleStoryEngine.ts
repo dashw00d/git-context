@@ -46,9 +46,6 @@ export interface RetrievedHistory {
 export class BundleStoryEngine {
   constructor(private llmAnalyst: LlmAnalyst) {}
 
-  /**
-   * Generate narrative story from bundle facts + historical context
-   */
   async generateStory(
     bundleFacts: RefactorBundleFacts,
     commitFacts: CommitFacts[],
@@ -60,11 +57,9 @@ export class BundleStoryEngine {
     if (precomputedHistory) {
       history = precomputedHistory;
     } else {
-      // Build bundle query shard
       const bundleShard = this.buildBundleShard(bundleFacts, commitFacts);
       const bundleEmbedding = await generateEmbedding(bundleShard);
 
-      // Cross-time retrieval with multiple query strategies
       const { history: generatedHistory } = await this.retrieveHistory(
         bundleEmbedding,
         bundleFacts,
@@ -75,12 +70,11 @@ export class BundleStoryEngine {
 
     logInfo('[BundleStory] Running LLM analysis...');
 
-    // Pass to LLM analyst with rich historical context
     const llmAnalysis = await this.llmAnalyst.analyze(bundleFacts, history);
 
     return {
       llmAnalysis,
-      history, // Include history for UI display
+      history,
     };
   }
 
@@ -134,13 +128,11 @@ export class BundleStoryEngine {
       return makeEmpty('client_unavailable');
     }
 
-    // Compute embedding if not provided (history step calls directly)
     const effectiveEmbedding =
       queryEmbedding && queryEmbedding.length > 0
         ? queryEmbedding
         : await generateEmbedding(this.buildBundleShard(bundleFacts, commitFacts));
 
-    // PROJECT ISOLATION: Filter by project ID
     const projectId = await getProjectId();
     if (!projectId) {
       logInfo('[BundleStory] No project ID found, skipping retrieval');
@@ -150,15 +142,12 @@ export class BundleStoryEngine {
     const commitsCollection = qdrant.getCollectionName('commits', projectId);
     const symbolsCollection = qdrant.getCollectionName('symbols', projectId);
 
-    // Ensure collections exist before searching (handles both base and project-specific collections)
     await qdrant.ensureCollection('commits', projectId);
     await qdrant.ensureCollection('symbols', projectId);
 
-    // Check collection sizes before searching to avoid unnecessary queries
     const commitsInfo = await client.getCollection(commitsCollection);
     const symbolsInfo = await client.getCollection(symbolsCollection);
 
-    // Safely access points_count (Qdrant API returns this property)
     const commitsCount = (commitsInfo as any).points_count ?? (commitsInfo as any).pointsCount ?? 0;
     const symbolsCount = (symbolsInfo as any).points_count ?? (symbolsInfo as any).pointsCount ?? 0;
 
@@ -191,7 +180,6 @@ export class BundleStoryEngine {
       ],
     };
 
-    // Query 1: Similar commits (episodic memory)
     let similarCommits: any[] = [];
     if (!commitsEmpty) {
       try {
@@ -200,7 +188,7 @@ export class BundleStoryEngine {
           limit: 20,
           with_payload: true,
           score_threshold: 0.6,
-          filter: projectFilter, // ONLY CURRENT PROJECT
+          filter: projectFilter,
         });
       } catch (error: any) {
         logWarn(
@@ -209,7 +197,6 @@ export class BundleStoryEngine {
       }
     }
 
-    // Query 2: Similar symbols (fine-grained history)
     let similarSymbols: any[] = [];
     if (!symbolsEmpty) {
       try {
@@ -218,7 +205,7 @@ export class BundleStoryEngine {
           limit: 30,
           with_payload: true,
           score_threshold: 0.65,
-          filter: projectFilter, // ONLY CURRENT PROJECT
+          filter: projectFilter,
         });
       } catch (error: any) {
         logWarn(
@@ -227,17 +214,16 @@ export class BundleStoryEngine {
       }
     }
 
-    // Query 3: Refactors with high structural change (similar complexity)
     const refactorFilter = {
       must: [
         {
           key: 'project_id',
-          match: { value: projectId }, // PROJECT ISOLATION
+          match: { value: projectId },
         },
         {
           key: 'structural_change_score',
           range: {
-            gte: 0.1, // Lowered from 0.5 to capture more refactors
+            gte: 0.1,
           },
         },
       ],
@@ -259,10 +245,8 @@ export class BundleStoryEngine {
       }
     }
 
-    // Build symbol evolution timelines
     const symbolEvolution = await this.buildSymbolEvolution(similarSymbols);
 
-    // Validate filter isolation: check that all retrieved items match project_id
     const retrievedProjectIds = new Set<string>();
     similarCommits.forEach(c => {
       if (c.payload?.project_id && typeof c.payload.project_id === 'string')
@@ -324,9 +308,6 @@ export class BundleStoryEngine {
     return { history, metrics };
   }
 
-  /**
-   * Build symbol evolution timelines from similar symbols
-   */
   private async buildSymbolEvolution(similarSymbols: any[]): Promise<Map<string, Array<any>>> {
     const evolutionMap = new Map<string, Array<any>>();
 
@@ -346,7 +327,6 @@ export class BundleStoryEngine {
       });
     }
 
-    // Sort each timeline by date
     for (const [_dnaId, timeline] of evolutionMap) {
       timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }

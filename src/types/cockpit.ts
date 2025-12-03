@@ -15,15 +15,15 @@ export interface BundleConfig {
 
 export interface CommitDTO {
   sha: string;
-  shortSha: string; // precomputed, e.g. sha.slice(0, 8)
-  message: string; // first line of commit message
+  shortSha: string;
+  message: string;
   author: string;
-  authoredAt: string; // ISO8601
-  changes: number; // total change count or files changed
-  inBundle: boolean; // belongs to current active bundle
-  scope: 'staged' | 'unstaged' | 'history'; // derive from source
-  analyzed?: boolean; // whether this commit has been analyzed
-  files?: Array<{ path: string; status: FileStatus }>; // files changed in this commit
+  authoredAt: string;
+  changes: number;
+  inBundle: boolean;
+  scope: 'staged' | 'unstaged' | 'history';
+  analyzed?: boolean;
+  files?: Array<{ path: string; status: FileStatus }>;
 }
 
 export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'unknown' | string;
@@ -39,15 +39,14 @@ export interface UnstagedFileDTO {
 }
 
 export interface BundleSummaryDTO {
-  id: string; // bundle/report identifier
+  id: string;
   commitCount: number;
   fileCount: number;
   symbolCount: number;
-  createdAt?: string; // ISO8601
-  debtScore?: number; // 0–100, optional refactor debt
+  createdAt?: string;
+  debtScore?: number;
 }
 
-// If you want strong typing, alias to your existing RefactorBundleFacts
 export type BundleFactsDTO = RefactorBundleFacts | null;
 
 export interface BundleView {
@@ -85,14 +84,14 @@ export interface BundleView {
 }
 
 export interface SymbolDTO {
-  id: string; // symbol_id or "path:name"
+  id: string;
   name: string;
   path: string;
-  kind: string; // "function" | "class" | ...
-  language: string; // "php" | "ts" | "tsx" | ...
+  kind: string;
+  language: string;
   changeType?: SymbolChangeType;
   commitCount: number;
-  lastChangedAt: string; // ISO8601
+  lastChangedAt: string;
 }
 
 export type SymbolChangeType = 'added' | 'modified' | 'removed';
@@ -101,7 +100,7 @@ export interface SymbolHistoryEntryDTO {
   sha: string;
   shortSha: string;
   message: string;
-  when: string; // ISO8601
+  when: string;
   changeType: SymbolChangeType;
 }
 
@@ -109,7 +108,7 @@ export interface ReportDTO {
   id: string;
   title: string;
   summary: string;
-  createdAt: string; // ISO8601
+  createdAt: string;
   branch?: string;
   pinned?: boolean;
   bundleSummary?: BundleSummaryDTO;
@@ -119,14 +118,14 @@ export interface ReportDTO {
 /* ---------- Cockpit sidebar state (host → cockpit) ---------- */
 
 export interface NodeMetrics {
-  riskScore: number;      // 0–100 (Calculated from complexity + churn)
-  churnScore: number;     // 0–100 (Frequency of changes)
-  lastModified: number;   // Timestamp of last commit
-  driftCount: number;     // Number of drift warnings
-  incomingRefs: number;   // Count of incoming edges
-  outgoingRefs: number;   // Count of outgoing edges
-  authors: string[];      // Top 3 authors (Bus Factor)
-  ageDays: number;        // Days since creation or last major refactor
+  riskScore: number;
+  churnScore: number;
+  lastModified: number;
+  driftCount: number;
+  incomingRefs: number;
+  outgoingRefs: number;
+  authors: string[];
+  ageDays: number;
 }
 
 export interface CockpitState {
@@ -141,17 +140,17 @@ export interface CockpitState {
   };
 
   /* Phase 1: Data Foundation */
-  nodeMetrics: Record<string, NodeMetrics>; // key = node.path (or id)
-  currentTimeFilter: number; // timestamp for time travel (default Date.now())
+  nodeMetrics: Record<string, NodeMetrics>;
+  currentTimeFilter: number;
 
   /** Which accordion should be open by default / last */
   activeSection: CockpitSectionKey;
 
   /* Analysis status for header + bundle section */
   isAnalyzing: boolean;
-  analysisStep?: string; // e.g. "Diffing", "Building facts"
-  analysisProgress?: number; // e.g. 0–1 or 0–100
-  error?: string | null; // Error message to display to user
+  analysisStep?: string;
+  analysisProgress?: number;
+  error?: string | null;
 
   /* Pipeline execution state */
   currentStepId?: string | null;
@@ -163,7 +162,7 @@ export interface CockpitState {
     similarCommits: Array<any>;
     similarSymbols: Array<any>;
     relatedRefactors: Array<any>;
-    symbolEvolution: Record<string, Array<any>>; // Map serialized as object
+    symbolEvolution: Record<string, Array<any>>;
   };
 
   /* Workspace analysis results */
@@ -179,24 +178,24 @@ export interface CockpitState {
 
   /* Commits & selection section */
   commits: CommitDTO[];
-  hasMoreCommits: boolean; // whether "Load more commits" should show
+  hasMoreCommits: boolean;
   commitsFilterText: string;
   commitsFilterScopes: {
     staged: boolean;
     unstaged: boolean;
     history: boolean;
   };
-  lastNCommits: number; // current N for "Analyze last N commits"
+  lastNCommits: number;
 
   stagedFiles: StagedFileDTO[];
   unstagedFiles: UnstagedFileDTO[];
 
   /* Active bundle section */
   bundleSummary?: BundleSummaryDTO | null;
-  bundleFacts: BundleFactsDTO; // used by full report webview, not rendered in cockpit
-  bundleReportId: string | null; // id of currently active report, if any
+  bundleFacts: BundleFactsDTO;
+  bundleReportId: string | null;
   bundleView: BundleView | null;
-  bundleViewVersion: number; // Monotonic version to prevent progressive loading races
+  bundleViewVersion: number;
 
   /* Symbols section */
   symbols: SymbolDTO[];
@@ -204,7 +203,7 @@ export interface CockpitState {
   symbolKindFilter: string | 'all';
   symbolChangeFilter: 'all' | SymbolChangeType;
   activeSymbolId: string | null;
-  activeSymbolHistory: SymbolHistoryEntryDTO[]; // history of selected symbol
+  activeSymbolHistory: SymbolHistoryEntryDTO[];
 
   /* Saved reports section */
   reports: ReportDTO[];
@@ -218,11 +217,11 @@ export interface CockpitState {
   /* Live Analysis State */
   liveAnalysis: {
     isTracking: boolean;
-    pendingChanges: number; // lines/symbols
+    pendingChanges: number;
     totalEdits: number;
     status: 'idle' | 'analyzing' | 'ready' | 'error';
     summary: LiveAnalysisSummary | null;
-    facts: any; // Relaxed type for now, or define LiveFactsDTO
+    facts: any;
   };
 
   /* Bundle Scope Configuration */
@@ -233,7 +232,6 @@ export interface CockpitState {
   history: ContextFrame[];
   explorerData: ExplorerNode[];
 
-  // Debug
   actionHistory?: Array<{ type: string; payload?: any; timestamp: string }>;
 }
 
@@ -247,7 +245,7 @@ export interface ContextFrame {
   description?: string;
   parentId?: string;
   status: AnalysisStatus;
-  data?: any; // Hydrated data (metadata, timeline, symbols, etc.)
+  data?: any;
   breadcrumbs?: string[];
   tier?: 'structure' | 'hybrid' | 'semantics';
 }
@@ -266,40 +264,33 @@ export interface LiveAnalysisSummary {
   zombies: number;
   drift: number;
   dead: number;
-  hybridDrifts?: number; // Hybrid facts (CST) drift count
+  hybridDrifts?: number;
 }
 
-/* ---------- Cockpit → Host messages ---------- */
-
 export type CockpitClientMessage =
-  /* Global / navigation */
   | {
       type: 'setActiveSection';
       section: CockpitSectionKey;
     }
   | {
-      type: 'resetAll'; // "Reset All" button in header
+      type: 'resetAll';
     }
-
-  /* Analysis entrypoints from header or bundle section */
   | {
       type: 'generateReport';
       mode: 'selection' | 'lastN' | 'staged' | 'unstaged';
-      lastN?: number; // required when mode === 'lastN'
-      force?: boolean; // force reanalysis
+      lastN?: number;
+      force?: boolean;
     }
   | {
       type: 'cancelAnalysis';
     }
-
-  /* Commits & selection section */
   | {
       type: 'toggleCommit';
       sha: string;
     }
   | {
       type: 'addCommitBySha';
-      shaOrRef: string; // SHA or branch name
+      shaOrRef: string;
     }
   | {
       type: 'loadMoreCommits';
@@ -329,8 +320,6 @@ export type CockpitClientMessage =
       type: 'compareFilesToCommit';
       sha: string;
     }
-
-  /* Active bundle section */
   | {
       type: 'bundleRegenerate';
     }
@@ -338,17 +327,14 @@ export type CockpitClientMessage =
       type: 'bundleClear';
     }
   | {
-      type: 'bundleExport'; // export JSON for LLM
+      type: 'bundleExport';
     }
   | {
-      /** Open / focus the full report webview for current bundleReportId */
       type: 'openActiveReport';
     }
   | {
       type: 'bundleCancel';
     }
-
-  /* Symbols section */
   | {
       type: 'setSymbolFilterText';
       text: string;
@@ -377,11 +363,9 @@ export type CockpitClientMessage =
       type: 'askAssistant';
       payload?: any;
     }
-
-  /* Saved reports section */
   | {
       type: 'openReport';
-      reportId: string; // host loads that report + opens full report webview
+      reportId: string;
     }
   | {
       type: 'regenerateReport';
@@ -414,20 +398,14 @@ export type CockpitClientMessage =
       type: 'setReportsShowPinnedOnly';
       value: boolean;
     }
-
-  /* Deep links into full report webview (triggered from cockpit UI) */
   | {
-      /** Ask the full report webview to scroll to a section (e.g. "overview", "incompleteness") */
       type: 'scrollReportToSection';
       sectionId: string;
     }
   | {
-      /** Ask host to open an "evidence" target in editor (file/line/symbol) */
       type: 'openEvidence';
-      evidenceId: string; // whatever your report webview emits
+      evidenceId: string;
     }
-
-  /* Live Analysis */
   | {
       type: 'generateLiveReport';
     }
@@ -468,8 +446,6 @@ export type CockpitClientMessage =
   | { type: 'navigateToFrame'; frame: ContextFrame }
   | { type: 'navigateBack' }
   | { type: 'updateTimeFilter'; value: number };
-
-/* ---------- Host → Cockpit messages ---------- */
 
 export type CockpitHostMessage =
   | { type: 'updateState'; payload: CockpitState }

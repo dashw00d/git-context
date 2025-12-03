@@ -30,16 +30,10 @@ export class ContextSkeletonService {
     try {
       switch (config.mode) {
         case 'repo':
-          // Analyze the entire repository
           files = await this.getAllRepoFiles();
           roots.push('/');
           break;
         case 'module':
-          // Analyze specific modules/directories
-          // For now, 'module' falls back to repo if no roots provided,
-          // but ideally it should be the active file's directory.
-          // Since we don't have active file context here easily without passing it in,
-          // we'll assume the caller might have set roots, or we just default to repo.
           // TODO: Enhance this to accept 'activeFile' context.
           if (config.roots.length > 0) {
             files = await this.getFilesFromRoots(config.roots);
@@ -50,12 +44,10 @@ export class ContextSkeletonService {
           }
           break;
         case 'changes':
-          // Analyze only changed files (staged + unstaged)
           files = await this.getChangedFiles();
           roots.push('changes');
           break;
         case 'custom':
-          // Analyze custom paths provided by the user
           files = await this.getFilesFromRoots(config.roots);
           roots.push(...config.roots);
           break;
@@ -64,7 +56,6 @@ export class ContextSkeletonService {
           roots.push('/');
       }
 
-      // Apply exclusions
       if (config.exclusions && config.exclusions.length > 0) {
         files = this.applyExclusions(files, config.exclusions);
       }
@@ -93,7 +84,6 @@ export class ContextSkeletonService {
     const allFiles = await this.getAllRepoFiles();
     return allFiles.filter(file => {
       return roots.some(root => {
-        // Handle both directory and file roots
         if (file === root) return true;
         if (file.startsWith(root + '/')) return true;
         return false;
@@ -104,7 +94,6 @@ export class ContextSkeletonService {
   private applyExclusions(files: string[], exclusions: string[]): string[] {
     return files.filter(file => {
       return !exclusions.some(ex => {
-        // Simple glob matching simulation
         const pattern = ex.replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*');
         const regex = new RegExp(`^${pattern}$`);
         return regex.test(file) || file.includes(ex.replace('**', ''));
@@ -117,12 +106,11 @@ export class ContextSkeletonService {
     const filtered: string[] = [];
 
     for (const file of files) {
-      // Use existing filterPath utility
       if (
         await filterPath(file, {
           git: this.git,
           gitRoot,
-          status: 'M', // Dummy
+          status: 'M',
           skipSizeCheck: true,
         })
       ) {

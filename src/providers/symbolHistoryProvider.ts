@@ -7,9 +7,7 @@ export class SymbolHistoryProvider {
 
   constructor(private context: vscode.ExtensionContext) {}
 
-  refresh(): void {
-    // TreeView removed - no event firing needed
-  }
+  refresh(): void {}
 
   async exportRecentSymbols(
     limit = 20,
@@ -39,20 +37,17 @@ export class SymbolHistoryProvider {
       const conditions: string[] = [];
       const params: any[] = [];
 
-      // Apply text filter if provided
       if (filterText && filterText.trim()) {
         conditions.push(`(s.name LIKE ? OR s.path LIKE ?)`);
         const searchTerm = `%${filterText.trim()}%`;
         params.push(searchTerm, searchTerm);
       }
 
-      // Apply kind filter if provided
       if (filterKind && filterKind !== 'all') {
         conditions.push(`s.kind = ?`);
         params.push(filterKind);
       }
 
-      // Apply change type filter if provided
       if (filterChange && filterChange !== 'all') {
         conditions.push(`s.change_type = ?`);
         params.push(filterChange);

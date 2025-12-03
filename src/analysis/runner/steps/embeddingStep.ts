@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-syntax */
 import { EmbeddingIndexer } from '../../embeddingIndexer';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 

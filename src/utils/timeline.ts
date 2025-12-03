@@ -1,6 +1,3 @@
-/**
- * Convert version string to human-readable position in timeline
- */
 export function describeVersionPosition(version: string, timeline: string[]): string {
   const index = timeline.findIndex(v => v === version);
   if (index === -1) return version;

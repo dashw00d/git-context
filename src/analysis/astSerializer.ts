@@ -5,17 +5,13 @@ import { getTreeSitterParser } from './tree-sitter';
 export interface SerializedNode {
   type: string;
   text?: string;
-  range: [number, number]; // start line, end line
+  range: [number, number];
   children?: SerializedNode[];
 }
 
 export class AstSerializer {
   private parser = getTreeSitterParser();
 
-  /**
-   * Parse file content and return a serialized JSON representation of the AST
-   * tailored for LLM consumption (compact, truncated text)
-   */
   async serializeFile(
     content: string,
     filePath: string,

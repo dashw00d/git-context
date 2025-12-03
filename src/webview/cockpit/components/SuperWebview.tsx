@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { CockpitState, ContextFrame, ExplorerNode } from '../../../types/cockpit';
-import { CockpitHostMessageSchema } from '../../../state/schemas';
-import { getMessageTracer, postMessageWithTracing } from '../utils/messageUtils';
+import { postMessageWithTracing } from '../utils/messageUtils';
 import { Assistant } from './Assistant';
 import { Sidebar } from './Sidebar';
 import { Stage } from './Stage';
@@ -17,7 +16,7 @@ const LayoutStyle: React.CSSProperties = {
 const MainAreaStyle: React.CSSProperties = {
   display: 'flex',
   flex: 1,
-  minHeight: 0, // Critical for flex overflow
+  minHeight: 0,
   overflow: 'hidden',
 };
 
@@ -25,33 +24,26 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
   vscode,
   cockpitState,
 }) => {
-  // Local state only for UI responsiveness (tabs, width) and ephemeral chat
-  // Navigation state (activeFrame, history) now comes from cockpitState via Redux
   const [assistantMessages, setAssistantMessages] = React.useState<
     Array<{ role: 'user' | 'assistant'; content: string }>
   >([]);
   const [width, setWidth] = React.useState(window.innerWidth);
-  const [activeTab, setActiveTab] = React.useState<
-    'explorer' | 'stage' | 'assistant'
-  >('stage');
+  const [activeTab, setActiveTab] = React.useState<'explorer' | 'stage' | 'assistant'>('stage');
   const [isAssistantOpen, setIsAssistantOpen] = React.useState(true);
 
-  // Derived state
   const activeFrame = cockpitState.activeFrame;
   const history = cockpitState.history;
   const explorerData = cockpitState.explorerData;
-  // Selection is now handled via store actions if needed, or local to Stage if ephemeral.
+
   const [selection, setSelection] = React.useState<any>(null);
 
   React.useEffect(() => {
-    // Request explorer tree and bundle data on mount
     postMessageWithTracing(vscode, { type: 'getExplorerTree' });
     postMessageWithTracing(vscode, { type: 'getBundleData' });
 
     const handler = (event: MessageEvent) => {
       const raw = event.data;
 
-      // Handle specific SuperWebview messages only
       if (raw?.type === 'analysisError' && raw.payload) {
         console.warn('[SuperWebview] Analysis error', raw.payload);
         return;
@@ -64,9 +56,6 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         ]);
         return;
       }
-
-      // All other messages (updateState, etc.) are handled by parent App component
-      // No need to validate or warn about them here
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
@@ -98,7 +87,6 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
   };
 
   const handleSidebarSelect = (node: ExplorerNode) => {
-    // Handle Reports
     if (node.id === 'reports-root') {
       const newFrame: ContextFrame = {
         level: 'bundle',
@@ -114,20 +102,17 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
       return;
     }
 
-    // Handle Bundle Selection
     if (node.id.startsWith('bundle-')) {
       const bundleId = node.id.replace('bundle-', '');
 
-      // Switch active bundle
       postMessageWithTracing(vscode, { type: 'switchBundle', id: bundleId });
 
-      // Navigate to root of this new bundle
       const newFrame: ContextFrame = {
         level: 'bundle',
-        id: 'root', // The bundle itself is the root context
+        id: 'root',
         name: node.name,
         status: 'ready',
-        parentId: undefined, // It is the root
+        parentId: undefined,
       };
 
       postMessageWithTracing(vscode, {
@@ -137,7 +122,6 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
       return;
     }
 
-    // Determine level based on node type
     let level: ContextFrame['level'] = 'bundle';
     switch (node.type) {
       case 'file':
@@ -153,10 +137,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
         level = 'bundle';
     }
 
-    // Trigger analysis for files and symbols
     if (level === 'file' || level === 'symbol') {
-      // Optimistic update is handled by the reducer responding to NAVIGATE_TO with 'scanning'
-      // We dispatch NAVIGATE_TO first, then trigger analysis
       const newFrame: ContextFrame = {
         level,
         id: node.id,
@@ -185,7 +166,6 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
     }
   };
 
-  // Breakpoints
   const isNarrow = width < 800;
   const isMedium = width >= 800 && width < 1200;
   const isWide = width >= 1200;
@@ -225,8 +205,8 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
               cockpitState={cockpitState}
               vscode={vscode}
             />
-            {/* Inspector removed, Assistant is separate or integrated? 
-                Plan says "Inspector is gone". 
+            {/* Inspector removed, Assistant is separate or integrated?
+                Plan says "Inspector is gone".
                 Let's keep Assistant visible in wide mode if open.
             */}
             {/* Debug / Cache Stats Footer */}
@@ -422,11 +402,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
                     fontSize: '0.8em',
                   }}
                 >
-                  {tab === 'explorer'
-                    ? '📁'
-                    : tab === 'stage'
-                      ? '🎯'
-                      : '🤖'}
+                  {tab === 'explorer' ? '📁' : tab === 'stage' ? '🎯' : '🤖'}
                 </div>
               ))}
             </div>

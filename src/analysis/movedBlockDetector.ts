@@ -1,4 +1,4 @@
-// Removed unused Database import
+
 import { DatabaseService, getDatabaseService } from '../services/databaseService';
 import { getDatabaseManager } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
@@ -10,8 +10,8 @@ import { GitOperations } from './git';
 export interface CodeBlock {
   file: string;
   symbolId?: string;
-  dnaId?: string; // Add DNA ID for matching
-  symbolKind?: string; // Add symbol kind for inferBlockType
+  dnaId?: string;
+  symbolKind?: string;
   startLine: number;
   endLine: number;
   content: string;
@@ -69,11 +69,11 @@ export interface CrossVersionSymbolLineage {
   sourceVersion: string;
   destVersion: string;
   moveType: 'rename' | 'relocate' | 'refactor';
-  versionDescription?: string; // Human-readable description (e.g., "3 versions ago → 1 version ago")
+  versionDescription?: string;
 }
 
 export class MovedBlockDetector {
-  private similarityThreshold: number = 0.6; // Configurable threshold (default 0.6)
+  private similarityThreshold: number = 0.6;
 
   constructor(
     private dbManager = getDatabaseManager(),
@@ -102,14 +102,14 @@ export class MovedBlockDetector {
   ): Promise<MovedBlockResult> {
     logInfo(`[MovedBlockDetector] Detecting moves for commit ${commitSha.substring(0, 8)}`);
 
-    // Extract code blocks from symbols
+
     const deletedBlocks = await this.extractCodeBlocks(deletedSymbols, commitSha, 'deleted');
     const addedBlocks = await this.extractCodeBlocks(addedSymbols, commitSha, 'added');
 
-    // Find move candidates
+
     const candidates = this.findMoveCandidates(deletedBlocks, addedBlocks);
 
-    // Convert candidates to moved blocks
+
     const movedBlocks: MovedBlock[] = candidates.map(candidate => ({
       commitSha,
       sourceFile: candidate.sourceBlock.file,
@@ -128,10 +128,10 @@ export class MovedBlockDetector {
       lineCount: candidate.sourceBlock.endLine - candidate.sourceBlock.startLine + 1,
     }));
 
-    // Store moved blocks
+
     await this.storeMovedBlocks(movedBlocks);
 
-    // Generate symbol lineage
+
     const symbolLineage = this.generateSymbolLineage(movedBlocks);
     await this.storeSymbolLineage(symbolLineage);
 
@@ -154,15 +154,15 @@ export class MovedBlockDetector {
 
     for (const symbol of symbols) {
       try {
-        // Get file content (for deleted symbols, we need parent content)
+
         const filePath = symbol.id.split(':')[0];
         const contentSha = context === 'deleted' ? await this.getParentSha(commitSha) : commitSha;
         const fileContent = await this.getFileContent(filePath, contentSha);
 
-        // Extract symbol content from file
+
         const symbolContent = this.extractSymbolContent(fileContent, symbol);
 
-        // Create hashes
+
         const normalizedHash = this.hashNormalized(symbolContent);
         const structureHash = this.hashStructure(symbolContent);
 
@@ -206,7 +206,7 @@ export class MovedBlockDetector {
     for (const removed of removedSymbols) {
       if (!removed.dnaId) continue;
 
-      // Find best match by DNA ID
+
       let bestMatch: SymbolInfo | null = null;
       let bestSimilarity = 0;
 
@@ -214,7 +214,7 @@ export class MovedBlockDetector {
         if (matchedAdded.has(added.id)) continue;
         if (!added.dnaId) continue;
 
-        // Exact DNA match
+
         if (removed.dnaId === added.dnaId) {
           bestMatch = added;
           bestSimilarity = 1.0;
@@ -239,27 +239,27 @@ export class MovedBlockDetector {
 
     for (const deleted of deletedBlocks) {
       for (const added of addedBlocks) {
-        // Allow same-file moves (in-file refactoring)
-        // Match via stable DNA IDs for in-file moves
+
+
 
         let similarityScore = 0;
 
-        // Stage 1: Exact hash match (perfect move)
+
         if (deleted.normalizedHash === added.normalizedHash) {
           similarityScore = 1.0;
         }
-        // Stage 2: Structure match (move with minor edits)
+
         else if (deleted.structureHash === added.structureHash) {
           similarityScore = this.calculateTextSimilarity(deleted.content, added.content);
-          if (similarityScore < this.similarityThreshold) continue; // Too different
+          if (similarityScore < this.similarityThreshold) continue;
         }
-        // Stage 3: Fuzzy match (partial moves)
+
         else {
           similarityScore = this.calculateLevenshteinSimilarity(
             deleted.normalizedHash,
             added.normalizedHash
           );
-          if (similarityScore < this.similarityThreshold) continue; // Too different
+          if (similarityScore < this.similarityThreshold) continue;
         }
 
         candidates.push({
@@ -270,7 +270,7 @@ export class MovedBlockDetector {
       }
     }
 
-    // Deduplicate: prefer highest similarity matches
+
     return this.deduplicateCandidates(candidates);
   }
 
@@ -282,7 +282,7 @@ export class MovedBlockDetector {
     if (block.symbolKind) {
       return block.symbolKind;
     }
-    // Fallback to generic 'block' if kind not available
+
     return 'block';
   }
 
@@ -292,27 +292,27 @@ export class MovedBlockDetector {
   classifyMoveReason(candidate: MoveCandidate): MoveReason {
     const { sourceBlock, destBlock } = candidate;
 
-    // File rename: same directory, different filename
+
     if (this.isFileRename(sourceBlock.file, destBlock.file)) {
       return 'file_rename';
     }
 
-    // Extraction: moved to a utility/helper file
+
     if (this.isUtilityFile(destBlock.file) && !this.isUtilityFile(sourceBlock.file)) {
       return 'extraction';
     }
 
-    // Consolidation: multiple similar blocks moved to same file
+
     if (this.hasMultipleMovesToSameFile(destBlock.file)) {
       return 'consolidation';
     }
 
-    // Module split: moving from large file to new smaller file
+
     if (this.isNewFile(destBlock.file) && this.isLargeFile(sourceBlock.file)) {
       return 'module_split';
     }
 
-    // Default: generic refactoring
+
     if (candidate.similarityScore >= 0.95) {
       return 'refactoring';
     }
@@ -324,7 +324,7 @@ export class MovedBlockDetector {
    * Calculate text similarity using diff-match-patch
    */
   private calculateTextSimilarity(text1: string, text2: string): number {
-    // Simplified implementation - in production would use diff-match-patch
+
     const longer = text1.length > text2.length ? text1 : text2;
     const shorter = text1.length > text2.length ? text2 : text1;
 
@@ -367,9 +367,9 @@ export class MovedBlockDetector {
           matrix[i][j] = matrix[i - 1][j - 1];
         } else {
           matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1, // substitution
-            matrix[i][j - 1] + 1, // insertion
-            matrix[i - 1][j] + 1 // deletion
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
           );
         }
       }
@@ -384,7 +384,7 @@ export class MovedBlockDetector {
   private deduplicateCandidates(candidates: MoveCandidate[]): MoveCandidate[] {
     const grouped = new Map<string, MoveCandidate[]>();
 
-    // Group by source block
+
     for (const candidate of candidates) {
       const key = `${candidate.sourceBlock.file}:${candidate.sourceBlock.symbolId}`;
       if (!grouped.has(key)) {
@@ -393,7 +393,7 @@ export class MovedBlockDetector {
       grouped.get(key)!.push(candidate);
     }
 
-    // For each group, pick the highest similarity candidate
+
     const deduplicated: MoveCandidate[] = [];
     for (const group of Array.from(grouped.values())) {
       const best = group.reduce((best, current) =>
@@ -413,7 +413,7 @@ export class MovedBlockDetector {
 
     for (const move of movedBlocks) {
       if (move.sourceSymbolId && move.destSymbolId && move.sourceSymbolId !== move.destSymbolId) {
-        // Determine move type
+
         let moveType: 'file_rename' | 'block_move' | 'symbol_rename' = 'block_move';
 
         if (move.sourceFile !== move.destFile && move.sourceSymbolId === move.destSymbolId) {
@@ -527,9 +527,9 @@ export class MovedBlockDetector {
    */
   private hashNormalized(content: string): string {
     const normalized = content
-      .replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
-      .replace(/\/\/.*/g, '') // Remove line comments
-      .replace(/\s+/g, ' ') // Normalize whitespace
+      .replace(/\/\*[\s\S]*?\*\
+      .replace(/\/\/.*/g, '')
+      .replace(/\s+/g, ' ')
       .trim();
 
     const crypto = require('crypto');
@@ -540,53 +540,53 @@ export class MovedBlockDetector {
    * Hash structural content (AST-based)
    */
   private hashStructure(content: string): string {
-    // Simplified implementation - in production would parse AST
+
     const tokens = content
-      .replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, 'ID') // Replace identifiers
-      .replace(/\d+/g, 'NUM') // Replace numbers
-      .replace(/["'].*?["']/g, 'STR') // Replace strings
-      .replace(/\s+/g, ''); // Remove whitespace
+      .replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, 'ID')
+      .replace(/\d+/g, 'NUM')
+      .replace(/["'].*?["']/g, 'STR')
+      .replace(/\s+/g, '');
 
     const crypto = require('crypto');
     return crypto.createHash('sha256').update(tokens).digest('hex').substring(0, 16);
   }
 
-  // Utility methods for move classification
+
   private isUtilityFile(filePath: string): boolean {
     const patterns = ['/utils/', '/helpers/', '/lib/', '/common/', '/shared/'];
     return patterns.some(p => filePath.toLowerCase().includes(p.toLowerCase()));
   }
 
   private hasMultipleMovesToSameFile(_filePath: string): boolean {
-    // Check if multiple blocks moved to same file
-    // This requires access to all detected moves in the current batch, which is available
-    // in the calling context (classifyMoveReason is called for each candidate).
-    // For proper implementation, this should track moves per destination file.
+
+
+
+
     // TODO: Implement by tracking destination files in detectMovedBlocks and passing context
-    // For now, this is a placeholder that would need to be enhanced with move tracking
+
     return false;
   }
 
   private isNewFile(filePath: string): boolean {
-    // Check if file was recently created
-    // This is a heuristic - files in certain directories or with certain patterns
-    // might be considered "new" even if they have some history
-    // For now, use a simple heuristic based on file path patterns
+
+
+
+
     const newFilePatterns = ['/new/', '/temp/', '/test/', '/spec/'];
     return newFilePatterns.some(pattern => filePath.toLowerCase().includes(pattern));
   }
 
   private isLargeFile(filePath: string): boolean {
-    // Check if file is large based on path heuristics
-    // Large files are often in specific directories or have certain patterns
-    // This is a placeholder - proper implementation would check actual file size
+
+
+
     // TODO: Implement by reading file content and counting lines, or using git to get file size
     const largeFilePatterns = ['/generated/', '/vendor/', '/node_modules/', '.min.', '.bundle.'];
     return largeFilePatterns.some(pattern => filePath.toLowerCase().includes(pattern));
   }
 
   private isFileRename(sourcePath: string, destPath: string): boolean {
-    // Check if paths represent a file rename (same directory, different filename)
+
     const sourceDir = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
     const destDir = destPath.substring(0, destPath.lastIndexOf('/'));
     const sourceName = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
@@ -595,11 +595,8 @@ export class MovedBlockDetector {
     return sourceDir === destDir && sourceName !== destName;
   }
 
-  // Public API methods
 
-  /**
-   * Get all moved blocks for a commit
-   */
+
   async getMovedBlocks(commitSha: string): Promise<MovedBlock[]> {
     const stmt = prepare(`
       SELECT * FROM moved_blocks
@@ -627,9 +624,6 @@ export class MovedBlockDetector {
     }));
   }
 
-  /**
-   * Get symbol lineage (history of moves)
-   */
   async getSymbolLineage(symbolId: string): Promise<SymbolLineage[]> {
     const stmt = prepare(`
       SELECT * FROM symbol_lineage
@@ -646,9 +640,6 @@ export class MovedBlockDetector {
     }));
   }
 
-  /**
-   * Find all moves involving a file
-   */
   async getFileMoves(filePath: string): Promise<MovedBlock[]> {
     const stmt = prepare(`
       SELECT * FROM moved_blocks
@@ -677,38 +668,28 @@ export class MovedBlockDetector {
   }
 }
 
-/**
- * Input type for moved block detection
- */
 export interface MovedBlockDetectorInput {
   commitSha: string;
   deletedSymbols: SymbolInfo[];
   addedSymbols: SymbolInfo[];
 }
 
-/**
- * Moved block detector that extends BaseDetector for unified analysis patterns
- * Delegates operational methods to legacy detector for backward compatibility
- */
 export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, MovedBlock[]> {
   private legacyDetector: MovedBlockDetector;
 
   constructor(config: Partial<DetectorConfig> = {}) {
     super({
-      enableCaching: false, // Move detection should always be fresh
+      enableCaching: false,
       ...config,
     });
     this.legacyDetector = new MovedBlockDetector();
   }
 
-  /**
-   * Detect moved blocks from input (BaseDetector interface)
-   */
   async detect(input: MovedBlockDetectorInput): Promise<MovedBlock[]> {
     return this.getCachedResult(
       this.generateCacheKey(input.commitSha, input.deletedSymbols, input.addedSymbols),
       async () => {
-        // Call detectMovedBlocks and return just the moved blocks
+
         const result = await this.legacyDetector.detectMovedBlocks(
           input.commitSha,
           input.deletedSymbols,
@@ -719,10 +700,6 @@ export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, 
     );
   }
 
-  /**
-   * Main entry point: detect moved blocks between file changes
-   * Delegates to legacy detector
-   */
   async detectMovedBlocks(
     commitSha: string,
     deletedSymbols: SymbolInfo[],
@@ -731,10 +708,6 @@ export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, 
     return this.legacyDetector.detectMovedBlocks(commitSha, deletedSymbols, addedSymbols);
   }
 
-  /**
-   * Match symbols by DNA ID across versions (for cross-version move detection)
-   * Delegates to legacy detector
-   */
   matchByDna(
     removedSymbols: SymbolInfo[],
     addedSymbols: SymbolInfo[]
@@ -746,10 +719,6 @@ export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, 
     return this.legacyDetector.matchByDna(removedSymbols, addedSymbols);
   }
 
-  /**
-   * Set similarity threshold for move detection
-   * Delegates to legacy detector
-   */
   setSimilarityThreshold(threshold: number): void {
     this.legacyDetector.setSimilarityThreshold(threshold);
   }

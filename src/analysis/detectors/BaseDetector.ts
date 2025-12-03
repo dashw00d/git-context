@@ -16,22 +16,22 @@ export interface DetectorLogger {
  * Configuration for detector thresholds and caching
  */
 export interface DetectorConfig {
-  thresholds?: Partial<ThresholdConfig>; // Partial to allow merging
+  thresholds?: Partial<ThresholdConfig>;
   enableCaching?: boolean;
   cacheTTL?: number;
   maxCacheSize?: number;
-  logger?: DetectorLogger; // Optional logger injection
+  logger?: DetectorLogger;
 }
 
 /**
  * Threshold configuration for detector algorithms
  */
 export interface ThresholdConfig {
-  similarityMin: number; // Minimum similarity score (0.0-1.0)
-  confidenceMin: number; // Minimum confidence score (0.0-1.0)
-  changeThreshold: number; // Minimum change count for significance
-  maxGroupSize: number; // Maximum size of groups to process
-  scoreWeight: number; // Weight multiplier for scoring
+  similarityMin: number;
+  confidenceMin: number;
+  changeThreshold: number;
+  maxGroupSize: number;
+  scoreWeight: number;
 }
 
 /**
@@ -56,8 +56,8 @@ export const DEFAULT_THRESHOLDS: ThresholdConfig = {
  *
  * ```typescript
  * const detector = new MyDetector({
- *   thresholds: { similarityMin: 0.8 },  // Override specific threshold
- *   enableCaching: false  // Disable caching for this instance
+ *   thresholds: { similarityMin: 0.8 },
+ *   enableCaching: false
  * });
  * ```
  *
@@ -85,7 +85,7 @@ export const DEFAULT_THRESHOLDS: ThresholdConfig = {
  *
  * ```typescript
  * return this.getCachedResult(this.generateCacheKey(input), async () => {
- *   // Expensive computation here
+ *
  * });
  * ```
  *
@@ -101,9 +101,9 @@ export const DEFAULT_THRESHOLDS: ThresholdConfig = {
  * ```typescript
  * class MyDetector extends BaseDetector<MyInput, MyOutput> {
  *   async detect(input: MyInput): Promise<MyOutput> {
- *     // Use this.config.thresholds for algorithm parameters
- *     // Use this.groupBy(), this.deduplicateByScore(), etc. for utilities
- *     // Use this.getCachedResult() for caching
+ *
+ *
+ *
  *     return this.getCachedResult(this.generateCacheKey(input), async () => {
  *       const groups = this.groupBy(input.items, item => item.category);
  *       const deduped = this.deduplicateByScore(groups);
@@ -113,7 +113,7 @@ export const DEFAULT_THRESHOLDS: ThresholdConfig = {
  *   }
  *
  *   protected async postProcess(output: MyOutput, input: MyInput): Promise<MyOutput> {
- *     // Optional: filter or transform output
+ *
  *     return output.filter(item => item.score > 0.5);
  *   }
  * }
@@ -124,7 +124,6 @@ export abstract class BaseDetector<TInput, TOutput> {
   protected cache?: LRUCache<string, any>;
 
   constructor(config: Partial<DetectorConfig> = {}) {
-    // Get base thresholds from centralized config
     const extensionConfig = getExtensionConfig();
     const baseThresholds = extensionConfig.detectorThresholds
       ? {
@@ -142,13 +141,11 @@ export abstract class BaseDetector<TInput, TOutput> {
         }
       : DEFAULT_THRESHOLDS;
 
-    // Merge with provided config (override takes precedence)
     const finalThresholds: ThresholdConfig = {
       ...baseThresholds,
       ...config.thresholds,
     };
 
-    // Default logger to imported logger functions if not provided
     const logger: DetectorLogger = config.logger || {
       debug: logDebug,
       warn: logWarn,
@@ -158,7 +155,7 @@ export abstract class BaseDetector<TInput, TOutput> {
     this.config = {
       thresholds: finalThresholds,
       enableCaching: config.enableCaching ?? true,
-      cacheTTL: config.cacheTTL ?? 3600000, // 1 hour
+      cacheTTL: config.cacheTTL ?? 3600000,
       maxCacheSize: config.maxCacheSize ?? 100,
       logger,
     } as DetectorConfig & { thresholds: ThresholdConfig; logger: DetectorLogger };
@@ -172,7 +169,6 @@ export abstract class BaseDetector<TInput, TOutput> {
       });
     }
 
-    // Log initialization with thresholds (debug level)
     this.config.logger.debug(
       `[BaseDetector:${this.constructor.name}] Initialized with thresholds: ${JSON.stringify(this.config.thresholds)}`
     );
@@ -208,13 +204,12 @@ export abstract class BaseDetector<TInput, TOutput> {
    * @example
    * ```typescript
    * protected async postProcess(output: MyOutput, input: MyInput): Promise<MyOutput> {
-   *   // Filter out low-confidence results
+   *
    *   return output.filter(item => item.confidence > 0.5);
    * }
    * ```
    */
   protected async postProcess(output: TOutput, _input: TInput): Promise<TOutput> {
-    // Default implementation: no transformation
     return output;
   }
 
@@ -230,11 +225,11 @@ export abstract class BaseDetector<TInput, TOutput> {
 
     const groups = new Map<string, T[]>();
     for (const item of items) {
-      if (!item) continue; // Skip invalid items
+      if (!item) continue;
 
       try {
         const key = keyFn(item);
-        if (!key) continue; // Skip items with invalid keys
+        if (!key) continue;
 
         if (!groups.has(key)) {
           groups.set(key, []);
@@ -283,24 +278,20 @@ export abstract class BaseDetector<TInput, TOutput> {
         continue;
       }
 
-      // Filter out non-numeric scores and find the best
       const validItems = group.filter(item => {
         const score = item.score;
         return typeof score === 'number' && !isNaN(score) && isFinite(score);
       });
 
       if (validItems.length === 0) {
-        // Fallback to first item if all scores are invalid
         deduped.push(group[0]!);
         continue;
       }
 
-      // Find the item with the highest score
       const best = validItems.reduce((prev, curr) =>
         (curr.score ?? 0) > (prev.score ?? 0) ? curr : prev
       );
 
-      // Only include if it meets the minimum similarity threshold
       const bestScore = best.score ?? 0;
       if (bestScore >= this.config.thresholds.similarityMin) {
         deduped.push(best);
@@ -326,7 +317,6 @@ export abstract class BaseDetector<TInput, TOutput> {
     for (const group of groups.values()) {
       if (!group?.length) continue;
 
-      // Filter items that meet confidence threshold (handle non-numeric values)
       const validItems = group.filter(item => {
         const confidence = item.confidence;
         if (typeof confidence !== 'number' || isNaN(confidence) || !isFinite(confidence)) {
@@ -346,7 +336,6 @@ export abstract class BaseDetector<TInput, TOutput> {
   protected score(metrics: Record<string, number> | null | undefined): number {
     if (!metrics || Object.keys(metrics).length === 0) return 0;
 
-    // Filter out NaN and invalid values
     const values = Object.values(metrics).filter(
       v => typeof v === 'number' && !isNaN(v) && isFinite(v)
     );
@@ -357,7 +346,6 @@ export abstract class BaseDetector<TInput, TOutput> {
     const average = sum / values.length;
     const weighted = average * this.config.thresholds.scoreWeight;
 
-    // Clamp to 0-1 range
     return Math.min(1.0, Math.max(0.0, weighted));
   }
 
@@ -400,7 +388,6 @@ export abstract class BaseDetector<TInput, TOutput> {
       if (group.length <= maxSize) {
         limited.set(key, group);
       } else {
-        // Keep only the first maxSize items
         limited.set(key, group.slice(0, maxSize));
       }
     }
@@ -427,7 +414,6 @@ export abstract class BaseDetector<TInput, TOutput> {
     key: string,
     computeFn: () => Promise<TCompute> | TCompute
   ): Promise<TCompute> {
-    // Check local cache first
     if (this.cache?.has(key)) {
       this.config.logger.debug(
         `[BaseDetector:${this.constructor.name}] Cache hit: ${key.substring(0, 50)}...`
@@ -435,7 +421,6 @@ export abstract class BaseDetector<TInput, TOutput> {
       return Promise.resolve(this.cache.get(key) as TCompute);
     }
 
-    // Compute and cache result
     return Promise.resolve(computeFn()).then(result => {
       this.cache?.set(key, result as any);
       this.config.logger.debug(
@@ -461,7 +446,7 @@ export abstract class BaseDetector<TInput, TOutput> {
     });
 
     const baseKey = keyParts.join('_');
-    // Add namespace prefix to avoid collisions between different detector classes
+
     return `detector:${this.constructor.name}:${baseKey}`;
   }
 
@@ -471,9 +456,6 @@ export abstract class BaseDetector<TInput, TOutput> {
    */
   protected clearCache(scope?: 'local' | 'global'): void {
     if (scope === 'global' || !scope) {
-      // Note: Global cache integration would go here if snapshotManager or another
-      // global cache system is extended to support detector result caching
-      // For now, this is a placeholder for future integration
       this.config.logger.debug(
         `[BaseDetector:${this.constructor.name}] Global cache clear requested (not yet integrated)`
       );

@@ -10,7 +10,6 @@ function buildDepGraph(steps: PipelineStep[]): Record<string, string[]> {
   const stepIds = new Set(steps.map(s => s.id));
 
   for (const step of steps) {
-    // Validate dependencies exist
     if (step.deps) {
       for (const dep of step.deps) {
         if (!stepIds.has(dep)) {
@@ -33,7 +32,6 @@ function topologicalSort(graph: Record<string, string[]>): string[][] {
   const queue: string[] = [];
   const levels: string[][] = [];
 
-  // Initialize in-degrees (number of dependencies each node has)
   for (const node in graph) {
     inDegree.set(node, graph[node].length);
     if (graph[node].length === 0) {
@@ -41,17 +39,14 @@ function topologicalSort(graph: Record<string, string[]>): string[][] {
     }
   }
 
-  // Process queue
   while (queue.length > 0) {
     const level: string[] = [];
 
-    // Process all nodes at current level
     const queueSize = queue.length;
     for (let i = 0; i < queueSize; i++) {
       const node = queue.shift()!;
       level.push(node);
 
-      // Reduce in-degree of all nodes that depend on this node
       for (const dependent in graph) {
         if (graph[dependent].includes(node)) {
           const currentDegree = inDegree.get(dependent)! - 1;
@@ -68,7 +63,6 @@ function topologicalSort(graph: Record<string, string[]>): string[][] {
     }
   }
 
-  // Check for cycles (if not all nodes were processed)
   if (levels.flat().length !== Object.keys(graph).length) {
     throw new Error('Pipeline contains circular dependencies');
   }
@@ -92,7 +86,6 @@ export async function runPipeline(
   const pipelineStartTime = Date.now();
   const stepTimings: Record<string, { start: number; end?: number; duration?: number }> = {};
 
-  // Build dependency graph and topological levels
   const depGraph = buildDepGraph(steps);
   const levels = topologicalSort(depGraph);
 
@@ -100,7 +93,6 @@ export async function runPipeline(
     `[Pipeline] Starting pipeline execution with ${levels.length} levels and ${steps.length} steps`
   );
 
-  // Execute steps level by level (parallel within levels)
   for (const level of levels) {
     const promises = level.map(stepId => {
       const step = steps.find(s => s.id === stepId)!;
@@ -125,15 +117,10 @@ export async function runPipeline(
           state.stepTimings![stepId].duration = duration;
           state.completedSteps.add(step.id);
 
-          // Collect cache statistics if available
           let cacheHits: number | undefined;
           let cacheMisses: number | undefined;
 
-          // Try to get cache stats from commit indexer (stored in state or accessible)
-          // This is a simplified approach - in practice, you'd pass config to enable this
           if (step.id === 'bundle_facts' && state.commitFacts) {
-            // Estimate cache performance from commit facts processing
-            // This is a placeholder - actual implementation would track per-step
           }
 
           const timestamp = new Date().toISOString();
@@ -158,7 +145,6 @@ export async function runPipeline(
 
           state.errors.push({ stepId: step.id, error });
 
-          // Track optional step failures for partial execution
           const optionalSteps = ['drift', 'legacy', 'hotspots', 'moved_blocks'];
           if (optionalSteps.includes(step.id)) {
             state.partialReasons!.push(
@@ -166,7 +152,6 @@ export async function runPipeline(
             );
           }
 
-          // Extract detailed error information
           const stepError = {
             message: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,
@@ -182,15 +167,12 @@ export async function runPipeline(
             timestamp,
           });
           logDebug(`[Pipeline] Failed step: ${step.label} (${duration}ms): ${stepError.message}`);
-          // Skip remaining work in this level for live mode optional steps\n+          if (state.mode === 'cheap_live' && LIVE_OPTIONAL_STEPS.has(step.id)) {\n+            return;\n+          }\n+\n+          // Continue with other steps in level (best-effort mode)
         });
     });
 
-    // Wait for all steps in this level to complete
     await Promise.allSettled(promises);
   }
 
-  // Log performance summary
   const pipelineEndTime = Date.now();
   const totalDuration = pipelineEndTime - pipelineStartTime;
   state.pipelineDuration = totalDuration;
@@ -201,7 +183,6 @@ export async function runPipeline(
     logInfo(`[Pipeline] Steps failed: ${state.errors.length}`);
   }
 
-  // Log individual step timings
   const completedTimings = Object.entries(stepTimings)
     .filter(([, timing]) => timing.duration !== undefined)
     .sort(([, a], [, b]) => (b.duration || 0) - (a.duration || 0));

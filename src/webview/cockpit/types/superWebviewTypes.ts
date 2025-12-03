@@ -16,7 +16,7 @@ export interface StageProps {
   onZoomIn: (frame: ContextFrame) => void;
   onZoomOut: () => void;
   onSelect: (item: any) => void;
-  cockpitState: any; // Using any to avoid circular dependency or deep import if not needed, or import CockpitState
+  cockpitState: any;
   vscode: any;
 }
 

@@ -13,7 +13,7 @@ export class CockpitStore extends EventEmitter {
   constructor() {
     super();
     this.state = initialState;
-    // Always create debugger, it will check getDebugMode() internally for logging
+
     this.debugger = new StateDebugger();
     this.traceActions = process.env.GIT_CONTEXT_TRACE_ACTIONS === '1';
   }
@@ -23,13 +23,10 @@ export class CockpitStore extends EventEmitter {
   }
 
   dispatch(action: Action): void {
-    // Capture prevState before any changes
     const prevState = this.state;
 
-    // Single reduce - compute next state
     const baseNextState = cockpitReducer(prevState, action);
 
-    // Append action to history (capped at 50)
     const newHistory = [
       ...(baseNextState.actionHistory || []),
       {
@@ -39,16 +36,13 @@ export class CockpitStore extends EventEmitter {
       },
     ].slice(-50);
 
-    // Assign final state with updated history
     const nextState = { ...baseNextState, actionHistory: newHistory };
     this.state = nextState;
 
-    // Debug logging with StateDebugger (conditional)
     if (this.debugger) {
       this.debugger.logTransition(action, prevState, nextState);
     }
 
-    // Log state transition
     if (this.traceActions) {
       try {
         const { getStateLogger } = require('../services/stateLogger');
@@ -58,11 +52,8 @@ export class CockpitStore extends EventEmitter {
           stateBefore: prevState,
           stateAfter: nextState,
         });
-      } catch (e) {
-        // Ignore logging errors to prevent app crash
-      }
+      } catch (e) {}
 
-      // Minimal console trace to avoid noisy dumps
       const payloadKeys = Object.keys((action as any).payload || {});
       console.log(
         `[Store] Action: ${action.type}`,
@@ -79,7 +70,6 @@ export class CockpitStore extends EventEmitter {
   }
 }
 
-// Singleton instance
 let store: CockpitStore | null = null;
 
 export function getStore(): CockpitStore {

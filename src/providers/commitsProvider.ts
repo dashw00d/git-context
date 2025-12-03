@@ -25,7 +25,7 @@ export class CommitsProvider {
     private activeBundleProvider: ActiveBundleProvider
   ) {
     this.branchManager = new BranchManager();
-    // Initialize git lazily in async methods
+
     this.git = null;
     this.currentBranch = null;
     this.manualCommits = new Set(
@@ -38,7 +38,6 @@ export class CommitsProvider {
 
   async refresh(): Promise<void> {
     await this.updateBranchCursor();
-    // TreeView removed - no event firing needed
   }
 
   private async updateBranchCursor() {
@@ -51,7 +50,6 @@ export class CommitsProvider {
     }
   }
 
-  // Methods for compatibility with commands.ts
   async initializeDatabase(): Promise<void> {
     const { ensureDatabaseInitialized } = await import('../storage/database');
     await ensureDatabaseInitialized();
@@ -95,7 +93,6 @@ export class CommitsProvider {
     let updatedStaged: string[] | undefined;
     let updatedUnstaged: string[] | undefined;
 
-    // Check if it's a staged file
     try {
       const { GitOperations } = require('../analysis/git');
       const git = new GitOperations();
@@ -109,7 +106,6 @@ export class CommitsProvider {
         }
         updatedStaged = Array.from(selectedStaged);
       } else {
-        // Assume it's an unstaged file if not staged
         if (selectedUnstaged.has(filePath)) {
           selectedUnstaged.delete(filePath);
         } else {
@@ -119,7 +115,7 @@ export class CommitsProvider {
       }
     } catch (error) {
       logError('Failed to determine file status for toggle:', error);
-      // Fallback: if we can't determine, just toggle in both sets (less efficient but safe)
+
       if (selectedStaged.has(filePath)) {
         selectedStaged.delete(filePath);
       } else {
@@ -225,8 +221,6 @@ export class CommitsProvider {
         risks?: string[];
       }> = [];
 
-      // 1. Inject Virtual Commits (Staged/Unstaged)
-      // Only if not filtering text (or if text matches "staged"/"unstaged")
       if (
         !filterText ||
         'staged changes'.includes(filterText.toLowerCase()) ||
@@ -268,7 +262,6 @@ export class CommitsProvider {
         }
       }
 
-      // 2. Get HEAD SHA for explicit HEAD node
       let headSha: string | null = null;
       try {
         headSha = await git.getHeadSha();
@@ -276,7 +269,6 @@ export class CommitsProvider {
         headSha = null;
       }
 
-      // 3. Add explicit HEAD node (baseline commit before workspace changes)
       if (!filterText && headSha) {
         try {
           const headInfo = await git.getCommitInfo(headSha);
@@ -285,15 +277,12 @@ export class CommitsProvider {
             message: headInfo.message,
             author: headInfo.author,
             date: headInfo.date,
-            changes: 0, // Virtual - will be populated if analyzed
-            files: [], // Will be populated from git.getFileChanges if needed
+            changes: 0,
+            files: [],
           });
-        } catch {
-          // HEAD not accessible, skip
-        }
+        } catch {}
       }
 
-      // 4. Fetch History Commits using CommitService
       const searchOptions = {
         limit: this.loadMoreOffset + limitValue,
         offset: 0,
@@ -302,14 +291,12 @@ export class CommitsProvider {
 
       const commits = await commitService.searchCommits(searchOptions);
 
-      // 5. Map History Commits (exclude HEAD since we added it explicitly)
       const historyCommits = await Promise.all(
         commits
           .filter(commit => commit.sha && !isWorkspaceSha(commit.sha) && commit.sha !== headSha)
           .map(async commit => {
             let files: Array<{ path: string; status: any }> = [];
             try {
-              // Only fetch files if we have a valid non-workspace SHA
               if (commit.sha && !isWorkspaceSha(commit.sha)) {
                 const changes = await git.getFileChanges(commit.sha);
                 if (Array.isArray(changes)) {
@@ -323,9 +310,6 @@ export class CommitsProvider {
               }
             } catch (e) {
               logWarn(`Failed to fetch files for commit ${commit.sha}: ${e}`);
-              // If we failed to load files, but DB says there are changes,
-              // we shouldn't return empty array if possible.
-              // However, we can't invent files. The UI will show 0 files but maybe 'changes' count from DB.
             }
 
             return {
@@ -336,8 +320,8 @@ export class CommitsProvider {
               files,
               stats: {
                 files: commit.changes || 0,
-                insertions: 0, // Not available in metadata
-                deletions: 0, // Not available in metadata
+                insertions: 0,
+                deletions: 0,
               },
               isHead: false,
               isStaged: false,

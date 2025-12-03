@@ -8,7 +8,7 @@ export interface IntendedState {
   lastPath?: string;
   lastSig?: string;
   lastSha: string;
-  isRenamed?: boolean; // Indicates if this symbol was renamed
+  isRenamed?: boolean;
 }
 
 /**
@@ -16,7 +16,7 @@ export interface IntendedState {
  */
 export async function buildIntendedMap(commitShas: string[]): Promise<Map<string, IntendedState>> {
   const db = getDatabaseManager().getDatabase();
-  // Sort SHAs oldest → newest (reverse chronological order)
+
   const placeholders = commitShas.map(() => '?').join(',');
   const shaOrderStmt = prepare(`
     SELECT sha FROM commits_metadata
@@ -28,21 +28,18 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
   const intended = new Map<string, IntendedState>();
 
   for (const sha of orderedShas) {
-    // Load symbol deltas for this commit
     const symbolsStmt = prepare(`
       SELECT symbol_id, name, path, signature, change_type, mod_reason
       FROM symbols WHERE sha = ?
     `);
     const symbols = symbolsStmt.all(sha) as any[];
 
-    // Load renames from renames table
     const renamesStmt = prepare(`
       SELECT old_symbol_id, new_symbol_id, old_name, new_name, confidence
       FROM renames WHERE sha = ?
     `);
     const renames = renamesStmt.all(sha) as any[];
 
-    // Process additions/modifications
     for (const symbol of symbols) {
       const key = symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
 
@@ -66,31 +63,25 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
       }
     }
 
-    // Process renames - treat as continuity (not delete+add)
-    // Create a set of renamed old symbol IDs to skip them in removals
     const renamedOldIds = new Set<string>();
     for (const rename of renames) {
       const oldKey = rename.old_symbol_id;
       const newKey = rename.new_symbol_id;
       renamedOldIds.add(oldKey);
 
-      // If the old symbol was intended to be present, map it to the new symbol
       const oldState = intended.get(oldKey);
       if (oldState && oldState.expect === 'present') {
-        // Remove the old symbol entry
         intended.delete(oldKey);
 
-        // Set new symbol as present, marking it as renamed
         intended.set(newKey, {
           expect: 'present',
           lastName: rename.new_name,
-          lastPath: rename.new_symbol_id.split(':')[0], // Extract path from symbol ID
-          lastSig: oldState.lastSig, // Preserve signature from old state
+          lastPath: rename.new_symbol_id.split(':')[0],
+          lastSig: oldState.lastSig,
           lastSha: sha,
-          isRenamed: true, // Mark as renamed
+          isRenamed: true,
         });
       } else {
-        // Old symbol wasn't in intended map yet, just add the new one
         intended.set(newKey, {
           expect: 'present',
           lastName: rename.new_name,
@@ -101,12 +92,10 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
       }
     }
 
-    // Process removals (but skip symbols that were renamed)
     for (const symbol of symbols) {
       if (symbol.change_type === 'removed') {
         const key = symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
 
-        // Skip if this symbol was renamed (continuity, not removal)
         if (renamedOldIds.has(key)) {
           continue;
         }
@@ -119,11 +108,9 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
     }
   }
 
-  // Log rename continuity summary
   const renamedCount = Array.from(intended.values()).filter(s => s.isRenamed).length;
   logInfo(`Intended map: ${intended.size} symbols, ${renamedCount} renamed`);
 
-  // Fallback: if intended is empty, use hotspots and moved blocks to infer baseline
   if (intended.size === 0 && commitShas.length > 0) {
     logInfo(`Intended map is empty, using fallback heuristics from hotspots and moved blocks`);
     const fallbackIntended = await buildIntendedMapFallback(commitShas, db);
@@ -140,17 +127,13 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
   return intended;
 }
 
-/**
- * Fallback: Build intended map from hotspots (high churn = divergent) and moved blocks (DNA continuity)
- */
 async function buildIntendedMapFallback(
   commitShas: string[],
   _db: any
 ): Promise<Map<string, IntendedState>> {
   const intended = new Map<string, IntendedState>();
-  const churnThreshold = 40; // Hotspot score threshold for high churn
+  const churnThreshold = 40;
 
-  // Get hotspot symbols with high churn (likely divergent/refactored)
   const hotspotStmt = prepare(`
     SELECT DISTINCT sh.symbol_id, sh.file_path, sh.symbol_name, sh.hotspot_score
     FROM symbol_hotspots sh
@@ -172,7 +155,6 @@ async function buildIntendedMapFallback(
     }
   }
 
-  // Get moved blocks to infer DNA continuity (symbols that moved = present)
   const movedStmt = prepare(`
     SELECT DISTINCT dest_symbol_id, dest_file
     FROM moved_blocks
@@ -188,7 +170,7 @@ async function buildIntendedMapFallback(
         expect: 'present',
         lastPath: move.dest_file,
         lastSha: commitShas[commitShas.length - 1] || 'unknown',
-        isRenamed: true, // Moved blocks indicate continuity/rename
+        isRenamed: true,
       });
     }
   }
@@ -196,9 +178,6 @@ async function buildIntendedMapFallback(
   return intended;
 }
 
-/**
- * Reconstruct IntendedState from evidence arrays when database unavailable
- */
 export function reconstructIntendedFromEvidence(
   evidence: Record<string, any>
 ): Map<string, IntendedState> {
@@ -213,7 +192,6 @@ export function reconstructIntendedFromEvidence(
   const renamed = (evidence['intended.renamed'] as string[]) || [];
   const renamedSet = new Set(renamed);
 
-  // Parse symbol IDs: path:kind:name
   function parseSymbolId(id: string): {
     path: string;
     kind: string;
@@ -224,11 +202,11 @@ export function reconstructIntendedFromEvidence(
       return {
         path: parts[0],
         kind: parts[1],
-        // Handle names with colons (e.g., "namespace:ClassName")
+
         name: parts.slice(2).join(':'),
       };
     }
-    // Fallback for malformed IDs
+
     return {
       path: parts[0] || '',
       kind: parts[1] || 'unknown',
@@ -236,7 +214,6 @@ export function reconstructIntendedFromEvidence(
     };
   }
 
-  // Process present symbols
   present.forEach(id => {
     const parsed = parseSymbolId(id);
     intended.set(id, {
@@ -248,7 +225,6 @@ export function reconstructIntendedFromEvidence(
     });
   });
 
-  // Process absent symbols
   absent.forEach(id => {
     const parsed = parseSymbolId(id);
     intended.set(id, {

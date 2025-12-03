@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-syntax */
 import { computeScope } from '../../../facts/scope';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 

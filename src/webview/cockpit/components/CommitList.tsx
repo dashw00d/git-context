@@ -29,7 +29,6 @@ export const CommitList: React.FC<CommitListProps> = ({ state, vscode, formatDat
   const alreadyAnalyzedSelection =
     selectedCommits.length > 0 && selectedCommits.every(c => c.analyzed);
 
-  // Filter by scope first
   let scopedCommits = state.commits.filter(c => {
     if (c.scope === 'staged' && !state.commitsFilterScopes.staged) return false;
     if (c.scope === 'unstaged' && !state.commitsFilterScopes.unstaged) return false;
@@ -37,7 +36,6 @@ export const CommitList: React.FC<CommitListProps> = ({ state, vscode, formatDat
     return true;
   });
 
-  // Then filter by text
   const list = scopedCommits.filter(
     c =>
       !filter ||

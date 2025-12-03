@@ -16,7 +16,6 @@ export function convertDeltasToSnapshot(deltas: {
   const symbolsByFile = new Map<string, SymbolContext[]>();
   const analyzedPaths = new Set<string>();
 
-  // Helper to add symbol to maps
   const addSymbol = (symbol: SymbolInfo) => {
     const ctx: SymbolContext = {
       id: 0, // Placeholder for working snapshot (not from database)
@@ -40,7 +39,6 @@ export function convertDeltasToSnapshot(deltas: {
 
     symbolsById.set(symbol.id, ctx);
 
-    // Extract file path from symbol ID (format: "path:semanticId")
     const filePath = symbol.id.split(':')[0];
     if (!symbolsByFile.has(filePath)) {
       symbolsByFile.set(filePath, []);
@@ -49,22 +47,14 @@ export function convertDeltasToSnapshot(deltas: {
     analyzedPaths.add(filePath);
   };
 
-  // Process added symbols
   for (const symbol of deltas.added) {
     addSymbol(symbol);
   }
 
-  // Process modified symbols (use current state, not pre-state)
   for (const delta of deltas.modified) {
     addSymbol(delta.symbol);
   }
 
-  // Note: Removed symbols are intentionally NOT included in working snapshot
-  // They existed in HEAD but not in working tree, so they shouldn't appear
-  // in the "working" state used for drift detection
-
-  // For now, return empty edges - these can be added later via DependencyExtractor
-  // if needed for more complete analysis
   const edges: EdgeContext[] = [];
 
   logInfo(

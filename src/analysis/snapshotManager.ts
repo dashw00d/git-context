@@ -15,7 +15,7 @@ export interface FileSnapshot {
   edges: EdgeInfo[];
   shapeHash?: string;
   bodyHash?: string;
-  _cacheSize?: number; // Internal: cached serialized size for LRU cache performance
+  _cacheSize?: number;
 }
 
 export class SnapshotManager {
@@ -40,20 +40,17 @@ export class SnapshotManager {
     if (!this.snapshotCache) {
       const config = getExtensionConfig();
       if (config.snapshotCacheEnabled === false) {
-        return; // Cache is disabled, don't create it
+        return;
       }
       this.snapshotCache = new LRUCache<string, FileSnapshot>({
-        max: config.snapshotCacheSize || 1000, // Increased from 50 to 1000
-        ttl: (config.snapshotCacheTTL || 3600) * 1000, // Convert seconds to milliseconds
-        updateAgeOnGet: true, // Promote on access (LRU behavior)
+        max: config.snapshotCacheSize || 1000,
+        ttl: (config.snapshotCacheTTL || 3600) * 1000,
+        updateAgeOnGet: true,
         sizeCalculation: (value: FileSnapshot, key: string) => {
-          // Use cached size if available (calculated once on creation/load)
-          // Fallback to key length + 100KB estimate if missing (defensive)
           return key.length + (value._cacheSize || 100000);
         },
-        maxSize: 100 * 1024 * 1024, // 100MB total (increased from 10MB to allow 500+ snapshots)
+        maxSize: 100 * 1024 * 1024,
         dispose: (value: FileSnapshot, key: string) => {
-          // Use cached size instead of recalculating
           const size = value._cacheSize || 0;
           logDebug(`[Snapshot] Evicted ${key.substring(0, 20)}... (size: ${size}B)`);
         },
@@ -90,7 +87,6 @@ export class SnapshotManager {
     blobSha: string,
     content: string
   ): Promise<FileSnapshot> {
-    // Check LRU cache first
     const cacheKey = `${blobSha}:${filePath}`;
     this.initCache();
     const lruCached = this.snapshotCache?.get(cacheKey);
@@ -100,30 +96,26 @@ export class SnapshotManager {
       return lruCached;
     }
 
-    // Check database cache
     const cached = this.getCachedSnapshot(blobSha, filePath);
     if (cached) {
       logDebug(`[Snapshot] DB cache hit for ${filePath}@${blobSha.substring(0, 8)}`);
       this.cacheHits++;
-      // Also cache in LRU for faster access
+
       this.snapshotCache?.set(cacheKey, cached);
       return cached;
     }
 
     this.cacheMisses++;
 
-    // Parse with Tree-sitter
     logDebug(`[Snapshot] Creating snapshot for ${filePath}@${blobSha.substring(0, 8)}`);
     const language = this.detectLanguage(filePath);
 
-    // Extract symbols WITH body text
     const { symbols, bodyTexts } = await this.symbolExtractor.extractSymbolsWithBodies(
       content,
       filePath,
       language
     );
 
-    // Assign DNA IDs
     const symbolsWithDNA = await assignDNAIds_v2(symbols, bodyTexts, language);
 
     const edges = this.dependencyExtractor.extractDependencies(content, filePath, symbolsWithDNA);
@@ -141,13 +133,10 @@ export class SnapshotManager {
       bodyHash,
     };
 
-    // Calculate and cache serialized size once (for LRU cache performance)
     snapshot._cacheSize = JSON.stringify(snapshot).length;
 
-    // Queue for batch write
     this.queueSnapshot(snapshot);
 
-    // Also cache in LRU cache for faster access
     const lruCacheKey = `${blobSha}:${filePath}`;
     this.snapshotCache?.set(lruCacheKey, snapshot);
 
@@ -181,7 +170,6 @@ export class SnapshotManager {
       bodyHash: row.body_hash,
     };
 
-    // Calculate and cache serialized size once (for LRU cache performance)
     snapshot._cacheSize = JSON.stringify(snapshot).length;
 
     return snapshot;
@@ -198,7 +186,6 @@ export class SnapshotManager {
     if (this.writeQueue.length === 0) return;
     const batch = this.writeQueue.splice(0, this.BATCH_SIZE);
 
-    // Get wrapped database with transaction support
     const stmt = prepare(`
       INSERT OR REPLACE INTO file_snapshots
       (blob_sha, file_path, language, symbols_json, edges_json, shape_hash, body_hash, created_at)
@@ -207,7 +194,6 @@ export class SnapshotManager {
 
     const now = new Date().toISOString();
 
-    // Use transaction wrapper instead of manual BEGIN/COMMIT
     this.db.transaction(() => {
       for (const snapshot of batch) {
         stmt.run([
@@ -227,7 +213,6 @@ export class SnapshotManager {
   }
 
   private storeSnapshot(snapshot: FileSnapshot): void {
-    // Legacy method - use queueSnapshot instead
     this.queueSnapshot(snapshot);
   }
 
@@ -236,7 +221,6 @@ export class SnapshotManager {
   }
 
   private computeShapeHash(symbols: SymbolInfo[]): string {
-    // Simple shape hash: serialize kind + signature (ignore names)
     const shape = symbols
       .map(s => `${s.kind}:${s.signature}`)
       .sort()
@@ -256,9 +240,6 @@ export class SnapshotManager {
     return crypto.createHash('sha256').update(combined).digest('hex').substring(0, 16);
   }
 
-  /**
-   * Compare snapshots using DNA IDs (handles renames)
-   */
   compareSnapshots(
     parentSnapshot: FileSnapshot | null,
     currentSnapshot: FileSnapshot
@@ -275,7 +256,6 @@ export class SnapshotManager {
     const parentSymbols = parentSnapshot?.symbols || [];
     const currentSymbols = currentSnapshot.symbols;
 
-    // Map by DNA ID (stable across renames)
     const parentByDNA = new Map(parentSymbols.map(s => [s.dnaId, s]));
     const currentByDNA = new Map(currentSymbols.map(s => [s.dnaId, s]));
 
@@ -288,32 +268,26 @@ export class SnapshotManager {
     }> = [];
     const renamed: Array<{ symbol: SymbolInfo; previousSymbol: SymbolInfo }> = [];
 
-    // Find added and modified (by DNA)
     for (const symbol of currentSymbols) {
       const prev = parentByDNA.get(symbol.dnaId);
 
       if (!prev) {
         added.push(symbol);
       } else {
-        // Same DNA - check for modifications
         const sigChanged = prev.signature !== symbol.signature;
         const bodyChanged = prev.bodyHash !== symbol.bodyHash;
         const nameChanged = prev.name !== symbol.name;
 
         if (nameChanged && !sigChanged && !bodyChanged) {
-          // Pure rename (same signature + body, different name)
           renamed.push({ symbol, previousSymbol: prev });
         } else if (sigChanged || bodyChanged) {
-          // Modified
           const changeType = sigChanged && bodyChanged ? 'both' : sigChanged ? 'signature' : 'body';
 
           modified.push({ symbol, previousSymbol: prev, changeType });
         }
-        // else: no change (same name, signature, body)
       }
     }
 
-    // Find removed (by DNA)
     for (const symbol of parentSymbols) {
       if (!currentByDNA.has(symbol.dnaId)) {
         removed.push(symbol);
@@ -322,9 +296,7 @@ export class SnapshotManager {
 
     return { added, removed, modified, renamed };
   }
-  /**
-   * Helper to read file content from disk
-   */
+
   async getFileContent(filePath: string): Promise<string | null> {
     try {
       const fs = require('fs');

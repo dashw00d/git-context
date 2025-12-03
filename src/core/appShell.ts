@@ -6,8 +6,8 @@ import {
   CockpitStateChange,
   getCockpitOrchestrator,
 } from '../state/cockpitOrchestrator';
-import { logError } from '../utils/logger';
 import type { CockpitState } from '../types/cockpit';
+import { logError } from '../utils/logger';
 
 export type CommandHandler = (context: vscode.ExtensionContext, ...args: any[]) => any;
 export type WatcherFactory = (
@@ -55,13 +55,9 @@ export class AppShell {
     return this.pipelineFactory.getPipeline();
   }
 
-  /**
-   * Register a feature with commands, watchers, and/or effects
-   */
   registerFeature(feature: FeatureRegistration): void {
     this.features.push(feature);
 
-    // Register commands
     if (feature.commands) {
       for (const cmd of feature.commands) {
         const disposable = vscode.commands.registerCommand(cmd.command, (...args) =>
@@ -72,7 +68,6 @@ export class AppShell {
       }
     }
 
-    // Register watchers (async, needs pipeline)
     if (feature.watchers) {
       this.pipelineFactory.getPipeline().then(pipeline => {
         for (const watcherFactory of feature.watchers!) {
@@ -83,7 +78,6 @@ export class AppShell {
       });
     }
 
-    // Register effects
     if (feature.effects) {
       for (const effect of feature.effects) {
         const unsubscribe = this.orchestrator.registerEffect({
@@ -95,7 +89,6 @@ export class AppShell {
       }
     }
 
-    // Call onActivate if provided
     if (feature.onActivate) {
       Promise.resolve(feature.onActivate(this)).catch(err => {
         logError(`[AppShell] Feature onActivate error: ${err}`);
@@ -103,16 +96,10 @@ export class AppShell {
     }
   }
 
-  /**
-   * Convenience method for registering a single command
-   */
   registerCommand(command: string, handler: CommandHandler): void {
     this.registerFeature({ commands: [{ command, handler }] });
   }
 
-  /**
-   * Convenience method for registering a single watcher
-   */
   async registerWatcher(factory: WatcherFactory): Promise<void> {
     const pipeline = await this.getPipeline();
     const watcher = factory(this.orchestrator, pipeline);
@@ -121,12 +108,10 @@ export class AppShell {
   }
 
   async deactivate(): Promise<void> {
-    // Unsubscribe all effects
     for (const unsubscribe of this.registeredEffects) {
       unsubscribe();
     }
 
-    // Call onDeactivate for all features
     for (const feature of this.features) {
       if (feature.onDeactivate) {
         try {
@@ -136,7 +121,5 @@ export class AppShell {
         }
       }
     }
-
-    // Dispose watchers and commands are handled by context.subscriptions
   }
 }

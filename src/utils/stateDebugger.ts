@@ -2,7 +2,7 @@
 import { Action } from '../state/actions';
 import { BundleViewSchema, ContextFrameSchema, ExplorerNodeSchema } from '../state/schemas';
 import { CockpitState } from '../types/cockpit';
-import { logDebug, logWarn, logError } from './logger';
+import { logDebug, logError, logWarn } from './logger';
 
 interface StateDiff {
   [key: string]: {
@@ -43,14 +43,12 @@ export class StateDebugger {
       this.transitions.shift();
     }
 
-    // Log to output channel
     this.prettyPrint(transition);
   }
 
   private computeDiff(prev: CockpitState, next: CockpitState, actionType: string): StateDiff {
     const diff: StateDiff = {};
 
-    // Always check critical navigation fields
     if (prev.activeFrame.id !== next.activeFrame.id) {
       diff.activeFrame = {
         changed: true,
@@ -68,7 +66,6 @@ export class StateDebugger {
       };
     }
 
-    // Check frame.data changes
     const prevDataKeys = Object.keys(prev.activeFrame.data || {});
     const nextDataKeys = Object.keys(next.activeFrame.data || {});
     if (
@@ -82,7 +79,6 @@ export class StateDebugger {
       };
     }
 
-    // History changes
     if (prev.history.length !== next.history.length) {
       diff.history = {
         changed: true,
@@ -95,7 +91,6 @@ export class StateDebugger {
       };
     }
 
-    // BundleView changes
     if (prev.bundleView !== next.bundleView) {
       const prevHotspots = prev.bundleView?.hotspots?.length || 0;
       const nextHotspots = next.bundleView?.hotspots?.length || 0;
@@ -106,7 +101,6 @@ export class StateDebugger {
       };
     }
 
-    // ExplorerData changes
     if (prev.explorerData.length !== next.explorerData.length) {
       diff.explorerData = {
         changed: true,
@@ -115,7 +109,6 @@ export class StateDebugger {
       };
     }
 
-    // BundleFacts changes
     if (prev.bundleFacts !== next.bundleFacts) {
       diff.bundleFacts = {
         changed: true,
@@ -124,7 +117,6 @@ export class StateDebugger {
       };
     }
 
-    // Check for suspicious patterns
     this.detectSuspiciousPatterns(diff, actionType, prev, next);
 
     return diff;
@@ -136,7 +128,6 @@ export class StateDebugger {
     prev: CockpitState,
     next: CockpitState
   ): void {
-    // Pattern 1: Frame changed but data didn't clear
     if (
       diff.activeFrame?.changed &&
       prev.activeFrame.level !== next.activeFrame.level &&
@@ -149,7 +140,6 @@ export class StateDebugger {
       };
     }
 
-    // Pattern 2: Duplicate NAVIGATE_TO without NAVIGATE_BACK
     if (
       actionType === 'NAVIGATE_TO' &&
       prev.history.length > 0 &&
@@ -161,7 +151,6 @@ export class StateDebugger {
       };
     }
 
-    // Pattern 3: Bundle view updated but not reflected in frame for bundle level
     if (
       actionType === 'BUNDLE_VIEW_UPDATED' &&
       next.activeFrame.level === 'bundle' &&
@@ -174,7 +163,6 @@ export class StateDebugger {
       };
     }
 
-    // Pattern 4: Explorer cleared unexpectedly
     if (
       diff.explorerData?.changed &&
       next.explorerData.length === 0 &&
@@ -192,7 +180,6 @@ export class StateDebugger {
   private validateState(nextState: CockpitState, action: Action): string[] {
     const errors: string[] = [];
 
-    // Validate activeFrame
     const frameValidation = ContextFrameSchema.safeParse(nextState.activeFrame);
     if (!frameValidation.success) {
       errors.push(
@@ -200,7 +187,6 @@ export class StateDebugger {
       );
     }
 
-    // Validate bundleView if present
     if (nextState.bundleView) {
       const bundleViewValidation = BundleViewSchema.safeParse(nextState.bundleView);
       if (!bundleViewValidation.success) {
@@ -210,7 +196,6 @@ export class StateDebugger {
       }
     }
 
-    // Validate explorerData sample (first 3 nodes)
     if (nextState.explorerData.length > 0) {
       const sample = nextState.explorerData.slice(0, 3);
       for (let i = 0; i < sample.length; i++) {
@@ -223,7 +208,6 @@ export class StateDebugger {
       }
     }
 
-    // Validate tier completion actions have matching frameId
     if (
       action.type === 'FRAME_ANALYSIS_TIER_1_COMPLETE' ||
       action.type === 'FRAME_ANALYSIS_TIER_2_COMPLETE' ||
@@ -244,17 +228,14 @@ export class StateDebugger {
     const time = new Date(t.timestamp).toISOString().split('T')[1].split('.')[0];
     const hasChanges = Object.keys(t.diff).length > 0;
 
-    // Always log action type
     logDebug(`🔄 [${t.action.type}] @ ${time}`);
 
-    // Log payload if present (smartly trimmed)
     const payload = (t.action as any).payload;
     if (payload) {
       const trimmed = this.trimPayload(payload);
       logDebug(`   Payload: ${trimmed}`);
     }
 
-    // Log diff
     if (hasChanges) {
       for (const [key, value] of Object.entries(t.diff)) {
         if (value.changed) {
@@ -272,12 +253,10 @@ export class StateDebugger {
       }
     }
 
-    // Log validation errors
     if (t.validationErrors.length > 0) {
       logError(`   ❌ Validation Errors:`, new Error(t.validationErrors.join('\n')));
     }
 
-    // Blank line for readability
     logDebug('');
   }
 
@@ -285,10 +264,8 @@ export class StateDebugger {
     if (!payload) return 'null';
     if (typeof payload !== 'object') return String(payload);
 
-    // Special handling for common action payloads
     const trimmed: any = {};
 
-    // Frame actions - show key fields only
     if (payload.frame) {
       trimmed.frame = {
         id: payload.frame.id,
@@ -299,12 +276,10 @@ export class StateDebugger {
       };
     }
 
-    // FrameId in tier actions
     if (payload.frameId) {
       trimmed.frameId = payload.frameId;
     }
 
-    // Data in tier completions - just show size and keys
     if (payload.data && typeof payload.data === 'object') {
       const dataKeys = Object.keys(payload.data);
       trimmed.data = {
@@ -313,7 +288,6 @@ export class StateDebugger {
       };
     }
 
-    // View in BUNDLE_VIEW_UPDATED
     if (payload.view) {
       trimmed.view = {
         tier: payload.view.tier,
@@ -322,7 +296,6 @@ export class StateDebugger {
       };
     }
 
-    // Facts in BUNDLE_FACTS_UPDATED
     if (payload.facts) {
       trimmed.facts = payload.facts ? 'present' : 'null';
       if (payload.facts?.bundle) {
@@ -334,7 +307,6 @@ export class StateDebugger {
       }
     }
 
-    // Config
     if (payload.config) {
       trimmed.config = {
         mode: payload.config.mode,
@@ -343,17 +315,14 @@ export class StateDebugger {
       };
     }
 
-    // Nodes in EXPLORER_UPDATED
     if (payload.nodes) {
       trimmed.nodes = `${payload.nodes.length} nodes`;
     }
 
-    // Action in dispatch
     if (payload.action) {
       trimmed.action = payload.action.type;
     }
 
-    // If nothing was trimmed, show object size
     if (Object.keys(trimmed).length === 0) {
       return `{${Object.keys(payload).join(', ')}} (${JSON.stringify(payload).length} bytes)`;
     }

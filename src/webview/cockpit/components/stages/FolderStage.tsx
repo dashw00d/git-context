@@ -19,7 +19,6 @@ export const FolderStage: React.FC<{
     });
   };
 
-  // Filter bundle data to only show files within this folder's path
   const folderPath = frame.id;
   const bundleData = cockpitState?.bundleView;
 
@@ -43,19 +42,15 @@ export const FolderStage: React.FC<{
 
   const filteredRisks = React.useMemo(() => {
     if (!bundleData?.risks) return [];
-    return bundleData.risks.filter(
-      (risk: any) => risk.path && risk.path.startsWith(folderPath)
-    );
+    return bundleData.risks.filter((risk: any) => risk.path && risk.path.startsWith(folderPath));
   }, [bundleData?.risks, folderPath]);
 
-  // Calculate folder-scoped stats
   const fileCount = filteredHotspots.length;
   const symbolCount = filteredHotspots.reduce(
     (sum: number, file: any) => sum + (file.symbols || 0),
     0
   );
 
-  // Debug logging
   console.log('[FolderStage] folderPath:', folderPath);
   console.log('[FolderStage] filteredHotspots:', filteredHotspots);
   console.log('[FolderStage] filteredTreemap:', filteredTreemap);

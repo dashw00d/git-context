@@ -21,7 +21,7 @@ export const TreemapView: React.FC<{
       {isAnalyzing
         ? 'Loading heatmap...'
         : hasHotspots
-          ? '' // Don't show "No churn data" if we have hotspots (fallback to list)
+          ? ''
           : 'No churn data yet. Run Analyze to populate the heatmap.'}
     </p>
   );

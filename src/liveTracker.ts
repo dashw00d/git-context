@@ -7,6 +7,7 @@ import { SymbolExtractor } from './analysis/symbols';
 import { getTreeSitterParser } from './analysis/tree-sitter';
 import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
 import { getStore } from './state/store';
+import type { SymbolInfo } from './types';
 import {
   detectLanguage,
   getExtensionConfig,
@@ -14,7 +15,6 @@ import {
   isCstOnlyLanguage,
 } from './utils/config';
 import { logDebug, logError, logInfo } from './utils/logger';
-import type { SymbolInfo } from './types';
 
 interface ThresholdConfig {
   lines: number;
@@ -28,7 +28,7 @@ export class LiveDiffTracker extends EventEmitter {
     lines: 50,
     symbols: 5,
     extensions: getSupportedExtensions(),
-  }; // Will be updated in updateConfig()
+  };
   private disposables: vscode.Disposable[] = [];
   private watcher: vscode.FileSystemWatcher | undefined;
   private git: GitOperations;
@@ -46,7 +46,6 @@ export class LiveDiffTracker extends EventEmitter {
     this.git = new GitOperations();
     this.symbolExtractor = new SymbolExtractor(this.git);
 
-    // Don't start tracking automatically
     this.updateConfig();
 
     vscode.workspace.onDidChangeConfiguration(e => {
@@ -69,7 +68,6 @@ export class LiveDiffTracker extends EventEmitter {
     );
     this.setupWatcher();
 
-    // Update UI state
     getCockpitOrchestrator().updateLiveState({ isTracking: true }, 'liveTracker:start');
 
     logInfo('[LiveTracker] Started tracking live changes');
@@ -81,7 +79,6 @@ export class LiveDiffTracker extends EventEmitter {
     this.isTracking = false;
     this.disposeWatchers();
 
-    // Update UI state
     getCockpitOrchestrator().updateLiveState({ isTracking: false }, 'liveTracker:stop');
 
     logInfo('[LiveTracker] Stopped tracking live changes');
@@ -98,30 +95,29 @@ export class LiveDiffTracker extends EventEmitter {
 
   private updateConfig() {
     const config = vscode.workspace.getConfiguration('git-context.live');
-    // VS Code automatically uses package.json defaults
+
     const enabled = config.get<boolean>('enabled');
     if (!enabled) {
       return;
     }
 
-    // Get nested threshold values - VS Code handles nested keys with dot notation
     const linesThreshold = config.get<number>('thresholds.lines');
     const symbolsThreshold = config.get<number>('thresholds.symbols');
     const extensions = config.get<string[]>('extensions') || getSupportedExtensions();
     const autoRunAfterEdits = config.get<number>('autoRunAfterEdits');
 
     this.threshold = {
-      lines: linesThreshold ?? 50, // Fallback if somehow not set
-      symbols: symbolsThreshold ?? 5, // Fallback if somehow not set
+      lines: linesThreshold ?? 50,
+      symbols: symbolsThreshold ?? 5,
       extensions: extensions.length > 0 ? extensions : getSupportedExtensions(),
     };
-    this.autoRunAfterEdits = autoRunAfterEdits ?? 50; // Fallback if somehow not set
+    this.autoRunAfterEdits = autoRunAfterEdits ?? 50;
   }
 
   private setupWatcher() {
     if (this.watcher) {
       this.watcher.dispose();
-      // Remove from disposables to avoid accumulation
+
       const idx = this.disposables.indexOf(this.watcher);
       if (idx !== -1) {
         this.disposables.splice(idx, 1);
@@ -140,14 +136,12 @@ export class LiveDiffTracker extends EventEmitter {
     let buffer = this.changeBuffers.get(uri) || [];
     buffer.push(...e.contentChanges);
 
-    // Cap buffer size to prevent memory leaks
     if (buffer.length > 1000) {
       buffer = buffer.slice(-1000);
     }
 
     this.changeBuffers.set(uri, buffer);
 
-    // Update edit count
     const currentCount = this.editCounts.get(uri) || 0;
     this.editCounts.set(uri, currentCount + 1);
 
@@ -199,7 +193,6 @@ export class LiveDiffTracker extends EventEmitter {
       path
     );
 
-    // Cache new symbols for next check
     this.symbolCache.set(uri, result.symbols);
 
     return result;
@@ -215,7 +208,6 @@ export class LiveDiffTracker extends EventEmitter {
     const doc = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri);
     if (!doc) return;
 
-    // Parse symbols and check symbol threshold
     let symbolDelta: {
       added: SymbolInfo[];
       removed: SymbolInfo[];
@@ -232,16 +224,13 @@ export class LiveDiffTracker extends EventEmitter {
       symbolCount = symbolDelta.added.length + symbolDelta.modified.length;
     } catch (error) {
       logError('[LiveTracker] Failed to parse symbols', error);
-      // Continue with line-based threshold if symbol parsing fails
     }
 
-    // Check thresholds (lines OR symbols OR edit count)
     const linesThresholdMet = linesChanged >= this.threshold.lines;
     const symbolsThresholdMet = symbolCount >= this.threshold.symbols;
     const editsThresholdMet = editCount >= this.autoRunAfterEdits;
 
     if (!linesThresholdMet && !symbolsThresholdMet && !editsThresholdMet) {
-      // Emit changes updated event even if threshold not met
       this.emit('changesUpdated', {
         uri,
         pendingChanges: this.hasPendingChanges(),
@@ -261,7 +250,6 @@ export class LiveDiffTracker extends EventEmitter {
     const isStaged = stagedFiles.some(f => f.path === relativePath);
     const mode = isStaged ? 'staged' : 'unstaged';
 
-    // Emit changes updated event
     this.emit('changesUpdated', {
       uri,
       pendingChanges: this.hasPendingChanges(),
@@ -271,7 +259,6 @@ export class LiveDiffTracker extends EventEmitter {
       thresholdReached: true,
     });
 
-    // Extract and save hybrid facts for CST-only or augmented files
     await this.extractAndSaveHybridFacts(doc, isStaged);
 
     if (this.autoRunAfterEdits > 0) {
@@ -307,7 +294,7 @@ export class LiveDiffTracker extends EventEmitter {
     const enableAugment = config.enableCstAugmentation ?? false;
 
     if (!enableCst && !enableAugment) {
-      return; // CST tracking disabled
+      return;
     }
 
     const filePath = doc.uri.fsPath;
@@ -316,17 +303,15 @@ export class LiveDiffTracker extends EventEmitter {
 
     const isCstOnly = isCstOnlyLanguage(language);
     if (!isCstOnly && !enableAugment) {
-      return; // Not CST-only and augmentation disabled
+      return;
     }
 
     const content = doc.getText();
     const version = isStaged ? 'workspace-staged' : 'workspace-unstaged';
 
     try {
-      // Parse file via worker
       const hybridFacts = await this.parser.extractHybridFacts(content, filePath, language);
 
-      // Save via timeline manager
       await this.cstTimelineManager.saveFacts(filePath, version, hybridFacts);
 
       if (hybridFacts.length > 0) {

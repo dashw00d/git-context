@@ -1,7 +1,3 @@
-import { ensureDatabaseInitialized } from '../storage/database';
-import { prepare } from '../storage/statement-wrapper';
-import { logError } from '../utils/logger';
-import { ServiceBase, ServiceConfig } from './base/ServiceBase';
 import type { MovedBlock } from '../analysis/movedBlockDetector';
 import type { Hotspot } from '../contracts/llmContext';
 import type {
@@ -9,10 +5,14 @@ import type {
   CommitMetadata,
   CommitSearchOptions,
 } from '../services/commitService';
+import { ensureDatabaseInitialized } from '../storage/database';
+import { prepare } from '../storage/statement-wrapper';
 import type { EdgeInfo, SymbolInfo } from '../types';
+import { logError } from '../utils/logger';
+import { ServiceBase, ServiceConfig } from './base/ServiceBase';
 
 export interface SymbolWithDNA extends SymbolInfo {
-  dna: string; // DNA hash for stable identity
+  dna: string;
 }
 
 export interface SymbolHistory {
@@ -42,8 +42,6 @@ export class DatabaseService extends ServiceBase {
   constructor(config: ServiceConfig = {}) {
     super(config);
   }
-
-  // ===== COMMIT OPERATIONS =====
 
   async getCommitMetadata(sha: string): Promise<CommitMetadata | null> {
     return this.queryWithCache(`commit_meta_${sha}`, async () => {
@@ -216,8 +214,6 @@ export class DatabaseService extends ServiceBase {
     });
   }
 
-  // ===== SYMBOL OPERATIONS =====
-
   async querySymbolsByDNA(dnaHash: string): Promise<SymbolWithDNA[]> {
     return this.queryWithCache(`symbols_dna_${dnaHash}`, async () => {
       try {
@@ -307,8 +303,6 @@ export class DatabaseService extends ServiceBase {
     });
   }
 
-  // ===== EDGE OPERATIONS =====
-
   async queryEdgesByCommit(sha: string): Promise<EdgeInfo[]> {
     return this.queryWithCache(`edges_commit_${sha}`, async () => {
       try {
@@ -330,8 +324,6 @@ export class DatabaseService extends ServiceBase {
       }
     });
   }
-
-  // ===== HOTSPOT OPERATIONS =====
 
   async queryHotspots(limit: number = 25): Promise<Hotspot[]> {
     return this.queryWithCache(`hotspots_${limit}`, async () => {
@@ -359,8 +351,6 @@ export class DatabaseService extends ServiceBase {
       }
     });
   }
-
-  // ===== MOVED BLOCK OPERATIONS =====
 
   async queryMovedBlocks(sha: string): Promise<MovedBlock[]> {
     return this.queryWithCache(`moved_blocks_${sha}`, async () => {
@@ -393,8 +383,6 @@ export class DatabaseService extends ServiceBase {
       }
     });
   }
-
-  // ===== FACTS OPERATIONS =====
 
   async insertCommitFacts(facts: CommitFacts[]): Promise<void> {
     await this.executeInTransaction(async () => {
@@ -444,7 +432,6 @@ export class DatabaseService extends ServiceBase {
       }
     });
   }
-  // ===== BUNDLE OPERATIONS =====
 
   async createBundle(name: string, config: any): Promise<string> {
     return this.executeInTransaction(async () => {
@@ -452,7 +439,6 @@ export class DatabaseService extends ServiceBase {
         const id = crypto.randomUUID();
         const now = new Date().toISOString();
 
-        // Insert bundle
         const stmt = prepare(`
           INSERT INTO bundles (id, name, created_at, updated_at, config_json)
           VALUES (?, ?, ?, ?, ?)
@@ -460,7 +446,6 @@ export class DatabaseService extends ServiceBase {
         stmt.run(id, name, now, now, JSON.stringify(config));
         stmt.free?.();
 
-        // Insert files
         if (config.files && Array.isArray(config.files)) {
           const fileStmt = prepare(`
             INSERT INTO bundle_files (bundle_id, file_path)
@@ -472,14 +457,13 @@ export class DatabaseService extends ServiceBase {
           fileStmt.free?.();
         }
 
-        // Invalidate cache
         this.cache?.delete('bundles_list');
 
         return id;
       } catch (error) {
         this.handleDbError(error, 'createBundle');
         logError('Failed to create bundle after error handling:', error);
-        return ''; // Return empty string instead of throwing
+        return '';
       }
     });
   }
@@ -492,7 +476,6 @@ export class DatabaseService extends ServiceBase {
         const results = stmt.all() as any[];
         stmt.free?.();
 
-        // Parse config
         return results.map(b => ({
           ...b,
           config: JSON.parse(b.config_json || '{}'),
@@ -533,7 +516,6 @@ export class DatabaseService extends ServiceBase {
         stmt.run(id);
         stmt.free?.();
 
-        // Invalidate cache
         this.cache?.delete(`bundle_${id}`);
         this.cache?.delete('bundles_list');
       } catch (error) {
@@ -566,14 +548,11 @@ export class DatabaseService extends ServiceBase {
         stmt.run(...params);
         stmt.free?.();
 
-        // Update files if config changed
         if (updates.config && updates.config.files) {
-          // Delete old files
           const delStmt = prepare('DELETE FROM bundle_files WHERE bundle_id = ?');
           delStmt.run(id);
           delStmt.free?.();
 
-          // Insert new files
           const fileStmt = prepare(`
             INSERT INTO bundle_files (bundle_id, file_path)
             VALUES (?, ?)
@@ -584,7 +563,6 @@ export class DatabaseService extends ServiceBase {
           fileStmt.free?.();
         }
 
-        // Invalidate cache
         this.cache?.delete(`bundle_${id}`);
         this.cache?.delete('bundles_list');
       } catch (error) {
@@ -594,7 +572,6 @@ export class DatabaseService extends ServiceBase {
   }
 }
 
-// Singleton instance
 let databaseServiceInstance: DatabaseService | null = null;
 
 export function getDatabaseService(): DatabaseService {
@@ -604,5 +581,4 @@ export function getDatabaseService(): DatabaseService {
   return databaseServiceInstance;
 }
 
-// Re-export types for convenience
 export type { CommitListItem, CommitMetadata, CommitSearchOptions } from './commitService';

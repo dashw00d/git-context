@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-syntax */
 import { logWarn } from '../../../utils/logger';
 import { BundleStoryEngine } from '../../bundleStoryEngine';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
@@ -16,7 +15,7 @@ export function createHistoryRetrievalStep(storyEngine: BundleStoryEngine): Pipe
 
       const timeoutMs = 15000;
       const historyPromise = (storyEngine as any).retrieveHistory(
-        null, // Will generate embedding internally
+        null,
         state.bundleFacts,
         state.commitFacts || []
       );

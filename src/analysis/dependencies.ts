@@ -5,8 +5,8 @@ import { logError, logWarn } from '../utils/logger';
 import { GitOperations } from './git';
 
 export class DependencyExtractor {
-  private readonly MAX_DEPTH = 3; // Prevent infinite recursion
-  private resolvedSymbols = new Map<string, boolean>(); // Cache resolved symbols
+  private readonly MAX_DEPTH = 3;
+  private resolvedSymbols = new Map<string, boolean>();
 
   /**
    * Extract dependency edges from file content with confidence scoring
@@ -17,7 +17,6 @@ export class DependencyExtractor {
     symbols: SymbolInfo[],
     depth: number = 0
   ): EdgeInfo[] {
-    // Prevent stack overflow from deep recursion
     if (depth > this.MAX_DEPTH) {
       logWarn(`Max recursion depth reached for ${filePath}`);
       return [];
@@ -30,17 +29,14 @@ export class DependencyExtractor {
 
     const edges: EdgeInfo[] = [];
 
-    // Extract imports/requires with high confidence
     const importEdges = this.extractImports(content, filePath, language, symbols);
     edges.push(...importEdges);
 
-    // Extract function calls within symbols
     for (const symbol of symbols) {
       const callEdges = this.extractCallsFromSymbol(content, filePath, symbol, language, symbols);
       edges.push(...callEdges);
     }
 
-    // Mark resolved edges
     for (const edge of edges) {
       edge.confidence = edge.confidence ?? this.calculateEdgeConfidence(edge, symbols);
       edge.isResolved = this.isEdgeResolved(edge);
@@ -65,7 +61,6 @@ export class DependencyExtractor {
       const line = lines[i].trim();
 
       if (isPHPLanguage(language)) {
-        // PHP imports: use, require, include
         const useMatch = line.match(/^use\s+([^;]+);/);
         if (useMatch) {
           const imported = useMatch[1].split('\\').pop() || useMatch[1];
@@ -85,14 +80,13 @@ export class DependencyExtractor {
             from: `${filePath}: file`,
             to: `${requiredFile}: file`,
             type: 'imports',
-            confidence: 0.8, // File imports are usually reliable
+            confidence: 0.8,
             isResolved: true,
           });
         }
       }
 
       if (isJSLanguage(language)) {
-        // JS/TS imports
         const importMatch = line.match(/import\s+.*?\s+from\s+['"]([^'"]+)['"]/);
         if (importMatch) {
           const importedModule = importMatch[1];
@@ -100,12 +94,11 @@ export class DependencyExtractor {
             from: `${filePath}: file`,
             to: `${importedModule}: module`,
             type: 'imports',
-            confidence: 0.9, // ES6 imports are usually reliable
+            confidence: 0.9,
             isResolved: true,
           });
         }
 
-        // CommonJS requires
         const requireMatch = line.match(/const\s+\w+\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/);
         if (requireMatch) {
           const requiredModule = requireMatch[1];
@@ -113,7 +106,7 @@ export class DependencyExtractor {
             from: `${filePath}: file`,
             to: `${requiredModule}: module`,
             type: 'imports',
-            confidence: 0.8, // CommonJS requires are reliable
+            confidence: 0.8,
             isResolved: true,
           });
         }
@@ -135,19 +128,17 @@ export class DependencyExtractor {
   ): EdgeInfo[] {
     const edges: EdgeInfo[] = [];
 
-    // Extract the symbol's code block
     const lines = content.split('\n');
-    const startLine = symbol.location.start.line - 1; // Convert to 0-based
+    const startLine = symbol.location.start.line - 1;
     const endLine = symbol.location.end.line - 1;
 
     const symbolContent = lines.slice(startLine, endLine + 1).join('\n');
 
-    // Extract calls based on language
     if (isPHPLanguage(language)) {
       const callMatches = symbolContent.matchAll(/(\w+)\s*\(/g);
       for (const match of callMatches) {
         const calledFunction = match[1];
-        // Skip common PHP constructs
+
         if (
           !['if', 'while', 'for', 'foreach', 'echo', 'print', 'isset', 'empty'].includes(
             calledFunction
@@ -164,19 +155,17 @@ export class DependencyExtractor {
         }
       }
 
-      // Extract method calls ($obj->method())
       const methodMatches = symbolContent.matchAll(/\$(\w+)\s*->\s*(\w+)\s*\(/g);
       for (const match of methodMatches) {
         const variable = match[1];
         const method = match[2];
-        // Add edge for method call
+
         edges.push({
           from: symbol.id,
           to: `method_${method} `,
           type: 'calls',
         });
-        // Also track variable-to-object relationship if variable represents an object
-        // This helps track object dependencies
+
         if (variable && variable.length > 0) {
           edges.push({
             from: symbol.id,
@@ -188,11 +177,10 @@ export class DependencyExtractor {
     }
 
     if (isJSLanguage(language)) {
-      // Extract function calls
       const callMatches = symbolContent.matchAll(/(\w+)\s*\(/g);
       for (const match of callMatches) {
         const calledFunction = match[1];
-        // Skip common JS constructs and keywords
+
         if (
           ![
             'if',
@@ -215,19 +203,17 @@ export class DependencyExtractor {
         }
       }
 
-      // Extract method calls (obj.method())
       const methodMatches = symbolContent.matchAll(/(\w+)\.(\w+)\s*\(/g);
       for (const match of methodMatches) {
         const object = match[1];
         const method = match[2];
-        // Add edge for method call
+
         edges.push({
           from: symbol.id,
           to: `method_${method} `,
           type: 'calls',
         });
-        // Also track object dependency
-        // This helps build a more complete dependency graph
+
         if (
           object &&
           object.length > 0 &&
@@ -258,11 +244,9 @@ export class DependencyExtractor {
     const added: EdgeInfo[] = [];
     const removed: EdgeInfo[] = [];
 
-    // Create maps for efficient lookup
     const previousMap = new Map(previous.map(e => [`${e.from}:${e.to}:${e.type} `, e]));
     const currentMap = new Map(current.map(e => [`${e.from}:${e.to}:${e.type} `, e]));
 
-    // Find added edges
     for (const edge of current) {
       const key = `${edge.from}:${edge.to}:${edge.type} `;
       if (!previousMap.has(key)) {
@@ -270,7 +254,6 @@ export class DependencyExtractor {
       }
     }
 
-    // Find removed edges
     for (const edge of previous) {
       const key = `${edge.from}:${edge.to}:${edge.type} `;
       if (!currentMap.has(key)) {
@@ -294,7 +277,6 @@ export class DependencyExtractor {
   }> {
     const currentEdges: EdgeInfo[] = [];
 
-    // Group symbols by file path
     const symbolsByFile = new Map<string, SymbolInfo[]>();
     for (const symbol of [...symbols.added, ...symbols.modified.map(m => m.symbol)]) {
       const filePath = symbol.id.split(':')[0];
@@ -304,10 +286,8 @@ export class DependencyExtractor {
       symbolsByFile.get(filePath)!.push(symbol);
     }
 
-    // Extract edges from each file
     for (const [filePath, fileSymbols] of symbolsByFile) {
       try {
-        // Get current working content
         const isStaged = files.some(f => f.path === filePath && f.status !== 'U');
         const content = isStaged
           ? git.safeGetStagedContent(filePath)
@@ -322,7 +302,6 @@ export class DependencyExtractor {
       }
     }
 
-    // For working tree, we consider all edges as "added" since we're comparing against HEAD
     return {
       added: currentEdges,
       removed: [],
@@ -345,10 +324,9 @@ export class DependencyExtractor {
     const currentEdges: EdgeInfo[] = [];
     const previousEdges: EdgeInfo[] = [];
 
-    // Process current symbols
     for (const [filePath, content] of fileContents) {
       const fileSymbols = symbols.added.filter(s => s.id.startsWith(`${filePath}: `));
-      // Also include modified symbols in current analysis
+
       const modifiedSymbols = symbols.modified
         .map(m => m.symbol)
         .filter(s => s.id.startsWith(`${filePath}: `));
@@ -358,32 +336,22 @@ export class DependencyExtractor {
       currentEdges.push(...edges);
     }
 
-    // For modified files, we need to compare with previous versions
     const modifiedFiles = new Set(symbols.modified.map(m => m.symbol.id.split(':')[0]));
-
-    // Also check for files that might have edges removed but no symbol changes
-    // Ideally we should check all modified files in the commit, but we only have symbol info here
-    // We'll rely on the passed fileContents which should contain all modified files
 
     for (const filePath of modifiedFiles) {
       try {
         const commitInfo = await git.getCommitInfo(sha);
         if (commitInfo.parent) {
-          // Determine correct path for parent commit (handle renames)
           const fileChange = files.find(f => f.path === filePath);
           const parentPath =
             fileChange?.status === 'R' && fileChange.oldPath ? fileChange.oldPath : filePath;
 
-          // Get previous content safely
           const previousContent = await git.safeGetFileContent(commitInfo.parent, parentPath);
 
-          // Get previous symbols (we need to reconstruct or fetch them)
-          // For now, we'll use the previousSymbol from modified deltas
           const previousFileSymbols = symbols.modified
             .filter(m => m.symbol.id.startsWith(`${filePath}: `) && m.previousSymbol)
             .map(m => m.previousSymbol!);
 
-          // Extract previous edges
           const edges = this.extractDependencies(previousContent, filePath, previousFileSymbols);
           previousEdges.push(...edges);
         }
@@ -392,7 +360,6 @@ export class DependencyExtractor {
       }
     }
 
-    // Compare edges
     const changes = this.compareEdges(previousEdges, currentEdges);
 
     return {
@@ -412,10 +379,8 @@ export class DependencyExtractor {
     const fanOut = new Map<string, number>();
 
     for (const edge of edges) {
-      // Increment fan-in for the target
       fanIn.set(edge.to, (fanIn.get(edge.to) || 0) + 1);
 
-      // Increment fan-out for the source
       fanOut.set(edge.from, (fanOut.get(edge.from) || 0) + 1);
     }
 
@@ -437,16 +402,12 @@ export class DependencyExtractor {
     const upstreamDependencies = new Map<string, SymbolInfo[]>();
     const impactScore = new Map<string, number>();
 
-    // Get symbol IDs that changed
     const changedIds = new Set(changedSymbols.map(s => s.id));
 
-    // Find downstream callers (who calls the changed symbols)
     for (const edge of allEdges) {
       if (changedIds.has(edge.to)) {
-        // edge.from calls edge.to (which changed)
         const callers = downstreamCallers.get(edge.to) || [];
-        // Store the caller's ID even if we can't resolve the full symbol info
-        // We create a placeholder SymbolInfo with just the ID
+
         if (!callers.some(c => c.id === edge.from)) {
           callers.push({
             id: edge.from,
@@ -463,10 +424,8 @@ export class DependencyExtractor {
       }
     }
 
-    // Find upstream dependencies (what the changed symbols call)
     for (const edge of allEdges) {
       if (changedIds.has(edge.from)) {
-        // edge.from (which changed) calls edge.to
         const dependencies = upstreamDependencies.get(edge.from) || [];
         if (!dependencies.some(d => d.id === edge.to)) {
           dependencies.push({
@@ -484,7 +443,6 @@ export class DependencyExtractor {
       }
     }
 
-    // Calculate impact scores (simple metric)
     for (const symbolId of changedIds) {
       const downstreamCount = downstreamCallers.get(symbolId)?.length || 0;
       const upstreamCount = upstreamDependencies.get(symbolId)?.length || 0;
@@ -494,35 +452,23 @@ export class DependencyExtractor {
     return { downstreamCallers, upstreamDependencies, impactScore };
   }
 
-  /**
-   * Check if a symbol ID is known/resolvable
-   */
   private isSymbolKnown(symbolId: string, knownSymbols: SymbolInfo[]): boolean {
     return knownSymbols.some(s => s.id === symbolId || s.semanticId === symbolId);
   }
 
-  /**
-   * Check if an edge target is resolved
-   */
   private isEdgeResolved(edge: EdgeInfo): boolean {
-    // For now, assume edges are resolved if confidence > default threshold
-    // In a full implementation, this would check against a symbol registry
     return (edge.confidence ?? 0) > getDefaultThreshold();
   }
 
-  /**
-   * Calculate confidence for an edge
-   */
   private calculateEdgeConfidence(edge: EdgeInfo, knownSymbols: SymbolInfo[]): number {
     if (edge.type === 'imports') {
-      return 0.9; // Import statements are usually reliable
+      return 0.9;
     }
 
     if (edge.type === 'calls') {
-      // Lower confidence for dynamic calls or unknown targets
       return this.isSymbolKnown(edge.to, knownSymbols) ? 0.7 : 0.3;
     }
 
-    return 0.5; // Default confidence
+    return 0.5;
   }
 }

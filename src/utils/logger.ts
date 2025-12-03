@@ -4,14 +4,12 @@ let vscode: any;
 try {
   vscode = require('vscode');
 } catch {
-  // Not in VS Code environment
   vscode = null;
 }
 
 let infoChannel: any | undefined;
 let debugChannel: any | undefined;
 
-// Check if we are in VS Code environment
 const isVsCode = vscode && vscode.window;
 
 export function getInfoChannel(): any | undefined {
@@ -77,14 +75,13 @@ export function logError(message: string, error?: any): void {
       errorMsg = `${message}: ${error.message}`;
       stack = error.stack;
 
-      // Handle ZodError (duck typing)
       if ('issues' in error && Array.isArray((error as any).issues)) {
         const issues = (error as any).issues;
         const formattedIssues = issues
           .map((i: any) => `  - [${i.path.join('.')}] ${i.message}`)
           .join('\n');
         errorMsg = `${message}: Validation Failed\n${formattedIssues}`;
-        stack = undefined; // Don't show stack for validation errors, it's noise
+        stack = undefined;
       }
     } else {
       errorMsg = `${message}: ${error}`;

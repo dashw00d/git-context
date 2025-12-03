@@ -42,7 +42,7 @@ export class MessageController {
     }
 
     logInfo(`[Cockpit] Received message: ${msg.type}`);
-    // console.log('[Cockpit] Message details:', msg); // Reduce noise
+
     switch (msg.type) {
       case 'navigateToFrame':
         getStore().dispatch(navigationActions.navigateTo(msg.frame));
@@ -68,12 +68,11 @@ export class MessageController {
           logInfo(
             `[Cockpit] generateReport message received (mode=${mode || 'selection'}, force=${!!force}, lastN=${msg.lastN ?? state.lastNCommits})`
           );
-          // Update depth if passed explicitly (Stage posts LAST_N separately but keep this for safety)
+
           if (typeof msg.lastN === 'number') {
             getStore().dispatch(commitActions.setLastN(msg.lastN));
           }
 
-          // For lastN mode, prompt the user then dispatch analysis
           if (mode === 'lastN') {
             const { getExtensionConfig } = await import('../../../utils/config');
             const config = getExtensionConfig();
@@ -97,15 +96,13 @@ export class MessageController {
             }
           }
 
-          // Trigger the new store-based analysis flow (auto-selects depth in effects)
           const selection = selectSelection(state).commits;
           getStore().dispatch(analysisActions.request(selection, force));
 
-          // Kick off a skeleton so the UI can show progressive context while pipeline runs
           this.analysisController
             .sendSkeletonProgress()
             .catch(err => logDebug(`[Cockpit] Skeleton resolution failed: ${err}`));
-          // Kick off a hybrid fast update (virtual commits, quick churn) before full pipeline completes
+
           this.analysisController
             .sendHybridProgress()
             .catch(err => logDebug(`[Cockpit] Hybrid update failed: ${err}`));
@@ -219,7 +216,6 @@ export class MessageController {
         }
         break;
       case 'askAssistant':
-        // Build a scoped context payload and call the configured LLM client
         try {
           const frame = msg.payload?.frame;
           const text = msg.payload?.text || 'Provide a concise summary and next steps.';
@@ -299,11 +295,11 @@ export class MessageController {
       case 'scrollReportToSection':
         if (msg.sectionId) {
           const state = getStore().getState();
-          // First ensure report is open
+
           if (state.bundleReportId) {
             await vscode.commands.executeCommand('git-context.openReport', state.bundleReportId);
           }
-          // Then scroll to the section
+
           await vscode.commands.executeCommand('git-context.scrollToReportSection', msg.sectionId);
           logInfo(`[Cockpit] Scrolled to report section ${msg.sectionId}`);
         }
@@ -314,9 +310,6 @@ export class MessageController {
         }
         break;
       case 'ready':
-        // Send state is handled by CockpitProvider or we can do it here if we had access to sendState
-        // But sendState is just postMessage.
-        // Let's do it here.
         this.sendState();
         await this.analysisController.updateBundleData();
         await this.explorerController.updateExplorerTree();
@@ -357,21 +350,15 @@ export class MessageController {
         break;
       case 'switchBundle':
         if (msg.id && msg.id !== 'root') {
-          // Don't switch if navigating to generic 'root' frame
-          // 1. Clear UI state immediately to show clean slate
           getStore().dispatch(bundleActions.switchStart());
 
-          // 2. Switch active bundle in database
           await this.bundleManager.setActiveBundle(msg.id);
 
-          // 3. Load bundle details (config + facts)
           const bundle = await this.bundleManager.getBundle(msg.id);
 
           if (bundle) {
-            // 4. Update config
             getStore().dispatch(bundleActions.configUpdated(bundle.config));
 
-            // 5. Clear facts (will reload from analysis)
             getStore().dispatch(
               bundleActions.factsUpdated(null, {
                 id: msg.id,
@@ -381,12 +368,10 @@ export class MessageController {
               })
             );
 
-            // 6. Populate skeleton, bundle data, and explorer
             await this.analysisController.updateSkeleton(bundle.config);
             await this.analysisController.updateBundleData();
             await this.explorerController.updateExplorerTree();
 
-            // 7. Navigate to bundle root with proper frame
             getStore().dispatch(
               navigationActions.navigateTo({
                 level: 'bundle',
@@ -412,15 +397,12 @@ export class MessageController {
           const newConfig = { ...currentConfig, ...msg.config };
           getStore().dispatch(bundleActions.configUpdated(newConfig));
 
-          // Trigger immediate skeleton update for visual feedback
           await this.analysisController.updateSkeleton(newConfig);
 
-          // Save to workspace settings
           await vscode.workspace
             .getConfiguration('git-context')
             .update('bundleConfig', newConfig, vscode.ConfigurationTarget.Workspace);
 
-          // Trigger data update with new config
           await this.analysisController.updateBundleData();
         }
         break;
@@ -450,7 +432,6 @@ export class MessageController {
     const parsed = CockpitHostMessageSchema.parse(message);
     this.tracer.logOutgoing(parsed.type, parsed.payload, 'extension');
     try {
-      // eslint-disable-next-line no-restricted-syntax
       this.view.webview.postMessage(parsed);
     } catch (error) {
       logError('[Cockpit] Failed to send message', error);

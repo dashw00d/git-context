@@ -27,7 +27,7 @@ export class LlmAnalyst {
     tokens?: number,
     duration?: number
   ) => void;
-  private maxInputChars: number = 1000000; // Default 1M chars
+  private maxInputChars: number = 1000000;
 
   setLLMCallTracker(
     tracker: (purpose: string, model?: string, tokens?: number, duration?: number) => void
@@ -43,7 +43,6 @@ export class LlmAnalyst {
     let totalTokens = 0;
     let totalCalls = 0;
 
-    // Track performance metrics
     const performanceMetrics = {
       startTime,
       endTime: 0,
@@ -52,14 +51,11 @@ export class LlmAnalyst {
       totalCalls,
     };
 
-    // Get config for maxInputChars
     const config = getExtensionConfig();
     this.maxInputChars = (config as any).maxInputChars || 1000000;
 
-    // Build a slimmed payload before size checks to keep prompts lean
     const slimFacts = this.buildSlimFacts(facts);
 
-    // Summarize facts if too large (top 20 symbols by impact, aggregate edges)
     const factsJson = JSON.stringify(slimFacts);
     const factsSize = factsJson.length;
     let processedFacts = slimFacts;
@@ -70,7 +66,6 @@ export class LlmAnalyst {
       );
       processedFacts = this.summarizeFacts(slimFacts);
 
-      // Check if still too large, apply deep summarization
       if (JSON.stringify(processedFacts).length > this.maxInputChars * 0.8) {
         logInfo('LLM Analyst: Still too large, applying deep summarization...');
         processedFacts = this.deepSummarize(processedFacts);
@@ -86,13 +81,11 @@ export class LlmAnalyst {
     }
 
     try {
-      // Pass 1: Intent & Story Analysis (use summarized facts)
       logInfo('LLM Analyst: Running intent analysis...');
       const intentBlock = await this.analyzeIntent(processedFacts);
       totalCalls++;
       totalTokens += this.estimateTokens(JSON.stringify(processedFacts) + PROMPT_INTENT_AND_STORY);
 
-      // Pass 2: Drift Verification (use summarized facts)
       logInfo('LLM Analyst: Running drift verification...');
       const driftBlock = await this.analyzeDrift(processedFacts);
       totalCalls++;
@@ -100,23 +93,20 @@ export class LlmAnalyst {
         JSON.stringify(processedFacts) + PROMPT_DRIFT_VERIFICATION
       );
 
-      // Pass 3: Cleanup Plan (use summarized facts)
       logInfo('LLM Analyst: Generating cleanup plan...');
       const cleanupBlock = await this.analyzeCleanup(processedFacts);
       totalCalls++;
       totalTokens += this.estimateTokens(JSON.stringify(processedFacts) + PROMPT_CLEANUP_PLAN);
 
-      // Pass 4: Pattern Discovery (if raw feed provided)
       let discoveryBlock: AnalysisBlock | undefined;
       if (rawFeed) {
         logInfo('LLM Analyst: Running pattern discovery...');
         const discoveryResult = await this.discoverPatterns(rawFeed, processedFacts);
         discoveryBlock = this.createDiscoveryBlock(discoveryResult, facts);
-        totalCalls += 3; // Discover, Quantify, Plan
+        totalCalls += 3;
         totalTokens += discoveryResult.metadata.totalTokens;
       }
 
-      // Combine results
       const blocks = [intentBlock, driftBlock, cleanupBlock];
       if (discoveryBlock) {
         blocks.push(discoveryBlock);
@@ -124,21 +114,17 @@ export class LlmAnalyst {
       const summary = this.generateSummary(blocks, facts);
       const markdown = this.generateMarkdown(blocks, facts);
 
-      // Calculate performance metrics
       performanceMetrics.endTime = Date.now();
       performanceMetrics.duration = performanceMetrics.endTime - performanceMetrics.startTime;
       performanceMetrics.totalTokens = totalTokens;
       performanceMetrics.totalCalls = totalCalls;
 
-      // Log performance metrics
       logInfo(
         `[LLMAnalyst] Analysis completed in ${performanceMetrics.duration}ms (${totalCalls} calls, ~${totalTokens} tokens)`
       );
 
-      // Calculate health score
       const healthScore = this.calculateHealthScore(facts);
 
-      // Calculate validated evidence count (evidence with valid filePath in scope.files)
       const knownFiles = new Set((facts.evidence['scope.files'] as string[]) || []);
       const validatedEvidenceCount = blocks.reduce((acc, block) => {
         return (
@@ -174,7 +160,6 @@ export class LlmAnalyst {
     } catch (error) {
       logError('LLM Analyst failed:', error);
 
-      // Return minimal fallback analysis
       const fallbackBlock = AnalysisBlockUtils.createBlock(
         'error',
         'Analysis Error',
@@ -198,7 +183,6 @@ export class LlmAnalyst {
         ]
       );
 
-      // Calculate health score even for error case
       const healthScore = this.calculateHealthScore(facts);
 
       return {
@@ -226,17 +210,14 @@ export class LlmAnalyst {
     let totalTokens = 0;
 
     try {
-      // Get known files from facts for grounding examples
       const knownFiles = (facts.evidence['scope.files'] as string[]) || [];
       const knownFilesList =
         knownFiles.length > 0
           ? `\n\nKNOWN FILES (ONLY use these in examples):\n${JSON.stringify(knownFiles)}\n\n`
           : '\n\n';
 
-      // Turn 1: Discover Patterns
       logInfo('LLM Analyst: Discovering emergent patterns...');
 
-      // Use curated discovery feed if available (efficient), otherwise fallback to raw feed (expensive)
       const discoveryInput = (facts as any).discoveryFeed
         ? `DISCOVERY FEED JSON:\n${JSON.stringify((facts as any).discoveryFeed)}`
         : `RAW FEED JSON:\n${JSON.stringify(rawFeed)}`;
@@ -246,7 +227,6 @@ export class LlmAnalyst {
       const discovery = await this.callLLM(discoverPrompt, 'discover');
       totalTokens += this.estimateTokens(discoverPrompt);
 
-      // Turn 2: Quantify Impact
       logInfo('LLM Analyst: Quantifying patterns...');
       const quantifyPromptTemplate = this.getPrompt('quantify', PROMPT_QUANTIFY);
       const quantifyPrompt = `${SYSTEM_PROMPT}\n\nDISCOVERED PATTERNS:\n${JSON.stringify(
@@ -255,7 +235,6 @@ export class LlmAnalyst {
       const quantified = await this.callLLM(quantifyPrompt, 'quantify');
       totalTokens += this.estimateTokens(quantifyPrompt);
 
-      // Turn 3: Plan Synthesis
       logInfo('LLM Analyst: Synthesizing fix plan...');
       const planPromptTemplate = this.getPrompt('plan', PROMPT_PLAN);
       const planPrompt = `${SYSTEM_PROMPT}\n\nQUANTIFIED PATTERNS:\n${JSON.stringify(
@@ -294,7 +273,6 @@ export class LlmAnalyst {
 
     const block = AnalysisBlockUtils.createBlock('intent', 'Refactor Intent & Story', 'intent');
 
-    // Parse the LLM response and extract claims
     const claims = this.parseIntentResponse(response, facts);
     block.claims = claims;
 
@@ -315,7 +293,6 @@ export class LlmAnalyst {
 
     const block = AnalysisBlockUtils.createBlock('drift', 'Drift Verification', 'drift');
 
-    // Parse drift verification response
     const { claims, actions } = this.parseDriftResponse(response, facts);
     block.claims = claims;
     block.actions = actions;
@@ -337,7 +314,6 @@ export class LlmAnalyst {
 
     const block = AnalysisBlockUtils.createBlock('cleanup', 'Cleanup Plan', 'cleanup');
 
-    // Parse cleanup plan response
     const { claims, actions } = this.parseCleanupResponse(response, facts);
     block.claims = claims;
     block.actions = actions;
@@ -355,7 +331,6 @@ export class LlmAnalyst {
       'discovery'
     );
 
-    // Get known files for validation
     const knownFiles = new Set((facts.evidence['scope.files'] as string[]) || []);
 
     if (discoveryResult.quantified && discoveryResult.quantified.quantified) {
@@ -435,7 +410,6 @@ export class LlmAnalyst {
 
     const maxTokens = this.getMaxTokens(stepKey);
 
-    // Track LLM call
     const callStart = Date.now();
     const config = getExtensionConfig();
     const model = config.openRouterModel;
@@ -445,19 +419,15 @@ export class LlmAnalyst {
       maxTokens,
     });
 
-    // Track completion
     const duration = Date.now() - callStart;
     if (this.llmCallTracker) {
       this.llmCallTracker(`report-${stepKey}`, model, undefined, duration);
     }
 
-    // Try to parse as JSON first
     try {
-      // Extract JSON from markdown code blocks if present
       const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
       const jsonStr = jsonMatch ? jsonMatch[1] : response.trim();
 
-      // Try to find JSON object in the response
       const jsonStart = jsonStr.indexOf('{');
       const jsonEnd = jsonStr.lastIndexOf('}');
       if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
@@ -465,7 +435,6 @@ export class LlmAnalyst {
         return JSON.parse(extractedJson);
       }
 
-      // If no braces found, try parsing the whole string
       return JSON.parse(jsonStr);
     } catch (error) {
       logWarn(`Failed to parse LLM response as JSON, falling back to string parsing: ${error}`);
@@ -479,7 +448,6 @@ export class LlmAnalyst {
   private parseIntentResponse(response: any, facts: RefactorBundleFacts): any[] {
     const claims = [];
 
-    // If response is parsed JSON
     if (response.claims && Array.isArray(response.claims)) {
       return response.claims.map((claim: any) => ({
         text: claim.text,
@@ -491,11 +459,9 @@ export class LlmAnalyst {
       }));
     }
 
-    // Fallback to existing string matching logic
     if (response.raw) {
       const rawResponse = response.raw.toLowerCase();
 
-      // Look for problem identification
       if (
         rawResponse.includes('problem') ||
         rawResponse.includes('issue') ||
@@ -514,7 +480,6 @@ export class LlmAnalyst {
         });
       }
 
-      // Look for scope assessment
       const totalChanges = facts.intended.present + facts.intended.absent;
       if (totalChanges > 50) {
         claims.push({
@@ -541,7 +506,6 @@ export class LlmAnalyst {
     const claims = [];
     const actions = [];
 
-    // If response is parsed JSON
     if (response.claims && Array.isArray(response.claims)) {
       claims.push(
         ...response.claims.map((claim: any) => ({
@@ -570,11 +534,9 @@ export class LlmAnalyst {
       );
     }
 
-    // Fallback to existing logic if no structured data
     if (claims.length === 0 && actions.length === 0 && response.raw) {
       const rawResponse = response.raw.toLowerCase();
 
-      // Check for incompleteness validation
       if (facts.findings.incompleteness.missing > 0) {
         if (
           rawResponse.includes('real') ||
@@ -608,7 +570,6 @@ export class LlmAnalyst {
         }
       }
 
-      // Check for zombie validation
       if (facts.findings.incompleteness.zombies > 0) {
         if (rawResponse.includes('should be removed') || rawResponse.includes('obsolete')) {
           actions.push({
@@ -640,7 +601,6 @@ export class LlmAnalyst {
     const claims: any[] = [];
     const actions: any[] = [];
 
-    // If response is parsed JSON
     if (response.actions && Array.isArray(response.actions)) {
       actions.push(
         ...response.actions.map((action: any) => ({
@@ -656,13 +616,11 @@ export class LlmAnalyst {
       );
     }
 
-    // Fallback to existing numbered list parsing
     if (actions.length === 0 && response.raw) {
       const lines = response.raw.split('\n');
       let currentAction: any = null;
 
       for (const line of lines) {
-        // Look for numbered items (1., 2., etc.)
         const numberedMatch = line.match(/^(\d+)\.\s*(.+)/);
         if (numberedMatch) {
           if (currentAction) {
@@ -676,10 +634,7 @@ export class LlmAnalyst {
             effort: this.inferEffort(numberedMatch[2]),
             risk: this.inferRisk(numberedMatch[2]),
           };
-        }
-        // Look for evidence citations
-        else if (currentAction && (line.includes('findings.') || line.includes('legacyAudit.'))) {
-          // Extract evidence paths
+        } else if (currentAction && (line.includes('findings.') || line.includes('legacyAudit.'))) {
           const evidenceMatch = line.match(/findings\.[^.]+(?:\[[^\]]+\])?/g);
           if (evidenceMatch) {
             for (const path of evidenceMatch) {
@@ -708,12 +663,10 @@ export class LlmAnalyst {
       allClaims.push(...block.claims);
     });
 
-    // Filter to critical/high severity or high confidence (>=0.8)
     const valuableClaims = allClaims.filter(
       c => c.severity === 'critical' || c.severity === 'high' || c.confidence >= 0.8
     );
 
-    // Sort by severity (critical > high > medium > low) then confidence
     const severityOrder: Record<'critical' | 'high' | 'medium' | 'low', number> = {
       critical: 4,
       high: 3,
@@ -738,7 +691,6 @@ export class LlmAnalyst {
       allActions.push(...block.actions);
     });
 
-    // Calculate value score for each action
     const priorityWeight: Record<'urgent' | 'high' | 'medium' | 'low', number> = {
       urgent: 10,
       high: 5,
@@ -761,7 +713,6 @@ export class LlmAnalyst {
         (action.risk === 'low' ? 1.5 : action.risk === 'medium' ? 1.0 : 0.7),
     }));
 
-    // Sort by score (descending)
     scoredActions.sort((a, b) => b.score - a.score);
 
     return scoredActions.slice(0, limit).map(item => item.action);
@@ -779,10 +730,8 @@ export class LlmAnalyst {
     const totalSymbols = facts.working.symbols;
     const issueRate = totalSymbols > 0 ? totalIssues / totalSymbols : 0;
 
-    // Base score: 100 = perfect, 0 = terrible
     const baseScore = Math.max(0, 100 - issueRate * 100);
 
-    // Penalties for critical issues
     const criticalPenalty = facts.findings.incompleteness.missing * 2;
     const zombiePenalty = facts.findings.incompleteness.zombies * 0.5;
 
@@ -799,12 +748,10 @@ export class LlmAnalyst {
       facts.findings.incompleteness.divergent +
       facts.findings.legacyAudit.dead;
 
-    // Extract top insights
     const topClaims = this.extractTopClaims(blocks, 3);
     const topActions = this.extractTopActions(blocks, 5);
     const healthScore = this.calculateHealthScore(facts);
 
-    // Calculate high-priority action count
     const highPriorityActions = blocks.reduce(
       (sum, block) =>
         sum + block.actions.filter(a => a.priority === 'high' || a.priority === 'urgent').length,
@@ -813,7 +760,6 @@ export class LlmAnalyst {
 
     let summary = `## Key Insights\n\n`;
 
-    // Most critical finding
     if (topClaims.length > 0) {
       const criticalClaim = topClaims[0];
       summary += `**Most Critical:** ${criticalClaim.text} `;
@@ -822,7 +768,6 @@ export class LlmAnalyst {
       )}% confidence)\n\n`;
     }
 
-    // Top actionable items
     if (topActions.length > 0) {
       summary += `**Immediate Actions:**\n`;
       topActions.forEach((action, i) => {
@@ -832,11 +777,9 @@ export class LlmAnalyst {
       summary += `\n`;
     }
 
-    // Refactor health score
     const healthIndicator = healthScore >= 80 ? '✅' : healthScore >= 60 ? '⚠️' : '🔴';
     summary += `**Refactor Health:** ${healthScore.toFixed(0)}/100 ${healthIndicator}\n\n`;
 
-    // Quick stats
     summary += `**Quick Stats:** `;
     summary += `${facts.bundle.shas.length} commits, `;
     summary += `${facts.working.symbols} symbols analyzed, `;
@@ -986,7 +929,6 @@ export class LlmAnalyst {
       }
     };
 
-    // Remove heavy working evidence
     if (clone.evidence) {
       delete clone.evidence['working.symbols'];
       delete clone.evidence['working.edges'];
@@ -1030,7 +972,6 @@ export class LlmAnalyst {
       return typeof limit === 'number' ? normalized.slice(0, limit) : normalized;
     };
 
-    // Capture hybrid facts summary and drop raw facts (include sample names)
     if (facts.hybridFacts) {
       const hybridFacts = facts.hybridFacts as Record<string, any[]>;
       const fileCounts = Object.entries(hybridFacts).map(([file, list]) => ({
@@ -1057,7 +998,6 @@ export class LlmAnalyst {
       delete clone.hybridFacts;
     }
 
-    // Cap incompleteness evidence arrays
     if (clone.evidence) {
       clone.evidence['findings.incompleteness.missing'] = normalizeList(
         clone.evidence['findings.incompleteness.missing'],
@@ -1073,7 +1013,6 @@ export class LlmAnalyst {
       );
     }
 
-    // Targeted evidence summary for the LLM (keeps only concise lists)
     const evidenceSummary: Record<string, any> = {};
     const take = (key: string, limit: number) =>
       Array.isArray(clone.evidence?.[key]) ? clone.evidence[key].slice(0, limit) : undefined;
@@ -1082,7 +1021,6 @@ export class LlmAnalyst {
     const zombies = take('findings.incompleteness.zombies', caps.zombies);
     const divergent = take('findings.incompleteness.divergent', caps.divergent);
 
-    // Process hybrid drifts with snippets
     const hybridDrifts = Array.isArray(clone.findings?.hybridDrifts)
       ? clone.findings.hybridDrifts.slice(0, caps.hybridDrifts).map((d: any) => {
           const file = d.fact?.filePath || d.fact?.path || d.file;
@@ -1120,13 +1058,12 @@ export class LlmAnalyst {
       evidenceSummary.hybridSummary = clone.hybridSummary;
     }
 
-    // Hotspot summaries with snippets
     const hotspotEvidence = (clone.evidence && clone.evidence.hotspots) || [];
     let hotspots: any[] | undefined;
     if (Array.isArray(hotspotEvidence) && hotspotEvidence.length > 0) {
       hotspots = hotspotEvidence.slice(0, caps.hotspots).map((h: any) => {
         const file = h.file || h.path || h.filePath;
-        // Try to get a relevant line, e.g. from touchedInVersions or default to 0
+
         return {
           file,
           hotspotScore: h.hotspotScore || h.churnScore || h.score,
@@ -1137,7 +1074,6 @@ export class LlmAnalyst {
       evidenceSummary.hotspots = hotspots;
     }
 
-    // Counts for quick triage
     evidenceSummary.counts = {
       missing: missing?.length || 0,
       zombies: zombies?.length || 0,
@@ -1151,15 +1087,12 @@ export class LlmAnalyst {
       clone.evidenceSummary = evidenceSummary;
     }
 
-    // Cap moved lineage if present
     if (Array.isArray(clone.bundle?.movedLineage)) {
       clone.bundle.movedLineage = clone.bundle.movedLineage.slice(0, caps.moved);
     }
 
-    // Record caps applied for transparency in prompts
     clone.llmCapsApplied = caps;
 
-    // Build a curated discovery feed (top items with snippets)
     const discoveryFeed: any[] = [];
     const pushLimited = (items: any[], type: string) => {
       for (const item of items) {
@@ -1178,7 +1111,6 @@ export class LlmAnalyst {
 
     clone.discoveryFeed = discoveryFeed.slice(0, caps.discoveryTotal);
 
-    // Drop raw hybridFacts to keep payload lean
     if (clone.hybridFacts) {
       delete clone.hybridFacts;
     }
@@ -1192,14 +1124,12 @@ export class LlmAnalyst {
   private summarizeFacts(facts: RefactorBundleFacts): RefactorBundleFacts {
     const summarized = { ...facts };
 
-    // Summarize evidence: top 20 symbols by impact
     if (summarized.evidence && Array.isArray(summarized.evidence['working.symbols'])) {
       const symbols = summarized.evidence['working.symbols'] as string[];
-      // Take top 20 (or all if less than 20)
+
       summarized.evidence['working.symbols'] = symbols.slice(0, 20);
     }
 
-    // Aggregate edges: count by type instead of listing all
     if (summarized.evidence && Array.isArray(summarized.evidence['working.edges'])) {
       const edges = summarized.evidence['working.edges'] as string[];
       const edgeCounts = new Map<string, number>();
@@ -1213,19 +1143,10 @@ export class LlmAnalyst {
       );
     }
 
-    // Prioritize drifts: Sort by type/severity, keep top 5 per category
     if (summarized.findings.incompleteness) {
-      // Note: Using findings instead of drift (refactorBundleFacts structure uses findings.incompleteness)
-      // Mapping to the structure expected by the LLM prompts which might look for summarized.drift
-      // For now, we modify the arrays in place if they are in evidence or findings
-
-      // We need to handle both 'drift' object if it exists or findings.incompleteness
       const _inc = summarized.findings.incompleteness;
-      // We can't easily sort here without more data, but we can slice
-      // Assuming the input arrays are already somewhat ordered or we just take first few
     }
 
-    // Enhance Hybrid Facts Preservation
     if (facts.hybridFacts && (facts as any).drift?.hybridDrifts) {
       const drift = (facts as any).drift;
       const hybridDrifts = drift.hybridDrifts.slice(0, 5).map((d: any) => ({
@@ -1245,7 +1166,6 @@ export class LlmAnalyst {
       (summarized.hybridSummary as any).hybridDriftSamples = hybridDrifts;
     }
 
-    // Add Semantic Aggregates and Evidence Snippets
     const evidenceSnippets = {
       drift: this.extractSnippets(
         (facts as any).drift?.unresolved_callers || [],
@@ -1263,7 +1183,6 @@ export class LlmAnalyst {
     };
     (summarized as any).evidenceSnippets = evidenceSnippets;
 
-    // Truncate large evidence arrays
     const maxEvidenceItems = 50;
     for (const key in summarized.evidence) {
       if (
@@ -1277,43 +1196,32 @@ export class LlmAnalyst {
     return summarized;
   }
 
-  // Helper: Extract snippets
   private extractSnippets(items: any[], max: number, template: string): string[] {
     if (!items || !Array.isArray(items)) return [];
     return items.slice(0, max).map(item => {
       let str = template;
       Object.keys(item).forEach(key => (str = str.replace(`{${key}}`, item[key] || '')));
-      return str.slice(0, 80); // Cap per snippet
+      return str.slice(0, 80);
     });
   }
 
-  /**
-   * Improved token estimation
-   * Uses better approximation: ~3.5 chars per token for code, ~4 for text
-   */
   private estimateTokens(text: string): number {
-    // Count code-like patterns (more tokens per char)
     const codePattern = /[{}();=<>[\]]/g;
     const codeMatches = (text.match(codePattern) || []).length;
     const codeRatio = codeMatches / Math.max(text.length, 1);
 
-    // Adjust chars per token based on code density
     const charsPerToken = codeRatio > 0.1 ? 3.5 : 4.0;
     return Math.ceil(text.length / charsPerToken);
   }
 
-  /**
-   * Deep summarization: Keep only summaries + examples, drop arrays
-   */
   private deepSummarize(facts: RefactorBundleFacts): RefactorBundleFacts {
     const deep = { ...facts };
 
-    // Keep metrics and summaries, drop raw evidence arrays
     if (deep.evidence) {
       deep.evidence = {
         risks: deep.evidence.risks,
         structuralChangeScore: deep.evidence.structuralChangeScore,
-        // Keep only essential arrays capped very low
+
         'findings.incompleteness': deep.evidence['findings.incompleteness']
           ? (deep.evidence['findings.incompleteness'] as any).slice(0, 10)
           : undefined,

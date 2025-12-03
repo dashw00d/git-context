@@ -94,9 +94,9 @@ describe('LiveDiffTracker', () => {
       });
     });
 
-    // Manually trigger event for testing
+
     (tracker as any).emit('changesUpdated', {
-      uri: 'file:///test.ts',
+      uri: 'file:/
       pendingChanges: { files: 1, totalEdits: 1 }
     });
 
@@ -109,9 +109,9 @@ describe('LiveDiffTracker', () => {
       { dispose: vi.fn() },
       { dispose: vi.fn() }
     ];
-    
+
     tracker.dispose();
-    // Should not throw
+
     expect(tracker.hasPendingChanges().files).toBe(0);
   });
 });

@@ -1,11 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import {
-  LlmAnalysis,
-  AnalysisBlock,
-  Claim,
-  Action,
-  EvidenceLink,
-} from '../analysis/llmAnalyst/blocks';
+import React, { useEffect, useState } from 'react';
+import { AnalysisBlock, EvidenceLink, LlmAnalysis } from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
 import { formatStats } from '../utils/statsFormatter';
 
@@ -32,7 +26,6 @@ export const RefactorReportView: React.FC<RefactorReportViewProps> = ({
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceLink | null>(null);
   const [activeTab, setActiveTab] = useState<'analysis' | 'facts'>('analysis');
 
-  // Auto-select first block on load
   useEffect(() => {
     if (analysis.blocks.length > 0 && !selectedBlock) {
       setSelectedBlock(analysis.blocks[0]);
@@ -453,7 +446,7 @@ const FactsContent: React.FC<{
                         onAction('delete', {
                           symbolId: z.symbol_id,
                           filePath: z.file || (z.symbol_id && z.symbol_id.split(':')[0]),
-                          range: z.loc || z.location, // Ensure we have location
+                          range: z.loc || z.location,
                         })
                       }
                       title="Remove this symbol"
@@ -518,9 +511,6 @@ const FactsContent: React.FC<{
   );
 };
 
-/**
- * Helper functions for icons and styling
- */
 function getBlockIcon(type: AnalysisBlock['type']): string {
   switch (type) {
     case 'intent':

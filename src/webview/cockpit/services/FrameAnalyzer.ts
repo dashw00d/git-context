@@ -92,7 +92,6 @@ export class FrameAnalyzer {
     }
 
     try {
-      // Extract edges for blast radius
       const edgeStrings = (facts.evidence?.['working.edges'] as string[]) || [];
       const outgoing: any[] = [];
       const incoming: any[] = [];
@@ -118,7 +117,6 @@ export class FrameAnalyzer {
 
       data.blastRadius = { incoming, outgoing };
 
-      // Extract hotspots for this file
       if (facts.evidence?.hotspots) {
         const hotspot = (facts.evidence.hotspots as any[]).find(h => h.path === targetPath);
         if (hotspot?.score !== undefined) {
@@ -137,10 +135,7 @@ export class FrameAnalyzer {
         }
       }
 
-      // Extract drift issues
       if (facts.findings?.incompleteness) {
-        // This is a simplification - in reality we'd parse the findings
-        // to see if they relate to this file
         const missing = facts.findings.incompleteness.missing || 0;
         if (missing > 0) {
           data.drift.push({
@@ -150,7 +145,7 @@ export class FrameAnalyzer {
           });
         }
       }
-      // Extract drift symbols for this file
+
       const driftSymbols =
         (facts.findings?.patternDrift?.conventionDrift?.driftSymbols as any[]) || [];
       driftSymbols
@@ -164,7 +159,6 @@ export class FrameAnalyzer {
           });
         });
 
-      // Get git history if available
       try {
         const { GitOperations } = require('../../../analysis/git');
         const gitOps = new GitOperations();
@@ -174,7 +168,6 @@ export class FrameAnalyzer {
         logDebug(`FrameAnalyzer: Failed to get git history for ${frameId}: ${e}`);
       }
 
-      // Get diff stats
       try {
         const { GitOperations } = require('../../../analysis/git');
         const gitOps = new GitOperations();
@@ -187,7 +180,7 @@ export class FrameAnalyzer {
       return data;
     } catch (error) {
       logError(`FrameAnalyzer: Tier 2 analysis failed for ${frameId}`, error);
-      return data; // Return partial data
+      return data;
     }
   }
 
@@ -203,7 +196,7 @@ export class FrameAnalyzer {
     _facts: BundleFactsDTO
   ): Promise<Tier3Data> {
     // Placeholder for AI analysis
-    // This would typically call the LLM service
+
     return {
       summary: `Analysis not available for ${frameId}`,
       risks: [],

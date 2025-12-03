@@ -26,7 +26,6 @@ export async function registerCoreFeatures(
   const orchestrator = shell.getOrchestrator();
   const store = getStore();
 
-  // Analyze last N commits
   shell.registerCommand('git-context.analyzeLastCommits', async (context, countArg) => {
     const config = getExtensionConfig();
     const count =
@@ -55,10 +54,8 @@ export async function registerCoreFeatures(
           return;
         }
 
-        // Update selection so Cockpit reflects the chosen commits
         store.dispatch({ type: 'SELECTION_SET', payload: { shas } });
 
-        // Run full pipeline (index + analyze bundle)
         await vscode.commands.executeCommand('git-context.analyze');
       } catch (error) {
         vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
@@ -66,7 +63,6 @@ export async function registerCoreFeatures(
     }
   });
 
-  // Open symbol in file
   shell.registerCommand('git-context.openSymbol', async (context, sha, filePath, range) => {
     try {
       const { getGitRoot } = await import('../utils/config');
@@ -87,11 +83,9 @@ export async function registerCoreFeatures(
     }
   });
 
-  // Toggle commit selection
   shell.registerCommand('git-context.toggleCommitSelection', async (context, shaOrItem) => {
     const sha = typeof shaOrItem === 'string' ? shaOrItem : shaOrItem?.id || shaOrItem?.sha;
     if (sha) {
-      // Update orchestrator state instead of provider
       const state = store.getState();
       const selected = new Set(state.selectedCommitShas);
       if (selected.has(sha)) {
@@ -107,25 +101,21 @@ export async function registerCoreFeatures(
     }
   });
 
-  // Clear selection
   shell.registerCommand('git-context.clearSelection', async _context => {
     store.dispatch({ type: 'SELECTION_CLEARED' });
     await updateContexts();
   });
 
-  // Copy SHA
   shell.registerCommand('git-context.copySha', async (context, sha) => {
     await vscode.env.clipboard.writeText(sha);
     vscode.window.showInformationMessage(`Copied SHA: ${sha.substring(0, 8)}`);
   });
 
-  // Add commit by SHA
   shell.registerCommand('git-context.addCommitBySha', async (context, shaOrRef) => {
     try {
       let sha = shaOrRef;
-      // Simple validation - if it looks like a SHA, use it
+
       if (!/^[0-9a-f]{7,40}$/i.test(shaOrRef)) {
-        // Try to resolve as a ref using git command
         const { GitOperations } = await import('../analysis/git');
         try {
           const git = new GitOperations();
@@ -153,7 +143,6 @@ export async function registerCoreFeatures(
     }
   });
 
-  // Select all staged
   shell.registerCommand('git-context.selectAllStaged', async _context => {
     const state = store.getState();
     const stagedPaths = state.stagedFiles.map(f => f.path);
@@ -163,7 +152,6 @@ export async function registerCoreFeatures(
     });
   });
 
-  // Select all unstaged
   shell.registerCommand('git-context.selectAllUnstaged', async _context => {
     const state = store.getState();
     const unstagedPaths = state.unstagedFiles.map(f => f.path);
@@ -173,7 +161,6 @@ export async function registerCoreFeatures(
     });
   });
 
-  // Add more commits
   shell.registerCommand('git-context.addMoreCommits', async _context => {
     try {
       providers.commitsProvider.loadMoreOffset += 20;
@@ -184,10 +171,7 @@ export async function registerCoreFeatures(
     }
   });
 
-  // Reset all
   shell.registerCommand('git-context.resetAll', async _context => {
-    // If cockpit features already registered this command, prefer a single path.
-    // This registration provides the full reset (vectors + DB + orchestrator).
     const answer = await vscode.window.showWarningMessage(
       'Are you sure you want to reset all data? This will clear the database, vector index, and cache.',
       { modal: true },
@@ -200,7 +184,6 @@ export async function registerCoreFeatures(
     }
 
     try {
-      // Clear vectors
       try {
         const { getQdrantClient } = await import('../storage/qdrantClient');
         const qdrant = getQdrantClient();
@@ -218,7 +201,6 @@ export async function registerCoreFeatures(
         logError('Failed to clear vectors', e);
       }
 
-      // Clear database tables (except migration log)
       const { getDatabaseManager: _getDatabaseManager } = await import('../storage/database');
       const dbManager = _getDatabaseManager();
       const db = dbManager.getDatabase();
@@ -248,9 +230,8 @@ export async function registerCoreFeatures(
               `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
             ).get(table);
             if (exists) {
-              // eslint-disable-next-line no-restricted-properties
               db.exec(`DELETE FROM ${table}`);
-              // eslint-disable-next-line no-restricted-properties
+
               db.exec(`DELETE FROM sqlite_sequence WHERE name='${table}'`);
             }
           } catch (err) {
@@ -278,20 +259,16 @@ export async function registerCoreFeatures(
     }
   });
 
-  // Bundle clear
   shell.registerCommand('git-context.bundle.clear', async _context => {
     store.dispatch({ type: 'BUNDLE_CLEARED' });
-    // Clear bundle state (provider method may not exist, that's ok)
+
     await updateContexts();
   });
 
-  // Bundle cancel
   shell.registerCommand('git-context.bundle.cancel', async _context => {
-    // Cancel any running analysis
     store.dispatch({ type: 'ANALYSIS_CANCELLED' });
   });
 
-  // Bundle export
   shell.registerCommand('git-context.bundle.export', async _context => {
     const state = orchestrator.getState();
     if (!state.bundleFacts) {
@@ -313,16 +290,12 @@ export async function registerCoreFeatures(
     }
   });
 
-  // Scroll to report section
   shell.registerCommand('git-context.scrollToReportSection', async (_context, sectionId) => {
-    // Forward to report webview
     logInfo(`Scroll to section: ${sectionId}`);
   });
 
-  // Open symbol history
   shell.registerCommand('git-context.openSymbolHistory', async (_context, symbolId) => {
     try {
-      // Show symbol history in a new document
       const { getDatabaseManager: _getDatabaseManager } = await import('../storage/database');
       const history = prepare(`
         SELECT sha, name, path, change_type, diff_snippet_post
@@ -351,7 +324,6 @@ export async function registerCoreFeatures(
     }
   });
 
-  // Download WASM files
   shell.registerCommand('git-context.downloadWasmFiles', async _context => {
     try {
       const { spawn } = require('child_process');
@@ -411,14 +383,11 @@ export async function registerCoreFeatures(
     }
   });
 
-  // Super Report (facts-first, zoomable prototype)
   shell.registerCommand('git-context.superReport', async () => {
     try {
-      // Try to get facts from orchestrator first
       const state = orchestrator.getState();
       let facts: any = state.bundleFacts;
 
-      // Fallback: load last-bundle-facts.json from .git/commit-tracker
       if (!facts) {
         try {
           const gitRoot = (await import('../utils/config')).getGitRoot();

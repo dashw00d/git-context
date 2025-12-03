@@ -20,7 +20,6 @@ export function setupFileWatchers(
   let factsRefreshTimeout: NodeJS.Timeout | null = null;
 
   const setupWatchers = async () => {
-    // Dispose existing watchers
     if (dbWatcher) {
       dbWatcher.dispose();
       dbWatcher = undefined;
@@ -37,37 +36,31 @@ export function setupFileWatchers(
       return;
     }
 
-    // Set up file watcher for database auto-refresh
     const dbPathPattern = new vscode.RelativePattern(
       vscode.Uri.file(gitRoot),
       '.git/commit-tracker/commit_tracker.db'
     );
     dbWatcher = vscode.workspace.createFileSystemWatcher(dbPathPattern);
 
-    // Refresh UI when database changes (with defensive checks)
     const refreshUI = () => {
-      // Get gitRoot dynamically in case workspace changed
       const currentGitRoot = getGitRoot();
       if (!currentGitRoot) {
-        return; // No git root available
+        return;
       }
 
       const dbPath = vscode.Uri.file(`${currentGitRoot}/.git/commit-tracker/commit_tracker.db`);
 
-      // Check if database file actually exists before refreshing
       const fs = require('fs');
       if (!fs.existsSync(dbPath.fsPath)) {
-        return; // Don't refresh if database doesn't exist yet
+        return;
       }
 
-      // Clear existing timeout to debounce rapid changes
       if (refreshTimeout) {
         clearTimeout(refreshTimeout);
       }
 
       refreshTimeout = setTimeout(async () => {
         try {
-          // Only refresh if providers are initialized
           if (providers.activeBundleProvider) {
             providers.activeBundleProvider.refresh();
           }
@@ -77,23 +70,21 @@ export function setupFileWatchers(
           if (providers.symbolHistoryProvider) {
             await providers.symbolHistoryProvider.refresh();
           }
-          // Refresh reports via orchestrator
+
           const { updateReportsState } = await import('./stateUpdaters');
           updateReportsState(orchestrator, 'db:facts').catch((err: any) => {
             logError('Failed to update reports state', err);
           });
         } catch (error) {
-          // Gracefully handle any errors during refresh
           logError('Error refreshing UI after database change', error);
         }
         refreshTimeout = null;
-      }, 100); // 100ms debounce
+      }, 100);
     };
 
     dbWatcher.onDidChange(refreshUI);
     dbWatcher.onDidCreate(refreshUI);
 
-    // Set up file watcher for facts file to auto-refresh tree
     const factsPathPattern = new vscode.RelativePattern(
       vscode.Uri.file(gitRoot),
       '.git/commit-tracker/last-bundle-facts.json'
@@ -101,27 +92,24 @@ export function setupFileWatchers(
     factsWatcher = vscode.workspace.createFileSystemWatcher(factsPathPattern);
 
     const refreshTreeOnFactsUpdate = () => {
-      // Debounce rapid changes
       if (factsRefreshTimeout) {
         clearTimeout(factsRefreshTimeout);
       }
 
       factsRefreshTimeout = setTimeout(async () => {
         try {
-          // Get gitRoot dynamically in case workspace changed
           const currentGitRoot = getGitRoot();
           if (!currentGitRoot) {
-            return; // No git root available
+            return;
           }
 
-          // Refresh bundle provider to pick up latest facts
           if (providers.activeBundleProvider) {
             providers.activeBundleProvider.refresh();
           }
           if (providers.commitsProvider) {
             await providers.commitsProvider.refresh();
           }
-          // Refresh reports
+
           const { updateReportsState } = await import('./stateUpdaters');
           updateReportsState(orchestrator, 'facts:update').catch((err: any) => {
             logError('Failed to update reports state', err);
@@ -130,17 +118,15 @@ export function setupFileWatchers(
           logError('Error refreshing tree after facts update', error);
         }
         factsRefreshTimeout = null;
-      }, 200); // 200ms debounce for facts updates
+      }, 200);
     };
 
     factsWatcher.onDidChange(refreshTreeOnFactsUpdate);
     factsWatcher.onDidCreate(refreshTreeOnFactsUpdate);
   };
 
-  // Initial setup
   setupWatchers();
 
-  // Clean up timeout on deactivation
   return {
     dispose: () => {
       if (refreshTimeout) {

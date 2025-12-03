@@ -28,15 +28,15 @@
     return to;
   };
   var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-    // If the importer is in node compatibility mode or this is not an ESM
-    // file that has been converted to a CommonJS file using a Babel-
-    // compatible transform (i.e. "__esModule" has not been set), then set
-    // "default" to the CommonJS "module.exports" for node compatibility.
+
+
+
+
     isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
     mod
   ));
 
-  // node_modules/react/cjs/react.development.js
+
   var require_react_development = __commonJS({
     "node_modules/react/cjs/react.development.js"(exports, module) {
       "use strict";
@@ -84,7 +84,7 @@
           };
           var ReactCurrentActQueue = {
             current: null,
-            // Used to reproduce behavior of `batchedUpdates` in legacy mode.
+
             isBatchingLegacy: false,
             didScheduleLegacyUpdate: false
           };
@@ -484,14 +484,14 @@
           }
           var ReactElement = function(type, key, ref, self, source, owner, props) {
             var element = {
-              // This tag allows us to uniquely identify this as a React Element
+
               $$typeof: REACT_ELEMENT_TYPE,
-              // Built-in properties that belong on the element
+
               type,
               key,
               ref,
               props,
-              // Record the component responsible for creating this element.
+
               _owner: owner
             };
             {
@@ -710,12 +710,12 @@
                   }
                   mappedChild = cloneAndReplaceKey(
                     mappedChild,
-                    // Keep both the (mapped) and old keys if they differ, just as
-                    // traverseAllChildren used to do for objects as children
-                    escapedPrefix + // $FlowFixMe Flow incorrectly thinks React.Portal doesn't have a key
+
+
+                    escapedPrefix +
                     (mappedChild.key && (!_child || _child.key !== mappedChild.key) ? (
-                      // $FlowFixMe Flow incorrectly thinks existing element's key can be a number
-                      // eslint-disable-next-line react-internal/safe-string-coercion
+
+
                       escapeUserProvidedKey("" + mappedChild.key) + "/"
                     ) : "") + childKey
                   );
@@ -798,20 +798,20 @@
           function createContext(defaultValue) {
             var context = {
               $$typeof: REACT_CONTEXT_TYPE,
-              // As a workaround to support multiple concurrent renderers, we categorize
-              // some renderers as primary and others as secondary. We only expect
-              // there to be two concurrent renderers at most: React Native (primary) and
-              // Fabric (secondary); React DOM (primary) and React ART (secondary).
-              // Secondary renderers store their context values on separate fields.
+
+
+
+
+
               _currentValue: defaultValue,
               _currentValue2: defaultValue,
-              // Used to track how many concurrent renderers this context currently
-              // supports within in a single renderer. Such as parallel server rendering.
+
+
               _threadCount: 0,
-              // These are circular
+
               Provider: null,
               Consumer: null,
-              // Add these to use same hidden class in VM as ServerContext
+
               _defaultValue: null,
               _globalName: null
             };
@@ -939,7 +939,7 @@
           }
           function lazy(ctor) {
             var payload = {
-              // We use these fields to store the result.
+
               _status: Uninitialized,
               _result: ctor
             };
@@ -1033,10 +1033,10 @@
               return true;
             }
             if (typeof type === "object" && type !== null) {
-              if (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE || // This needs to include all possible module reference object
-              // types supported by any Flight configuration anywhere since
-              // we don't know which Flight build this will end up being used
-              // with.
+              if (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE ||
+
+
+
               type.$$typeof === REACT_MODULE_REFERENCE || type.getModuleId !== void 0) {
                 return true;
               }
@@ -1553,8 +1553,8 @@
               var propTypes;
               if (typeof type === "function") {
                 propTypes = type.propTypes;
-              } else if (typeof type === "object" && (type.$$typeof === REACT_FORWARD_REF_TYPE || // Note: Memo only checks outer props here.
-              // Inner props are checked in the reconciler.
+              } else if (typeof type === "object" && (type.$$typeof === REACT_FORWARD_REF_TYPE ||
+
               type.$$typeof === REACT_MEMO_TYPE)) {
                 propTypes = type.propTypes;
               } else {
@@ -1910,7 +1910,7 @@
     }
   });
 
-  // node_modules/react/index.js
+
   var require_react = __commonJS({
     "node_modules/react/index.js"(exports, module) {
       "use strict";
@@ -1922,7 +1922,7 @@
     }
   });
 
-  // node_modules/scheduler/cjs/scheduler.development.js
+
   var require_scheduler_development = __commonJS({
     "node_modules/scheduler/cjs/scheduler.development.js"(exports) {
       "use strict";
@@ -2372,7 +2372,7 @@
     }
   });
 
-  // node_modules/scheduler/index.js
+
   var require_scheduler = __commonJS({
     "node_modules/scheduler/index.js"(exports, module) {
       "use strict";
@@ -2384,7 +2384,7 @@
     }
   });
 
-  // node_modules/react-dom/cjs/react-dom.development.js
+
   var require_react_dom_development = __commonJS({
     "node_modules/react-dom/cjs/react-dom.development.js"(exports) {
       "use strict";
@@ -2616,7 +2616,7 @@
             }
             switch (typeof value) {
               case "function":
-              // $FlowIssue symbol is perfectly valid here
+
               case "symbol":
                 return true;
               case "boolean": {
@@ -2676,8 +2676,8 @@
             "children",
             "dangerouslySetInnerHTML",
             // TODO: This prevents the assignment of defaultValue to regular
-            // elements (not just inputs). Now that ReactDOMInput assigns to the
-            // defaultValue property -- do we need this?
+
+
             "defaultValue",
             "defaultChecked",
             "innerHTML",
@@ -2690,13 +2690,13 @@
               name,
               RESERVED,
               false,
-              // mustUseProperty
+
               name,
-              // attributeName
+
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
@@ -2706,13 +2706,13 @@
               name,
               STRING,
               false,
-              // mustUseProperty
+
               attributeName,
-              // attributeName
+
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
@@ -2721,13 +2721,13 @@
               name,
               BOOLEANISH_STRING,
               false,
-              // mustUseProperty
+
               name.toLowerCase(),
-              // attributeName
+
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
@@ -2736,21 +2736,21 @@
               name,
               BOOLEANISH_STRING,
               false,
-              // mustUseProperty
+
               name,
-              // attributeName
+
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
           [
             "allowFullScreen",
             "async",
-            // Note: there is a special case that prevents it from being written to the DOM
-            // on the client side because the browsers are inconsistent. Instead we call focus().
+
+
             "autoFocus",
             "autoPlay",
             "controls",
@@ -2771,66 +2771,66 @@
             "reversed",
             "scoped",
             "seamless",
-            // Microdata
+
             "itemScope"
           ].forEach(function(name) {
             properties[name] = new PropertyInfoRecord(
               name,
               BOOLEAN,
               false,
-              // mustUseProperty
+
               name.toLowerCase(),
-              // attributeName
+
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
           [
             "checked",
-            // Note: `option.selected` is not updated if `select.multiple` is
-            // disabled with `removeAttribute`. We have special logic for handling this.
+
+
             "multiple",
             "muted",
             "selected"
-            // NOTE: if you add a camelCased prop to this list,
-            // you'll need to set attributeName to name.toLowerCase()
-            // instead in the assignment below.
+
+
+
           ].forEach(function(name) {
             properties[name] = new PropertyInfoRecord(
               name,
               BOOLEAN,
               true,
-              // mustUseProperty
+
               name,
-              // attributeName
+
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
           [
             "capture",
             "download"
-            // NOTE: if you add a camelCased prop to this list,
-            // you'll need to set attributeName to name.toLowerCase()
-            // instead in the assignment below.
+
+
+
           ].forEach(function(name) {
             properties[name] = new PropertyInfoRecord(
               name,
               OVERLOADED_BOOLEAN,
               false,
-              // mustUseProperty
+
               name,
-              // attributeName
+
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
@@ -2839,21 +2839,21 @@
             "rows",
             "size",
             "span"
-            // NOTE: if you add a camelCased prop to this list,
-            // you'll need to set attributeName to name.toLowerCase()
-            // instead in the assignment below.
+
+
+
           ].forEach(function(name) {
             properties[name] = new PropertyInfoRecord(
               name,
               POSITIVE_NUMERIC,
               false,
-              // mustUseProperty
+
               name,
-              // attributeName
+
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
@@ -2862,13 +2862,13 @@
               name,
               NUMERIC,
               false,
-              // mustUseProperty
+
               name.toLowerCase(),
-              // attributeName
+
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
@@ -2950,21 +2950,21 @@
             "writing-mode",
             "xmlns:xlink",
             "x-height"
-            // NOTE: if you add a camelCased prop to this list,
-            // you'll need to set attributeName to name.toLowerCase()
-            // instead in the assignment below.
+
+
+
           ].forEach(function(attributeName) {
             var name = attributeName.replace(CAMELIZE, capitalize);
             properties[name] = new PropertyInfoRecord(
               name,
               STRING,
               false,
-              // mustUseProperty
+
               attributeName,
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
@@ -2975,20 +2975,20 @@
             "xlink:show",
             "xlink:title",
             "xlink:type"
-            // NOTE: if you add a camelCased prop to this list,
-            // you'll need to set attributeName to name.toLowerCase()
-            // instead in the assignment below.
+
+
+
           ].forEach(function(attributeName) {
             var name = attributeName.replace(CAMELIZE, capitalize);
             properties[name] = new PropertyInfoRecord(
               name,
               STRING,
               false,
-              // mustUseProperty
+
               attributeName,
               "http://www.w3.org/1999/xlink",
               false,
-              // sanitizeURL
+
               false
             );
           });
@@ -2996,20 +2996,20 @@
             "xml:base",
             "xml:lang",
             "xml:space"
-            // NOTE: if you add a camelCased prop to this list,
-            // you'll need to set attributeName to name.toLowerCase()
-            // instead in the assignment below.
+
+
+
           ].forEach(function(attributeName) {
             var name = attributeName.replace(CAMELIZE, capitalize);
             properties[name] = new PropertyInfoRecord(
               name,
               STRING,
               false,
-              // mustUseProperty
+
               attributeName,
               "http://www.w3.org/XML/1998/namespace",
               false,
-              // sanitizeURL
+
               false
             );
           });
@@ -3018,13 +3018,13 @@
               attributeName,
               STRING,
               false,
-              // mustUseProperty
+
               attributeName.toLowerCase(),
-              // attributeName
+
               null,
-              // attributeNamespace
+
               false,
-              // sanitizeURL
+
               false
             );
           });
@@ -3033,11 +3033,11 @@
             "xlinkHref",
             STRING,
             false,
-            // mustUseProperty
+
             "xlink:href",
             "http://www.w3.org/1999/xlink",
             true,
-            // sanitizeURL
+
             false
           );
           ["src", "href", "action", "formAction"].forEach(function(attributeName) {
@@ -3045,13 +3045,13 @@
               attributeName,
               STRING,
               false,
-              // mustUseProperty
+
               attributeName.toLowerCase(),
-              // attributeName
+
               null,
-              // attributeNamespace
+
               true,
-              // sanitizeURL
+
               true
             );
           });
@@ -3631,7 +3631,7 @@
                 return "SuspenseList";
               case TracingMarkerComponent:
                 return "TracingMarker";
-              // The display name for this tags come from the user-provided type:
+
               case ClassComponent:
               case FunctionComponent:
               case IncompleteClassComponent:
@@ -3897,8 +3897,8 @@
             var type = props.type;
             if (value != null) {
               if (type === "number") {
-                if (value === 0 && node.value === "" || // We explicitly want to coerce to number here if possible.
-                // eslint-disable-next-line
+                if (value === 0 && node.value === "" ||
+
                 node.value != value) {
                   node.value = toString(value);
                 }
@@ -3986,7 +3986,7 @@
           }
           function setDefaultValue(node, type, value) {
             if (
-              // Focused number inputs synchronize on blur. See ChangeEventPlugin.js
+
               type !== "number" || getActiveElement(node.ownerDocument) !== node
             ) {
               if (value == null) {
@@ -4386,7 +4386,7 @@
             widows: true,
             zIndex: true,
             zoom: true,
-            // SVG-related properties
+
             fillOpacity: true,
             floodOpacity: true,
             stopOpacity: true,
@@ -4447,9 +4447,9 @@
               error(
                 "Unsupported style property %s. Did you mean %s?",
                 name,
-                // As Andi Smith suggests
-                // (http://www.andismith.com/blog/2012/02/modernizr-prefixed/), an `-ms` prefix
-                // is converted to lowercase `ms`.
+
+
+
                 camelize(name.replace(msPattern$1, "ms-"))
               );
             };
@@ -4592,7 +4592,7 @@
             source: true,
             track: true,
             wbr: true
-            // NOTE: menuitem's close tag should be omitted, but that causes problems.
+
           };
           var voidElementTags = assign({
             menuitem: true
@@ -4629,10 +4629,10 @@
               return typeof props.is === "string";
             }
             switch (tagName) {
-              // These are reserved SVG and MathML elements.
-              // We don't mind this list too much because we expect it to never grow.
-              // The alternative is to track the namespace in a few places which is convoluted.
-              // https://w3c.github.io/webcomponents/spec/custom/#custom-elements-core-concepts
+
+
+
+
               case "annotation-xml":
               case "color-profile":
               case "font-face":
@@ -4647,7 +4647,7 @@
             }
           }
           var possibleStandardNames = {
-            // HTML
+
             accept: "accept",
             acceptcharset: "acceptCharset",
             "accept-charset": "acceptCharset",
@@ -4797,7 +4797,7 @@
             width: "width",
             wmode: "wmode",
             wrap: "wrap",
-            // SVG
+
             about: "about",
             accentheight: "accentHeight",
             "accent-height": "accentHeight",
@@ -5137,19 +5137,19 @@
           };
           var ariaProperties = {
             "aria-current": 0,
-            // state
+
             "aria-description": 0,
             "aria-details": 0,
             "aria-disabled": 0,
-            // state
+
             "aria-hidden": 0,
-            // state
+
             "aria-invalid": 0,
-            // state
+
             "aria-keyshortcuts": 0,
             "aria-label": 0,
             "aria-roledescription": 0,
-            // Widget Attributes
+
             "aria-autocomplete": 0,
             "aria-checked": 0,
             "aria-expanded": 0,
@@ -5169,15 +5169,15 @@
             "aria-valuemin": 0,
             "aria-valuenow": 0,
             "aria-valuetext": 0,
-            // Live Region Attributes
+
             "aria-atomic": 0,
             "aria-busy": 0,
             "aria-live": 0,
             "aria-relevant": 0,
-            // Drag-and-Drop Attributes
+
             "aria-dropeffect": 0,
             "aria-grabbed": 0,
-            // Relationship Attributes
+
             "aria-activedescendant": 0,
             "aria-colcount": 0,
             "aria-colindex": 0,
@@ -5798,7 +5798,7 @@
           );
           var BeforeMutationMask = (
             // TODO: Remove Update flag from before mutation phase by re-landing Visibility
-            // flag logic (see #20043)
+
             Update | Snapshot | 0
           );
           var MutationMask = Placement | Update | ChildDeletion | ContentReset | Ref | Hydrating | Visibility;
@@ -6645,17 +6645,17 @@
             if (nextLanes === NoLanes) {
               return NoLanes;
             }
-            if (wipLanes !== NoLanes && wipLanes !== nextLanes && // If we already suspended with a delay, then interrupting is fine. Don't
-            // bother waiting until the root is complete.
+            if (wipLanes !== NoLanes && wipLanes !== nextLanes &&
+
             (wipLanes & suspendedLanes) === NoLanes) {
               var nextLane = getHighestPriorityLane(nextLanes);
               var wipLane = getHighestPriorityLane(wipLanes);
               if (
-                // Tests whether the next lane is equal or lower priority than the wip
-                // one. This works because the bits decrease in priority as you go left.
-                nextLane >= wipLane || // Default priority updates should not interrupt transition updates. The
-                // only difference between default updates and transition updates is that
-                // default updates do not support refresh transitions.
+
+
+                nextLane >= wipLane ||
+
+
                 nextLane === DefaultLane && (wipLane & TransitionLanes) !== NoLanes
               ) {
                 return wipLanes;
@@ -6904,8 +6904,8 @@
               var index2 = pickArbitraryLaneIndex(lanes);
               var lane = 1 << index2;
               if (
-                // Is this one of the newly entangled lanes?
-                lane & entangledLanes | // Is this lane transitively entangled with the newly entangled lanes?
+
+                lane & entangledLanes |
                 entanglements[index2] & entangledLanes
               ) {
                 entanglements[index2] |= entangledLanes;
@@ -7096,7 +7096,7 @@
             "keyup",
             "input",
             "textInput",
-            // Intentionally camelCase
+
             "copy",
             "cut",
             "paste",
@@ -7462,7 +7462,7 @@
           }
           function getEventPriority(domEventName) {
             switch (domEventName) {
-              // Used by SimpleEventPlugin:
+
               case "cancel":
               case "click":
               case "close":
@@ -7498,20 +7498,20 @@
               case "touchend":
               case "touchstart":
               case "volumechange":
-              // Used by polyfills:
-              // eslint-disable-next-line no-fallthrough
+
+
               case "change":
               case "selectionchange":
               case "textInput":
               case "compositionstart":
               case "compositionend":
               case "compositionupdate":
-              // Only enableCreateEventHandleAPI:
-              // eslint-disable-next-line no-fallthrough
+
+
               case "beforeblur":
               case "afterblur":
-              // Not used by React but could be by user code:
-              // eslint-disable-next-line no-fallthrough
+
+
               case "beforeinput":
               case "blur":
               case "fullscreenchange":
@@ -7536,8 +7536,8 @@
               case "toggle":
               case "touchmove":
               case "wheel":
-              // Not used by React but could be by user code:
-              // eslint-disable-next-line no-fallthrough
+
+
               case "mouseenter":
               case "mouseleave":
               case "pointerenter":
@@ -7909,7 +7909,7 @@
             repeat: 0,
             locale: 0,
             getModifierState: getEventModifierState,
-            // Legacy Interface
+
             charCode: function(event) {
               if (event.type === "keypress") {
                 return getEventCharCode(event);
@@ -7966,24 +7966,24 @@
           var WheelEventInterface = assign({}, MouseEventInterface, {
             deltaX: function(event) {
               return "deltaX" in event ? event.deltaX : (
-                // Fallback to `wheelDeltaX` for Webkit and normalize (right is positive).
+
                 "wheelDeltaX" in event ? -event.wheelDeltaX : 0
               );
             },
             deltaY: function(event) {
               return "deltaY" in event ? event.deltaY : (
-                // Fallback to `wheelDeltaY` for Webkit and normalize (down is positive).
+
                 "wheelDeltaY" in event ? -event.wheelDeltaY : (
-                  // Fallback to `wheelDelta` for IE<9 and normalize (down is positive).
+
                   "wheelDelta" in event ? -event.wheelDelta : 0
                 )
               );
             },
             deltaZ: 0,
-            // Browsers without "deltaMode" is reporting in raw wheel delta where one
-            // notch on the scroll is always +/- 120, roughly equivalent to pixels.
-            // A good approximation of DOM_DELTA_LINE (1) is 5% of viewport size or
-            // ~40 pixels, for DOM_DELTA_SCREEN (2) it is 87.5% of viewport size.
+
+
+
+
             deltaMode: 0
           });
           var SyntheticWheelEvent = createSyntheticEvent(WheelEventInterface);
@@ -8006,7 +8006,7 @@
           }
           var hasSpaceKeypress = false;
           function isKeypressCommand(nativeEvent) {
-            return (nativeEvent.ctrlKey || nativeEvent.altKey || nativeEvent.metaKey) && // ctrlKey && altKey is equivalent to AltGr, and is not a command.
+            return (nativeEvent.ctrlKey || nativeEvent.altKey || nativeEvent.metaKey) &&
             !(nativeEvent.ctrlKey && nativeEvent.altKey);
           }
           function getCompositionEventType(domEventName) {
@@ -8723,7 +8723,7 @@
           function extractEvents$3(dispatchQueue, domEventName, targetInst, nativeEvent, nativeEventTarget, eventSystemFlags, targetContainer) {
             var targetNode = targetInst ? getNodeFromInstance(targetInst) : window;
             switch (domEventName) {
-              // Track the input node that has focus.
+
               case "focusin":
                 if (isTextInputElement(targetNode) || targetNode.contentEditable === "true") {
                   activeElement$1 = targetNode;
@@ -8736,8 +8736,8 @@
                 activeElementInst$1 = null;
                 lastSelection = null;
                 break;
-              // Don't fire the event while the user is dragging. This matches the
-              // semantics of the native select event.
+
+
               case "mousedown":
                 mouseDown = true;
                 break;
@@ -8747,20 +8747,20 @@
                 mouseDown = false;
                 constructSelectEvent(dispatchQueue, nativeEvent, nativeEventTarget);
                 break;
-              // Chrome and IE fire non-standard event when selection is changed (and
-              // sometimes when it hasn't). IE's event fires out of order with respect
-              // to key and input events on deletion, so we discard it.
-              //
-              // Firefox doesn't support selectionchange, so check selection status
-              // after each key entry. The selection changes after keydown and before
-              // keyup, but we check on keydown as well in the case of holding down a
-              // key, when multiple keydown events are fired but only one keyup is.
-              // This is also our approach for IE handling, for the reason above.
+
+
+
+
+
+
+
+
+
               case "selectionchange":
                 if (skipSelectionChangeEvent) {
                   break;
                 }
-              // falls through
+
               case "keydown":
               case "keyup":
                 constructSelectEvent(dispatchQueue, nativeEvent, nativeEventTarget);
@@ -8926,9 +8926,9 @@
             var inCapturePhase = (eventSystemFlags & IS_CAPTURE_PHASE) !== 0;
             {
               var accumulateTargetOnly = !inCapturePhase && // TODO: ideally, we'd eventually add all events from
-              // nonDelegatedEvents list in DOMPluginEventSystem.
-              // Then we can remove this special list.
-              // This is a breaking change that can wait until React 18.
+
+
+
               domEventName === "scroll";
               var _listeners = accumulateSinglePhaseListeners(targetInst, reactName, nativeEvent.type, inCapturePhase, accumulateTargetOnly);
               if (_listeners.length > 0) {
@@ -9280,13 +9280,13 @@
           var normalizeHTML;
           {
             warnedUnknownTags = {
-              // There are working polyfills for <dialog>. Let people use it.
+
               dialog: true,
-              // Electron ships a custom <webview> tag to display external web content in
-              // an isolated frame and process.
-              // This tag is not present in non Electron environments such as JSDom which
-              // is often used for testing purposes.
-              // @see https://electronjs.org/docs/api/webview-tag
+
+
+
+
+
               webview: true
             };
             validatePropertiesInDevelopment = function(type, props) {
@@ -9785,7 +9785,7 @@
               for (var _i = 0; _i < attributes.length; _i++) {
                 var name = attributes[_i].name.toLowerCase();
                 switch (name) {
-                  // Controlled attributes are not validated
+
                   // TODO: Only ignore them on controlled tags.
                   case "value":
                     break;
@@ -9829,12 +9829,12 @@
                     listenToNonDelegatedEvent("scroll", domElement);
                   }
                 }
-              } else if (shouldWarnDev && true && // Convince Flow we've calculated it (it's DEV-only in this method.)
+              } else if (shouldWarnDev && true &&
               typeof isCustomComponentTag === "boolean") {
                 var serverValue = void 0;
                 var propertyInfo = isCustomComponentTag && enableCustomElementPropertySupport ? null : getPropertyInfo(propKey);
                 if (rawProps[SUPPRESS_HYDRATION_WARNING] === true) ;
-                else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING || // Controlled attributes are not validated
+                else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING ||
                 // TODO: Only ignore them on controlled tags.
                 propKey === "value" || propKey === "checked" || propKey === "selected") ;
                 else if (propKey === DANGEROUSLY_SET_INNER_HTML) {
@@ -9893,7 +9893,7 @@
             {
               if (shouldWarnDev) {
                 if (
-                  // $FlowFixMe - Should be inferred as not undefined.
+
                   extraAttributeNames.size > 0 && rawProps[SUPPRESS_HYDRATION_WARNING] !== true
                 ) {
                   warnForExtraAttributes(extraAttributeNames);
@@ -9992,9 +9992,9 @@
               "marquee",
               "object",
               "template",
-              // https://html.spec.whatwg.org/multipage/syntax.html#html-integration-point
+
               // TODO: Distinguish by namespace here -- for <title>, including it here
-              // errs on the side of fewer warnings
+
               "foreignObject",
               "desc",
               "title"
@@ -10054,37 +10054,37 @@
             };
             var isTagValidWithParent = function(tag, parentTag) {
               switch (parentTag) {
-                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-inselect
+
                 case "select":
                   return tag === "option" || tag === "optgroup" || tag === "#text";
                 case "optgroup":
                   return tag === "option" || tag === "#text";
-                // Strictly speaking, seeing an <option> doesn't mean we're in a <select>
-                // but
+
+
                 case "option":
                   return tag === "#text";
-                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-intd
-                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-incaption
-                // No special behavior since these rules fall back to "in body" mode for
-                // all except special table nodes which cause bad parsing behavior anyway.
-                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-intr
+
+
+
+
+
                 case "tr":
                   return tag === "th" || tag === "td" || tag === "style" || tag === "script" || tag === "template";
-                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-intbody
+
                 case "tbody":
                 case "thead":
                 case "tfoot":
                   return tag === "tr" || tag === "style" || tag === "script" || tag === "template";
-                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-incolgroup
+
                 case "colgroup":
                   return tag === "col" || tag === "template";
-                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-intable
+
                 case "table":
                   return tag === "caption" || tag === "colgroup" || tag === "tbody" || tag === "tfoot" || tag === "thead" || tag === "style" || tag === "script" || tag === "template";
-                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-inhead
+
                 case "head":
                   return tag === "base" || tag === "basefont" || tag === "bgsound" || tag === "link" || tag === "meta" || tag === "title" || tag === "noscript" || tag === "noframes" || tag === "style" || tag === "script" || tag === "template";
-                // https://html.spec.whatwg.org/multipage/semantics.html#the-html-element
+
                 case "html":
                   return tag === "head" || tag === "body" || tag === "frameset";
                 case "frameset":
@@ -11652,7 +11652,7 @@
               if (didWarnAboutUnsafeLifecycles.has(fiber.type)) {
                 return;
               }
-              if (typeof instance.componentWillMount === "function" && // Don't warn about react-lifecycles-compat polyfilled components.
+              if (typeof instance.componentWillMount === "function" &&
               instance.componentWillMount.__suppressDeprecationWarning !== true) {
                 pendingComponentWillMountWarnings.push(fiber);
               }
@@ -11835,12 +11835,12 @@
             var mixedRef = element.ref;
             if (mixedRef !== null && typeof mixedRef !== "function" && typeof mixedRef !== "object") {
               {
-                if ((returnFiber.mode & StrictLegacyMode || warnAboutStringRefs) && // We warn in ReactElement.js if owner and self are equal for string refs
-                // because these cannot be automatically converted to an arrow function
-                // using a codemod. Therefore, we don't have to warn about string refs again.
-                !(element._owner && element._self && element._owner.stateNode !== element._self) && // Will already throw with "Function components cannot have string refs"
-                !(element._owner && element._owner.tag !== ClassComponent) && // Will already warn with "Function components cannot be given refs"
-                !(typeof element.type === "function" && !isReactClass(element.type)) && // Will already throw with "Element ref was specified as a string (someStringRef) but no owner was set"
+                if ((returnFiber.mode & StrictLegacyMode || warnAboutStringRefs) &&
+
+
+                !(element._owner && element._self && element._owner.stateNode !== element._self) &&
+                !(element._owner && element._owner.tag !== ClassComponent) &&
+                !(typeof element.type === "function" && !isReactClass(element.type)) &&
                 element._owner) {
                   var componentName = getComponentNameFromFiber(returnFiber) || "Component";
                   if (!didWarnAboutStringRefs[componentName]) {
@@ -11998,11 +11998,11 @@
                 return updateFragment2(returnFiber, current2, element.props.children, lanes, element.key);
               }
               if (current2 !== null) {
-                if (current2.elementType === elementType || // Keep this check inline so it only runs on the false path:
-                isCompatibleFamilyForHotReloading(current2, element) || // Lazy types should reconcile their resolved type.
-                // We need to do this after the Hot Reloading check above,
-                // because hot reloading has different semantics than prod because
-                // it doesn't resuspend. So we can't let the call below suspend.
+                if (current2.elementType === elementType ||
+                isCompatibleFamilyForHotReloading(current2, element) ||
+
+
+
                 typeof elementType === "object" && elementType !== null && elementType.$$typeof === REACT_LAZY_TYPE && resolveLazy(elementType) === current2.type) {
                   var existing = useFiber(current2, element.props);
                   existing.ref = coerceRef(returnFiber, current2, element);
@@ -12296,7 +12296,7 @@
                 throw new Error("An object is not an iterable. This error is likely caused by a bug in React. Please file an issue.");
               }
               {
-                if (typeof Symbol === "function" && // $FlowFixMe Flow doesn't know about toStringTag
+                if (typeof Symbol === "function" &&
                 newChildrenIterable[Symbol.toStringTag] === "Generator") {
                   if (!didWarnAboutGenerators) {
                     error("Using Generators as children is unsupported and will likely yield unexpected results because enumerating a generator mutates it. You may convert it to an array with `Array.from()` or the `[...spread]` operator before rendering. Keep in mind you might need to polyfill these features for older browsers.");
@@ -12445,11 +12445,11 @@
                       return existing;
                     }
                   } else {
-                    if (child.elementType === elementType || // Keep this check inline so it only runs on the false path:
-                    isCompatibleFamilyForHotReloading(child, element) || // Lazy types should reconcile their resolved type.
-                    // We need to do this after the Hot Reloading check above,
-                    // because hot reloading has different semantics than prod because
-                    // it doesn't resuspend. So we can't let the call below suspend.
+                    if (child.elementType === elementType ||
+                    isCompatibleFamilyForHotReloading(child, element) ||
+
+
+
                     typeof elementType === "object" && elementType !== null && elementType.$$typeof === REACT_LAZY_TYPE && resolveLazy(elementType) === child.type) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var _existing = useFiber(child, element.props);
@@ -13043,7 +13043,7 @@
               case CaptureUpdate: {
                 workInProgress2.flags = workInProgress2.flags & ~ShouldCapture | DidCapture;
               }
-              // Intentional fallthrough
+
               case UpdateState: {
                 var _payload = update.payload;
                 var partialState;
@@ -13142,9 +13142,9 @@
                   if (newLastBaseUpdate !== null) {
                     var _clone = {
                       eventTime: updateEventTime,
-                      // This update is going to be committed so we never want uncommit
-                      // it. Using NoLane works because 0 is a subset of all bitmasks, so
-                      // this will never be skipped by the check above.
+
+
+
                       lane: NoLane,
                       tag: update.tag,
                       payload: update.payload,
@@ -13155,8 +13155,8 @@
                   }
                   newState = getStateFromUpdate(workInProgress2, queue, update, newState, props, instance);
                   var callback = update.callback;
-                  if (callback !== null && // If the update was already committed, we should not queue its
-                  // callback again.
+                  if (callback !== null &&
+
                   update.lane !== NoLane) {
                     workInProgress2.flags |= Callback;
                     var effects = queue.effects;
@@ -13327,8 +13327,8 @@
                     return node;
                   }
                 }
-              } else if (node.tag === SuspenseListComponent && // revealOrder undefined can't be trusted because it don't
-              // keep track of whether it suspended or not.
+              } else if (node.tag === SuspenseListComponent &&
+
               node.memoizedProps.revealOrder !== void 0) {
                 var didSuspend = (node.flags & DidCapture) !== NoFlags;
                 if (didSuspend) {
@@ -13546,11 +13546,11 @@
               currentHookNameInDev = null;
               hookTypesDev = null;
               hookTypesUpdateIndexDev = -1;
-              if (current2 !== null && (current2.flags & StaticMask) !== (workInProgress2.flags & StaticMask) && // Disable this warning in legacy mode, because legacy Suspense is weird
-              // and creates false positives. To make this work in legacy mode, we'd
-              // need to mark fibers that commit in an incomplete state, somehow. For
-              // now I'll disable the warning that most of the bugs that would trigger
-              // it are either exclusive to concurrent mode or exist in both.
+              if (current2 !== null && (current2.flags & StaticMask) !== (workInProgress2.flags & StaticMask) &&
+
+
+
+
               (current2.mode & ConcurrentMode) !== NoMode) {
                 error("Internal React error: Expected static flag was missing. Please notify the React team.");
               }
@@ -13741,9 +13741,9 @@
                 } else {
                   if (newBaseQueueLast !== null) {
                     var _clone = {
-                      // This update is going to be committed so we never want uncommit
-                      // it. Using NoLane works because 0 is a subset of all bitmasks, so
-                      // this will never be skipped by the check above.
+
+
+
                       lane: NoLane,
                       action: update.action,
                       hasEagerState: update.hasEagerState,
@@ -13898,8 +13898,8 @@
             }
             var inst = hook.queue;
             updateEffect(subscribeToStore.bind(null, fiber, inst, subscribe), [subscribe]);
-            if (inst.getSnapshot !== getSnapshot || snapshotChanged || // Check if the susbcribe function changed. We can save some memory by
-            // checking whether we scheduled a subscription effect above.
+            if (inst.getSnapshot !== getSnapshot || snapshotChanged ||
+
             workInProgressHook !== null && workInProgressHook.memoizedState.tag & HasEffect) {
               fiber.flags |= Passive;
               pushEffect(HasEffect | Passive$1, updateStoreInstance.bind(null, fiber, inst, nextSnapshot, getSnapshot), void 0, null);
@@ -13994,7 +13994,7 @@
               create,
               destroy,
               deps,
-              // Circular
+
               next: null
             };
             var componentUpdateQueue = currentlyRenderingFiber$1.updateQueue;
@@ -15529,14 +15529,14 @@
                 error("contextType was defined as an instance property on %s. Use a static property to define contextType instead.", name);
               }
               {
-                if (ctor.childContextTypes && !didWarnAboutLegacyContext$1.has(ctor) && // Strict Mode has its own warning for legacy context, so we can skip
-                // this one.
+                if (ctor.childContextTypes && !didWarnAboutLegacyContext$1.has(ctor) &&
+
                 (workInProgress2.mode & StrictLegacyMode) === NoMode) {
                   didWarnAboutLegacyContext$1.add(ctor);
                   error("%s uses the legacy childContextTypes API which is no longer supported and will be removed in the next major release. Use React.createContext() instead\n\n.Learn more about this warning here: https://reactjs.org/link/legacy-context", name);
                 }
-                if (ctor.contextTypes && !didWarnAboutLegacyContext$1.has(ctor) && // Strict Mode has its own warning for legacy context, so we can skip
-                // this one.
+                if (ctor.contextTypes && !didWarnAboutLegacyContext$1.has(ctor) &&
+
                 (workInProgress2.mode & StrictLegacyMode) === NoMode) {
                   didWarnAboutLegacyContext$1.add(ctor);
                   error("%s uses the legacy contextTypes API which is no longer supported and will be removed in the next major release. Use React.createContext() with static contextType instead.\n\nLearn more about this warning here: https://reactjs.org/link/legacy-context", name);
@@ -15612,7 +15612,7 @@
             {
               if ("contextType" in ctor) {
                 var isValid2 = (
-                  // Allow null for conditional declaration
+
                   contextType === null || contextType !== void 0 && contextType.$$typeof === REACT_CONTEXT_TYPE && contextType._context === void 0
                 );
                 if (!isValid2 && !didWarnAboutInvalidateContextType.has(ctor)) {
@@ -15910,9 +15910,9 @@
               newState = workInProgress2.memoizedState;
             }
             var shouldUpdate = checkHasForceUpdateAfterProcessing() || checkShouldComponentUpdate(workInProgress2, ctor, oldProps, newProps, oldState, newState, nextContext) || // TODO: In some cases, we'll end up checking if context has changed twice,
-            // both before and after `shouldComponentUpdate` has been called. Not ideal,
-            // but I'm loath to refactor this function. This only happens for memoized
-            // components so it's not that common.
+
+
+
             enableLazyContextPropagation;
             if (shouldUpdate) {
               if (!hasNewLifecycles && (typeof instance.UNSAFE_componentWillUpdate === "function" || typeof instance.componentWillUpdate === "function")) {
@@ -16269,7 +16269,7 @@
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
-                    // Resolved props
+
                     "prop",
                     getComponentNameFromType(Component2)
                   );
@@ -16317,7 +16317,7 @@
           function updateMemoComponent(current2, workInProgress2, Component2, nextProps, renderLanes2) {
             if (current2 === null) {
               var type = Component2.type;
-              if (isSimpleFunctionComponent(type) && Component2.compare === null && // SimpleMemoComponent codepath doesn't resolve outer props either.
+              if (isSimpleFunctionComponent(type) && Component2.compare === null &&
               Component2.defaultProps === void 0) {
                 var resolvedType = type;
                 {
@@ -16336,7 +16336,7 @@
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
-                    // Resolved props
+
                     "prop",
                     getComponentNameFromType(type)
                   );
@@ -16362,7 +16362,7 @@
                 checkPropTypes(
                   _innerPropTypes,
                   nextProps,
-                  // Resolved props
+
                   "prop",
                   getComponentNameFromType(_type)
                 );
@@ -16403,7 +16403,7 @@
                     checkPropTypes(
                       outerPropTypes,
                       nextProps,
-                      // Resolved (SimpleMemoComponent has no defaultProps)
+
                       "prop",
                       getComponentNameFromType(outerMemoType)
                     );
@@ -16413,7 +16413,7 @@
             }
             if (current2 !== null) {
               var prevProps = current2.memoizedProps;
-              if (shallowEqual(prevProps, nextProps) && current2.ref === workInProgress2.ref && // Prevent bailout if the implementation changed due to hot reload.
+              if (shallowEqual(prevProps, nextProps) && current2.ref === workInProgress2.ref &&
               workInProgress2.type === current2.type) {
                 didReceiveUpdate = false;
                 workInProgress2.pendingProps = nextProps = prevProps;
@@ -16523,7 +16523,7 @@
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
-                    // Resolved props
+
                     "prop",
                     getComponentNameFromType(Component2)
                   );
@@ -16599,7 +16599,7 @@
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
-                    // Resolved props
+
                     "prop",
                     getComponentNameFromType(Component2)
                   );
@@ -16820,7 +16820,7 @@
                       checkPropTypes(
                         outerPropTypes,
                         resolvedProps,
-                        // Resolved for outer only
+
                         "prop",
                         getComponentNameFromType(Component2)
                       );
@@ -16832,7 +16832,7 @@
                   workInProgress2,
                   Component2,
                   resolveDefaultProps(Component2.type, resolvedProps),
-                  // The inner type can have defaults too
+
                   renderLanes2
                 );
                 return child;
@@ -16906,8 +16906,8 @@
               }
             }
             if (
-              // Run these checks in production only if the flag is off.
-              // Eventually we'll delete this branch altogether.
+
+
               typeof value === "object" && value !== null && typeof value.render === "function" && value.$$typeof === void 0
             ) {
               {
@@ -17182,14 +17182,14 @@
             };
             var primaryChildFragment;
             if (
-              // In legacy mode, we commit the primary tree as if it successfully
-              // completed, even though it's in an inconsistent state.
-              (mode & ConcurrentMode) === NoMode && // Make sure we're on the second pass, i.e. the primary child fragment was
-              // already cloned. In legacy mode, the only case where this isn't true is
-              // when DevTools forces us to display a fallback; we skip the first render
-              // pass entirely and go straight to rendering the fallback. (In Concurrent
-              // Mode, SuspenseList can also trigger this scenario, but this is a legacy-
-              // only codepath.)
+
+
+              (mode & ConcurrentMode) === NoMode &&
+
+
+
+
+
               workInProgress2.child !== currentPrimaryChildFragment
             ) {
               var progressedPrimaryFragment = workInProgress2.child;
@@ -17272,8 +17272,8 @@
                   workInProgress2,
                   renderLanes2,
                   // TODO: When we delete legacy mode, we should make this error argument
-                  // required — every concurrent mode path that causes hydration to
-                  // de-opt to client rendering should have an error message.
+
+
                   null
                 );
               }
@@ -17531,7 +17531,7 @@
                   initSuspenseListRenderState(
                     workInProgress2,
                     false,
-                    // isBackwards
+
                     tail,
                     lastContentRow,
                     tailMode
@@ -17556,10 +17556,10 @@
                   initSuspenseListRenderState(
                     workInProgress2,
                     true,
-                    // isBackwards
+
                     _tail,
                     null,
-                    // last
+
                     tailMode
                   );
                   break;
@@ -17568,11 +17568,11 @@
                   initSuspenseListRenderState(
                     workInProgress2,
                     false,
-                    // isBackwards
+
                     null,
-                    // tail
+
                     null,
-                    // last
+
                     void 0
                   );
                   break;
@@ -17848,13 +17848,13 @@
             if (current2 !== null) {
               var oldProps = current2.memoizedProps;
               var newProps = workInProgress2.pendingProps;
-              if (oldProps !== newProps || hasContextChanged() || // Force a re-render if the implementation changed due to hot reload:
+              if (oldProps !== newProps || hasContextChanged() ||
               workInProgress2.type !== current2.type) {
                 didReceiveUpdate = true;
               } else {
                 var hasScheduledUpdateOrContext = checkScheduledUpdateOrContext(current2, renderLanes2);
-                if (!hasScheduledUpdateOrContext && // If this is the second pass of an error or suspense boundary, there
-                // may not be work scheduled on `current`, so we check for this flag.
+                if (!hasScheduledUpdateOrContext &&
+
                 (workInProgress2.flags & DidCapture) === NoFlags) {
                   didReceiveUpdate = false;
                   return attemptEarlyBailoutIfNoScheduledUpdate(current2, workInProgress2, renderLanes2);
@@ -17931,7 +17931,7 @@
                       checkPropTypes(
                         outerPropTypes,
                         _resolvedProps3,
-                        // Resolved for outer only
+
                         "prop",
                         getComponentNameFromType(_type2)
                       );
@@ -18214,8 +18214,8 @@
                     if (current2 !== null) {
                       var prevState = current2.memoizedState;
                       if (
-                        // Check if this is a client root
-                        !prevState.isDehydrated || // Check if we reverted to client rendering (e.g. due to an error)
+
+                        !prevState.isDehydrated ||
                         (workInProgress2.flags & ForceClientRender) !== NoFlags
                       ) {
                         workInProgress2.flags |= Snapshot;
@@ -18424,9 +18424,9 @@
                         return null;
                       }
                     } else if (
-                      // The time it took to render last row is greater than the remaining
-                      // time we have to render. So rendering one more row would likely
-                      // exceed it.
+
+
+
                       now() * 2 - renderState.renderingStartTime > getRenderTargetTime() && renderLanes2 !== OffscreenLane
                     ) {
                       workInProgress2.flags |= DidCapture;
@@ -18477,7 +18477,7 @@
                 if (current2 !== null) {
                   var _prevState = current2.memoizedState;
                   var prevIsHidden = _prevState !== null;
-                  if (prevIsHidden !== nextIsHidden && // LegacyHidden doesn't do any hiding — it only pre-renders.
+                  if (prevIsHidden !== nextIsHidden &&
                   !enableLegacyHidden) {
                     workInProgress2.flags |= Visibility;
                   }
@@ -18905,7 +18905,7 @@
                       if (destroy === null) {
                         addendum = " You returned null. If your effect does not require clean up, return undefined (or nothing).";
                       } else if (typeof destroy.then === "function") {
-                        addendum = "\n\nIt looks like you wrote " + hookName + "(async () => ...) or returned a Promise. Instead, write the async function inside your effect and call it immediately:\n\n" + hookName + "(() => {\n  async function fetchData() {\n    // You can await here\n    const response = await MyAPI.getData(someId);\n    // ...\n  }\n  fetchData();\n}, [someId]); // Or [] if effect doesn't need props or state\n\nLearn more about data fetching with Hooks: https://reactjs.org/link/hooks-data-fetching";
+                        addendum = "\n\nIt looks like you wrote " + hookName + "(async () => ...) or returned a Promise. Instead, write the async function inside your effect and call it immediately:\n\n" + hookName + "(() => {\n  async function fetchData() {\n
                       } else {
                         addendum = " You returned: " + destroy;
                       }
@@ -19361,7 +19361,7 @@
                 insertOrAppendPlacementNodeIntoContainer(finishedWork, _before, _parent);
                 break;
               }
-              // eslint-disable-next-line-no-fallthrough
+
               default:
                 throw new Error("Invalid host parent fiber. This error is likely caused by a bug in React. Please file an issue.");
             }
@@ -19461,7 +19461,7 @@
                   safelyDetachRef(deletedFiber, nearestMountedAncestor);
                 }
               }
-              // eslint-disable-next-line-no-fallthrough
+
               case HostText: {
                 {
                   var prevHostParent = hostParent;
@@ -19916,7 +19916,7 @@
                     nextEffect = child;
                     commitLayoutEffects_begin(
                       child,
-                      // New root; bubble back up to here and stop.
+
                       root2,
                       committedLanes
                     );
@@ -20360,7 +20360,7 @@
           function isLegacyActEnvironment(fiber) {
             {
               var isReactActEnvironmentGlobal = (
-                // $FlowExpectedError – Flow doesn't know about IS_REACT_ACT_ENVIRONMENT global
+
                 typeof IS_REACT_ACT_ENVIRONMENT !== "undefined" ? IS_REACT_ACT_ENVIRONMENT : void 0
               );
               var jestIsDefined = typeof jest !== "undefined";
@@ -20370,7 +20370,7 @@
           function isConcurrentActEnvironment() {
             {
               var isReactActEnvironmentGlobal = (
-                // $FlowExpectedError – Flow doesn't know about IS_REACT_ACT_ENVIRONMENT global
+
                 typeof IS_REACT_ACT_ENVIRONMENT !== "undefined" ? IS_REACT_ACT_ENVIRONMENT : void 0
               );
               if (!isReactActEnvironmentGlobal && ReactCurrentActQueue.current !== null) {
@@ -20527,7 +20527,7 @@
                 }
               }
               ensureRootIsScheduled(root2, eventTime);
-              if (lane === SyncLane && executionContext === NoContext && (fiber.mode & ConcurrentMode) === NoMode && // Treat `act` as if it's inside `batchedUpdates`, even in legacy mode.
+              if (lane === SyncLane && executionContext === NoContext && (fiber.mode & ConcurrentMode) === NoMode &&
               !ReactCurrentActQueue$1.isBatchingLegacy) {
                 resetRenderTimer();
                 flushSyncCallbacksOnlyInLegacyMode();
@@ -20543,7 +20543,7 @@
           function isUnsafeClassRenderPhaseUpdate(fiber) {
             return (
               // TODO: Remove outdated deferRenderPhaseUpdateToNextBatch experiment. We
-              // decided not to enable it.
+
               (executionContext & RenderContext) !== NoContext
             );
           }
@@ -20561,9 +20561,9 @@
             }
             var newCallbackPriority = getHighestPriorityLane(nextLanes);
             var existingCallbackPriority = root2.callbackPriority;
-            if (existingCallbackPriority === newCallbackPriority && // Special case related to `act`. If the currently scheduled task is a
-            // Scheduler task, rather than an `act` task, cancel it and re-scheduled
-            // on the `act` queue.
+            if (existingCallbackPriority === newCallbackPriority &&
+
+
             !(ReactCurrentActQueue$1.current !== null && existingCallbackNode !== fakeActCallbackNode)) {
               {
                 if (existingCallbackNode == null && existingCallbackPriority !== SyncLane) {
@@ -20723,16 +20723,16 @@
               case RootFatalErrored: {
                 throw new Error("Root did not complete. This is a bug in React.");
               }
-              // Flow knows about invariant, so it complains if I add a break
-              // statement, but eslint doesn't know about invariant, so it complains
-              // if I do. eslint-disable-next-line no-fallthrough
+
+
+
               case RootErrored: {
                 commitRoot(root2, workInProgressRootRecoverableErrors, workInProgressTransitions);
                 break;
               }
               case RootSuspended: {
                 markRootSuspended$1(root2, lanes);
-                if (includesOnlyRetries(lanes) && // do not delay if we're inside an act() scope
+                if (includesOnlyRetries(lanes) &&
                 !shouldForceFlushFallbacksInDEV()) {
                   var msUntilTimeout = globalMostRecentFallbackTime + FALLBACK_THROTTLE_MS - now();
                   if (msUntilTimeout > 10) {
@@ -20883,7 +20883,7 @@
               return fn(a);
             } finally {
               executionContext = prevExecutionContext;
-              if (executionContext === NoContext && // Treat `act` as if it's inside `batchedUpdates`, even in legacy mode.
+              if (executionContext === NoContext &&
               !ReactCurrentActQueue$1.isBatchingLegacy) {
                 resetRenderTimer();
                 flushSyncCallbacksOnlyInLegacyMode();
@@ -22371,15 +22371,15 @@
                 case REACT_OFFSCREEN_TYPE:
                   return createFiberFromOffscreen(pendingProps, mode, lanes, key);
                 case REACT_LEGACY_HIDDEN_TYPE:
-                // eslint-disable-next-line no-fallthrough
+
                 case REACT_SCOPE_TYPE:
-                // eslint-disable-next-line no-fallthrough
+
                 case REACT_CACHE_TYPE:
-                // eslint-disable-next-line no-fallthrough
+
                 case REACT_TRACING_MARKER_TYPE:
-                // eslint-disable-next-line no-fallthrough
+
                 case REACT_DEBUG_TRACING_MODE_TYPE:
-                // eslint-disable-next-line no-fallthrough
+
                 default: {
                   if (typeof type === "object" && type !== null) {
                     switch (type.$$typeof) {
@@ -22508,7 +22508,7 @@
             fiber.stateNode = {
               containerInfo: portal.containerInfo,
               pendingChildren: null,
-              // Used by persistent updates
+
               implementation: portal.implementation
             };
             return fiber;
@@ -22610,7 +22610,7 @@
                 element: initialChildren,
                 isDehydrated: hydrate2,
                 cache: null,
-                // not enabled yet
+
                 transitions: null,
                 pendingSuspenseBoundaries: null
               };
@@ -22626,7 +22626,7 @@
               checkKeyStringCoercion(key);
             }
             return {
-              // This tag allow us to uniquely identify this as a React Portal
+
               $$typeof: REACT_PORTAL_TYPE,
               key: key == null ? null : "" + key,
               children,
@@ -22885,7 +22885,7 @@
                 }
               } else {
                 updated[oldKey] = copyWithRenameImpl(
-                  // $FlowFixMe number or string is fine here
+
                   obj[oldKey],
                   oldPath,
                   newPath,
@@ -23043,21 +23043,21 @@
               currentDispatcherRef: ReactCurrentDispatcher2,
               findHostInstanceByFiber,
               findFiberByHostInstance: findFiberByHostInstance || emptyFindFiberByHostInstance,
-              // React Refresh
+
               findHostInstancesForRefresh,
               scheduleRefresh,
               scheduleRoot,
               setRefreshHandler,
-              // Enables DevTools to append owner stacks to error messages in DEV mode.
+
               getCurrentFiber: getCurrentFiberForDevTools,
-              // Enables DevTools to detect reconciler version rather than renderer version
-              // which may not match for third party renderers.
+
+
               reconcilerVersion: ReactVersion
             });
           }
           var defaultOnRecoverableError = typeof reportError === "function" ? (
-            // In modern browsers, reportError will dispatch an error event,
-            // emulating an uncaught JavaScript error.
+
+
             reportError
           ) : function(error2) {
             console["error"](error2);
@@ -23267,13 +23267,13 @@
                 container,
                 LegacyRoot,
                 null,
-                // hydrationCallbacks
+
                 false,
-                // isStrictMode
+
                 false,
-                // concurrentUpdatesByDefaultOverride,
+
                 "",
-                // identifierPrefix
+
                 noopOnRecoverableError
               );
               container._reactRootContainer = root2;
@@ -23298,13 +23298,13 @@
                 container,
                 LegacyRoot,
                 null,
-                // hydrationCallbacks
+
                 false,
-                // isStrictMode
+
                 false,
-                // concurrentUpdatesByDefaultOverride,
+
                 "",
-                // identifierPrefix
+
                 noopOnRecoverableError
               );
               container._reactRootContainer = _root;
@@ -23464,8 +23464,8 @@
           setGetCurrentUpdatePriority(getCurrentUpdatePriority);
           setAttemptHydrationAtPriority(runWithPriority);
           {
-            if (typeof Map !== "function" || // $FlowIssue Flow incorrectly thinks Map has no prototype
-            Map.prototype == null || typeof Map.prototype.forEach !== "function" || typeof Set !== "function" || // $FlowIssue Flow incorrectly thinks Set has no prototype
+            if (typeof Map !== "function" ||
+            Map.prototype == null || typeof Map.prototype.forEach !== "function" || typeof Set !== "function" ||
             Set.prototype == null || typeof Set.prototype.clear !== "function" || typeof Set.prototype.forEach !== "function") {
               error("React depends on Map and Set built-in types. Make sure that you load a polyfill in older browsers. https://reactjs.org/link/react-polyfills");
             }
@@ -23484,8 +23484,8 @@
           }
           var Internals = {
             usingClientEntryPoint: false,
-            // Keep in sync with ReactTestUtils.js.
-            // This is an array for better minification.
+
+
             Events: [getInstanceFromNode, getNodeFromInstance, getFiberCurrentPropsFromNode, enqueueStateRestore, restoreStateIfNeeded, batchedUpdates$1]
           };
           function createRoot$1(container, options2) {
@@ -23548,7 +23548,7 @@
     }
   });
 
-  // node_modules/react-dom/index.js
+
   var require_react_dom = __commonJS({
     "node_modules/react-dom/index.js"(exports, module) {
       "use strict";
@@ -23561,7 +23561,7 @@
     }
   });
 
-  // node_modules/react-dom/client.js
+
   var require_client = __commonJS({
     "node_modules/react-dom/client.js"(exports) {
       "use strict";
@@ -23592,11 +23592,11 @@
     }
   });
 
-  // src/webview/cockpit/index.tsx
+
   var React28 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
-  // node_modules/zod/v3/external.js
+
   var external_exports = {};
   __export(external_exports, {
     BRAND: () => BRAND,
@@ -23708,7 +23708,7 @@
     void: () => voidType
   });
 
-  // node_modules/zod/v3/helpers/util.js
+
   var util;
   (function(util2) {
     util2.assertEqual = (_) => {
@@ -23774,7 +23774,7 @@
       return {
         ...first,
         ...second
-        // second overwrites first
+
       };
     };
   })(objectUtil || (objectUtil = {}));
@@ -23842,7 +23842,7 @@
     }
   };
 
-  // node_modules/zod/v3/ZodError.js
+
   var ZodIssueCode = util.arrayToEnum([
     "invalid_type",
     "invalid_literal",
@@ -23960,7 +23960,7 @@
     return error;
   };
 
-  // node_modules/zod/v3/locales/en.js
+
   var errorMap = (issue, _ctx) => {
     let message;
     switch (issue.code) {
@@ -24063,7 +24063,7 @@
   };
   var en_default = errorMap;
 
-  // node_modules/zod/v3/errors.js
+
   var overrideErrorMap = en_default;
   function setErrorMap(map) {
     overrideErrorMap = map;
@@ -24072,7 +24072,7 @@
     return overrideErrorMap;
   }
 
-  // node_modules/zod/v3/helpers/parseUtil.js
+
   var makeIssue = (params) => {
     const { data, path, errorMaps, issueData } = params;
     const fullPath = [...path, ...issueData.path || []];
@@ -24107,13 +24107,13 @@
       path: ctx.path,
       errorMaps: [
         ctx.common.contextualErrorMap,
-        // contextual error map is first priority
+
         ctx.schemaErrorMap,
-        // then schema-bound map if available
+
         overrideMap,
-        // then global override map
+
         overrideMap === en_default ? void 0 : en_default
-        // then global default map
+
       ].filter((x) => !!x)
     });
     ctx.common.issues.push(issue);
@@ -24182,14 +24182,14 @@
   var isValid = (x) => x.status === "valid";
   var isAsync = (x) => typeof Promise !== "undefined" && x instanceof Promise;
 
-  // node_modules/zod/v3/helpers/errorUtil.js
+
   var errorUtil;
   (function(errorUtil2) {
     errorUtil2.errToObj = (message) => typeof message === "string" ? { message } : message || {};
     errorUtil2.toString = (message) => typeof message === "string" ? message : message?.message;
   })(errorUtil || (errorUtil = {}));
 
-  // node_modules/zod/v3/types.js
+
   var ParseInputLazyPath = class {
     constructor(parent, value, path, key) {
       this._cachedPath = [];
@@ -26039,7 +26039,7 @@
             key: { status: "valid", value: key },
             value: catchall._parse(
               new ParseInputLazyPath(ctx, value, ctx.path, key)
-              //, ctx.child(key), value, getParsedType(value)
+
             ),
             alwaysSet: key in ctx.data
           });
@@ -26099,23 +26099,23 @@
         unknownKeys: "passthrough"
       });
     }
-    // const AugmentFactory =
-    //   <Def extends ZodObjectDef>(def: Def) =>
-    //   <Augmentation extends ZodRawShape>(
-    //     augmentation: Augmentation
-    //   ): ZodObject<
-    //     extendShape<ReturnType<Def["shape"]>, Augmentation>,
-    //     Def["unknownKeys"],
-    //     Def["catchall"]
-    //   > => {
-    //     return new ZodObject({
-    //       ...def,
-    //       shape: () => ({
-    //         ...def.shape(),
-    //         ...augmentation,
-    //       }),
-    //     }) as any;
-    //   };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     extend(augmentation) {
       return new _ZodObject({
         ...this._def,
@@ -26142,65 +26142,65 @@
       });
       return merged;
     }
-    // merge<
-    //   Incoming extends AnyZodObject,
-    //   Augmentation extends Incoming["shape"],
-    //   NewOutput extends {
-    //     [k in keyof Augmentation | keyof Output]: k extends keyof Augmentation
-    //       ? Augmentation[k]["_output"]
-    //       : k extends keyof Output
-    //       ? Output[k]
-    //       : never;
-    //   },
-    //   NewInput extends {
-    //     [k in keyof Augmentation | keyof Input]: k extends keyof Augmentation
-    //       ? Augmentation[k]["_input"]
-    //       : k extends keyof Input
-    //       ? Input[k]
-    //       : never;
-    //   }
-    // >(
-    //   merging: Incoming
-    // ): ZodObject<
-    //   extendShape<T, ReturnType<Incoming["_def"]["shape"]>>,
-    //   Incoming["_def"]["unknownKeys"],
-    //   Incoming["_def"]["catchall"],
-    //   NewOutput,
-    //   NewInput
-    // > {
-    //   const merged: any = new ZodObject({
-    //     unknownKeys: merging._def.unknownKeys,
-    //     catchall: merging._def.catchall,
-    //     shape: () =>
-    //       objectUtil.mergeShapes(this._def.shape(), merging._def.shape()),
-    //     typeName: ZodFirstPartyTypeKind.ZodObject,
-    //   }) as any;
-    //   return merged;
-    // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     setKey(key, schema) {
       return this.augment({ [key]: schema });
     }
-    // merge<Incoming extends AnyZodObject>(
-    //   merging: Incoming
-    // ): //ZodObject<T & Incoming["_shape"], UnknownKeys, Catchall> = (merging) => {
-    // ZodObject<
-    //   extendShape<T, ReturnType<Incoming["_def"]["shape"]>>,
-    //   Incoming["_def"]["unknownKeys"],
-    //   Incoming["_def"]["catchall"]
-    // > {
-    //   // const mergedShape = objectUtil.mergeShapes(
-    //   //   this._def.shape(),
-    //   //   merging._def.shape()
-    //   // );
-    //   const merged: any = new ZodObject({
-    //     unknownKeys: merging._def.unknownKeys,
-    //     catchall: merging._def.catchall,
-    //     shape: () =>
-    //       objectUtil.mergeShapes(this._def.shape(), merging._def.shape()),
-    //     typeName: ZodFirstPartyTypeKind.ZodObject,
-    //   }) as any;
-    //   return merged;
-    // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     catchall(index) {
       return new _ZodObject({
         ...this._def,
@@ -27637,7 +27637,7 @@
   };
   var NEVER = INVALID;
 
-  // src/state/schemas.ts
+
   var HotspotSchema = external_exports.object({
     path: external_exports.string(),
     score: external_exports.number(),
@@ -27689,7 +27689,7 @@
       "scope.files": external_exports.array(external_exports.string()).optional(),
       "working.symbols": external_exports.array(external_exports.any()).optional()
     }).passthrough(),
-    // Allow other evidence keys
+
     findings: external_exports.object({
       hotspots: external_exports.array(HotspotSchema).optional(),
       incompleteness: external_exports.object({
@@ -27701,7 +27701,7 @@
         mixedTargets: external_exports.number(),
         oldNamespaces: external_exports.number(),
         conventionDrift: external_exports.any().optional(),
-        // Detailed schema can be added later if needed
+
         mixedConventionFiles: external_exports.number().optional()
       }).optional(),
       legacyAudit: external_exports.object({
@@ -27742,7 +27742,7 @@
   var FileDTOSchema = external_exports.object({
     path: external_exports.string(),
     status: external_exports.string()
-    // 'added' | 'modified' | ...
+
   });
   var SymbolDTOSchema = external_exports.object({
     id: external_exports.string(),
@@ -27835,7 +27835,7 @@
     external_exports.object({ type: external_exports.literal("bundleCancel") }),
     external_exports.object({ type: external_exports.literal("setSymbolFilterText"), text: external_exports.string() }),
     external_exports.object({ type: external_exports.literal("setSymbolKindFilter"), kind: external_exports.string() }),
-    // Kind is dynamic, keep string or use enum if known
+
     external_exports.object({
       type: external_exports.literal("setSymbolChangeFilter"),
       change: external_exports.enum(["all", "added", "modified", "removed"])
@@ -27871,7 +27871,7 @@
     external_exports.object({ type: external_exports.literal("deleteBundle"), id: external_exports.string() }),
     external_exports.object({ type: external_exports.literal("switchBundle"), id: external_exports.string() }),
     external_exports.object({ type: external_exports.literal("updateBundleConfig"), config: BundleConfigSchema.partial() }),
-    // Special internal types
+
     external_exports.object({ type: external_exports.literal("ready") }),
     external_exports.object({ type: external_exports.literal("clearError") }),
     external_exports.object({ type: external_exports.literal("navigateToFrame"), frame: ContextFrameSchema }),
@@ -27921,10 +27921,10 @@
     symbolFilterText: external_exports.string(),
     symbolKindFilter: external_exports.string(),
     symbolChangeFilter: external_exports.string(),
-    // 'all' | SymbolChangeType
+
     activeSymbolId: external_exports.string().nullable(),
     activeSymbolHistory: external_exports.array(external_exports.any()),
-    // SymbolHistoryEntryDTO
+
     reports: external_exports.array(ReportDTOSchema),
     reportsFilterText: external_exports.string(),
     reportsBranchFilter: external_exports.string(),
@@ -28005,14 +28005,14 @@
     FRAME_DATA_UPDATED: external_exports.object({
       frameId: external_exports.string(),
       data: external_exports.union([BundleViewSchema, external_exports.any()])
-      // Could be bundle view or other frame data
+
     })
   };
 
-  // src/webview/cockpit/components/SuperWebview.tsx
+
   var React26 = __toESM(require_react());
 
-  // src/utils/logger.ts
+
   var vscode;
   try {
     vscode = __require("vscode");
@@ -28051,7 +28051,7 @@
     console.warn(`[WARN] ${message}`);
   }
 
-  // src/utils/messageTracer.ts
+
   var MessageTracer = class {
     constructor() {
       this.traces = [];
@@ -28114,7 +28114,7 @@
         logWarn(`\u23F1\uFE0F  SLOW RESPONSE: ${type} took ${responseTime}ms`);
       }
     }
-    // Find message sequences
+
     findSequence(startType, endType) {
       const startIdx = this.traces.findIndex((t) => t.type === startType);
       if (startIdx === -1) return [];
@@ -28122,7 +28122,7 @@
       if (endIdx === -1) return [];
       return this.traces.slice(startIdx, endIdx + 1);
     }
-    // Get pending requests (requests without responses)
+
     getPendingRequests() {
       const now = Date.now();
       return Array.from(this.pendingRequests.entries()).map(([key, timestamp]) => ({
@@ -28143,7 +28143,7 @@
       }
       return payload;
     }
-    // Cleanup old traces
+
     cleanup(olderThanMs = 3e5) {
       const cutoff = Date.now() - olderThanMs;
       const before = this.traces.length;
@@ -28162,7 +28162,7 @@
     }
   };
 
-  // src/webview/cockpit/utils/messageUtils.ts
+
   var webviewTracer = null;
   function getMessageTracer() {
     if (!webviewTracer) {
@@ -28176,7 +28176,7 @@
     vscode3.postMessage(parsed);
   }
 
-  // src/webview/cockpit/components/Assistant.tsx
+
   var React = __toESM(require_react());
   var AssistantContainer = {
     height: "200px",
@@ -28260,14 +28260,14 @@
     ), /* @__PURE__ */ React.createElement("button", { style: { padding: "8px 15px", cursor: "pointer" }, onClick: () => send(input) }, "Send")));
   };
 
-  // src/webview/cockpit/components/Sidebar.tsx
+
   var React4 = __toESM(require_react());
 
-  // src/webview/cockpit/components/RichTreeItem.tsx
+
   var React2 = __toESM(require_react());
   var NodeStyle = (isActive) => ({
     padding: "4px 8px 4px 0",
-    // Removed left padding, handled by Sentinel
+
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
@@ -28296,7 +28296,7 @@
             width: "4px",
             height: "100%",
             backgroundColor: "var(--vscode-charts-green)",
-            // Green for today
+
             marginRight: "6px"
           }
         }
@@ -28311,7 +28311,7 @@
             width: "4px",
             height: "100%",
             borderLeft: "1px solid var(--vscode-charts-blue)",
-            // Blue for week
+
             borderRight: "1px solid var(--vscode-charts-blue)",
             marginRight: "6px"
           }
@@ -28446,7 +28446,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
     ))));
   };
 
-  // src/webview/cockpit/components/TimeSlider.tsx
+
   var React3 = __toESM(require_react());
   var ContainerStyle = {
     padding: "16px",
@@ -28542,7 +28542,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
     ), /* @__PURE__ */ React3.createElement("datalist", { id: "time-markers" }, /* @__PURE__ */ React3.createElement("option", { value: "0", label: "1y" }), /* @__PURE__ */ React3.createElement("option", { value: "25", label: "3m" }), /* @__PURE__ */ React3.createElement("option", { value: "50", label: "1m" }), /* @__PURE__ */ React3.createElement("option", { value: "75", label: "1w" }), /* @__PURE__ */ React3.createElement("option", { value: "100", label: "Now" })));
   };
 
-  // src/webview/cockpit/components/Sidebar.tsx
+
   var SidebarContainer = {
     minWidth: "200px",
     width: "100%",
@@ -28617,16 +28617,16 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         `));
   };
 
-  // src/webview/cockpit/components/Stage.tsx
+
   var React25 = __toESM(require_react());
 
-  // src/webview/cockpit/components/CodeMicroscope.tsx
+
   var React24 = __toESM(require_react());
 
-  // src/webview/cockpit/components/stages/BundleStage.tsx
+
   var React11 = __toESM(require_react());
 
-  // src/webview/cockpit/components/stages/templates/ConfigPanel.tsx
+
   var React5 = __toESM(require_react());
   var ConfigPanel = ({ config, depth, isAnalyzing, onConfigChange, onDepthChange, onApply, onClose }) => {
     return /* @__PURE__ */ React5.createElement(
@@ -28805,7 +28805,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
     );
   };
 
-  // src/webview/cockpit/components/StatsSection.tsx
+
   var React6 = __toESM(require_react());
   var StatsSection = ({ state, vscode: vscode3 }) => {
     const selectionCount = state.selectedCommitShas.length + (state.selectedStagedPaths.length > 0 ? 1 : 0) + (state.selectedUnstagedPaths.length > 0 ? 1 : 0);
@@ -28885,10 +28885,10 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
     )), /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Pipeline Diagnostics"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, currentStep), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Current Step")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: { ...ValueStyle, color: pipelineErrors.length > 0 ? "var(--vscode-charts-red)" : "inherit" } }, pipelineErrors.length), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Errors"))), topSteps.length > 0 && /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold", marginBottom: "5px" } }, "Top Step Timings"), topSteps.map(([stepId, duration]) => /* @__PURE__ */ React6.createElement("div", { key: stepId, style: { display: "flex", justifyContent: "space-between", fontSize: "0.85em", marginBottom: "4px" } }, /* @__PURE__ */ React6.createElement("span", null, stepId), /* @__PURE__ */ React6.createElement("span", { style: { fontFamily: "monospace" } }, Math.round(duration), "ms"))))));
   };
 
-  // src/webview/cockpit/components/stages/templates/TreemapView.tsx
+
   var React8 = __toESM(require_react());
 
-  // src/webview/cockpit/components/stages/TreemapNode.tsx
+
   var React7 = __toESM(require_react());
   var TreemapNode = ({ node, depth = 0 }) => {
     const children = node.children || [];
@@ -28963,7 +28963,7 @@ Churn: ${node.score.toFixed(1)}
     );
   };
 
-  // src/webview/cockpit/components/stages/templates/TreemapView.tsx
+
   var TreemapView = ({ treemap, isAnalyzing, hasHotspots }) => {
     if (treemap && treemap.length > 0) {
       return /* @__PURE__ */ React8.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, treemap.map((node, index) => /* @__PURE__ */ React8.createElement(TreemapNode, { key: node.id || node.path || `${node.name}-${index}`, node })));
@@ -28971,7 +28971,7 @@ Churn: ${node.score.toFixed(1)}
     return /* @__PURE__ */ React8.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, isAnalyzing ? "Loading heatmap..." : hasHotspots ? "" : "No churn data yet. Run Analyze to populate the heatmap.");
   };
 
-  // src/webview/cockpit/components/stages/templates/HotspotList.tsx
+
   var React9 = __toESM(require_react());
   var HotspotList = ({ hotspots, onFileClick, isAnalyzing }) => {
     if (hotspots.length === 0 && !isAnalyzing) {
@@ -29072,7 +29072,7 @@ Churn: ${file.score || 0}
     ));
   };
 
-  // src/webview/cockpit/components/stages/templates/RisksList.tsx
+
   var React10 = __toESM(require_react());
   var RisksList = ({ risks }) => {
     if (risks.length === 0) {
@@ -29096,7 +29096,7 @@ Churn: ${file.score || 0}
     ))));
   };
 
-  // src/webview/cockpit/components/stages/BundleStage.tsx
+
   var BundleStage = ({ frame, onZoomIn, cockpitState, vscode: vscode3 }) => {
     const [isConfigOpen, setIsConfigOpen] = React11.useState(false);
     const defaultConfig = {
@@ -29193,10 +29193,10 @@ Churn: ${file.score || 0}
     ), frame.data?.risks && frame.data.risks.length > 0 && /* @__PURE__ */ React11.createElement(RisksList, { risks: frame.data.risks }));
   };
 
-  // src/webview/cockpit/components/stages/FolderStage.tsx
+
   var React13 = __toESM(require_react());
 
-  // src/webview/cockpit/components/stages/templates/SummaryStats.tsx
+
   var React12 = __toESM(require_react());
   var SummaryStats = ({ commitCount, fileCount, symbolCount }) => {
     return /* @__PURE__ */ React12.createElement(
@@ -29218,7 +29218,7 @@ Churn: ${file.score || 0}
     );
   };
 
-  // src/webview/cockpit/components/stages/FolderStage.tsx
+
   var FolderStage = ({ frame, onZoomIn, cockpitState }) => {
     const handleFileClick = (file) => {
       onZoomIn({
@@ -29294,7 +29294,7 @@ Churn: ${file.score || 0}
     ), filteredRisks.length > 0 && /* @__PURE__ */ React13.createElement(RisksList, { risks: filteredRisks }), filteredHotspots.length === 0 && !cockpitState?.isAnalyzing && /* @__PURE__ */ React13.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots found in this folder. Files may not have been modified recently."));
   };
 
-  // src/webview/cockpit/components/stages/BlastRadiusStage.tsx
+
   var React14 = __toESM(require_react());
   var BlastRadiusStage = ({
     frame,
@@ -29537,13 +29537,13 @@ Churn: ${file.score || 0}
     );
   };
 
-  // src/webview/cockpit/components/stages/ReportsStage.tsx
+
   var React16 = __toESM(require_react());
 
-  // src/webview/cockpit/components/ReportList.tsx
+
   var React15 = __toESM(require_react());
 
-  // src/webview/cockpit/utils.ts
+
   var formatDate = (value) => {
     if (!value) return "";
     try {
@@ -29553,7 +29553,7 @@ Churn: ${file.score || 0}
     }
   };
 
-  // src/webview/cockpit/components/ReportList.tsx
+
   var ReportList = ({ state, vscode: vscode3 }) => {
     const filter = state.reportsFilterText.toLowerCase();
     const list = state.reports.filter(
@@ -29609,13 +29609,13 @@ Churn: ${file.score || 0}
     )));
   };
 
-  // src/webview/cockpit/components/stages/ReportsStage.tsx
+
   var ReportsStage = ({
     cockpitState,
     vscode: vscode3
   }) => /* @__PURE__ */ React16.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React16.createElement(ReportList, { state: cockpitState, vscode: vscode3 }));
 
-  // src/webview/cockpit/components/stages/SymbolStage.tsx
+
   var React17 = __toESM(require_react());
   var SymbolStage = ({ frame, vscode: vscode3 }) => /* @__PURE__ */ React17.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React17.createElement(
     "div",
@@ -29752,7 +29752,7 @@ Churn: ${file.score || 0}
     /* @__PURE__ */ React17.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
   )), !frame.data?.history?.length && /* @__PURE__ */ React17.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
 
-  // src/webview/cockpit/components/stages/StageHeader.tsx
+
   var React18 = __toESM(require_react());
   var HeaderContainer = {
     display: "flex",
@@ -29805,7 +29805,7 @@ Churn: ${file.score || 0}
     }, title: author }, author.charAt(0).toUpperCase()))), /* @__PURE__ */ React18.createElement("div", { title: "Incoming References" }, "Refs: ", /* @__PURE__ */ React18.createElement("strong", null, metrics.incomingRefs))))), metrics && /* @__PURE__ */ React18.createElement("div", { style: HealthBarStyle(metrics.riskScore) }));
   };
 
-  // src/webview/cockpit/components/stages/SedimentGutter.tsx
+
   var React19 = __toESM(require_react());
   var GutterContainer = {
     width: "12px",
@@ -29829,7 +29829,7 @@ Churn: ${file.score || 0}
         key: i,
         style: {
           height: "20px",
-          // Must match CodeEditor line height
+
           width: "100%",
           backgroundColor: getAgeColor(i),
           opacity: 0.6
@@ -29839,7 +29839,7 @@ Churn: ${file.score || 0}
     )));
   };
 
-  // src/webview/cockpit/components/stages/CodeEditor.tsx
+
   var React20 = __toESM(require_react());
   var EditorContainer = {
     flex: 1,
@@ -29892,7 +29892,7 @@ Churn: ${file.score || 0}
     }));
   };
 
-  // src/webview/cockpit/components/stages/PortalsRail.tsx
+
   var React21 = __toESM(require_react());
   var RailContainer = {
     width: "220px",
@@ -29925,7 +29925,7 @@ Churn: ${file.score || 0}
       onMouseEnter: (e) => e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)",
       onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent"
     },
-    /* @__PURE__ */ React21.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ React21.createElement("span", { style: { fontWeight: 600, fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React21.createElement("span", null, type === "incoming" ? "\u2199" : "\u2197"), name), /* @__PURE__ */ React21.createElement(
+ React21.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ React21.createElement("span", { style: { fontWeight: 600, fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React21.createElement("span", null, type === "incoming" ? "\u2199" : "\u2197"), name), /* @__PURE__ */ React21.createElement(
       "span",
       {
         style: {
@@ -29945,7 +29945,7 @@ Churn: ${file.score || 0}
     return /* @__PURE__ */ React21.createElement("div", { style: RailContainer }, /* @__PURE__ */ React21.createElement("div", { style: SectionHeader }, "Incoming (Referenced By)"), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "UTILS", count: Math.max(1, Math.floor(incomingRefs * 0.6)), type: "incoming" }), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "CONTROLLERS", count: Math.max(0, Math.floor(incomingRefs * 0.4)), type: "incoming" }), /* @__PURE__ */ React21.createElement("div", { style: SectionHeader }, "Outgoing (References)"), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "TYPES", count: Math.max(1, Math.floor(outgoingRefs * 0.5)), type: "outgoing" }), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "SERVICES", count: Math.max(0, Math.floor(outgoingRefs * 0.5)), type: "outgoing" }));
   };
 
-  // src/webview/cockpit/components/stages/SymbolBlock.tsx
+
   var React22 = __toESM(require_react());
   var BlockContainer = {
     border: "1px solid var(--vscode-editor-lineHighlightBorder)",
@@ -29988,12 +29988,12 @@ Churn: ${file.score || 0}
         onClick,
         title: `Click to zoom into ${name}`
       },
-      /* @__PURE__ */ React22.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React22.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React22.createElement("span", { style: NameStyle }, name), /* @__PURE__ */ React22.createElement("span", { style: { fontSize: "10px", opacity: 0.7 } }, "(", kind, ")")), /* @__PURE__ */ React22.createElement("div", { style: MetaStyle }, lineCount, " lines \u2022 C", complexity)),
-      /* @__PURE__ */ React22.createElement("div", { style: { opacity: 0.3, fontSize: "8px", overflow: "hidden" } }, Array.from({ length: Math.min(5, lineCount) }).map((_, i) => /* @__PURE__ */ React22.createElement("div", { key: i, style: { height: "4px", backgroundColor: "currentColor", marginBottom: "2px", width: `${Math.random() * 60 + 40}%` } })))
+ React22.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React22.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React22.createElement("span", { style: NameStyle }, name), /* @__PURE__ */ React22.createElement("span", { style: { fontSize: "10px", opacity: 0.7 } }, "(", kind, ")")), /* @__PURE__ */ React22.createElement("div", { style: MetaStyle }, lineCount, " lines \u2022 C", complexity)),
+ React22.createElement("div", { style: { opacity: 0.3, fontSize: "8px", overflow: "hidden" } }, Array.from({ length: Math.min(5, lineCount) }).map((_, i) => /* @__PURE__ */ React22.createElement("div", { key: i, style: { height: "4px", backgroundColor: "currentColor", marginBottom: "2px", width: `${Math.random() * 60 + 40}%` } })))
     );
   };
 
-  // src/webview/cockpit/components/stages/TimeScrubber.tsx
+
   var React23 = __toESM(require_react());
   var ScrubberContainer = {
     height: "40px",
@@ -30013,7 +30013,7 @@ Churn: ${file.score || 0}
     currentTimeFilter,
     onTimeFilterChange,
     startTime = Date.now() - 30 * 24 * 60 * 60 * 1e3,
-    // Default 30 days ago
+
     endTime = Date.now()
   }) => {
     const [isPlaying, setIsPlaying] = React23.useState(false);
@@ -30095,7 +30095,7 @@ Churn: ${file.score || 0}
     ));
   };
 
-  // src/webview/cockpit/components/CodeMicroscope.tsx
+
   var MicroscopeContainer = {
     flex: 1,
     display: "flex",
@@ -30206,7 +30206,7 @@ Churn: ${file.score || 0}
     ), renderFrame.level === "blast_radius" && /* @__PURE__ */ React24.createElement(BlastRadiusStage, { frame: renderFrame, onZoomIn: handleZoomIn }), renderFrame.level === "symbol" && /* @__PURE__ */ React24.createElement(SymbolStage, { frame: renderFrame, vscode: vscode3 })))));
   };
 
-  // src/webview/cockpit/components/Stage.tsx
+
   var Stage = ({
     frame,
     onZoomIn,
@@ -30226,7 +30226,7 @@ Churn: ${file.score || 0}
     );
   };
 
-  // src/webview/cockpit/components/SuperWebview.tsx
+
   var LayoutStyle = {
     display: "flex",
     height: "94vh",
@@ -30238,7 +30238,7 @@ Churn: ${file.score || 0}
     display: "flex",
     flex: 1,
     minHeight: 0,
-    // Critical for flex overflow
+
     overflow: "hidden"
   };
   var SuperWebview = ({
@@ -30314,11 +30314,11 @@ Churn: ${file.score || 0}
         const newFrame = {
           level: "bundle",
           id: "root",
-          // The bundle itself is the root context
+
           name: node.name,
           status: "ready",
           parentId: void 0
-          // It is the root
+
         };
         postMessageWithTracing(vscode3, {
           type: "navigateToFrame",
@@ -30432,7 +30432,7 @@ Churn: ${file.score || 0}
           minHeight: 0
         }
       },
-      /* @__PURE__ */ React26.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "assistant" ? /* @__PURE__ */ React26.createElement(
+ React26.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "assistant" ? /* @__PURE__ */ React26.createElement(
         Assistant,
         {
           frame: activeFrame,
@@ -30463,7 +30463,7 @@ Churn: ${file.score || 0}
           vscode: vscode3
         }
       ))),
-      /* @__PURE__ */ React26.createElement(
+ React26.createElement(
         "div",
         {
           style: {
@@ -30474,7 +30474,7 @@ Churn: ${file.score || 0}
             height: "40px"
           }
         },
-        /* @__PURE__ */ React26.createElement(
+ React26.createElement(
           "div",
           {
             onClick: () => setActiveTab("stage"),
@@ -30490,7 +30490,7 @@ Churn: ${file.score || 0}
           },
           "Explorer + Stage"
         ),
-        /* @__PURE__ */ React26.createElement(
+ React26.createElement(
           "div",
           {
             onClick: () => setActiveTab("assistant"),
@@ -30518,7 +30518,7 @@ Churn: ${file.score || 0}
           minHeight: 0
         }
       },
-      /* @__PURE__ */ React26.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "explorer" && /* @__PURE__ */ React26.createElement(
+ React26.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "explorer" && /* @__PURE__ */ React26.createElement(
         Sidebar,
         {
           data: explorerData,
@@ -30549,7 +30549,7 @@ Churn: ${file.score || 0}
           onSend: handleSendAssistant
         }
       )),
-      /* @__PURE__ */ React26.createElement(
+ React26.createElement(
         "div",
         {
           style: {
@@ -30590,7 +30590,7 @@ Churn: ${file.score || 0}
     ));
   };
 
-  // src/webview/cockpit/components/ErrorBoundary.tsx
+
   var React27 = __toESM(require_react());
   var ErrorBoundary = class extends React27.Component {
     constructor(props) {
@@ -30620,9 +30620,9 @@ Churn: ${file.score || 0}
               margin: "10px"
             }
           },
-          /* @__PURE__ */ React27.createElement("h2", null, "Something went wrong"),
-          /* @__PURE__ */ React27.createElement("details", { style: { whiteSpace: "pre-wrap", marginTop: "10px" } }, /* @__PURE__ */ React27.createElement("summary", { style: { cursor: "pointer", marginBottom: "10px" } }, "Error Details"), /* @__PURE__ */ React27.createElement("div", { style: { fontSize: "12px", fontFamily: "monospace" } }, /* @__PURE__ */ React27.createElement("strong", null, "Error:"), " ", this.state.error?.toString(), /* @__PURE__ */ React27.createElement("br", null), /* @__PURE__ */ React27.createElement("br", null), /* @__PURE__ */ React27.createElement("strong", null, "Component Stack:"), /* @__PURE__ */ React27.createElement("br", null), this.state.errorInfo?.componentStack)),
-          /* @__PURE__ */ React27.createElement(
+ React27.createElement("h2", null, "Something went wrong"),
+ React27.createElement("details", { style: { whiteSpace: "pre-wrap", marginTop: "10px" } }, /* @__PURE__ */ React27.createElement("summary", { style: { cursor: "pointer", marginBottom: "10px" } }, "Error Details"), /* @__PURE__ */ React27.createElement("div", { style: { fontSize: "12px", fontFamily: "monospace" } }, /* @__PURE__ */ React27.createElement("strong", null, "Error:"), " ", this.state.error?.toString(), /* @__PURE__ */ React27.createElement("br", null), /* @__PURE__ */ React27.createElement("br", null), /* @__PURE__ */ React27.createElement("strong", null, "Component Stack:"), /* @__PURE__ */ React27.createElement("br", null), this.state.errorInfo?.componentStack)),
+ React27.createElement(
             "button",
             {
               onClick: this.handleReset,
@@ -30644,7 +30644,7 @@ Churn: ${file.score || 0}
     }
   };
 
-  // src/webview/cockpit/index.tsx
+
   var vscode2 = window.acquireVsCodeApi();
   var defaultState = {
     repoName: null,
@@ -30748,7 +30748,7 @@ Churn: ${file.score || 0}
         className: "cockpit",
         style: { padding: 0, margin: 0, height: "100vh", overflow: "hidden" }
       },
-      /* @__PURE__ */ React28.createElement(SuperWebview, { vscode: vscode2, cockpitState: state })
+ React28.createElement(SuperWebview, { vscode: vscode2, cockpitState: state })
     ));
   };
   var rootEl = document.getElementById("root");
@@ -30757,52 +30757,5 @@ Churn: ${file.score || 0}
     root.render(/* @__PURE__ */ React28.createElement(App, null));
   }
 })();
-/*! Bundled license information:
 
-react/cjs/react.development.js:
-  (**
-   * @license React
-   * react.development.js
-   *
-   * Copyright (c) Facebook, Inc. and its affiliates.
-   *
-   * This source code is licensed under the MIT license found in the
-   * LICENSE file in the root directory of this source tree.
-   *)
 
-scheduler/cjs/scheduler.development.js:
-  (**
-   * @license React
-   * scheduler.development.js
-   *
-   * Copyright (c) Facebook, Inc. and its affiliates.
-   *
-   * This source code is licensed under the MIT license found in the
-   * LICENSE file in the root directory of this source tree.
-   *)
-
-react-dom/cjs/react-dom.development.js:
-  (**
-   * @license React
-   * react-dom.development.js
-   *
-   * Copyright (c) Facebook, Inc. and its affiliates.
-   *
-   * This source code is licensed under the MIT license found in the
-   * LICENSE file in the root directory of this source tree.
-   *)
-  (**
-   * Checks if an event is supported in the current execution environment.
-   *
-   * NOTE: This will not work correctly for non-generic events such as `change`,
-   * `reset`, `load`, `error`, and `select`.
-   *
-   * Borrows from Modernizr.
-   *
-   * @param {string} eventNameSuffix Event name, e.g. "click".
-   * @return {boolean} True if the event is supported.
-   * @internal
-   * @license Modernizr 3.0.0pre (Custom Build) | MIT
-   *)
-*/
-//# sourceMappingURL=cockpit.js.map

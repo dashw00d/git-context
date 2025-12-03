@@ -1,9 +1,6 @@
 import { EdgeInfo, FileChange, RiskFlag, SymbolDelta } from '../types';
 
 export class RiskDetector {
-  /**
-   * Analyze a commit and detect risk flags
-   */
   detectRisks(
     files: FileChange[],
     symbols: {
@@ -18,37 +15,30 @@ export class RiskDetector {
   ): RiskFlag[] {
     const risks: RiskFlag[] = [];
 
-    // Check for breaking changes
     if (this.hasBreakingChanges(symbols.modified)) {
       risks.push('breaking-api');
     }
 
-    // Check for migrations
     if (this.hasMigrations(files)) {
       risks.push('schema-migration');
     }
 
-    // Check for refactors
     if (this.hasRefactor(files, symbols)) {
       risks.push('refactor');
     }
 
-    // Check for security-related changes
     if (this.hasSecurityChanges(files, symbols)) {
       risks.push('security');
     }
 
-    // Check for performance-related changes
     if (this.hasPerformanceChanges(files, symbols)) {
       risks.push('performance');
     }
 
-    // Check for authentication changes
     if (this.hasAuthChanges(files, symbols)) {
       risks.push('auth');
     }
 
-    // Check for payment-related changes
     if (this.hasPaymentChanges(files, symbols)) {
       risks.push('payment');
     }
@@ -56,12 +46,8 @@ export class RiskDetector {
     return risks;
   }
 
-  /**
-   * Check for breaking API changes
-   */
   private hasBreakingChanges(modifiedSymbols: SymbolDelta[]): boolean {
     for (const delta of modifiedSymbols) {
-      // Public function/method signature changes
       if (
         (delta.symbol.kind === 'function' || delta.symbol.kind === 'method') &&
         delta.changeType === 'signature_changed' &&
@@ -70,7 +56,6 @@ export class RiskDetector {
         return true;
       }
 
-      // Removed public exports
       if (delta.changeType === 'removed' && this.isPublicSymbol(delta.symbol)) {
         return true;
       }
@@ -78,9 +63,6 @@ export class RiskDetector {
     return false;
   }
 
-  /**
-   * Check for database/schema migrations
-   */
   private hasMigrations(files: FileChange[]): boolean {
     const migrationPatterns = [
       /migration/i,
@@ -102,19 +84,14 @@ export class RiskDetector {
     });
   }
 
-  /**
-   * Check for large refactoring operations
-   */
   private hasRefactor(
     files: FileChange[],
     symbols: { added: any[]; removed: any[]; modified: SymbolDelta[] }
   ): boolean {
-    // Many files changed
     if (files.length > 10) {
       return true;
     }
 
-    // Many symbols renamed or moved
     const renamedSymbols = symbols.modified.filter(
       delta =>
         delta.changeType === 'signature_changed' &&
@@ -125,7 +102,6 @@ export class RiskDetector {
       return true;
     }
 
-    // Large number of symbol changes
     const totalSymbolChanges =
       symbols.added.length + symbols.removed.length + symbols.modified.length;
     if (totalSymbolChanges > 20) {
@@ -135,9 +111,6 @@ export class RiskDetector {
     return false;
   }
 
-  /**
-   * Check for security-related changes
-   */
   private hasSecurityChanges(
     files: FileChange[],
     symbols: { added: any[]; removed: any[]; modified: SymbolDelta[] }
@@ -158,12 +131,10 @@ export class RiskDetector {
       /exploit/i,
     ];
 
-    // Check file names
     if (files.some(file => securityPatterns.some(pattern => pattern.test(file.path)))) {
       return true;
     }
 
-    // Check symbol names
     const allSymbols = [...symbols.added, ...symbols.modified.map(s => s.symbol)];
     if (allSymbols.some(symbol => securityPatterns.some(pattern => pattern.test(symbol.name)))) {
       return true;
@@ -172,9 +143,6 @@ export class RiskDetector {
     return false;
   }
 
-  /**
-   * Check for performance-related changes
-   */
   private hasPerformanceChanges(
     files: FileChange[],
     symbols: { added: any[]; removed: any[]; modified: SymbolDelta[] }
@@ -192,12 +160,10 @@ export class RiskDetector {
       /fast/i,
     ];
 
-    // Check file names
     if (files.some(file => performancePatterns.some(pattern => pattern.test(file.path)))) {
       return true;
     }
 
-    // Check symbol names
     const allSymbols = [...symbols.added, ...symbols.modified.map(s => s.symbol)];
     if (allSymbols.some(symbol => performancePatterns.some(pattern => pattern.test(symbol.name)))) {
       return true;
@@ -206,9 +172,6 @@ export class RiskDetector {
     return false;
   }
 
-  /**
-   * Check for authentication-related changes
-   */
   private hasAuthChanges(
     files: FileChange[],
     symbols: { added: any[]; removed: any[]; modified: SymbolDelta[] }
@@ -226,12 +189,10 @@ export class RiskDetector {
       /authorization/i,
     ];
 
-    // Check file names
     if (files.some(file => authPatterns.some(pattern => pattern.test(file.path)))) {
       return true;
     }
 
-    // Check symbol names
     const allSymbols = [...symbols.added, ...symbols.modified.map(s => s.symbol)];
     if (allSymbols.some(symbol => authPatterns.some(pattern => pattern.test(symbol.name)))) {
       return true;
@@ -240,9 +201,6 @@ export class RiskDetector {
     return false;
   }
 
-  /**
-   * Check for payment-related changes
-   */
   private hasPaymentChanges(
     files: FileChange[],
     symbols: { added: any[]; removed: any[]; modified: SymbolDelta[] }
@@ -261,12 +219,10 @@ export class RiskDetector {
       /currency/i,
     ];
 
-    // Check file names
     if (files.some(file => paymentPatterns.some(pattern => pattern.test(file.path)))) {
       return true;
     }
 
-    // Check symbol names
     const allSymbols = [...symbols.added, ...symbols.modified.map(s => s.symbol)];
     if (allSymbols.some(symbol => paymentPatterns.some(pattern => pattern.test(symbol.name)))) {
       return true;
@@ -275,19 +231,11 @@ export class RiskDetector {
     return false;
   }
 
-  /**
-   * Check if a symbol is public (not private)
-   */
   private isPublicSymbol(symbol: any): boolean {
-    // Symbols starting with underscore are typically private
     return !symbol.name.startsWith('_');
   }
 
-  /**
-   * Check if a symbol change represents a rename
-   */
   private isRename(current: any, previous: any): boolean {
-    // Same signature structure but different name
     return (
       current.name !== previous.name &&
       current.signature.replace(current.name, 'X') ===

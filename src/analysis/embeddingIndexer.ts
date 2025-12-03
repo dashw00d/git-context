@@ -42,13 +42,10 @@ export class EmbeddingIndexer {
 
     logInfo(`[EmbeddingIndexer] Indexing ${commitFacts.length} commits...`);
 
-    // Index commit shards
     metrics.commitShardCount = await this.indexCommitShards(commitFacts, client);
 
-    // Index symbol shards
     metrics.symbolShardCount = await this.indexSymbolShards(commitFacts, client);
 
-    // Index theme shards (new semantic memory layer)
     metrics.themeShardCount = await this.indexThemeShards(commitFacts, client);
 
     logInfo(`[EmbeddingIndexer] Indexing complete`);
@@ -61,10 +58,9 @@ export class EmbeddingIndexer {
    */
   private async indexCommitShards(commitFacts: CommitFacts[], client: any): Promise<number> {
     const qdrant = getQdrantClient();
-    const projectId = (await getProjectId()) || 'unknown'; // Get unique project identifier
+    const projectId = (await getProjectId()) || 'unknown';
     const collectionName = qdrant.getCollectionName('commits', projectId);
 
-    // Ensure collection exists (handles both base and project-specific collections)
     await qdrant.ensureCollection('commits', projectId);
 
     let processed = 0;
@@ -89,7 +85,6 @@ export class EmbeddingIndexer {
       processed += 1;
     });
 
-    // Verify indexing
     const info = await client.getCollection(collectionName);
     const pointsCount = (info as any).points_count ?? (info as any).pointsCount ?? 0;
 
@@ -109,17 +104,15 @@ export class EmbeddingIndexer {
    */
   private async indexSymbolShards(commitFacts: CommitFacts[], client: any): Promise<number> {
     const qdrant = getQdrantClient();
-    const projectId = (await getProjectId()) || 'unknown'; // Get unique project identifier
+    const projectId = (await getProjectId()) || 'unknown';
     const collectionName = qdrant.getCollectionName('symbols', projectId);
 
-    // Ensure collection exists (handles both base and project-specific collections)
     await qdrant.ensureCollection('symbols', projectId);
 
     const symbolShards = [];
 
     logInfo(`[EmbeddingIndexer] Gathering symbol history from ${commitFacts.length} commits...`);
 
-    // Gather symbol history from DB
     for (const facts of commitFacts) {
       const symbols = this.loadSymbolHistory(facts.sha);
       logDebug(
@@ -172,14 +165,10 @@ export class EmbeddingIndexer {
     return symbolShards.length;
   }
 
-  /**
-   * Build commit story shard
-   */
   private async buildCommitShard(
     facts: CommitFacts,
     projectId: string
   ): Promise<{ text: string; metadata: any }> {
-    // Load extended facts (drift/legacy/hotspots)
     const extended = await this.loadExtendedFacts(facts.sha);
 
     const tags = [
@@ -188,13 +177,12 @@ export class EmbeddingIndexer {
       facts.symbolsRemoved > 10 ? '[major-deletion]' : '',
       facts.symbolsAdded > 20 ? '[major-addition]' : '',
       facts.blastRadius > 50 ? '[high-blast-radius]' : '',
-      // Enriched tags
+
       extended.hotspots.length > 0 ? '[has-hotspots]' : '',
       extended.structuralChangeScore > 0.8 ? '[critical-drift]' : '',
       extended.edgesAdded > 5 ? '[high-coupling]' : '',
     ].filter(Boolean);
 
-    // Get commit metadata from DB
     const commitInfo = await this.getCommitMetadata(facts.sha);
 
     const text =
@@ -210,7 +198,7 @@ export class EmbeddingIndexer {
     return {
       text,
       metadata: {
-        project_id: projectId, // PROJECT ISOLATION
+        project_id: projectId,
         sha: facts.sha,
         date: commitInfo?.date,
         author: commitInfo?.author,
@@ -224,16 +212,13 @@ export class EmbeddingIndexer {
         structural_change_score: facts.structuralChangeScore,
         blast_radius: facts.blastRadius,
         files_changed: facts.filesChanged,
-        // Enriched metadata
+
         hotspots: extended.hotspots,
         tags: tags,
       },
     };
   }
 
-  /**
-   * Build symbol story shard
-   */
   private async buildSymbolShard(
     symbolHistory: any,
     commitFacts: CommitFacts,
@@ -244,7 +229,7 @@ export class EmbeddingIndexer {
       `[${symbolHistory.kind}]`,
       symbolHistory.impact_score > 10 ? '[high-impact]' : '',
       symbolHistory.impact_score > 50 ? '[critical-impact]' : '',
-      // Enriched tags
+
       commitFacts.risks.length > 0 ? `[risk:${commitFacts.risks[0]}]` : '',
       commitFacts.structuralChangeScore > 0.7 ? '[high-structural-change]' : '',
     ].filter(Boolean);
@@ -265,7 +250,7 @@ export class EmbeddingIndexer {
     return {
       text,
       metadata: {
-        project_id: projectId, // PROJECT ISOLATION
+        project_id: projectId,
         symbol_dna_id: symbolHistory.symbol_dna_id,
         name: symbolHistory.name,
         kind: symbolHistory.kind,
@@ -301,20 +286,15 @@ export class EmbeddingIndexer {
     };
   }
 
-  /**
-   * Index theme shards (aggregated patterns)
-   */
   private async indexThemeShards(commitFacts: CommitFacts[], client: any): Promise<number> {
     const qdrant = getQdrantClient();
     const projectId = (await getProjectId()) || 'unknown';
     const collectionName = qdrant.getCollectionName('patterns', projectId);
 
-    // Ensure collection exists (handles both base and project-specific collections)
     await qdrant.ensureCollection('patterns', projectId);
 
     const themeShards: { text: string; metadata: any }[] = [];
 
-    // Aggregate by inferred theme (risks + hotspots -> theme_id)
     const themeMap = new Map<
       string,
       {
@@ -326,7 +306,6 @@ export class EmbeddingIndexer {
     >();
 
     for (const facts of commitFacts) {
-      // Load extended facts for better theme inference
       const extended = await this.loadExtendedFacts(facts.sha);
       const hotspots = extended.hotspots || [];
 
@@ -368,7 +347,7 @@ export class EmbeddingIndexer {
           commits: agg.commits,
           hotspots: agg.hotspots,
           risks: uniqueRisks,
-          tags: tags, // For hybrid search
+          tags: tags,
         },
       });
     }
@@ -397,11 +376,9 @@ export class EmbeddingIndexer {
   }
 
   private inferThemeId(risks: string[], hotspots: string[]): string {
-    // Stable ID generation: sort components to ensure order independence
     const key = [...new Set([...risks, ...hotspots])].sort().join('|');
     if (!key) return 'theme_general';
 
-    // Simple hash to hex
     let hash = 0;
     for (let i = 0; i < key.length; i++) {
       hash = (hash << 5) - hash + key.charCodeAt(i);
@@ -411,7 +388,6 @@ export class EmbeddingIndexer {
   }
 
   private async loadExtendedFacts(sha: string): Promise<any> {
-    // Get drift and legacy info from commits_analysis
     const analysisStmt = prepare(`
       SELECT structural_change_score, files_changed, hotspots_json
       FROM commits_analysis
@@ -419,20 +395,16 @@ export class EmbeddingIndexer {
     `);
     const analysis = analysisStmt.get(sha) as any;
 
-    // Get edge stats
     const edgesStmt = prepare(`
       SELECT COUNT(*) as count FROM edges WHERE sha = ? AND change_type = 'added'
     `);
     const edgesAdded = (edgesStmt.get(sha) as any)?.count || 0;
 
-    // Get hotspot details if available
     let hotspots: string[] = [];
     if (analysis?.hotspots_json) {
       try {
         hotspots = JSON.parse(analysis.hotspots_json);
-      } catch (e) {
-        /* ignore */
-      }
+      } catch (e) {}
     }
 
     return {
@@ -443,7 +415,6 @@ export class EmbeddingIndexer {
   }
 
   private symbolToPointId(dnaId: string, sha: string): number {
-    // Combine DNA ID + SHA for unique symbol version ID
     const combined = dnaId + sha;
     return stringToPointId(combined);
   }

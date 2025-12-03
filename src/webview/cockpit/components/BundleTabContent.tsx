@@ -47,7 +47,6 @@ export const BundleTabContent: React.FC<BundleTabContentProps> = ({
   const evidence = facts.evidence || {};
   const findings = facts.findings;
 
-  // Get evidence arrays
   const missingEvidence = evidence['findings.incompleteness']?.missing || [];
   const zombiesEvidence = evidence['findings.incompleteness']?.zombies || [];
   const deadEvidence = evidence['findings.legacyAudit']?.dead || [];

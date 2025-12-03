@@ -6,9 +6,6 @@ import { CockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { getStore } from '../state/store';
 import { logError } from '../utils/logger';
 
-/**
- * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'commits' } })
- */
 export async function updateWorkspaceFilesState(
   _orchestrator: CockpitOrchestrator,
   _commitsProvider: CommitsProvider,
@@ -17,9 +14,6 @@ export async function updateWorkspaceFilesState(
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'commits' } });
 }
 
-/**
- * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'commits' } })
- */
 export async function updateCommitsState(
   _orchestrator: CockpitOrchestrator,
   _commitsProvider: CommitsProvider,
@@ -29,9 +23,6 @@ export async function updateCommitsState(
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'commits' } });
 }
 
-/**
- * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'bundle' } })
- */
 export async function updateBundleState(
   _orchestrator: CockpitOrchestrator,
   _activeBundleProvider: ActiveBundleProvider,
@@ -40,9 +31,6 @@ export async function updateBundleState(
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'bundle' } });
 }
 
-/**
- * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'symbols' } })
- */
 export async function updateSymbolsState(
   _orchestrator: CockpitOrchestrator,
   _symbolHistoryProvider: SymbolHistoryProvider,
@@ -51,9 +39,6 @@ export async function updateSymbolsState(
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'symbols' } });
 }
 
-/**
- * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'reports' } })
- */
 export async function updateReportsState(
   _orchestrator: CockpitOrchestrator,
   _reason = 'reports:update'
@@ -61,9 +46,6 @@ export async function updateReportsState(
   getStore().dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'reports' } });
 }
 
-/**
- * @deprecated Use store.dispatch({ type: 'REFRESH_REQUESTED', payload: { scope: 'all' } })
- */
 export async function refreshCockpitState(
   _orchestrator: CockpitOrchestrator,
   _providers: {

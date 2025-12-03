@@ -26,7 +26,6 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
     (findings?.legacyAudit?.replacedLeftovers?.length || 0) +
     (findings?.patternDrift?.conventionDrift?.driftSymbolCount || 0);
 
-  // Pipeline health snapshot
   const stepTimings = Object.entries(state.pipelineStepTimings || {}).sort(
     ([, a], [, b]) => (b || 0) - (a || 0)
   );
@@ -34,7 +33,6 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
   const pipelineErrors = state.pipelineErrors || [];
   const currentStep = state.currentStepId ?? 'idle';
 
-  // Calculate health score (replicated from MetricsRow logic)
   let healthScore = 100;
   if (findings) {
     const warnings =
@@ -96,19 +94,39 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
         <h3 style={TitleStyle}>Global Health</h3>
         <div style={RowStyle}>
           <div style={ItemStyle}>
-            <span style={{ ...ValueStyle, color: healthScore > 70 ? 'var(--vscode-charts-green)' : healthScore > 40 ? 'var(--vscode-charts-yellow)' : 'var(--vscode-charts-red)' }}>
+            <span
+              style={{
+                ...ValueStyle,
+                color:
+                  healthScore > 70
+                    ? 'var(--vscode-charts-green)'
+                    : healthScore > 40
+                      ? 'var(--vscode-charts-yellow)'
+                      : 'var(--vscode-charts-red)',
+              }}
+            >
               {healthScore.toFixed(0)}%
             </span>
             <span style={LabelStyle}>Health Score</span>
           </div>
           <div style={ItemStyle}>
-            <span style={{ ...ValueStyle, color: criticalCount > 0 ? 'var(--vscode-charts-red)' : 'inherit' }}>
+            <span
+              style={{
+                ...ValueStyle,
+                color: criticalCount > 0 ? 'var(--vscode-charts-red)' : 'inherit',
+              }}
+            >
               {criticalCount}
             </span>
             <span style={LabelStyle}>Critical Issues</span>
           </div>
           <div style={ItemStyle}>
-            <span style={{ ...ValueStyle, color: warningCount > 0 ? 'var(--vscode-charts-yellow)' : 'inherit' }}>
+            <span
+              style={{
+                ...ValueStyle,
+                color: warningCount > 0 ? 'var(--vscode-charts-yellow)' : 'inherit',
+              }}
+            >
               {warningCount}
             </span>
             <span style={LabelStyle}>Warnings</span>
@@ -121,7 +139,9 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
         <h3 style={TitleStyle}>Scope Analysis</h3>
         <div style={RowStyle}>
           <div style={ItemStyle}>
-            <span style={ValueStyle}>{bundleSummary?.commitCount || state.selectedCommitShas.length}</span>
+            <span style={ValueStyle}>
+              {bundleSummary?.commitCount || state.selectedCommitShas.length}
+            </span>
             <span style={LabelStyle}>Commits</span>
           </div>
           <div style={ItemStyle}>
@@ -166,7 +186,12 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
             <span style={LabelStyle}>Current Step</span>
           </div>
           <div style={ItemStyle}>
-            <span style={{ ...ValueStyle, color: pipelineErrors.length > 0 ? 'var(--vscode-charts-red)' : 'inherit' }}>
+            <span
+              style={{
+                ...ValueStyle,
+                color: pipelineErrors.length > 0 ? 'var(--vscode-charts-red)' : 'inherit',
+              }}
+            >
               {pipelineErrors.length}
             </span>
             <span style={LabelStyle}>Errors</span>
@@ -174,9 +199,19 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
         </div>
         {topSteps.length > 0 && (
           <div style={{ marginTop: '10px' }}>
-            <div style={{ fontSize: '0.9em', fontWeight: 'bold', marginBottom: '5px' }}>Top Step Timings</div>
+            <div style={{ fontSize: '0.9em', fontWeight: 'bold', marginBottom: '5px' }}>
+              Top Step Timings
+            </div>
             {topSteps.map(([stepId, duration]) => (
-              <div key={stepId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', marginBottom: '4px' }}>
+              <div
+                key={stepId}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '0.85em',
+                  marginBottom: '4px',
+                }}
+              >
                 <span>{stepId}</span>
                 <span style={{ fontFamily: 'monospace' }}>{Math.round(duration)}ms</span>
               </div>

@@ -12,13 +12,9 @@ import { LegacyAuditResult } from './legacyAudit';
 import { ScopeSet } from './scope';
 import { RefactorBundleFacts } from './types';
 import { WorkingSnapshot } from './workingSnapshot';
-import type { HybridFact } from '../types/cstFacts'; // eslint-disable-line @typescript-eslint/no-unused-vars
+import type { HybridFact } from '../types/cstFacts';
 export type { RefactorBundleFacts } from './types';
 
-/**
- * Build RefactorBundleFacts from pipeline state (CommitFacts + WorkspaceFacts)
- * Enhanced version that uses full logic from assembleFacts when additional data is provided
- */
 export async function buildRefactorBundleFacts(
   commitFacts: CommitFacts[],
   workspaceFacts:
@@ -43,7 +39,7 @@ export async function buildRefactorBundleFacts(
     }>;
   }
 ): Promise<RefactorBundleFacts> {
-  // Log inputs for diagnostics
+
   const intendedSize = options.intended.size;
   const hybridFactsCount = await getHybridFactsCount(
     options.scope,
@@ -55,7 +51,7 @@ export async function buildRefactorBundleFacts(
     }`
   );
 
-  // Validation warning
+
   if (intendedSize === 0) {
     logWarn(
       `WARNING: intended.present === 0. Consider using --enable-cst to populate intended state.`
@@ -71,7 +67,7 @@ export async function buildRefactorBundleFacts(
     options.legacy,
     options.hotspots
   );
-  // Add timeline and movedLineage if provided
+
   if (options.timeline) {
     facts.bundle.timeline = options.timeline;
   }
@@ -79,19 +75,16 @@ export async function buildRefactorBundleFacts(
     facts.bundle.movedLineage = options.movedLineage;
   }
 
-  // Strict Validation: Ensure facts match the schema
+
   try {
     return BundleFactsSchema.parse(facts) as RefactorBundleFacts;
   } catch (error) {
     logError('BundleFactsSchema validation failed', error);
-    // Best effort: return facts even if validation fails
+
     return facts as RefactorBundleFacts;
   }
 }
 
-/**
- * Assemble all facts into v2 JSON schema
- */
 export async function assembleFacts(
   commitShas: string[],
   scope: ScopeSet,
@@ -101,14 +94,14 @@ export async function assembleFacts(
   legacy: LegacyAuditResult,
   hotspots?: any[]
 ): Promise<RefactorBundleFacts> {
-  // Calculate counts and lists
+
   const intendedCounts = calculateIntendedCounts(intended);
   const intendedLists = getIntendedLists(intended);
   const workingLists = getWorkingLists(working);
   const newestSha = commitShas.length > 0 ? commitShas[0] : 'unknown';
   const oldestSha = commitShas.length > 0 ? commitShas[commitShas.length - 1] : 'unknown';
 
-  // Collect hybrid facts for bundle
+
   const hybridFactsMap: Record<string, HybridFact[]> = {};
   const config = getExtensionConfig();
   const enableCst = config.enableCstTracking ?? true;
@@ -117,7 +110,7 @@ export async function assembleFacts(
   if (enableCst || enableAugment) {
     const timelineManager = getCstTimelineManager();
 
-    // Build version map for per-file version selection
+
     const versionMap = new Map<string, string>();
     for (const filePath of scope.allPaths) {
       const language = detectLanguage(filePath);
@@ -140,7 +133,7 @@ export async function assembleFacts(
       versionMap.set(filePath, version);
     }
 
-    // Batch query with per-file versions
+
     const allFacts = await timelineManager.getPriorFactsBatchWithVersions(versionMap);
     for (const [filePath, facts] of allFacts) {
       if (facts.length > 0) {
@@ -152,7 +145,7 @@ export async function assembleFacts(
   const facts = {
     version: '2.0',
     generated_at: new Date().toISOString(),
-    confidence: 1.0, // Full confidence when using complete pipeline data
+    confidence: 1.0,
     bundle: {
       oldestSha,
       newestSha,
@@ -218,12 +211,12 @@ export async function assembleFacts(
         : undefined,
     },
     evidence: {
-      // Scope evidence
+
       'bundle.shas': commitShas,
       'scope.files': Array.from(scope.commitFiles),
       'scope.blastRadius': Array.from(scope.blastRadius),
 
-      // Timeline chain evidence
+
       'timeline.chain': {
         unstaged: scope.unstagedFiles?.size || 0,
         staged: scope.stagedFiles?.size || 0,
@@ -231,7 +224,7 @@ export async function assembleFacts(
         commits: commitShas.length,
       },
 
-      // Hybrid facts breakdown by version
+
       'hybrid.unstaged': {
         total: Object.entries(hybridFactsMap)
           .filter(([path]) => scope.unstagedFiles?.has(path))
@@ -245,16 +238,16 @@ export async function assembleFacts(
         files: Object.keys(hybridFactsMap).filter(path => scope.stagedFiles?.has(path)),
       },
 
-      // Intended state evidence
+
       'intended.present': intendedLists.present,
       'intended.absent': intendedLists.absent,
       'intended.renamed': intendedLists.renamed,
 
-      // Working state evidence
+
       'working.symbols': workingLists.symbols,
       'working.edges': workingLists.edges,
 
-      // Findings evidence
+
       'findings.incompleteness': {
         missing: drift.missing_symbols.map(m => ({
           symbol_id: m.symbol_id,
@@ -327,10 +320,10 @@ export async function assembleFacts(
 
       'findings.unresolvedCallers': drift.unresolved_callers || undefined,
 
-      // Hotspots evidence
+
       hotspots: hotspots,
 
-      // Legacy fields for backward compatibility
+
       missing: drift.missing_symbols.map(m => ({
         symbol_id: m.symbol_id,
         expected: m.expected,
@@ -355,40 +348,34 @@ export async function assembleFacts(
         confidence: r.confidence,
       })),
     },
-    // Include hybrid facts if available
+
     hybridFacts: Object.keys(hybridFactsMap).length > 0 ? hybridFactsMap : undefined,
   };
 
   return facts as RefactorBundleFacts;
 }
 
-/**
- * Save facts to .git/commit-tracker/last-bundle-facts.json
- */
 export async function saveFacts(facts: RefactorBundleFacts): Promise<string> {
   const gitRoot = getGitRoot();
   if (!gitRoot) {
     logError('Not in a git repository');
-    return ''; // Return empty string instead of throwing
+    return '';
   }
 
   const factsDir = path.join(gitRoot, '.git', 'commit-tracker');
   const factsPath = path.join(factsDir, 'last-bundle-facts.json');
 
-  // Ensure directory exists
+
   if (!fs.existsSync(factsDir)) {
     fs.mkdirSync(factsDir, { recursive: true });
   }
 
-  // Write facts JSON
+
   fs.writeFileSync(factsPath, JSON.stringify(facts, null, 2), 'utf8');
 
   return factsPath;
 }
 
-/**
- * Calculate counts for intended state summary
- */
 export function calculateIntendedCounts(intended: Map<string, IntendedState>): {
   present: number;
   absent: number;
@@ -412,10 +399,7 @@ export function calculateIntendedCounts(intended: Map<string, IntendedState>): {
   return { present, absent, renamed };
 }
 
-/**
- * Get detailed lists for intended state
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 function getIntendedLists(intended: Map<string, IntendedState>): {
   present: string[];
   absent: string[];
@@ -439,10 +423,7 @@ function getIntendedLists(intended: Map<string, IntendedState>): {
   return { present, absent, renamed };
 }
 
-/**
- * Get detailed lists for working state
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 function getWorkingLists(working: WorkingSnapshot): {
   symbols: string[];
   edges: string[];
@@ -453,17 +434,13 @@ function getWorkingLists(working: WorkingSnapshot): {
   };
 }
 
-/**
- * Detect files with mixed naming convention targets
- * Counts files that have multiple naming conventions in use
- */
 export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapshot): number {
-  // Use mixedConventionFiles from drift detector if available
+
   if (drift.mixedConventionFiles && drift.mixedConventionFiles.length > 0) {
     return drift.mixedConventionFiles.length;
   }
 
-  // Fallback: detect by analyzing files with multiple conventions
+
   const fileConventions = new Map<string, Set<string>>();
 
   for (const [symbolId, symbol] of working.symbolsById) {
@@ -472,7 +449,7 @@ export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapsho
       fileConventions.set(filePath, new Set());
     }
 
-    // Simple convention detection based on naming patterns
+
     const name = symbol.name;
     if (/^[a-z]/.test(name)) {
       fileConventions.get(filePath)!.add('camelCase');
@@ -483,7 +460,7 @@ export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapsho
     }
   }
 
-  // Count files with multiple conventions
+
   let mixedCount = 0;
   for (const conventions of fileConventions.values()) {
     if (conventions.size > 1) {
@@ -494,10 +471,6 @@ export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapsho
   return mixedCount;
 }
 
-/**
- * Detect old namespace usage patterns
- * Looks for symbols using deprecated/old namespace patterns
- */
 export function detectOldNamespaces(
   working: WorkingSnapshot,
   intended: Map<string, IntendedState>
@@ -508,32 +481,32 @@ export function detectOldNamespaces(
     /\\Old\\/,
     /\\Legacy\\/,
     /\\Deprecated\\/,
-    /\/old\//,
-    /\/legacy\//,
-    /\/deprecated\//,
+    /\/old\
+    /\/legacy\
+    /\/deprecated\
   ];
 
   let oldNamespaceCount = 0;
 
-  // Check working symbols for old namespace patterns
+
   for (const [symbolId, symbol] of working.symbolsById) {
     const filePath = symbolId.split(':')[0];
     const symbolName = symbol.name;
 
-    // Check if path or name matches old namespace patterns
+
     const matchesOldPattern = oldNamespacePatterns.some(
       pattern => pattern.test(filePath) || pattern.test(symbolName)
     );
 
     if (matchesOldPattern) {
-      // Only count if it's in scope (intended map) or if it's a zombie (should be removed)
+
       const intendedState = intended.get(symbolId);
       if (intendedState || !intended.has(symbolId)) {
-        // Check if this is a zombie (should be removed but still exists)
+
         if (intendedState?.expect === 'absent') {
           oldNamespaceCount++;
         } else if (!intended.has(symbolId)) {
-          // Symbol not in intended map but matches old pattern - potential old namespace
+
           oldNamespaceCount++;
         }
       }
@@ -543,13 +516,7 @@ export function detectOldNamespaces(
   return oldNamespaceCount;
 }
 
-/**
- * Compute basic dead symbol detection from reachability analysis
- * Identifies symbols that are not reachable from entry points
- */
-/**
- * Helper to get hybrid facts count
- */
+
 async function getHybridFactsCount(scope: ScopeSet, sha: string): Promise<number> {
   const config = getExtensionConfig();
   const enableCst = config.enableCstTracking ?? true;

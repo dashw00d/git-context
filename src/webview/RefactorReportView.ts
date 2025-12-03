@@ -1,9 +1,6 @@
 import { AnalysisBlock, EvidenceLink, LlmAnalysis } from '../analysis/llmAnalyst/blocks';
 import { RefactorBundleFacts } from '../facts/types';
 
-/**
- * Main refactor report webview with three-panel layout
- */
 export class RefactorReportView {
   private analysis: LlmAnalysis;
   private facts: RefactorBundleFacts;
@@ -24,7 +21,6 @@ export class RefactorReportView {
     this.facts = facts;
     this.onEvidenceClick = onEvidenceClick;
 
-    // Auto-select first block
     if (this.analysis.blocks.length > 0) {
       this.selectedBlock = this.analysis.blocks[0];
     }
@@ -32,25 +28,17 @@ export class RefactorReportView {
     this.render();
   }
 
-  /**
-   * Render the complete UI
-   */
   private render(): void {
     this.container.innerHTML = '';
     this.container.className = 'refactor-report-container';
 
-    // Header
     const header = this.createHeader();
     this.container.appendChild(header);
 
-    // Three-panel layout
     const layout = this.createThreePanelLayout();
     this.container.appendChild(layout);
   }
 
-  /**
-   * Create header section
-   */
   private createHeader(): HTMLElement {
     const header = document.createElement('div');
     header.className = 'header';
@@ -78,36 +66,26 @@ export class RefactorReportView {
     return header;
   }
 
-  /**
-   * Create three-panel layout
-   */
   private createThreePanelLayout(): HTMLElement {
     const layout = document.createElement('div');
     layout.className = 'three-panel-layout';
 
-    // Sidebar
     const sidebar = this.createSidebar();
     layout.appendChild(sidebar);
 
-    // Main panel
     const mainPanel = this.createMainPanel();
     layout.appendChild(mainPanel);
 
-    // Inspector panel
     const inspector = this.createInspectorPanel();
     layout.appendChild(inspector);
 
     return layout;
   }
 
-  /**
-   * Create sidebar with navigation
-   */
   private createSidebar(): HTMLElement {
     const sidebar = document.createElement('div');
     sidebar.className = 'sidebar';
 
-    // Analysis blocks section
     const blocksSection = document.createElement('div');
     blocksSection.className = 'sidebar-section';
 
@@ -151,7 +129,6 @@ export class RefactorReportView {
     blocksSection.appendChild(blockList);
     sidebar.appendChild(blocksSection);
 
-    // Quick stats section
     const statsSection = document.createElement('div');
     statsSection.className = 'sidebar-section';
 
@@ -162,7 +139,6 @@ export class RefactorReportView {
     const statsGrid = document.createElement('div');
     statsGrid.className = 'stats-grid';
 
-    // Missing stat
     const missingItem = document.createElement('div');
     missingItem.className = 'stat-item';
     const missingLabel = document.createElement('span');
@@ -175,7 +151,6 @@ export class RefactorReportView {
     missingItem.appendChild(missingValue);
     statsGrid.appendChild(missingItem);
 
-    // Zombies stat
     const zombiesItem = document.createElement('div');
     zombiesItem.className = 'stat-item';
     const zombiesLabel = document.createElement('span');
@@ -188,7 +163,6 @@ export class RefactorReportView {
     zombiesItem.appendChild(zombiesValue);
     statsGrid.appendChild(zombiesItem);
 
-    // Dead Code stat
     const deadItem = document.createElement('div');
     deadItem.className = 'stat-item';
     const deadLabel = document.createElement('span');
@@ -201,7 +175,6 @@ export class RefactorReportView {
     deadItem.appendChild(deadValue);
     statsGrid.appendChild(deadItem);
 
-    // Replaced stat
     const replacedItem = document.createElement('div');
     replacedItem.className = 'stat-item';
     const replacedLabel = document.createElement('span');
@@ -216,7 +189,6 @@ export class RefactorReportView {
     statsSection.appendChild(statsGrid);
     sidebar.appendChild(statsSection);
 
-    // Evidence browser section
     if (this.selectedBlock) {
       const evidenceSection = document.createElement('div');
       evidenceSection.className = 'sidebar-section';
@@ -228,7 +200,6 @@ export class RefactorReportView {
       const evidenceList = document.createElement('div');
       evidenceList.className = 'evidence-list';
 
-      // Claims evidence
       this.selectedBlock.claims.forEach((claim, index) => {
         const group = document.createElement('div');
         group.className = 'evidence-group';
@@ -253,7 +224,6 @@ export class RefactorReportView {
         evidenceList.appendChild(group);
       });
 
-      // Actions evidence
       this.selectedBlock.actions.forEach((action, index) => {
         const group = document.createElement('div');
         group.className = 'evidence-group';
@@ -285,14 +255,10 @@ export class RefactorReportView {
     return sidebar;
   }
 
-  /**
-   * Create main panel with content
-   */
   private createMainPanel(): HTMLElement {
     const mainPanel = document.createElement('div');
     mainPanel.className = 'main-panel';
 
-    // Tab bar
     const tabBar = document.createElement('div');
     tabBar.className = 'tab-bar';
 
@@ -316,7 +282,6 @@ export class RefactorReportView {
 
     mainPanel.appendChild(tabBar);
 
-    // Content area
     const contentArea = document.createElement('div');
     contentArea.className = 'content-area';
 
@@ -331,9 +296,6 @@ export class RefactorReportView {
     return mainPanel;
   }
 
-  /**
-   * Create analysis content
-   */
   private createAnalysisContent(): HTMLElement {
     const content = document.createElement('div');
     content.className = 'analysis-content';
@@ -354,7 +316,6 @@ export class RefactorReportView {
       return content;
     }
 
-    // Block header
     const header = document.createElement('div');
     header.className = 'block-header';
 
@@ -376,7 +337,6 @@ export class RefactorReportView {
 
     content.appendChild(header);
 
-    // Claims section
     if (this.selectedBlock.claims.length > 0) {
       const claimsSection = document.createElement('div');
       claimsSection.className = 'claims-section';
@@ -409,7 +369,6 @@ export class RefactorReportView {
 
         claimItem.appendChild(header);
 
-        // Evidence
         const evidenceDiv = document.createElement('div');
         evidenceDiv.className = 'claim-evidence';
         claim.evidence.forEach(evidence => {
@@ -427,7 +386,6 @@ export class RefactorReportView {
       content.appendChild(claimsSection);
     }
 
-    // Actions section
     if (this.selectedBlock.actions.length > 0) {
       const actionsSection = document.createElement('div');
       actionsSection.className = 'actions-section';
@@ -479,7 +437,6 @@ export class RefactorReportView {
           actionItem.appendChild(deps);
         }
 
-        // Evidence
         const evidenceDiv = document.createElement('div');
         evidenceDiv.className = 'action-evidence';
         action.evidence.forEach(evidence => {
@@ -500,14 +457,10 @@ export class RefactorReportView {
     return content;
   }
 
-  /**
-   * Create facts content
-   */
   private createFactsContent(): HTMLElement {
     const content = document.createElement('div');
     content.className = 'facts-content';
 
-    // Summary
     const summary = document.createElement('div');
     summary.className = 'facts-summary';
 
@@ -518,7 +471,6 @@ export class RefactorReportView {
     const grid = document.createElement('div');
     grid.className = 'facts-grid';
 
-    // Bundle Info Card
     const bundleCard = document.createElement('div');
     bundleCard.className = 'fact-card';
     const bundleTitle = document.createElement('h4');
@@ -532,7 +484,6 @@ export class RefactorReportView {
     bundleCard.appendChild(bundleP2);
     grid.appendChild(bundleCard);
 
-    // Analysis Scope Card
     const scopeCard = document.createElement('div');
     scopeCard.className = 'fact-card';
     const scopeTitle = document.createElement('h4');
@@ -546,7 +497,6 @@ export class RefactorReportView {
     scopeCard.appendChild(scopeP2);
     grid.appendChild(scopeCard);
 
-    // Symbols Card
     const symbolsCard = document.createElement('div');
     symbolsCard.className = 'fact-card';
     const symbolsTitle = document.createElement('h4');
@@ -565,7 +515,6 @@ export class RefactorReportView {
     summary.appendChild(grid);
     content.appendChild(summary);
 
-    // JSON view
     const jsonSection = document.createElement('div');
     jsonSection.className = 'facts-json';
 
@@ -582,9 +531,6 @@ export class RefactorReportView {
     return content;
   }
 
-  /**
-   * Create inspector panel
-   */
   private createInspectorPanel(): HTMLElement {
     const inspector = document.createElement('div');
     inspector.className = 'inspector-panel';
@@ -639,9 +585,6 @@ export class RefactorReportView {
     return inspector;
   }
 
-  /**
-   * Helper functions
-   */
   private getBlockIcon(type: AnalysisBlock['type']): string {
     switch (type) {
       case 'intent':

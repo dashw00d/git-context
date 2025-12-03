@@ -1,8 +1,8 @@
 import { IntendedState } from '../facts/intendedMap';
+import type { ScopeSet } from '../facts/scope';
 import { HybridFact, isCstFact } from '../types/cstFacts';
 import { logDebug } from '../utils/logger';
 import { getCstTimelineManager, getPriorVersionInChain } from './cstTimeline';
-import type { ScopeSet } from '../facts/scope';
 
 export interface HybridDrift {
   fact: HybridFact;
@@ -27,7 +27,6 @@ export async function detectHybridDrift(
   const drifts: HybridDrift[] = [];
   const timelineManager = getCstTimelineManager();
 
-  // Validate version is in expected timeline chain
   const validVersions = new Set(['workspace-unstaged', 'workspace-staged', 'HEAD', ...commitShas]);
 
   if (!validVersions.has(currentVersion)) {
@@ -39,22 +38,17 @@ export async function detectHybridDrift(
     );
   }
 
-  // Determine prior version in timeline chain
   const priorVersion = getPriorVersionInChain(currentVersion, scope, filePath, commitShas);
   const priorFacts = priorVersion
     ? await timelineManager.getPriorFacts(filePath, priorVersion)
     : null;
 
-  // Check for missing facts (in intended but not in current)
-  // Use priorVersionSha (from IntendedState.lastSha) to retrieve the missing fact
   for (const [factKey, expected] of intended) {
-    // Only check facts that belong to this file
     if (!factKey.startsWith(filePath + ':')) continue;
 
     if (expected.expect === 'present') {
       const found = currentFacts.find(f => f.id === factKey);
       if (!found) {
-        // Fact is missing - retrieve from prior version in chain
         const priorSha = priorVersion || expected.lastSha;
         if (priorSha) {
           try {
@@ -79,12 +73,10 @@ export async function detectHybridDrift(
     }
   }
 
-  // Now check current facts for zombies, divergence, and modifications
   for (const fact of currentFacts) {
     const factKey = fact.id;
     const expected = intended.get(factKey);
 
-    // Check for zombie facts (expected absent but found)
     if (expected?.expect === 'absent') {
       drifts.push({
         fact,
@@ -94,7 +86,6 @@ export async function detectHybridDrift(
       continue;
     }
 
-    // Check for divergent facts (name or structure changed)
     if (expected && expected.expect === 'present') {
       if (expected.lastName && fact.name !== expected.lastName) {
         drifts.push({
@@ -106,13 +97,11 @@ export async function detectHybridDrift(
       }
     }
 
-    // Check for modified facts
-    // Prefer timeline-based detection for CST facts, fallback to prior facts comparison
     let isModified = false;
     let timelineDelta: Array<{ version: string; delta: any }> | undefined;
 
     if (isCstFact(fact) && fact.timeline.length > 0) {
-      const recentDeltas = fact.timeline.slice(-3); // Last 3 changes
+      const recentDeltas = fact.timeline.slice(-3);
       const hasModifications = recentDeltas.some(
         entry => entry.delta.type === 'modified' || entry.delta.type === 'added'
       );
@@ -126,11 +115,9 @@ export async function detectHybridDrift(
       }
     }
 
-    // Compare with prior facts for modifications (if not already detected via timeline)
     if (!isModified && priorFacts) {
       const priorFact = priorFacts.find(p => p.dnaId === fact.dnaId || p.id === fact.id);
       if (priorFact) {
-        // Check if modified (DNA changed or location changed)
         if (
           priorFact.dnaId !== fact.dnaId ||
           priorFact.location.start.line !== fact.location.start.line
@@ -146,7 +133,6 @@ export async function detectHybridDrift(
       }
     }
 
-    // Add modified drift if detected
     if (isModified) {
       drifts.push({
         fact,
@@ -159,13 +145,9 @@ export async function detectHybridDrift(
   return drifts;
 }
 
-/**
- * Get hybrid facts for a file from timeline
- * Note: Caller must determine correct version from scope (unstaged → 'workspace-unstaged', staged → 'workspace-staged', commit → SHA)
- */
 export async function getHybridFactsForFile(
   filePath: string,
-  version: string // Caller must determine correct version from scope
+  version: string
 ): Promise<HybridFact[]> {
   const timelineManager = getCstTimelineManager();
   return (await timelineManager.getPriorFacts(filePath, version)) || [];

@@ -26,8 +26,8 @@ import { MermaidGenerator } from './mermaidGenerator';
  * with deterministic truncation and context budgeting.
  */
 export class ContextExporter {
-  private readonly MAX_TOKEN_BUDGET = 12000; // Rough token estimate
-  private readonly TOKEN_PER_CHAR = 1 / 4; // Rough approximation
+  private readonly MAX_TOKEN_BUDGET = 12000;
+  private readonly TOKEN_PER_CHAR = 1 / 4;
   private readonly mermaidGenerator = new MermaidGenerator();
   private readonly dependencyExtractor = new DependencyExtractor();
 
@@ -74,7 +74,6 @@ export class ContextExporter {
       legacy_audit: auditReport,
     };
 
-    // Apply context budgeting
     this.applyContextBudget(report);
 
     return report;
@@ -89,7 +88,6 @@ export class ContextExporter {
     const defaultPath = path.join(getGitRoot()!, '.git', 'commit-tracker', 'commit-context.json');
     const outputPath = filePath || defaultPath;
 
-    // Ensure directory exists
     const dir = path.dirname(outputPath);
     fs.mkdirSync(dir, { recursive: true });
 
@@ -104,7 +102,6 @@ export class ContextExporter {
     const { getDatabaseService } = await import('../services/databaseService');
     const dbService = getDatabaseService();
 
-    // Get commit info using service
     const commitMetadata = await dbService.getCommitMetadata(sha);
 
     if (!commitMetadata) {
@@ -123,10 +120,8 @@ export class ContextExporter {
       };
     }
 
-    // Get analysis data using service
     const analysisRow = await dbService.getCommitAnalysis(sha);
 
-    // Get files using service
     const fileRows = await dbService.getFilesByCommit(sha);
 
     const files: FileContext[] = [];
@@ -134,7 +129,6 @@ export class ContextExporter {
       files.push(await this.buildFileContext(sha, fileRow));
     }
 
-    // Get edges using service
     const edgeInfos = await dbService.queryEdgesByCommit(sha);
     const edges: EdgeContext[] = edgeInfos.map(edge => ({
       from_symbol_id: edge.from,
@@ -145,7 +139,6 @@ export class ContextExporter {
       is_resolved: Boolean(edge.isResolved ?? true),
     }));
 
-    // Parse risks
     const risks = JSON.parse(analysisRow?.risks || '[]');
 
     return {
@@ -171,7 +164,6 @@ export class ContextExporter {
    * Build context for a single file
    */
   private async buildFileContext(sha: string, fileRow: any): Promise<FileContext> {
-    // Get symbols for this file
     const symbolsStmt = prepare(`
       SELECT * FROM symbols WHERE sha = ? AND path = ?
     `);
@@ -190,7 +182,6 @@ export class ContextExporter {
       diff_snippet_post: row.diff_snippet_post,
     }));
 
-    // Group symbols by change type from database
     const added = symbols.filter(s => symbolRows.find(r => r.id === s.id)?.change_type === 'added');
     const removed = symbols.filter(
       s => symbolRows.find(r => r.id === s.id)?.change_type === 'removed'
@@ -201,7 +192,6 @@ export class ContextExporter {
         symbolRows.find(r => r.id === s.id)?.change_type === 'signature_changed'
     );
 
-    // Handle renames: load from renames table
     const renamesStmt = prepare(`
       SELECT * FROM renames WHERE sha = ? AND path = ?
     `);
@@ -240,7 +230,6 @@ export class ContextExporter {
   ): Promise<LlmContextReport['rollups']> {
     const placeholders = shas.map(() => '?').join(',');
 
-    // Hotspots: symbols changed in ≥2 commits
     const hotspotsStmt = prepare(`
       SELECT symbol_id, name, COUNT(DISTINCT sha) as change_count, MAX(date) as last_changed
       FROM symbols s
@@ -253,7 +242,6 @@ export class ContextExporter {
     `);
     const hotspots = hotspotsStmt.all(...shas) as any[];
 
-    // Top changed files: count of symbol deltas per file across commits
     const fileRollupsStmt = prepare(`
       SELECT path, COUNT(*) as total_changes, MAX(c.date) as last_commit
       FROM symbols s
@@ -265,7 +253,6 @@ export class ContextExporter {
     `);
     const topChangedFiles = fileRollupsStmt.all(...shas) as any[];
 
-    // Dependency deltas: individual edge changes
     const depDeltasStmt = prepare(`
       SELECT from_symbol_id, to_symbol_id, change_type, confidence
       FROM edges
@@ -280,13 +267,13 @@ export class ContextExporter {
         symbol_id: h.symbol_id,
         change_count: h.change_count,
         last_changed: h.last_changed,
-        risk_score: Math.min(h.change_count / 5, 1.0), // Simple risk scoring
+        risk_score: Math.min(h.change_count / 5, 1.0),
       })),
       top_changed_files: topChangedFiles.map(f => ({
         path: f.path,
         total_changes: f.total_changes,
         last_commit: f.last_commit,
-        languages: [], // Would need to detect from files
+        languages: [],
       })),
       dependency_deltas: depDeltas.map(d => ({
         from_symbol_id: d.from_symbol_id,
@@ -306,10 +293,9 @@ export class ContextExporter {
     const currentTokens = this.estimateTokenCount(report);
 
     if (currentTokens <= this.MAX_TOKEN_BUDGET) {
-      return; // No truncation needed
+      return;
     }
 
-    // Truncate in priority order (lowest priority first)
     const truncationSteps = [
       () => this.truncateDiffHunks(report),
       () => this.truncateLowConfidenceEdges(report),
@@ -339,7 +325,7 @@ export class ContextExporter {
   private truncateDiffHunks(report: LlmContextReport): void {
     for (const commit of report.commits) {
       for (const file of commit.files) {
-        file.hunks = undefined; // Remove diff hunks
+        file.hunks = undefined;
       }
     }
   }
@@ -349,11 +335,9 @@ export class ContextExporter {
    */
   private truncateLowConfidenceEdges(report: LlmContextReport): void {
     for (const commit of report.commits) {
-      // Dynamic confidence threshold based on edge count
       const totalEdges = commit.edges.length;
       const threshold = getDynamicThreshold(totalEdges);
 
-      // Collect symbols that were removed or modified (important for legacy audit)
       const legacySymbols = new Set<string>();
       for (const file of commit.files) {
         for (const symbol of file.symbols.removed) {
@@ -365,7 +349,6 @@ export class ContextExporter {
       }
 
       commit.edges = commit.edges.filter(edge => {
-        // Always keep edges connected to legacy symbols (removed/modified) for dead-code detection
         const isLegacyEdge =
           legacySymbols.has(edge.from_symbol_id) || legacySymbols.has(edge.to_symbol_id);
         return isLegacyEdge || (edge.confidence ?? 0) >= threshold;
@@ -380,7 +363,6 @@ export class ContextExporter {
     for (const commit of report.commits) {
       const changed = new Set<string>();
       for (const file of commit.files) {
-        // Handle regular symbols
         for (const s of [
           ...file.symbols.added,
           ...file.symbols.modified,
@@ -388,7 +370,7 @@ export class ContextExporter {
         ]) {
           changed.add(s.symbol_id || String(s.id));
         }
-        // Handle renames (both old and new symbol IDs)
+
         for (const r of file.symbols.renamed || []) {
           changed.add(r.old_symbol_id);
           changed.add(r.new_symbol_id);
@@ -448,14 +430,12 @@ export class ContextExporter {
     shas: string[]
   ): Promise<LlmContextReport['graphs']> {
     try {
-      // Validate that commits match the requested shas
       if (commits.length !== shas.length) {
         logDebug(
           `[ContextExporter] Warning: commit count (${commits.length}) doesn't match sha count (${shas.length})`
         );
       }
 
-      // Collect all edges and symbols across commits
       const allEdges: any[] = [];
       const allSymbols: any[] = [];
       const changedSymbols: any[] = [];
@@ -468,20 +448,18 @@ export class ContextExporter {
           allSymbols.push(...file.symbols.modified);
           allSymbols.push(...file.symbols.removed);
 
-          // For renames, we want to show both old and new states if possible
-          // But for the graph, we mainly need the nodes to exist
           if (file.symbols.renamed) {
             for (const r of file.symbols.renamed) {
               allSymbols.push({
                 id: r.new_symbol_id,
                 name: r.new_name,
                 kind: 'unknown',
-              }); // New
+              });
               allSymbols.push({
                 id: r.old_symbol_id,
                 name: r.old_name,
                 kind: 'unknown',
-              }); // Old
+              });
             }
           }
 
@@ -510,13 +488,11 @@ export class ContextExporter {
         }
       }
 
-      // Generate dependency graph
       const dependencyGraph = this.mermaidGenerator.generateGraph(allEdges, allSymbols, {
         maxNodes: 30,
         showConfidence: true,
       });
 
-      // Generate blast radius graph using real dependency analysis
       const blastRadius = this.dependencyExtractor.calculateBlastRadius(
         changedSymbols.map(
           s =>
@@ -545,18 +521,12 @@ export class ContextExporter {
     }
   }
 
-  /**
-   * Perform legacy audit using facts/legacyAudit implementation
-   * Adapter that converts LegacyAuditResult to LegacyAuditReport format
-   */
   private async performLegacyAudit(shas: string[]): Promise<LegacyAuditReport> {
     try {
-      // Build required inputs for legacy audit
       const scope = await computeScope(shas);
       const intended = await buildIntendedMap(shas);
       const working = await getWorkingSnapshot(scope.allPaths);
 
-      // Use V2 detector with BaseDetector enhancements
       const legacyDetector = new LegacyDetector();
       const result = await legacyDetector.detect({
         intended,
@@ -564,14 +534,13 @@ export class ContextExporter {
         scope,
       });
 
-      // Convert LegacyAuditResult to LegacyAuditReport format
       return {
-        missing_symbols: [], // Not directly provided by auditLegacy, would need drift detector
+        missing_symbols: [],
         zombie_symbols: result.legacyUsed.map(s => s.symbol_id),
         replaced_leftover: result.replacedLeftovers.map(r => r.old.symbol_id),
         dead_candidates: result.dead.map(s => s.symbol_id),
-        drift_edges: [], // Not directly provided by auditLegacy
-        hotspots: [], // Would need to compute from file-level analysis
+        drift_edges: [],
+        hotspots: [],
       };
     } catch (error) {
       const { logError } = await import('../utils/logger');

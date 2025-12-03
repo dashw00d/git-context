@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { RiskDetector } from '../../../src/analysis/heuristics';
-import { FileChange, SymbolDelta, SymbolInfo } from '../../../src/types';
+import { FileChange, SymbolDelta } from '../../../src/types';
 
 describe('RiskDetector', () => {
   const detector = new RiskDetector();
@@ -19,17 +19,17 @@ describe('RiskDetector', () => {
               name: 'publicFunc',
               kind: 'function',
               signature: '(a: string, b: number)',
-              location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
+              location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
             },
             previousSymbol: {
               id: 'func_A',
               name: 'publicFunc',
               kind: 'function',
               signature: '(a: string)',
-              location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } }
-            }
-          } as SymbolDelta
-        ]
+              location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
+            },
+          } as SymbolDelta,
+        ],
       };
 
       const risks = detector.detectRisks(files, symbols, { added: [], removed: [] });
@@ -40,8 +40,8 @@ describe('RiskDetector', () => {
       const files: FileChange[] = [
         {
           path: 'src/db/migrations/001_init.sql',
-          status: 'A'
-        }
+          status: 'A',
+        },
       ];
       const symbols = { added: [], removed: [], modified: [] };
 
@@ -58,11 +58,11 @@ describe('RiskDetector', () => {
             name: 'validatePassword',
             kind: 'function',
             location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-            signature: ''
-          }
+            signature: '',
+          },
         ],
         removed: [],
-        modified: []
+        modified: [],
       };
 
       const risks = detector.detectRisks(files, symbols, { added: [], removed: [] });
@@ -70,10 +70,9 @@ describe('RiskDetector', () => {
     });
 
     it('should detect large refactors', () => {
-      // Create > 10 files
       const files: FileChange[] = Array.from({ length: 11 }, (_, i) => ({
         path: `file${i}.ts`,
-        status: 'M'
+        status: 'M',
       }));
       const symbols = { added: [], removed: [], modified: [] };
 

@@ -166,14 +166,13 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         bundleViewVersion: 0,
       };
     case 'BUNDLE_SWITCH_START':
-      // Clear all bundle-related state when switching bundles
       return {
         ...state,
         bundleFacts: null,
         bundleSummary: null,
         bundleView: null,
         explorerData: [],
-        // Reset to bundle root frame
+
         activeFrame: {
           level: 'bundle',
           id: 'root',
@@ -183,13 +182,9 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         history: [],
       };
     case 'BUNDLE_VIEW_UPDATED': {
-      // BundleView is global state, separate from frame.data
-      // Stage component will access it via cockpitState.bundleView when needed
-      // If we're at the bundle root, also update activeFrame.data to prevent suspicious_bundle_sync warning
       const shouldUpdateFrameData =
         state.activeFrame.level === 'bundle' && state.activeFrame.id === 'root';
 
-      // Check bundleViewVersion to prevent out-of-order updates
       const incomingVersion = action.payload.version ?? state.bundleViewVersion + 1;
       if (incomingVersion < state.bundleViewVersion) {
         logWarn(
@@ -242,18 +237,13 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
     case 'REPO_CONTEXT_UPDATED':
       return { ...state, repoName: action.payload.repoName, branchName: action.payload.branchName };
 
-    // Navigation
     case 'NAVIGATE_TO': {
-      // Clean frame.data to prevent contamination across different frame levels
-      // Each frame level should have its own isolated data structure
       const cleanFrame: ContextFrame = {
         ...action.payload.frame,
-        // Only preserve data if explicitly provided, otherwise start fresh
+
         data: action.payload.frame.data || undefined,
       };
 
-      // Only push to history if we're actually navigating to a different frame
-      // This prevents duplicate entries when navigating to the same frame (e.g., bundle switch)
       const shouldPushHistory = state.activeFrame.id !== cleanFrame.id;
 
       return {
@@ -285,11 +275,9 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
       };
     }
 
-    // Tiered Frame Analysis - Progressive loading
     case 'FRAME_ANALYSIS_TIER_1_COMPLETE':
     case 'FRAME_ANALYSIS_TIER_2_COMPLETE':
     case 'FRAME_ANALYSIS_TIER_3_COMPLETE': {
-      // Validate frameId to prevent stale updates (user navigated away during analysis)
       if (state.activeFrame.id !== action.payload.frameId) {
         logWarn(
           `[Reducer] Dropping stale tier data for ${action.payload.frameId} (current frame: ${state.activeFrame.id})`
@@ -297,7 +285,6 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         return state;
       }
 
-      // Determine tier level for status tracking
       const tierNum =
         action.type === 'FRAME_ANALYSIS_TIER_1_COMPLETE'
           ? 1
@@ -317,7 +304,6 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
       };
     }
     case 'FRAME_ANALYSIS_TIER_FAILED': {
-      // Validate frameId - ignore stale tier failures
       if (state.activeFrame.id !== action.payload.frameId) {
         logWarn(
           `[Reducer] Dropping stale tier failure for ${action.payload.frameId} (current frame: ${state.activeFrame.id})`
@@ -325,7 +311,6 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         return state;
       }
 
-      // Log tier failure but keep existing data
       const nextStatus = action.payload.tier === 1 ? 'error' : 'ready';
       const errors = state.activeFrame.data?.errors || [];
       return {
@@ -341,7 +326,6 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
       };
     }
     case 'FRAME_DATA_UPDATED': {
-      // Validate frameId - only update if it's the current frame
       if (state.activeFrame.id !== action.payload.frameId) {
         logWarn(
           `[Reducer] Dropping stale frame data for ${action.payload.frameId} (current frame: ${state.activeFrame.id})`
@@ -351,7 +335,7 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
 
       return {
         ...state,
-        // Merge new data into existing instead of replacing (preserves progressive tier loading)
+
         activeFrame: {
           ...state.activeFrame,
           data: { ...state.activeFrame.data, ...action.payload.data },

@@ -46,7 +46,7 @@ export const SymbolBlock: React.FC<SymbolBlockProps> = ({
   onClick,
 }) => {
   const lineCount = endLine - startLine + 1;
-  const height = Math.max(40, lineCount * 2); // Scale height roughly by lines
+  const height = Math.max(40, lineCount * 2);
 
   return (
     <div
@@ -66,7 +66,15 @@ export const SymbolBlock: React.FC<SymbolBlockProps> = ({
       {/* Abstract representation of content */}
       <div style={{ opacity: 0.3, fontSize: '8px', overflow: 'hidden' }}>
         {Array.from({ length: Math.min(5, lineCount) }).map((_, i) => (
-          <div key={i} style={{ height: '4px', backgroundColor: 'currentColor', marginBottom: '2px', width: `${Math.random() * 60 + 40}%` }} />
+          <div
+            key={i}
+            style={{
+              height: '4px',
+              backgroundColor: 'currentColor',
+              marginBottom: '2px',
+              width: `${Math.random() * 60 + 40}%`,
+            }}
+          />
         ))}
       </div>
     </div>

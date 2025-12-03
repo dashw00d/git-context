@@ -28,7 +28,6 @@ export class MessageTracer {
       this.traces.shift();
     }
 
-    // Track request/response pairs
     if (
       type === 'analyzeFrame' ||
       type === 'getBundleData' ||
@@ -52,11 +51,9 @@ export class MessageTracer {
   logIncoming(type: string, payload: any, source: 'webview' | 'extension'): void {
     const direction = source === 'webview' ? 'extension→webview' : 'webview→extension';
 
-    // Calculate response time if this is a response
     let responseTime: number | undefined;
     let sequenceId: string | undefined;
 
-    // Try to match with pending request
     for (const [key, timestamp] of this.pendingRequests.entries()) {
       const [reqType] = key.split(':');
       if (
@@ -89,13 +86,11 @@ export class MessageTracer {
       `📥 ${trace.direction} [${type}]${responseTime ? ` (${responseTime}ms)` : ''}${sequenceId ? ` (${sequenceId})` : ''}`
     );
 
-    // Warn on slow responses
     if (responseTime && responseTime > 5000) {
       logWarn(`⏱️  SLOW RESPONSE: ${type} took ${responseTime}ms`);
     }
   }
 
-  // Find message sequences
   findSequence(startType: string, endType: string): MessageTrace[] {
     const startIdx = this.traces.findIndex(t => t.type === startType);
     if (startIdx === -1) return [];
@@ -106,7 +101,6 @@ export class MessageTracer {
     return this.traces.slice(startIdx, endIdx + 1);
   }
 
-  // Get pending requests (requests without responses)
   getPendingRequests(): Array<{ type: string; waitTime: number }> {
     const now = Date.now();
     return Array.from(this.pendingRequests.entries()).map(([key, timestamp]) => ({
@@ -122,7 +116,6 @@ export class MessageTracer {
   private sanitizePayload(payload: any): any {
     if (!payload) return payload;
 
-    // Don't log huge objects
     if (typeof payload === 'object') {
       const str = JSON.stringify(payload);
       if (str.length > 500) {
@@ -132,9 +125,7 @@ export class MessageTracer {
     return payload;
   }
 
-  // Cleanup old traces
   cleanup(olderThanMs: number = 300000): void {
-    // 5 minutes
     const cutoff = Date.now() - olderThanMs;
     const before = this.traces.length;
     this.traces = this.traces.filter(t => t.timestamp > cutoff);
@@ -144,7 +135,6 @@ export class MessageTracer {
       logDebug(`[MessageTracer] Cleaned ${cleaned} old message traces`);
     }
 
-    // Clean up stale pending requests (older than 30s)
     const staleCutoff = Date.now() - 30000;
     for (const [key, timestamp] of this.pendingRequests.entries()) {
       if (timestamp < staleCutoff) {
@@ -155,7 +145,6 @@ export class MessageTracer {
   }
 }
 
-// Singleton instance
 let tracer: MessageTracer | null = null;
 
 export function getMessageTracer(): MessageTracer {

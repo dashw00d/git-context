@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
-import pLimit = require('p-limit');
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { prepare } from '../storage/statement-wrapper';
+import type { SymbolInfo } from '../types';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { shouldProcessPathWithLog } from '../utils/pathFilter';
@@ -14,9 +14,7 @@ import { MovedBlockDetectorV2 } from './movedBlockDetector';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
 import { getTreeSitterParser } from './tree-sitter';
-import type { SymbolInfo } from '../types';
-// p-limit is CommonJS; use require style to avoid default-import issues
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+import pLimit = require('p-limit');
 
 export interface CommitFacts {
   sha: string;
@@ -109,7 +107,6 @@ export class CommitIndexer {
         lastError = error as Error;
 
         if (attempt === maxRetries) {
-          // All retries failed, but fn() should now return partial data instead of throwing
           logError(
             `[CommitIndexer] All retry attempts failed, proceeding with best-effort mode`,
             lastError
@@ -117,9 +114,8 @@ export class CommitIndexer {
           return await fn();
         }
 
-        // Exponential backoff with jitter: baseDelay * 2^attempt + random jitter
         const exponentialDelay = baseDelay * Math.pow(2, attempt);
-        const jitter = Math.random() * 0.1 * exponentialDelay; // 10% jitter
+        const jitter = Math.random() * 0.1 * exponentialDelay;
         const delay = exponentialDelay + jitter;
 
         logDebug(
@@ -131,9 +127,8 @@ export class CommitIndexer {
       }
     }
 
-    // Should not reach here
     logError('Unexpected: retryWithBackoff reached end without returning');
-    return await fn(); // Fallback
+    return await fn();
   }
 
   /**
@@ -143,7 +138,6 @@ export class CommitIndexer {
     sha: string,
     opts?: { force?: boolean; modules?: string[] }
   ): Promise<CommitFacts> {
-    // Check if already indexed with current analysis version (unless force)
     if (!opts?.force && this.isIndexed(sha)) {
       logDebug(`[CommitIndexer] ${sha} already indexed`);
       this.cacheHits++;
@@ -152,21 +146,18 @@ export class CommitIndexer {
 
     this.cacheMisses++;
 
-    // Mark as pending
     this.markPending(sha);
 
     try {
-      // Run indexing pipeline
       const facts = await this.indexCommit(sha, opts);
 
-      // Mark as complete
       this.markComplete(sha, facts);
 
       return facts;
     } catch (error) {
       this.markFailed(sha, error);
       logError(`Failed to index commit ${sha}`, error);
-      // Return partial data instead of throwing
+
       return {
         sha,
         symbolsAdded: 0,
@@ -203,11 +194,9 @@ export class CommitIndexer {
 
     const results = await Promise.all(promises);
 
-    // Flush any pending snapshot and diff writes
     this.snapshotManager.flushSnapshotQueue();
     this.structuralDiffManager.flushDiffQueue();
 
-    // Log cache performance metrics
     const stats = this.getCacheStats();
     logInfo(
       `[CommitIndexer] Cache performance: ${stats.cacheHits} hits, ${
@@ -228,7 +217,6 @@ export class CommitIndexer {
     const files = await this.git.getFileChanges(sha);
     const parentSha = commitInfo.parent || null;
 
-    // Parallel processing configuration
     const CONCURRENCY = 8;
     const limit = pLimit(CONCURRENCY);
 
@@ -236,11 +224,9 @@ export class CommitIndexer {
       `[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY})`
     );
 
-    // Process files in parallel
     const promises = files.map(file => limit(() => this.processFile(file, sha, parentSha)));
     const results = await Promise.all(promises);
 
-    // Aggregate results
     let totalSymbolsAdded = 0;
     let totalSymbolsModified = 0;
     let totalSymbolsRemoved = 0;
@@ -249,7 +235,7 @@ export class CommitIndexer {
     let maxStructuralChange = 0;
     const allRisks: string[] = [];
     const changedSymbols: any[] = [];
-    const allEdges: any[] = []; // Collect edge objects for blast radius
+    const allEdges: any[] = [];
     const symbolChanges = new Map<string, { type: string; symbol: any; filePath: string }>();
     const edgesToInsert: any[] = [];
     const fileHotspotsToUpdate: Array<{ path: string; symbols: any[] }> = [];
@@ -272,14 +258,10 @@ export class CommitIndexer {
       fileHotspotsToUpdate.push(...res.hotspots);
     }
 
-    // Construct allEdges for blast radius from edgesToInsert
     for (const edge of edgesToInsert) {
-      // Blast radius calculator expects simple edge objects or similar
-      // It uses: edge.from, edge.to
       allEdges.push({ from: edge.from, to: edge.to });
     }
 
-    // Calculate blast radius
     const blastRadiusResult = this.dependencyExtractor.calculateBlastRadius(
       changedSymbols,
       allEdges
@@ -290,7 +272,6 @@ export class CommitIndexer {
       0
     );
 
-    // Identify hotspots (symbols with highest impact)
     const hotspots = Array.from(blastRadiusResult.impactScore.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
@@ -300,7 +281,6 @@ export class CommitIndexer {
         changeType: symbolChanges.get(symbolId)?.type || 'unknown',
       }));
 
-    // Use RiskDetector for additional heuristics
     const detectedRisks = this.riskDetector.detectRisks(
       files,
       {
@@ -315,7 +295,6 @@ export class CommitIndexer {
 
     allRisks.push(...detectedRisks);
 
-    // Aggregate facts
     const facts: CommitFacts = {
       sha,
       symbolsAdded: totalSymbolsAdded,
@@ -330,27 +309,17 @@ export class CommitIndexer {
       hotspots,
     };
 
-    // Store metadata
     this.storeCommitMetadata(commitInfo, facts.filesChanged);
 
-    // Store symbol history
     logInfo(`[CommitIndexer] Storing ${symbolChanges.size} symbol changes for ${sha}`);
     await this.storeSymbolHistory(sha, symbolChanges, blastRadiusResult.impactScore);
 
-    // Store symbols
     await this.storeSymbols(sha, symbolChanges);
 
-    // Store edges (batch insert)
     if (!opts?.modules || opts.modules.includes('edges')) {
-      // We already collected edgesToInsert in parallel, now verify we have them all
-      // storeEdges function in legacy code re-derived them. We should update it to take pre-calculated edges
-      // OR just use the existing storeEdges for safety if logic is complex.
-      // The legacy storeEdges re-reads files/snapshots. That's wasteful.
-      // Let's use the edges we calculated in parallel!
       await this.storeEdgesBatch(sha, edgesToInsert);
     }
 
-    // Detect moved blocks
     const { movedBlocks } = await this.movedBlockDetector.detectMovedBlocks(
       sha,
       Array.from(symbolChanges.values())
@@ -361,10 +330,8 @@ export class CommitIndexer {
         .map(s => s.symbol)
     );
 
-    // Update symbol change types based on moves
     this.reconcileMovesWithSymbols(symbolChanges, movedBlocks);
 
-    // Update hotspot metrics
     const commitInfoForAuthor = await this.git.getCommitInfo(sha);
     await this.updateHotspotsFromBatch(
       sha,
@@ -396,7 +363,6 @@ export class CommitIndexer {
       hotspots: [],
     };
 
-    // Use centralized path filter
     const filterResult = await shouldProcessPathWithLog(
       path,
       {
@@ -433,7 +399,6 @@ export class CommitIndexer {
           });
         }
 
-        // Add removed edges
         for (const edge of parentSnapshot.edges) {
           result.edgesToInsert.push({
             from: edge.from,
@@ -448,7 +413,6 @@ export class CommitIndexer {
       return result;
     }
 
-    // Get current blob
     const currentBlobSha = await this.git.getBlobSha(sha, path);
     const currentContent = await this.git.safeGetFileContent(sha, path);
     const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
@@ -457,7 +421,6 @@ export class CommitIndexer {
       currentContent
     );
 
-    // Extract and save hybrid facts
     await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
 
     if (status === 'A') {
@@ -488,7 +451,6 @@ export class CommitIndexer {
       const parentBlobSha = await this.git.getBlobSha(parentSha, path);
 
       if (parentBlobSha === currentBlobSha) {
-        // Identical content
         await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
         return result;
       }
@@ -533,7 +495,6 @@ export class CommitIndexer {
         });
       }
 
-      // Calculate edge diffs
       const parentEdgeIds = new Set(
         parentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`)
       );
@@ -575,7 +536,6 @@ export class CommitIndexer {
         }
       }
 
-      // Structural diff
       const structDiff = await this.structuralDiffManager.getOrCreateStructuralDiff(
         parentBlobSha,
         currentBlobSha,
@@ -589,7 +549,6 @@ export class CommitIndexer {
       if (structDiff.interfaceChanged) result.risks.push('breaking-api');
       if (structDiff.controlFlowChanged) result.risks.push('refactor');
 
-      // Hybrid facts with parent hash
       const parentFileHash = await this.computeFileHashForFacts(path, parentSha, parentContent);
       await this.extractAndSaveHybridFacts(
         path,
@@ -600,7 +559,6 @@ export class CommitIndexer {
       );
     }
 
-    // Collect potential hotspots (symbols changed in this file)
     const fileSymbols = result.symbolChanges.filter(c => c.filePath === path).map(c => c.symbol);
 
     if (fileSymbols.length > 0) {
@@ -651,14 +609,12 @@ export class CommitIndexer {
     fileHotspots: Array<{ path: string; symbols: any[] }>,
     author?: string
   ): Promise<void> {
-    // Update file-level hotspots
     for (const { path, symbols } of fileHotspots) {
       if (symbols.length >= 5) {
         await this.hotspotDetector.updateFileHotspot(path, sha, symbols, author);
       }
     }
 
-    // Batch update symbol-level hotspots
     const symbols = Array.from(symbolChanges.values())
       .map(change => change.symbol)
       .filter(s => s && s.id && s.dnaId);
@@ -681,7 +637,6 @@ export class CommitIndexer {
       );
     }
 
-    // Snapshot
     const commitCount = this.getCommitCount();
     if (commitCount % 10 === 0) {
       await this.hotspotDetector.createSnapshot(sha);
@@ -703,21 +658,17 @@ export class CommitIndexer {
 
     this.db.transaction(() => {
       for (const [_dnaId, { type, symbol, filePath }] of symbolChanges) {
-        // Map symbol data to table columns
-        // Note: signature_pre/post are not in schema, using signature for now
-        // diff_snippet_pre/post are in schema
-
         stmt.run([
           sha,
           filePath,
-          symbol.id, // Use symbol.id (e.g. "path:kind:name") or dnaId? Schema says symbol_id.
+          symbol.id,
           symbol.name,
           symbol.kind,
           symbol.signature || '',
           type,
-          '', // diff_snippet_pre (not easily available here without diffing again)
-          '', // diff_snippet_post
-          1.0, // confidence
+          '',
+          '',
+          1.0,
         ]);
       }
     })();
@@ -738,7 +689,7 @@ export class CommitIndexer {
     const enableAugment = config.enableCstAugmentation ?? false;
 
     if (!enableCst && !enableAugment) {
-      return; // CST tracking disabled
+      return;
     }
 
     const language = detectLanguage(filePath);
@@ -746,14 +697,10 @@ export class CommitIndexer {
 
     const isCstOnly = isCstOnlyLanguage(language);
     if (!isCstOnly && !enableAugment) {
-      return; // Not CST-only and augmentation disabled
+      return;
     }
 
     try {
-      // Parse file via worker
-      // Note: extractHybridFacts in TreeSitterParser handles worker logic
-      // We pass empty string content if not needed by worker logic for pure extraction,
-      // but worker needs content to parse.
       const hybridFacts = await this.parser.extractHybridFacts(
         content,
         filePath,
@@ -761,7 +708,6 @@ export class CommitIndexer {
         existingSymbols
       );
 
-      // Save via timeline manager
       await this.cstTimelineManager.saveFacts(filePath, commitSha, hybridFacts, prevHash);
       if (hybridFacts.length > 0) {
         logDebug(
@@ -787,7 +733,6 @@ export class CommitIndexer {
     if (!language) return undefined;
 
     try {
-      // Reuse worker to extract facts for hash computation
       const hybridFacts = await this.parser.extractHybridFacts(content, filePath, language);
       const serialized = JSON.stringify(
         hybridFacts.map(f => ({
@@ -868,15 +813,11 @@ export class CommitIndexer {
     ]);
   }
 
-  /**
-   * Store detailed symbol change history
-   */
   private async storeSymbolHistory(
     sha: string,
     symbolChanges: Map<string, { type: string; symbol: any; filePath: string }>,
     impactScores: Map<string, number>
   ): Promise<void> {
-    // Get wrapped database with transaction support
     const stmt = prepare(`
       INSERT INTO symbol_history
       (symbol_dna_id, sha, file_path, name, kind, signature, body_hash,
@@ -884,7 +825,6 @@ export class CommitIndexer {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    // Wrap batch inserts in transaction
     this.db.transaction(() => {
       for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
         const impactScore = impactScores.get(dnaId) || 0;
@@ -905,22 +845,17 @@ export class CommitIndexer {
     })();
   }
 
-  /**
-   * Store edges into edges table with edge_type
-   */
   private async storeEdges(
     sha: string,
     files: Array<{ path: string; status: string }>,
     parentSha: string | null
   ): Promise<void> {
-    // Get wrapped database with transaction support
     const stmt = prepare(`
       INSERT OR REPLACE INTO edges
       (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    // Collect all edge data first (outside transaction, can use await)
     const edgesToInsert: Array<{
       sha: string;
       from: string;
@@ -934,7 +869,6 @@ export class CommitIndexer {
     for (const file of files) {
       const { path, status } = file;
 
-      // Use centralized path filter
       const filterResult = await shouldProcessPathWithLog(
         path,
         {
@@ -951,7 +885,6 @@ export class CommitIndexer {
       }
 
       if (status === 'D') {
-        // File deleted - get parent snapshot edges as removed
         if (parentSha) {
           const parentBlobSha = await this.git.getBlobSha(parentSha, path);
           const parentContent = await this.git.safeGetFileContent(parentSha, path);
@@ -976,7 +909,6 @@ export class CommitIndexer {
         continue;
       }
 
-      // Get current snapshot edges
       const currentBlobSha = await this.git.getBlobSha(sha, path);
       const currentContent = await this.git.safeGetFileContent(sha, path);
       const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
@@ -986,7 +918,6 @@ export class CommitIndexer {
       );
 
       if (status === 'A') {
-        // File added - all edges are added
         for (const edge of currentSnapshot.edges) {
           edgesToInsert.push({
             sha,
@@ -999,7 +930,6 @@ export class CommitIndexer {
           });
         }
       } else if (status === 'M' && parentSha) {
-        // File modified - compare edges
         const parentBlobSha = await this.git.getBlobSha(parentSha, path);
         const parentContent = await this.git.safeGetFileContent(parentSha, path);
         const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
@@ -1015,7 +945,6 @@ export class CommitIndexer {
           currentSnapshot.edges.map(e => `${e.from}-${e.to}-${(e as any).type || 'unknown'}`)
         );
 
-        // Added edges
         for (const edge of currentSnapshot.edges) {
           const edgeKey = `${edge.from}-${edge.to}-${(edge as any).type || 'unknown'}`;
           if (!parentEdgeIds.has(edgeKey)) {
@@ -1031,7 +960,6 @@ export class CommitIndexer {
           }
         }
 
-        // Removed edges
         for (const edge of parentSnapshot.edges) {
           const edgeKey = `${edge.from}-${edge.to}-${(edge as any).type || 'unknown'}`;
           if (!currentEdgeIds.has(edgeKey)) {
@@ -1049,7 +977,6 @@ export class CommitIndexer {
       }
     }
 
-    // Now insert all edges in a single transaction
     if (edgesToInsert.length > 0) {
       this.db.transaction(() => {
         for (const edge of edgesToInsert) {
@@ -1067,9 +994,6 @@ export class CommitIndexer {
     }
   }
 
-  /**
-   * Update hotspot metrics for files and symbols affected by this commit
-   */
   private async updateHotspots(
     sha: string,
     symbolChanges: Map<string, { type: string; symbol: any }>,
@@ -1078,30 +1002,26 @@ export class CommitIndexer {
     const commitInfo = await this.git.getCommitInfo(sha);
     const author = commitInfo.author;
 
-    // Update file-level hotspots (with threshold check)
     for (const file of files) {
       const { path } = file;
-      // Get symbol changes for this file
+
       const fileSymbols = Array.from(symbolChanges.values())
         .filter(change => change.symbol.id.startsWith(`${path}:`))
         .map(change => change.symbol);
 
-      // Skip if symbol changes < 5 (threshold)
       if (fileSymbols.length >= 5) {
         await this.hotspotDetector.updateFileHotspot(path, sha, fileSymbols, author);
       }
     }
 
-    // Batch update symbol-level hotspots with concurrency
     const symbols = Array.from(symbolChanges.values())
       .map(change => change.symbol)
       .filter(s => s && s.id && s.dnaId);
 
     if (symbols.length > 0) {
-      // Use batch method with concurrency limit of 8
       const limit = pLimit(8);
       const batches: SymbolInfo[][] = [];
-      const batchSize = 50; // Process 50 symbols per batch
+      const batchSize = 50;
 
       for (let i = 0; i < symbols.length; i += batchSize) {
         batches.push(symbols.slice(i, i + batchSize));
@@ -1116,16 +1036,12 @@ export class CommitIndexer {
       );
     }
 
-    // Optionally create snapshot for trend analysis (every 10 commits)
     const commitCount = this.getCommitCount();
     if (commitCount % 10 === 0) {
       await this.hotspotDetector.createSnapshot(sha);
     }
   }
 
-  /**
-   * Update symbol change types based on detected moves
-   */
   private reconcileMovesWithSymbols(
     symbolChanges: Map<string, { type: string; symbol: any }>,
     movedBlocks: any[]
@@ -1141,7 +1057,6 @@ export class CommitIndexer {
       if (sourceSymbol && destSymbol) {
         sourceSymbol.type = 'moved';
         destSymbol.type = 'moved';
-        // Could add additional metadata about the move
       }
     }
   }

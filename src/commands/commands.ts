@@ -26,7 +26,6 @@ export async function registerCommands(
   const store = getStore();
 
   try {
-    // Analyze last N commits
     const analyzeLastCommitsCmd = vscode.commands.registerCommand(
       'git-context.analyzeLastCommits',
       async (countArg?: string) => {
@@ -62,18 +61,15 @@ export async function registerCommands(
                 const commits = await git.getRecentCommits(parseInt(count));
                 const shas = commits.map(c => c.sha);
 
-                // Report progress
                 progress.report({
                   increment: 0,
                   message: `Analyzing ${shas.length} commits...`,
                 });
 
-                // Check for cancellation
                 if (token.isCancellationRequested) {
                   return;
                 }
 
-                // Just index commits (quick metadata load)
                 progress.report({
                   increment: 25,
                   message: 'Indexing commits...',
@@ -82,11 +78,9 @@ export async function registerCommands(
 
                 await pipeline.indexCommits(shas);
 
-                // Refresh UI to show indexed commits
                 progress.report({ increment: 50, message: 'Refreshing UI...' });
                 if (token.isCancellationRequested) return;
 
-                // Auto-select the indexed commits
                 store.dispatch({ type: 'SELECTION_SET', payload: { shas } });
                 await updateContexts();
 
@@ -109,7 +103,6 @@ export async function registerCommands(
                   `Indexed ${shas.length} commits. Starting analysis...`
                 );
 
-                // Trigger analysis
                 await vscode.commands.executeCommand('git-context.analyze');
               } catch (error) {
                 vscode.window.showErrorMessage(`Failed to analyze commits: ${error}`);
@@ -120,12 +113,10 @@ export async function registerCommands(
       }
     );
 
-    // Analyze staged changes
     const analyzeStagedCmd = vscode.commands.registerCommand(
       'git-context.analyzeStagedChanges',
       async () => {
         try {
-          // Refresh to ensure we have latest staged files
           await commitsProvider.refresh();
           const state = orchestrator.getState();
           const stagedPaths = state.stagedFiles.map(f => f.path);
@@ -135,14 +126,12 @@ export async function registerCommands(
             return;
           }
 
-          // Select all staged files
           store.dispatch({
             type: 'STAGED_SELECTION_UPDATED',
             payload: { paths: stagedPaths },
           });
           await updateContexts();
 
-          // Trigger full analysis
           await vscode.commands.executeCommand('git-context.analyze');
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to analyze staged changes: ${error}`);
@@ -154,7 +143,6 @@ export async function registerCommands(
       'git-context.analyzeUnstagedChanges',
       async () => {
         try {
-          // Refresh to ensure we have latest unstaged files
           await commitsProvider.refresh();
           const state = orchestrator.getState();
           const unstagedPaths = state.unstagedFiles.map(f => f.path);
@@ -164,14 +152,12 @@ export async function registerCommands(
             return;
           }
 
-          // Select all unstaged files
           store.dispatch({
             type: 'UNSTAGED_SELECTION_UPDATED',
             payload: { paths: unstagedPaths },
           });
           await updateContexts();
 
-          // Trigger full analysis
           await vscode.commands.executeCommand('git-context.analyze');
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to analyze unstaged changes: ${error}`);
@@ -179,7 +165,6 @@ export async function registerCommands(
       }
     );
 
-    // Open symbol in file (used by Cockpit)
     const openSymbolCmd = vscode.commands.registerCommand(
       'git-context.openSymbol',
       async (sha: string, filePath: string, range?: vscode.Range) => {
@@ -203,13 +188,11 @@ export async function registerCommands(
       }
     );
 
-    // Toggle commit selection (Cockpit)
     const toggleCommitSelectionCmd = vscode.commands.registerCommand(
       'git-context.toggleCommitSelection',
       async (shaOrItem: string | any) => {
         const sha = typeof shaOrItem === 'string' ? shaOrItem : shaOrItem?.id || shaOrItem?.sha;
         if (sha) {
-          // Update store state instead of provider
           const state = store.getState();
           const selected = new Set(state.selectedCommitShas);
           if (selected.has(sha)) {
@@ -226,7 +209,6 @@ export async function registerCommands(
       }
     );
 
-    // Clear selection (Cockpit)
     const clearSelectionCmd = vscode.commands.registerCommand(
       'git-context.clearSelection',
       async () => {
@@ -235,7 +217,6 @@ export async function registerCommands(
       }
     );
 
-    // Open evidence (Cockpit)
     const openEvidenceCmd = vscode.commands.registerCommand(
       'git-context.openEvidence',
       async (args: any) => {
@@ -279,7 +260,6 @@ export async function registerCommands(
       }
     );
 
-    // Copy SHA (useful utility, keep)
     const copyShaCmd = vscode.commands.registerCommand(
       'git-context.copySha',
       async (sha: string) => {
@@ -288,7 +268,6 @@ export async function registerCommands(
       }
     );
 
-    // Main analyze command (Cockpit)
     const analyzeCmd = vscode.commands.registerCommand(
       'git-context.analyze',
       async (forceReanalyze = false) => {
@@ -341,21 +320,18 @@ export async function registerCommands(
             }
           }
 
-          // In new architecture, workspace analysis happens as part of the pipeline
-          // Just ensure workspace SHAs are in the selected set
           for (const [mode, request] of workspaceRequests.entries()) {
             if (!request.sha) {
               const currentBranch = await ensureBranch();
               request.sha = makeWorkspaceSha(mode, currentBranch);
             }
-            // Normalize legacy workspace SHAs to include branch for lookup consistency
+
             const parsed = request.sha ? parseWorkspaceSha(request.sha) : null;
             if (parsed && !request.sha.includes('@')) {
               const currentBranch = await ensureBranch();
               request.sha = makeWorkspaceSha(mode, currentBranch);
             }
 
-            // Check if there are actually files to analyze for this workspace mode
             const { GitOperations } = await import('../analysis/git');
             const git = new GitOperations();
             const files =
@@ -376,7 +352,6 @@ export async function registerCommands(
             return;
           }
 
-          // Auto-include HEAD if selection has few files
           const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
           if (commitShas.length > 0) {
             const git = new GitOperations();
@@ -385,9 +360,7 @@ export async function registerCommands(
               try {
                 const files = await git.getFileChanges(sha);
                 estFiles += files.length;
-              } catch (error) {
-                // Skip on error
-              }
+              } catch (error) {}
             }
             if (estFiles < 10) {
               try {
@@ -401,9 +374,7 @@ export async function registerCommands(
                   );
                   shas.push(headSha);
                 }
-              } catch (error) {
-                // Skip HEAD inclusion on error
-              }
+              } catch (error) {}
             }
           }
 
@@ -428,7 +399,6 @@ export async function registerCommands(
             await commitsProvider.refresh();
           }
         } catch (error) {
-          // Update UI state on error
           store.dispatch({
             type: 'ANALYSIS_FAILED',
             payload: {
@@ -439,7 +409,6 @@ export async function registerCommands(
             `Failed to analyze selection: ${error instanceof Error ? error.message : String(error)}`
           );
         } finally {
-          // Ensure UI state is reset
           store.dispatch({
             type: 'ANALYSIS_PROGRESS_UPDATED',
             payload: {
@@ -452,7 +421,6 @@ export async function registerCommands(
       }
     );
 
-    // Open report (Cockpit)
     const openReportCmd = vscode.commands.registerCommand(
       'git-context.openReport',
       async (reportId: string) => {
@@ -461,7 +429,6 @@ export async function registerCommands(
           const reportManager = getReportManager();
           const report = reportManager.load(reportId);
           if (report && report.facts && refactorReportProvider) {
-            // Report manager stores the full analysis and facts
             await refactorReportProvider.showReport(report.analysis, report.facts);
           }
         } catch (error) {
@@ -470,7 +437,6 @@ export async function registerCommands(
       }
     );
 
-    // Regenerate report (Cockpit)
     const regenerateReportCmd = vscode.commands.registerCommand(
       'git-context.regenerateReport',
       async (reportId: string) => {
@@ -487,7 +453,6 @@ export async function registerCommands(
       }
     );
 
-    // Delete report (Cockpit)
     const deleteReportCmd = vscode.commands.registerCommand(
       'git-context.deleteReport',
       async (reportId: string) => {
@@ -506,7 +471,6 @@ export async function registerCommands(
       }
     );
 
-    // Toggle pin report (Cockpit)
     const togglePinReportCmd = vscode.commands.registerCommand(
       'git-context.togglePinReport',
       async (reportId: string) => {
@@ -529,15 +493,13 @@ export async function registerCommands(
       }
     );
 
-    // Add commit by SHA (Cockpit)
     const addCommitByShaCmd = vscode.commands.registerCommand(
       'git-context.addCommitBySha',
       async (shaOrRef: string) => {
         try {
           let sha = shaOrRef;
-          // Simple validation - if it looks like a SHA, use it
+
           if (!/^[0-9a-f]{7,40}$/i.test(shaOrRef)) {
-            // Try to resolve as a ref using git command
             const { GitOperations } = await import('../analysis/git');
             try {
               const git = new GitOperations();
@@ -566,7 +528,6 @@ export async function registerCommands(
       }
     );
 
-    // Select all staged (Cockpit)
     const selectAllStagedCmd = vscode.commands.registerCommand(
       'git-context.selectAllStaged',
       async () => {
@@ -579,7 +540,6 @@ export async function registerCommands(
       }
     );
 
-    // Select all unstaged (Cockpit)
     const selectAllUnstagedCmd = vscode.commands.registerCommand(
       'git-context.selectAllUnstaged',
       async () => {
@@ -592,7 +552,6 @@ export async function registerCommands(
       }
     );
 
-    // Add more commits (Cockpit)
     const addMoreCommitsCmd = vscode.commands.registerCommand(
       'git-context.addMoreCommits',
       async () => {
@@ -610,7 +569,6 @@ export async function registerCommands(
       }
     );
 
-    // Reset all (Cockpit)
     const resetAllCmd = vscode.commands.registerCommand('git-context.resetAll', async () => {
       store.dispatch({ type: 'SELECTION_CLEARED' });
       store.dispatch({ type: 'BUNDLE_CLEARED' });
@@ -623,7 +581,6 @@ export async function registerCommands(
       });
     });
 
-    // Bundle regenerate (Cockpit)
     const bundleRegenerateCmd = vscode.commands.registerCommand(
       'git-context.bundle.regenerate',
       async () => {
@@ -631,23 +588,19 @@ export async function registerCommands(
       }
     );
 
-    // Bundle clear (Cockpit)
     const bundleClearCmd = vscode.commands.registerCommand('git-context.bundle.clear', async () => {
       store.dispatch({ type: 'BUNDLE_CLEARED' });
-      // Clear bundle state (provider method may not exist, that's ok)
+
       await updateContexts();
     });
 
-    // Bundle cancel (Cockpit)
     const bundleCancelCmd = vscode.commands.registerCommand(
       'git-context.bundle.cancel',
       async () => {
-        // Cancel any running analysis
         store.dispatch({ type: 'ANALYSIS_CANCELLED' });
       }
     );
 
-    // Bundle export (Cockpit)
     const bundleExportCmd = vscode.commands.registerCommand(
       'git-context.bundle.export',
       async () => {
@@ -672,7 +625,6 @@ export async function registerCommands(
       }
     );
 
-    // Export rich context (JSON + graphs) using ContextExporter
     const exportContextCmd = vscode.commands.registerCommand(
       'git-context.exportContext',
       async () => {
@@ -718,21 +670,17 @@ export async function registerCommands(
       }
     );
 
-    // Scroll to report section (Cockpit)
     const scrollToReportSectionCmd = vscode.commands.registerCommand(
       'git-context.scrollToReportSection',
       async (sectionId: string) => {
-        // Forward to report webview
         logInfo(`Scroll to section: ${sectionId}`);
       }
     );
 
-    // Open symbol history (Cockpit)
     const openSymbolHistoryCmd = vscode.commands.registerCommand(
       'git-context.openSymbolHistory',
       async (symbolId: string) => {
         try {
-          // Show symbol history in a new document
           const history = prepare(`
             SELECT sha, name, path, change_type, diff_snippet_post
             FROM symbols
@@ -761,7 +709,6 @@ export async function registerCommands(
       }
     );
 
-    // Register downloadWasmFiles command
     const downloadWasmFilesCmd = vscode.commands.registerCommand(
       'git-context.downloadWasmFiles',
       async () => {
@@ -821,7 +768,6 @@ export async function registerCommands(
       }
     );
 
-    // Register generateLiveReport command
     const generateLiveReportCmd = vscode.commands.registerCommand(
       'git-context.generateLiveReport',
       async () => {
@@ -855,7 +801,6 @@ export async function registerCommands(
       }
     );
 
-    // Register all commands
     context.subscriptions.push(
       analyzeLastCommitsCmd,
       analyzeStagedCmd,

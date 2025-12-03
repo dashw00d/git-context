@@ -23,8 +23,8 @@ export class PathFilterError extends Error {
 export function handleServiceError(error: any, context: string): void {
   if (error instanceof DatabaseError && error.recoverable) {
     logDebug(`[${context}] Recoverable error: ${error.message}`);
-    return; // Don't throw recoverable errors - use best-effort mode
+    return;
   }
   logError(`[${context}] Unrecoverable error`, error);
-  return; // Don't throw unrecoverable errors either - log and continue
+  return;
 }

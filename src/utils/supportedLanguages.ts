@@ -2,14 +2,10 @@ import { LRUCache } from 'lru-cache';
 import { getExtensionConfig, getPackageJsonDefault } from './config';
 import { logWarn } from './logger';
 
-/**
- * Convert language name to constant name (e.g., 'c_sharp' -> 'C_SHARP')
- */
 function languageToConstantName(lang: string): string {
   return lang.toUpperCase().replace(/-/g, '_');
 }
 
-// Single source of truth for all supported languages
 const LANGUAGE_CONFIG = {
   bash: {
     wasm: 'https://unpkg.com/tree-sitter-wasms@latest/out/tree-sitter-bash.wasm',
@@ -121,13 +117,10 @@ const LANGUAGE_CONFIG = {
 type LanguageConfig = typeof LANGUAGE_CONFIG;
 export type Language = keyof LanguageConfig;
 
-// Generate WASM_URLS dynamically
 export const WASM_URLS: Record<Language, string> = Object.fromEntries(
   Object.entries(LANGUAGE_CONFIG).map(([lang, config]) => [lang, config.wasm])
 ) as Record<Language, string>;
 
-// Dynamically generate language constants from LANGUAGE_CONFIG
-// Type assertion ensures type safety with mapped uppercase keys
 type LangConstant = { [K in Uppercase<keyof LanguageConfig>]: Language };
 export const LANGUAGES = Object.entries(LANGUAGE_CONFIG).reduce(
   (acc, [lang]) => {
@@ -138,10 +131,8 @@ export const LANGUAGES = Object.entries(LANGUAGE_CONFIG).reduce(
   {} as Record<string, string>
 ) as LangConstant;
 
-// Supported languages array (for build scripts)
 export const SUPPORTED_LANGUAGES = Object.keys(LANGUAGE_CONFIG) as readonly Language[];
 
-// Generate EXT_TO_LANG_MAP dynamically
 export const EXT_TO_LANG_MAP: Record<string, Language> = {};
 for (const [lang, config] of Object.entries(LANGUAGE_CONFIG)) {
   for (const ext of config.extensions) {
@@ -149,27 +140,22 @@ for (const [lang, config] of Object.entries(LANGUAGE_CONFIG)) {
   }
 }
 
-// JS-like languages (dynamic from config)
 const JSLANGUAGES = Object.entries(LANGUAGE_CONFIG)
   .filter(([, config]) => 'isJS' in config && config.isJS === true)
   .map(([lang]) => lang as Language);
 
-// Cache for expensive operations (TTL: 5 minutes)
 const cache = new LRUCache<string, any>({
   max: 100,
-  ttl: 300 * 1000, // 5 minutes in milliseconds
+  ttl: 300 * 1000,
 });
 
-/**
- * Get validated extensions from config, with fallback to defaults
- */
 export function getSupportedExtensions(): string[] {
   const cacheKey = 'supportedExtensions';
   const cached = cache.get(cacheKey) as string[] | undefined;
   if (cached) return cached;
 
   const config = getExtensionConfig();
-  // Get defaults from package.json if not in config
+
   const defaultExts = getPackageJsonDefault('allowedExtensions') || [
     'php',
     'js',
@@ -182,7 +168,6 @@ export function getSupportedExtensions(): string[] {
   ];
   const exts = config.allowedExtensions || defaultExts;
 
-  // Validate: filter out invalid extensions
   const validExts = exts
     .filter((ext: any) => {
       if (typeof ext !== 'string' || !ext.trim()) return false;
@@ -201,9 +186,6 @@ export function getSupportedExtensions(): string[] {
   return validExts;
 }
 
-/**
- * Get unique tree-sitter languages for configured extensions
- */
 export function getSupportedLanguages(): Language[] {
   const cacheKey = 'supportedLanguages';
   const cached = cache.get(cacheKey) as Language[] | undefined;
@@ -216,26 +198,19 @@ export function getSupportedLanguages(): Language[] {
   return languages;
 }
 
-/**
- * Get dynamic regex pattern for test files based on configured extensions
- */
 export function getTestFilePattern(): RegExp {
   const cacheKey = 'testFilePattern';
   const cached = cache.get(cacheKey) as RegExp | undefined;
   if (cached) return cached;
 
   const exts = getSupportedExtensions().join('|');
-  // Optimized pattern: matches test.*.ext, spec.*.ext, or *.test.ext, *.spec.ext
-  // Uses 2 capture groups instead of 3 for better efficiency
+
   const pattern = new RegExp(`(test|spec).*\\.(${exts})$|.*\\.(test|spec)\\.(${exts})$`, 'i');
 
   cache.set(cacheKey, pattern);
   return pattern;
 }
 
-/**
- * Detect tree-sitter language from file path
- */
 export function detectLanguage(filePath: string): Language | null {
   const ext = filePath.split('.').pop()?.toLowerCase();
   if (!ext) return null;
@@ -243,38 +218,22 @@ export function detectLanguage(filePath: string): Language | null {
   return EXT_TO_LANG_MAP[ext] || null;
 }
 
-/**
- * Clear internal cache (called on config changes)
- */
 export function invalidateCache(): void {
   cache.clear();
 }
 
-/**
- * Check if language is a JavaScript-like language (javascript, typescript, or tsx)
- */
 export function isJSLanguage(language: string): boolean {
   return JSLANGUAGES.includes(language as Language);
 }
 
-/**
- * Check if language is PHP
- */
 export function isPHPLanguage(language: string): boolean {
   return language === 'php';
 }
 
-/**
- * Get all JS-like languages (javascript, typescript, tsx)
- */
 export function getJSLanguages(): Language[] {
   return [...JSLANGUAGES];
 }
 
-/**
- * Get languages needed for configured extensions (for WASM download)
- * Returns array of language names that need WASM files
- */
 export function getRequiredLanguagesForExtensions(extensions: string[]): Language[] {
   const requiredLanguages = new Set<Language>();
 
@@ -289,31 +248,16 @@ export function getRequiredLanguagesForExtensions(extensions: string[]): Languag
   return Array.from(requiredLanguages);
 }
 
-/**
- * Get missing WASM files based on configured extensions
- * Returns array of language names that need to be downloaded
- */
 export function getMissingWasmFiles(extensions: string[]): Language[] {
   const requiredLanguages = getRequiredLanguagesForExtensions(extensions);
 
-  // Check which WASM files exist (this would need to be called from Node.js context)
-  // For now, return all required languages - the download script will check file existence
   return requiredLanguages;
 }
 
-/**
- * Get languages that can be augmented with CST facts (hybrid mode)
- * Returns all SUPPORTED_LANGUAGES by default, optionally filtered by config
- */
 export function getAugmentableLanguages(): Language[] {
-  // All supported languages can be augmented with CST facts
-  // This includes PHP, JS/TS, and others that have semantic symbols
   return [...SUPPORTED_LANGUAGES];
 }
 
-/**
- * Check if a language is CST-only (no semantic symbols, only structural tracking)
- */
 export function isCstOnlyLanguage(language: Language | string): boolean {
   const config = getExtensionConfig();
   const cstLangs = (config.cstLanguages || ['markdown', 'json', 'yaml', 'css']).map(l =>
