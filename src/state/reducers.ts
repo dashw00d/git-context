@@ -57,6 +57,8 @@ export const initialState: CockpitState = {
   actionHistory: [],
   pipelineErrors: [],
   pipelineStepTimings: {},
+  nodeMetrics: {},
+  currentTimeFilter: Date.now(),
 };
 
 export function cockpitReducer(state: CockpitState = initialState, action: Action): CockpitState {
@@ -388,6 +390,11 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
 
     case 'RESET_ALL_STATE':
       return initialState;
+
+    case 'NODE_METRICS_UPDATED':
+      return { ...state, nodeMetrics: action.payload.metrics };
+    case 'TIME_FILTER_UPDATED':
+      return { ...state, currentTimeFilter: action.payload.timestamp };
 
     default:
       return state;

@@ -25,7 +25,12 @@ export const FolderStage: React.FC<{
 
   const filteredHotspots = React.useMemo(() => {
     if (!bundleData?.hotspots) return [];
-    return bundleData.hotspots.filter((file: any) => file.path.startsWith(folderPath));
+    return bundleData.hotspots
+      .filter((file: any) => file.path.startsWith(folderPath))
+      .map((file: any) => ({
+        ...file,
+        name: file.name || file.path.split('/').pop() || 'Unknown',
+      }));
   }, [bundleData?.hotspots, folderPath]);
 
   const filteredTreemap = React.useMemo(() => {

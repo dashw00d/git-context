@@ -2,7 +2,7 @@ import * as React from 'react';
 import { CockpitState } from '../../../../types/cockpit';
 import { postMessageWithTracing } from '../../utils/messageUtils';
 import { ConfigPanel, BundleConfig } from './templates/ConfigPanel';
-import { SummaryStats } from './templates/SummaryStats';
+import { StatsSection } from '../StatsSection';
 import { TreemapView } from './templates/TreemapView';
 import { HotspotList } from './templates/HotspotList';
 import { RisksList } from './templates/RisksList';
@@ -99,12 +99,8 @@ export const BundleStage: React.FC<{
         />
       )}
 
-      {cockpitState?.bundleSummary && (
-        <SummaryStats
-          commitCount={cockpitState.bundleSummary.commitCount}
-          fileCount={cockpitState.bundleSummary.fileCount}
-          symbolCount={cockpitState.bundleSummary.symbolCount}
-        />
+      {cockpitState && (
+        <StatsSection state={cockpitState} vscode={vscode} />
       )}
 
       <TreemapView

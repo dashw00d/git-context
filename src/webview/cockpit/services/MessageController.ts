@@ -4,6 +4,7 @@ import {
   bundleActions,
   commitActions,
   liveActions,
+  metricsActions,
   navigationActions,
   reportActions,
   symbolActions,
@@ -422,6 +423,9 @@ export class MessageController {
           // Trigger data update with new config
           await this.analysisController.updateBundleData();
         }
+        break;
+      case 'updateTimeFilter':
+        getStore().dispatch(metricsActions.setTimeFilter(msg.value));
         break;
       default:
         break;

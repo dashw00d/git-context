@@ -1,4 +1,4 @@
-import { ContextFrame, ExplorerNode } from '../../../types/cockpit';
+import { ContextFrame, ExplorerNode, NodeMetrics } from '../../../types/cockpit';
 
 export interface SidebarProps {
   data: ExplorerNode[];
@@ -6,6 +6,9 @@ export interface SidebarProps {
   onSelect: (node: ExplorerNode) => void;
   repoName?: string;
   branchName?: string;
+  allMetrics?: Record<string, NodeMetrics>;
+  currentTimeFilter?: number;
+  onTimeFilterChange?: (value: number) => void;
 }
 
 export interface StageProps {

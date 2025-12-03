@@ -220,3 +220,14 @@ export const workspaceActions = {
     payload: { workspaceFacts },
   }),
 };
+
+export const metricsActions = {
+  update: (metrics: Record<string, any>): Action => ({
+    type: 'NODE_METRICS_UPDATED',
+    payload: { metrics },
+  }),
+  setTimeFilter: (timestamp: number): Action => ({
+    type: 'TIME_FILTER_UPDATED',
+    payload: { timestamp },
+  }),
+};

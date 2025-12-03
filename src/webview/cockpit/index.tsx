@@ -87,6 +87,8 @@ const defaultState: CockpitState = {
   },
   history: [],
   explorerData: [],
+  nodeMetrics: {},
+  currentTimeFilter: Date.now(),
 };
 
 const App: React.FC = () => {

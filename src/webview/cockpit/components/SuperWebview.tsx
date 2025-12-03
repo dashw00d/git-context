@@ -3,7 +3,6 @@ import { CockpitState, ContextFrame, ExplorerNode } from '../../../types/cockpit
 import { CockpitHostMessageSchema } from '../../../state/schemas';
 import { getMessageTracer, postMessageWithTracing } from '../utils/messageUtils';
 import { Assistant } from './Assistant';
-import { Inspector } from './Inspector';
 import { Sidebar } from './Sidebar';
 import { Stage } from './Stage';
 
@@ -33,7 +32,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
   >([]);
   const [width, setWidth] = React.useState(window.innerWidth);
   const [activeTab, setActiveTab] = React.useState<
-    'explorer' | 'stage' | 'inspector' | 'assistant'
+    'explorer' | 'stage' | 'assistant'
   >('stage');
   const [isAssistantOpen, setIsAssistantOpen] = React.useState(true);
 
@@ -42,8 +41,6 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
   const history = cockpitState.history;
   const explorerData = cockpitState.explorerData;
   // Selection is now handled via store actions if needed, or local to Stage if ephemeral.
-  // For now, let's assume selection is ephemeral to the Stage component or we add it to store.
-  // The original code had `selection` in state. Let's use a local state for selection for now as it's often transient.
   const [selection, setSelection] = React.useState<any>(null);
 
   React.useEffect(() => {
@@ -200,10 +197,14 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
     }
   };
 
+  const handleTimeFilterChange = (value: number) => {
+    postMessageWithTracing(vscode, { type: 'updateTimeFilter', value });
+  };
+
   return (
     <div style={LayoutStyle}>
       <div style={MainAreaStyle}>
-        {/* Wide: Show all 3 columns */}
+        {/* Wide: Show Sidebar + Stage + Assistant */}
         {isWide && (
           <>
             <Sidebar
@@ -212,6 +213,9 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
               onSelect={handleSidebarSelect}
               repoName={cockpitState.repoName || undefined}
               branchName={cockpitState.branchName || undefined}
+              allMetrics={cockpitState.nodeMetrics}
+              currentTimeFilter={cockpitState.currentTimeFilter}
+              onTimeFilterChange={handleTimeFilterChange}
             />
             <Stage
               frame={activeFrame}
@@ -221,7 +225,10 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
               cockpitState={cockpitState}
               vscode={vscode}
             />
-            <Inspector frame={activeFrame} selection={selection} />
+            {/* Inspector removed, Assistant is separate or integrated? 
+                Plan says "Inspector is gone". 
+                Let's keep Assistant visible in wide mode if open.
+            */}
             {/* Debug / Cache Stats Footer */}
             {cockpitState.bundleSummary &&
               (cockpitState.bundleSummary as any).cacheHits !== undefined && (
@@ -243,7 +250,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
           </>
         )}
 
-        {/* Medium: Show Sidebar + Stage (hide Inspector) */}
+        {/* Medium: Show Sidebar + Stage */}
         {isMedium && (
           <div
             style={{
@@ -255,9 +262,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
             }}
           >
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
-              {activeTab === 'inspector' ? (
-                <Inspector frame={activeFrame} selection={selection} />
-              ) : activeTab === 'assistant' ? (
+              {activeTab === 'assistant' ? (
                 <Assistant
                   frame={activeFrame}
                   contextData={{}}
@@ -272,6 +277,9 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
                     onSelect={handleSidebarSelect}
                     repoName={cockpitState.repoName || undefined}
                     branchName={cockpitState.branchName || undefined}
+                    allMetrics={cockpitState.nodeMetrics}
+                    currentTimeFilter={cockpitState.currentTimeFilter}
+                    onTimeFilterChange={handleTimeFilterChange}
                   />
                   <Stage
                     frame={activeFrame}
@@ -303,37 +311,17 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
                   textAlign: 'center',
                   cursor: 'pointer',
                   borderTop:
-                    activeTab !== 'inspector'
+                    activeTab !== 'assistant'
                       ? '2px solid var(--vscode-activityBar-foreground)'
                       : '2px solid transparent',
                   color:
-                    activeTab !== 'inspector'
+                    activeTab !== 'assistant'
                       ? 'var(--vscode-activityBar-foreground)'
                       : 'var(--vscode-activityBar-inactiveForeground)',
                   fontSize: '0.85em',
                 }}
               >
                 Explorer + Stage
-              </div>
-              <div
-                onClick={() => setActiveTab('inspector')}
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  borderTop:
-                    activeTab === 'inspector'
-                      ? '2px solid var(--vscode-activityBar-foreground)'
-                      : '2px solid transparent',
-                  color:
-                    activeTab === 'inspector'
-                      ? 'var(--vscode-activityBar-foreground)'
-                      : 'var(--vscode-activityBar-inactiveForeground)',
-                  fontSize: '0.85em',
-                }}
-              >
-                Inspector
               </div>
               <div
                 onClick={() => setActiveTab('assistant')}
@@ -378,6 +366,9 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
                   onSelect={handleSidebarSelectWrapper}
                   repoName={cockpitState.repoName || undefined}
                   branchName={cockpitState.branchName || undefined}
+                  allMetrics={cockpitState.nodeMetrics}
+                  currentTimeFilter={cockpitState.currentTimeFilter}
+                  onTimeFilterChange={handleTimeFilterChange}
                 />
               )}
               {activeTab === 'stage' && (
@@ -390,7 +381,6 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
                   vscode={vscode}
                 />
               )}
-              {activeTab === 'inspector' && <Inspector frame={activeFrame} selection={selection} />}
               {activeTab === 'assistant' && (
                 <Assistant
                   frame={activeFrame}
@@ -411,7 +401,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
                 height: '40px',
               }}
             >
-              {['explorer', 'stage', 'inspector', 'assistant'].map(tab => (
+              {['explorer', 'stage', 'assistant'].map(tab => (
                 <div
                   key={tab}
                   onClick={() => setActiveTab(tab as any)}
@@ -436,9 +426,7 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
                     ? '📁'
                     : tab === 'stage'
                       ? '🎯'
-                      : tab === 'inspector'
-                        ? '🔍'
-                        : '🤖'}
+                      : '🤖'}
                 </div>
               ))}
             </div>

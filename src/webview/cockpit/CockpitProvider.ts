@@ -164,13 +164,45 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           this.analysisController.updateBundleData();
         }
       }
-      // Always update explorer tree if facts or config changed
-      this.updateExplorerTree();
+    // Always update explorer tree if facts or config changed
+      this.updateExplorerTree().then(() => {
+        // After explorer tree updates, refresh metrics for the visible nodes
+        this.refreshNodeMetrics();
+      });
     }
   }
 
   getState(): CockpitState {
     return getStore().getState();
+  }
+
+  async refreshNodeMetrics() {
+    try {
+      const { MetricsService } = await import('../../services/metricsService');
+      const { metricsActions } = await import('../../state/actionCreators');
+      
+      // Collect all file paths from explorer data
+      const paths: string[] = [];
+      const traverse = (nodes: any[]) => {
+        for (const node of nodes) {
+          if (node.type === 'file') {
+            paths.push(node.id); // Assuming id is the file path for files
+          }
+          if (node.children) {
+            traverse(node.children);
+          }
+        }
+      };
+      
+      traverse(this.state.explorerData || []);
+
+      if (paths.length > 0) {
+        const metrics = await MetricsService.getInstance().getNodeMetrics(paths, this.state.currentTimeFilter);
+        getStore().dispatch(metricsActions.update(metrics));
+      }
+    } catch (error) {
+      logError('[Cockpit] Failed to refresh node metrics', error);
+    }
   }
 
   updateCommits(commits: CockpitState['commits']) {

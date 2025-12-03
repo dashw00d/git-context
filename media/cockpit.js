@@ -521,7 +521,7 @@
             }
             return element;
           };
-          function createElement15(type, config, children) {
+          function createElement29(type, config, children) {
             var propName;
             var props = {};
             var key = null;
@@ -1107,7 +1107,7 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useRef(initialValue);
           }
-          function useEffect4(create, deps) {
+          function useEffect5(create, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useEffect(create, deps);
           }
@@ -1123,7 +1123,7 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useCallback(callback, deps);
           }
-          function useMemo(create, deps) {
+          function useMemo2(create, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useMemo(create, deps);
           }
@@ -1620,7 +1620,7 @@
                 error("React.createElement: type is invalid -- expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s", typeString, info);
               }
             }
-            var element = createElement15.apply(this, arguments);
+            var element = createElement29.apply(this, arguments);
             if (element == null) {
               return element;
             }
@@ -1890,12 +1890,12 @@
           exports.useContext = useContext;
           exports.useDebugValue = useDebugValue;
           exports.useDeferredValue = useDeferredValue;
-          exports.useEffect = useEffect4;
+          exports.useEffect = useEffect5;
           exports.useId = useId;
           exports.useImperativeHandle = useImperativeHandle;
           exports.useInsertionEffect = useInsertionEffect;
           exports.useLayoutEffect = useLayoutEffect;
-          exports.useMemo = useMemo;
+          exports.useMemo = useMemo2;
           exports.useReducer = useReducer;
           exports.useRef = useRef;
           exports.useState = useState9;
@@ -2394,9 +2394,9 @@
           if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart === "function") {
             __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
           }
-          var React15 = require_react();
+          var React29 = require_react();
           var Scheduler = require_scheduler();
-          var ReactSharedInternals = React15.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+          var ReactSharedInternals = React29.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
           var suppressWarning = false;
           function setSuppressWarning(newSuppressWarning) {
             {
@@ -2445,7 +2445,7 @@
           var HostPortal = 4;
           var HostComponent = 5;
           var HostText = 6;
-          var Fragment5 = 7;
+          var Fragment7 = 7;
           var Mode = 8;
           var ContextConsumer = 9;
           var ContextProvider = 10;
@@ -3602,7 +3602,7 @@
                 return "DehydratedFragment";
               case ForwardRef:
                 return getWrappedName$1(type, type.render, "ForwardRef");
-              case Fragment5:
+              case Fragment7:
                 return "Fragment";
               case HostComponent:
                 return type;
@@ -4003,7 +4003,7 @@
             {
               if (props.value == null) {
                 if (typeof props.children === "object" && props.children !== null) {
-                  React15.Children.forEach(props.children, function(child) {
+                  React29.Children.forEach(props.children, function(child) {
                     if (child == null) {
                       return;
                     }
@@ -9427,7 +9427,7 @@
               }
             }
           }
-          function createElement15(type, props, rootContainerElement, parentNamespace) {
+          function createElement29(type, props, rootContainerElement, parentNamespace) {
             var isCustomComponentTag;
             var ownerDocument = getOwnerDocumentFromRootContainer(rootContainerElement);
             var domElement;
@@ -10297,7 +10297,7 @@
               }
               parentNamespace = hostContextDev.namespace;
             }
-            var domElement = createElement15(type, props, rootContainerInstance, parentNamespace);
+            var domElement = createElement29(type, props, rootContainerInstance, parentNamespace);
             precacheFiberNode(internalInstanceHandle, domElement);
             updateFiberProps(domElement, props);
             return domElement;
@@ -12031,7 +12031,7 @@
               }
             }
             function updateFragment2(returnFiber, current2, fragment, lanes, key) {
-              if (current2 === null || current2.tag !== Fragment5) {
+              if (current2 === null || current2.tag !== Fragment7) {
                 var created = createFiberFromFragment(fragment, returnFiber.mode, lanes, key);
                 created.return = returnFiber;
                 return created;
@@ -12434,7 +12434,7 @@
                 if (child.key === key) {
                   var elementType = element.type;
                   if (elementType === REACT_FRAGMENT_TYPE) {
-                    if (child.tag === Fragment5) {
+                    if (child.tag === Fragment7) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var existing = useFiber(child, element.props.children);
                       existing.return = returnFiber;
@@ -17910,7 +17910,7 @@
                 var _resolvedProps2 = workInProgress2.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current2, workInProgress2, type, _resolvedProps2, renderLanes2);
               }
-              case Fragment5:
+              case Fragment7:
                 return updateFragment(current2, workInProgress2, renderLanes2);
               case Mode:
                 return updateMode(current2, workInProgress2, renderLanes2);
@@ -18182,7 +18182,7 @@
               case SimpleMemoComponent:
               case FunctionComponent:
               case ForwardRef:
-              case Fragment5:
+              case Fragment7:
               case Mode:
               case Profiler:
               case ContextConsumer:
@@ -22443,7 +22443,7 @@
             return fiber;
           }
           function createFiberFromFragment(elements, mode, lanes, key) {
-            var fiber = createFiber(Fragment5, elements, key, mode);
+            var fiber = createFiber(Fragment7, elements, key, mode);
             fiber.lanes = lanes;
             return fiber;
           }
@@ -23593,7 +23593,7 @@
   });
 
   // src/webview/cockpit/index.tsx
-  var React14 = __toESM(require_react());
+  var React28 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
   // node_modules/zod/v3/external.js
@@ -27875,7 +27875,8 @@
     external_exports.object({ type: external_exports.literal("ready") }),
     external_exports.object({ type: external_exports.literal("clearError") }),
     external_exports.object({ type: external_exports.literal("navigateToFrame"), frame: ContextFrameSchema }),
-    external_exports.object({ type: external_exports.literal("navigateBack") })
+    external_exports.object({ type: external_exports.literal("navigateBack") }),
+    external_exports.object({ type: external_exports.literal("updateTimeFilter"), value: external_exports.number() })
   ]);
   var CockpitStateSchema = external_exports.object({
     repoName: external_exports.string().nullable(),
@@ -28009,7 +28010,7 @@
   };
 
   // src/webview/cockpit/components/SuperWebview.tsx
-  var React12 = __toESM(require_react());
+  var React26 = __toESM(require_react());
 
   // src/utils/logger.ts
   var vscode;
@@ -28259,239 +28260,289 @@
     ), /* @__PURE__ */ React.createElement("button", { style: { padding: "8px 15px", cursor: "pointer" }, onClick: () => send(input) }, "Send")));
   };
 
-  // src/webview/cockpit/components/Inspector.tsx
+  // src/webview/cockpit/components/Sidebar.tsx
+  var React4 = __toESM(require_react());
+
+  // src/webview/cockpit/components/RichTreeItem.tsx
   var React2 = __toESM(require_react());
-  var InspectorContainer = {
-    minWidth: "250px",
-    width: "100%",
-    maxWidth: "300px",
-    borderLeft: "1px solid var(--vscode-panel-border)",
+  var NodeStyle = (isActive) => ({
+    padding: "4px 8px 4px 0",
+    // Removed left padding, handled by Sentinel
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    backgroundColor: isActive ? "var(--vscode-list-activeSelectionBackground)" : "transparent",
+    color: isActive ? "var(--vscode-list-activeSelectionForeground)" : "var(--vscode-list-foreground)",
+    position: "relative",
+    fontSize: "13px",
+    lineHeight: "22px",
+    transition: "background-color 0.1s ease",
+    minHeight: "24px"
+  });
+  var SentinelStrip = ({ lastModified }) => {
+    if (!lastModified) {
+      return /* @__PURE__ */ React2.createElement("div", { style: { width: "4px", height: "100%", marginRight: "6px", borderRight: "1px solid var(--vscode-tree-indentGuidesStroke)" } });
+    }
+    const now = Date.now();
+    const diff = now - lastModified;
+    const isToday = diff < 24 * 60 * 60 * 1e3;
+    const isWeek = diff < 7 * 24 * 60 * 60 * 1e3;
+    if (isToday) {
+      return /* @__PURE__ */ React2.createElement(
+        "div",
+        {
+          title: "Edited Today",
+          style: {
+            width: "4px",
+            height: "100%",
+            backgroundColor: "var(--vscode-charts-green)",
+            // Green for today
+            marginRight: "6px"
+          }
+        }
+      );
+    }
+    if (isWeek) {
+      return /* @__PURE__ */ React2.createElement(
+        "div",
+        {
+          title: "Edited this week",
+          style: {
+            width: "4px",
+            height: "100%",
+            borderLeft: "1px solid var(--vscode-charts-blue)",
+            // Blue for week
+            borderRight: "1px solid var(--vscode-charts-blue)",
+            marginRight: "6px"
+          }
+        }
+      );
+    }
+    return /* @__PURE__ */ React2.createElement(
+      "div",
+      {
+        title: "Stable (Older than 1 week)",
+        style: {
+          width: "4px",
+          height: "100%",
+          borderRight: "1px solid var(--vscode-tree-indentGuidesStroke)",
+          marginRight: "6px"
+        }
+      }
+    );
+  };
+  var RiskIndicator = ({ score }) => {
+    if (score < 10) return null;
+    let color = "var(--vscode-charts-green)";
+    if (score > 70) color = "var(--vscode-charts-red)";
+    else if (score > 40) color = "var(--vscode-charts-yellow)";
+    return /* @__PURE__ */ React2.createElement(
+      "div",
+      {
+        title: `Risk Score: ${score}`,
+        style: {
+          width: "8px",
+          height: "8px",
+          borderRadius: "50%",
+          backgroundColor: color,
+          marginLeft: "6px",
+          flexShrink: 0,
+          boxShadow: "0 0 2px rgba(0,0,0,0.2)"
+        }
+      }
+    );
+  };
+  var DriftIcon = ({ count }) => {
+    if (count <= 0) return null;
+    return /* @__PURE__ */ React2.createElement("span", { title: `${count} Drift Warnings`, style: { fontSize: "12px", marginLeft: "6px", cursor: "help" } }, "\u{1F47B}");
+  };
+  var TrafficBadge = ({ count }) => {
+    if (count <= 5) return null;
+    return /* @__PURE__ */ React2.createElement(
+      "span",
+      {
+        title: `${count} Incoming References`,
+        style: {
+          fontSize: "10px",
+          color: "var(--vscode-descriptionForeground)",
+          marginLeft: "6px",
+          fontFamily: "monospace",
+          cursor: "pointer"
+        },
+        onMouseEnter: (e) => {
+          e.currentTarget.style.color = "var(--vscode-textLink-foreground)";
+        },
+        onMouseLeave: (e) => {
+          e.currentTarget.style.color = "var(--vscode-descriptionForeground)";
+        }
+      },
+      count
+    );
+  };
+  var RichTreeItem = ({ node, depth, activeId, allMetrics, onSelect }) => {
+    const [expanded, setExpanded] = React2.useState(true);
+    const hasChildren = node.children && node.children.length > 0;
+    const isActive = node.id === activeId;
+    const metrics = allMetrics ? allMetrics[node.id] : void 0;
+    const handleSelect = (e) => {
+      e.stopPropagation();
+      onSelect(node);
+      if (hasChildren) setExpanded(!expanded);
+    };
+    const tooltip = metrics ? `${node.name}
+Risk: ${metrics.riskScore}
+Churn: ${metrics.churnScore}
+Drift: ${metrics.driftCount}
+Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.name;
+    return /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement(
+      "div",
+      {
+        style: { ...NodeStyle(isActive), paddingLeft: 0 },
+        onClick: handleSelect,
+        title: tooltip
+      },
+      /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", height: "22px", alignItems: "center" } }, /* @__PURE__ */ React2.createElement("div", { style: { width: `${depth * 12}px`, height: "100%" } }), /* @__PURE__ */ React2.createElement(SentinelStrip, { lastModified: metrics?.lastModified })),
+      /* @__PURE__ */ React2.createElement(
+        "div",
+        {
+          style: {
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            backgroundColor: node.status === "ready" ? "var(--vscode-charts-green)" : node.status === "scanning" ? "var(--vscode-charts-yellow)" : "var(--vscode-disabledForeground)",
+            marginRight: "6px",
+            flexShrink: 0,
+            opacity: 0.7,
+            animation: node.status === "scanning" ? "pulse 1.5s infinite ease-in-out" : "none"
+          }
+        }
+      ),
+      /* @__PURE__ */ React2.createElement(
+        "span",
+        {
+          style: {
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            opacity: metrics?.riskScore && metrics.riskScore > 70 ? 1 : 0.9,
+            fontWeight: isActive ? 600 : 400,
+            textDecoration: metrics?.driftCount && metrics.driftCount > 0 ? "underline wavy var(--vscode-charts-orange)" : "none"
+          }
+        },
+        node.name
+      ),
+      /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", alignItems: "center", marginLeft: "auto", paddingRight: "8px" } }, metrics && /* @__PURE__ */ React2.createElement(React2.Fragment, null, /* @__PURE__ */ React2.createElement(TrafficBadge, { count: metrics.incomingRefs }), /* @__PURE__ */ React2.createElement(DriftIcon, { count: metrics.driftCount }), /* @__PURE__ */ React2.createElement(RiskIndicator, { score: metrics.riskScore })))
+    ), hasChildren && expanded && /* @__PURE__ */ React2.createElement("div", null, node.children.map((child) => /* @__PURE__ */ React2.createElement(
+      RichTreeItem,
+      {
+        key: child.id,
+        node: child,
+        depth: depth + 1,
+        activeId,
+        allMetrics,
+        onSelect
+      }
+    ))));
+  };
+
+  // src/webview/cockpit/components/TimeSlider.tsx
+  var React3 = __toESM(require_react());
+  var ContainerStyle = {
+    padding: "16px",
+    borderTop: "1px solid var(--vscode-panel-border)",
     backgroundColor: "var(--vscode-sideBar-background)",
     display: "flex",
     flexDirection: "column",
-    overflow: "hidden"
+    gap: "8px"
   };
-  var TabsContainer = {
+  var LabelStyle = {
+    fontSize: "11px",
+    fontWeight: 600,
+    color: "var(--vscode-sideBarTitle-foreground)",
+    textTransform: "uppercase",
+    letterSpacing: "0.5px",
     display: "flex",
-    borderBottom: "1px solid var(--vscode-panel-border)"
+    justifyContent: "space-between",
+    alignItems: "center"
   };
-  var TabStyle = {
-    flex: 1,
-    padding: "8px",
-    textAlign: "center",
+  var SliderStyle = {
+    width: "100%",
     cursor: "pointer",
-    fontSize: "0.9em",
-    borderBottom: "2px solid transparent"
+    accentColor: "var(--vscode-progressBar-background)",
+    height: "4px"
   };
-  var ActiveTabStyle = {
-    ...TabStyle,
-    borderBottom: "2px solid var(--vscode-panelTitle-activeBorder)",
-    color: "var(--vscode-panelTitle-activeForeground)"
-  };
-  var ContentStyle = {
-    flex: 1,
-    padding: "15px",
-    overflow: "auto"
-  };
-  var Inspector = ({ frame }) => {
-    const [activeLens, setActiveLens] = React2.useState("timeline");
-    const isBundle = frame.level === "bundle";
-    const isFile = frame.level === "file";
-    const isSymbol = frame.level === "symbol";
-    const timeline = frame.data?.timeline || [];
-    const drift = frame.data?.drift || [];
-    const relations = frame.data?.blastRadius || frame.data?.relations || { incoming: [], outgoing: [], imports: [] };
-    const risk = frame.data?.risk || null;
-    return /* @__PURE__ */ React2.createElement("div", { style: InspectorContainer }, /* @__PURE__ */ React2.createElement("div", { style: TabsContainer }, ["timeline", "drift", "relations", "risk"].map((lens) => /* @__PURE__ */ React2.createElement(
-      "div",
+  var TimeSlider = ({ value, onChange }) => {
+    const now = Date.now();
+    const oneWeek = 7 * 24 * 60 * 60 * 1e3;
+    const oneMonth = 30 * 24 * 60 * 60 * 1e3;
+    const threeMonths = 3 * 30 * 24 * 60 * 60 * 1e3;
+    const oneYear = 365 * 24 * 60 * 60 * 1e3;
+    const timestampToSlider = (ts) => {
+      const diff = now - ts;
+      if (diff <= 0) return 100;
+      if (diff <= oneWeek) return 75 + 25 * (1 - diff / oneWeek);
+      if (diff <= oneMonth) return 50 + 25 * (1 - (diff - oneWeek) / (oneMonth - oneWeek));
+      if (diff <= threeMonths) return 25 + 25 * (1 - (diff - oneMonth) / (threeMonths - oneMonth));
+      if (diff <= oneYear) return 25 * (1 - (diff - threeMonths) / (oneYear - threeMonths));
+      return 0;
+    };
+    const sliderToTimestamp = (val) => {
+      if (val >= 100) return now;
+      if (val >= 75) return now - oneWeek * (1 - (val - 75) / 25);
+      if (val >= 50) return now - (oneWeek + (oneMonth - oneWeek) * (1 - (val - 50) / 25));
+      if (val >= 25) return now - (oneMonth + (threeMonths - oneMonth) * (1 - (val - 25) / 25));
+      return now - (threeMonths + (oneYear - threeMonths) * (1 - val / 25));
+    };
+    const handleChange = (e) => {
+      const val = parseInt(e.target.value, 10);
+      onChange(sliderToTimestamp(val));
+    };
+    const getLabel = (ts) => {
+      const diff = now - ts;
+      if (diff < 60 * 1e3) return "Now";
+      if (diff < oneWeek) return "Last Week";
+      if (diff < oneMonth) return "Last Month";
+      if (diff < threeMonths) return "Last 3 Months";
+      return "Last Year";
+    };
+    const reset = () => onChange(now);
+    return /* @__PURE__ */ React3.createElement("div", { style: ContainerStyle }, /* @__PURE__ */ React3.createElement("div", { style: LabelStyle }, /* @__PURE__ */ React3.createElement("span", null, "Time Travel"), /* @__PURE__ */ React3.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React3.createElement("span", { style: { color: "var(--vscode-descriptionForeground)", fontWeight: "normal" } }, getLabel(value)), value < now - 6e4 && /* @__PURE__ */ React3.createElement(
+      "span",
       {
-        key: lens,
-        style: activeLens === lens ? ActiveTabStyle : TabStyle,
-        onClick: () => setActiveLens(lens)
-      },
-      lens.charAt(0).toUpperCase() + lens.slice(1)
-    ))), /* @__PURE__ */ React2.createElement("div", { style: ContentStyle }, /* @__PURE__ */ React2.createElement("h4", null, activeLens.charAt(0).toUpperCase() + activeLens.slice(1), " Lens"), /* @__PURE__ */ React2.createElement("p", { style: { fontSize: "0.9em", color: "var(--vscode-descriptionForeground)" } }, "Scoped to: ", /* @__PURE__ */ React2.createElement("strong", null, frame.name), " (", frame.level, ")"), activeLens === "timeline" && /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement("ul", { style: { paddingLeft: "20px", marginTop: "10px", listStyle: "none" } }, timeline.map((item, index) => /* @__PURE__ */ React2.createElement(
-      "li",
-      {
-        key: index,
+        onClick: reset,
         style: {
-          marginBottom: "15px",
-          borderLeft: item.virtual ? "2px dashed var(--vscode-gitDecoration-modifiedResourceForeground)" : "2px solid var(--vscode-charts-blue)",
-          paddingLeft: "10px"
-        }
-      },
-      /* @__PURE__ */ React2.createElement(
-        "div",
-        {
-          style: {
-            fontWeight: "bold",
-            display: "flex",
-            alignItems: "center",
-            gap: "5px"
-          }
+          cursor: "pointer",
+          fontSize: "14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "16px",
+          height: "16px",
+          borderRadius: "50%",
+          backgroundColor: "var(--vscode-badge-background)",
+          color: "var(--vscode-badge-foreground)"
         },
-        item.virtual && /* @__PURE__ */ React2.createElement(
-          "span",
-          {
-            style: {
-              fontSize: "0.8em",
-              padding: "2px 4px",
-              borderRadius: "4px",
-              background: "var(--vscode-badge-background)",
-              color: "var(--vscode-badge-foreground)"
-            }
-          },
-          "VIRTUAL"
-        ),
-        item.message
-      ),
-      /* @__PURE__ */ React2.createElement(
-        "div",
-        {
-          style: {
-            fontSize: "0.8em",
-            color: "var(--vscode-descriptionForeground)",
-            marginTop: "2px"
-          }
-        },
-        item.date ? new Date(item.date).toLocaleString() : "Now",
-        " \u2022 ",
-        item.author
-      ),
-      item.stats && /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.8em", marginTop: "2px" } }, /* @__PURE__ */ React2.createElement(
-        "span",
-        {
-          style: { color: "var(--vscode-gitDecoration-addedResourceForeground)" }
-        },
-        "+",
-        item.stats.additions
-      ), " ", /* @__PURE__ */ React2.createElement(
-        "span",
-        {
-          style: { color: "var(--vscode-gitDecoration-deletedResourceForeground)" }
-        },
-        "-",
-        item.stats.deletions
-      ))
-    )), timeline.length === 0 && /* @__PURE__ */ React2.createElement("p", null, "No timeline data available.")), frame.data?.history?.length > 0 && /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React2.createElement("strong", null, "Evolution"), /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 0 0" } }, frame.data.history.map((h, idx) => /* @__PURE__ */ React2.createElement(
-      "li",
-      {
-        key: idx,
-        style: {
-          padding: "6px 0",
-          borderBottom: "1px solid var(--vscode-panel-border)",
-          fontSize: "0.85em"
-        }
+        title: "Reset to Now"
       },
-      /* @__PURE__ */ React2.createElement("div", { style: { fontWeight: "bold" } }, h.message || h.summary || h.change),
-      /* @__PURE__ */ React2.createElement("div", { style: { opacity: 0.7 } }, h.date ? new Date(h.date).toLocaleString() : "", " \u2022 ", h.author || "unknown")
-    ))))), activeLens === "drift" && /* @__PURE__ */ React2.createElement("div", null, drift.length > 0 ? /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0 } }, drift.map((item, index) => /* @__PURE__ */ React2.createElement(
-      "li",
+      "\u21BA"
+    ))), /* @__PURE__ */ React3.createElement(
+      "input",
       {
-        key: index,
-        style: {
-          marginBottom: "10px",
-          padding: "8px",
-          border: "1px solid var(--vscode-inputValidation-warningBorder)",
-          borderRadius: "4px",
-          backgroundColor: "var(--vscode-inputValidation-warningBackground)"
-        }
-      },
-      /* @__PURE__ */ React2.createElement(
-        "div",
-        {
-          style: {
-            fontWeight: "bold",
-            display: "flex",
-            justifyContent: "space-between"
-          }
-        },
-        /* @__PURE__ */ React2.createElement("span", null, item.issue),
-        /* @__PURE__ */ React2.createElement("span", { style: { fontSize: "0.8em", textTransform: "uppercase" } }, item.severity)
-      ),
-      /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "5px" } }, /* @__PURE__ */ React2.createElement("code", null, item.symbol), ": ", item.detail)
-    ))) : /* @__PURE__ */ React2.createElement("div", { style: { padding: "10px", opacity: 0.7 } }, /* @__PURE__ */ React2.createElement("span", { style: { color: "var(--vscode-testing-iconPassed)" } }, "\u2714"), " No drift detected."), /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React2.createElement("strong", null, "Naming Drift"), /* @__PURE__ */ React2.createElement(
-      "div",
-      {
-        style: {
-          height: "4px",
-          background: "var(--vscode-progressBar-background)",
-          marginTop: "4px",
-          borderRadius: "2px",
-          overflow: "hidden"
-        }
-      },
-      /* @__PURE__ */ React2.createElement(
-        "div",
-        {
-          style: {
-            width: `${Math.min(drift.length * 10, 100)}%`,
-            height: "100%",
-            background: drift.length ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)"
-          }
-        }
-      )
-    ))), activeLens === "relations" && /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement("p", null, /* @__PURE__ */ React2.createElement("strong", null, "Incoming:"), " ", relations.incoming?.length || 0, " callers"), relations.incoming?.length > 0 && /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 10px 0" } }, relations.incoming.map((edge, idx) => /* @__PURE__ */ React2.createElement(
-      "li",
-      {
-        key: idx,
-        style: {
-          fontSize: "0.85em",
-          padding: "4px 0",
-          borderBottom: "1px solid var(--vscode-panel-border)"
-        }
-      },
-      edge.from?.split(":")[0] || edge.from,
-      " \u2192 ",
-      edge.to?.split(":")[0] || edge.to,
-      " (",
-      edge.type,
-      ")"
-    ))), /* @__PURE__ */ React2.createElement("p", null, /* @__PURE__ */ React2.createElement("strong", null, "Outgoing:"), " ", relations.outgoing?.length || 0, " callees"), relations.outgoing?.length > 0 && /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: "6px 0 10px 0" } }, relations.outgoing.map((edge, idx) => /* @__PURE__ */ React2.createElement(
-      "li",
-      {
-        key: idx,
-        style: {
-          fontSize: "0.85em",
-          padding: "4px 0",
-          borderBottom: "1px solid var(--vscode-panel-border)"
-        }
-      },
-      edge.from?.split(":")[0] || edge.from,
-      " \u2192 ",
-      edge.to?.split(":")[0] || edge.to,
-      " (",
-      edge.type,
-      ")"
-    ))), /* @__PURE__ */ React2.createElement("p", null, /* @__PURE__ */ React2.createElement("strong", null, "Imports:"), " ", relations.imports?.length || 0, " modules")), activeLens === "risk" && /* @__PURE__ */ React2.createElement("div", null, risk ? /* @__PURE__ */ React2.createElement(
-      "div",
-      {
-        style: {
-          padding: "8px",
-          backgroundColor: "rgba(255, 0, 0, 0.1)",
-          borderRadius: "4px",
-          border: "1px solid red"
-        }
-      },
-      /* @__PURE__ */ React2.createElement("strong", null, "Risk Score"),
-      /* @__PURE__ */ React2.createElement("p", { style: { margin: "5px 0 0 0", fontSize: "0.9em" } }, "Hotspot: ", risk.hotspotScore, " \u2022 Drift: ", risk.driftCount, " \u2022 Legacy:", " ", risk.legacyDead, "/", risk.legacyReplaced),
-      frame.data?.changeStats && /* @__PURE__ */ React2.createElement("p", { style: { margin: "2px 0 0 0", fontSize: "0.85em" } }, "Changes: +", frame.data.changeStats.added, " / -", frame.data.changeStats.removed)
-    ) : /* @__PURE__ */ React2.createElement("div", { style: { padding: "10px", opacity: 0.7 } }, /* @__PURE__ */ React2.createElement("span", { style: { color: "var(--vscode-testing-iconPassed)" } }, "\u2714"), " No risk signals."), frame.data?.drift?.length > 0 && /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "12px" } }, /* @__PURE__ */ React2.createElement("strong", null, "Drift Signals"), /* @__PURE__ */ React2.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React2.createElement(
-      "li",
-      {
-        key: idx,
-        style: {
-          padding: "6px 0",
-          borderBottom: "1px solid var(--vscode-panel-border)"
-        }
-      },
-      /* @__PURE__ */ React2.createElement("div", { style: { fontWeight: "bold" } }, d.name || d.symbol),
-      /* @__PURE__ */ React2.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, d.issue || d.detail || d.suggestedName || "Drift detected")
-    )))))));
+        type: "range",
+        min: "0",
+        max: "100",
+        step: "1",
+        value: timestampToSlider(value),
+        onChange: handleChange,
+        style: SliderStyle,
+        title: new Date(value).toLocaleDateString(),
+        list: "time-markers"
+      }
+    ), /* @__PURE__ */ React3.createElement("datalist", { id: "time-markers" }, /* @__PURE__ */ React3.createElement("option", { value: "0", label: "1y" }), /* @__PURE__ */ React3.createElement("option", { value: "25", label: "3m" }), /* @__PURE__ */ React3.createElement("option", { value: "50", label: "1m" }), /* @__PURE__ */ React3.createElement("option", { value: "75", label: "1w" }), /* @__PURE__ */ React3.createElement("option", { value: "100", label: "Now" })));
   };
 
   // src/webview/cockpit/components/Sidebar.tsx
-  var React3 = __toESM(require_react());
   var SidebarContainer = {
     minWidth: "200px",
     width: "100%",
@@ -28500,95 +28551,39 @@
     backgroundColor: "var(--vscode-sideBar-background)",
     display: "flex",
     flexDirection: "column",
-    overflow: "hidden"
+    overflow: "hidden",
+    height: "100%"
   };
   var HeaderStyle2 = {
-    padding: "10px",
-    fontWeight: "bold",
+    padding: "12px 16px",
+    fontWeight: 600,
     borderBottom: "1px solid var(--vscode-panel-border)",
-    fontSize: "0.8em",
+    fontSize: "11px",
     textTransform: "uppercase",
-    color: "var(--vscode-sideBarTitle-foreground)"
+    letterSpacing: "0.5px",
+    color: "var(--vscode-sideBarTitle-foreground)",
+    backgroundColor: "var(--vscode-sideBarSectionHeader-background)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px"
   };
   var ListStyle = {
     flex: 1,
-    overflow: "auto",
-    padding: "5px 0"
+    overflowY: "auto",
+    overflowX: "hidden",
+    padding: "8px 0"
   };
-  var NodeStyle = (isActive) => ({
-    padding: "4px 10px",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    backgroundColor: isActive ? "var(--vscode-list-activeSelectionBackground)" : "transparent",
-    color: isActive ? "var(--vscode-list-activeSelectionForeground)" : "var(--vscode-list-foreground)"
-  });
-  var StatusIcon = ({ status }) => {
-    let color = "gray";
-    let title = "Unknown";
-    switch (status) {
-      case "ready":
-        color = "var(--vscode-charts-green)";
-        title = "Ready";
-        break;
-      case "scanning":
-        color = "var(--vscode-charts-yellow)";
-        title = "Scanning";
-        break;
-      case "unknown":
-        color = "var(--vscode-disabledForeground)";
-        title = "Not Scanned";
-        break;
-    }
-    return /* @__PURE__ */ React3.createElement(
-      "div",
-      {
-        title,
-        style: {
-          width: "8px",
-          height: "8px",
-          borderRadius: "50%",
-          backgroundColor: color,
-          marginRight: "8px",
-          flexShrink: 0,
-          animation: status === "scanning" ? "pulse 1s infinite" : "none"
-        }
-      }
-    );
-  };
-  var TreeNode = ({ node, depth, activeId, onSelect }) => {
-    const [expanded, setExpanded] = React3.useState(true);
-    const hasChildren = node.children && node.children.length > 0;
-    return /* @__PURE__ */ React3.createElement("div", null, /* @__PURE__ */ React3.createElement(
-      "div",
-      {
-        style: { ...NodeStyle(node.id === activeId), paddingLeft: `${depth * 15 + 10}px` },
-        onClick: () => {
-          onSelect(node);
-          if (hasChildren) setExpanded(!expanded);
-        }
-      },
-      /* @__PURE__ */ React3.createElement(StatusIcon, { status: node.status }),
-      /* @__PURE__ */ React3.createElement(
-        "span",
-        {
-          style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }
-        },
-        node.name
-      )
-    ), hasChildren && expanded && /* @__PURE__ */ React3.createElement("div", null, node.children.map((child) => /* @__PURE__ */ React3.createElement(
-      TreeNode,
-      {
-        key: child.id,
-        node: child,
-        depth: depth + 1,
-        activeId,
-        onSelect
-      }
-    ))));
-  };
-  var Sidebar = ({ data, activeId, onSelect, repoName, branchName }) => {
-    return /* @__PURE__ */ React3.createElement("div", { style: SidebarContainer }, /* @__PURE__ */ React3.createElement("div", { style: HeaderStyle2 }, /* @__PURE__ */ React3.createElement("div", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, repoName || "EXPLORER"), branchName && /* @__PURE__ */ React3.createElement(
+  var Sidebar = ({
+    data,
+    activeId,
+    onSelect,
+    repoName,
+    branchName,
+    allMetrics,
+    currentTimeFilter,
+    onTimeFilterChange
+  }) => {
+    return /* @__PURE__ */ React4.createElement("div", { style: SidebarContainer }, /* @__PURE__ */ React4.createElement("div", { style: HeaderStyle2 }, /* @__PURE__ */ React4.createElement("div", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, repoName || "EXPLORER"), branchName && /* @__PURE__ */ React4.createElement(
       "div",
       {
         style: {
@@ -28603,7 +28598,17 @@
       },
       "\u2387 ",
       branchName
-    )), /* @__PURE__ */ React3.createElement("div", { style: ListStyle }, data.map((node) => /* @__PURE__ */ React3.createElement(TreeNode, { key: node.id, node, depth: 0, activeId, onSelect }))), /* @__PURE__ */ React3.createElement("style", null, `
+    )), /* @__PURE__ */ React4.createElement("div", { style: ListStyle }, data.map((node) => /* @__PURE__ */ React4.createElement(
+      RichTreeItem,
+      {
+        key: node.id,
+        node,
+        depth: 0,
+        activeId,
+        onSelect,
+        allMetrics
+      }
+    ))), currentTimeFilter !== void 0 && onTimeFilterChange && /* @__PURE__ */ React4.createElement(TimeSlider, { value: currentTimeFilter, onChange: onTimeFilterChange }), /* @__PURE__ */ React4.createElement("style", null, `
           @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.4; }
@@ -28613,148 +28618,18 @@
   };
 
   // src/webview/cockpit/components/Stage.tsx
+  var React25 = __toESM(require_react());
+
+  // src/webview/cockpit/components/CodeMicroscope.tsx
+  var React24 = __toESM(require_react());
+
+  // src/webview/cockpit/components/stages/BundleStage.tsx
   var React11 = __toESM(require_react());
 
-  // src/webview/cockpit/components/stages/BundleStage.tsx
+  // src/webview/cockpit/components/stages/templates/ConfigPanel.tsx
   var React5 = __toESM(require_react());
-
-  // src/webview/cockpit/components/stages/TreemapNode.tsx
-  var React4 = __toESM(require_react());
-  var TreemapNode = ({ node, depth = 0 }) => {
-    const children = node.children || [];
-    const hasChildren = children.length > 0;
-    const baseColor = node.score > 10 ? "var(--vscode-charts-red)" : node.score > 5 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)";
-    return /* @__PURE__ */ React4.createElement(
-      "div",
-      {
-        style: {
-          flex: node.weight || 1,
-          minWidth: 80,
-          minHeight: 60,
-          border: "1px solid var(--vscode-panel-border)",
-          borderRadius: 4,
-          padding: 6,
-          margin: 4,
-          background: hasChildren ? "var(--vscode-editor-background)" : "var(--vscode-editor-inactiveSelectionBackground)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 4
-        },
-        title: `${node.name}
-Churn: ${node.score.toFixed(1)}
-+${node.added || 0} / -${node.removed || 0}`
-      },
-      /* @__PURE__ */ React4.createElement(
-        "div",
-        {
-          style: {
-            display: "flex",
-            justifyContent: "space-between",
-            fontSize: "0.8em",
-            fontWeight: "bold",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap"
-          }
-        },
-        /* @__PURE__ */ React4.createElement("span", null, node.name),
-        /* @__PURE__ */ React4.createElement("span", { style: { color: baseColor } }, node.score)
-      ),
-      /* @__PURE__ */ React4.createElement(
-        "div",
-        {
-          style: {
-            height: 4,
-            borderRadius: 2,
-            background: "var(--vscode-progressBar-background)",
-            overflow: "hidden"
-          }
-        },
-        /* @__PURE__ */ React4.createElement(
-          "div",
-          {
-            style: {
-              height: "100%",
-              width: `${Math.min((node.score || 0) * 2, 100)}%`,
-              background: baseColor
-            }
-          }
-        )
-      ),
-      /* @__PURE__ */ React4.createElement("div", { style: { fontSize: "0.7em", opacity: 0.7 } }, "+", node.added || 0, " / -", node.removed || 0),
-      hasChildren && /* @__PURE__ */ React4.createElement("div", { style: { display: "flex", flexWrap: "wrap", flex: 1, overflow: "hidden" } }, children.map((child, index) => /* @__PURE__ */ React4.createElement(
-        TreemapNode,
-        {
-          key: child.id || child.path || `${child.name}-${index}`,
-          node: child,
-          depth: depth + 1
-        }
-      )))
-    );
-  };
-
-  // src/webview/cockpit/components/stages/BundleStage.tsx
-  var BundleStage = ({ frame, onZoomIn, cockpitState, vscode: vscode3 }) => {
-    const [isConfigOpen, setIsConfigOpen] = React5.useState(false);
-    const defaultConfig = {
-      mode: "repo",
-      roots: [],
-      includeConnected: false,
-      exclusions: []
-    };
-    const [formConfig, setFormConfig] = React5.useState(
-      cockpitState?.bundleConfig || defaultConfig
-    );
-    const [depth, setDepth] = React5.useState(cockpitState?.lastNCommits || 20);
-    React5.useEffect(() => {
-      setFormConfig(
-        cockpitState?.bundleConfig || {
-          mode: "repo",
-          roots: [],
-          includeConnected: false,
-          exclusions: []
-        }
-      );
-      setDepth(cockpitState?.lastNCommits || 20);
-    }, [cockpitState?.bundleConfig, cockpitState?.lastNCommits]);
-    const handleConfigChange = (updates) => {
-      setFormConfig((prev) => ({ ...prev, ...updates }));
-    };
-    const applyConfig = () => {
-      if (!vscode3) return;
-      postMessageWithTracing(vscode3, { type: "updateBundleConfig", config: formConfig });
-      postMessageWithTracing(vscode3, { type: "setLastNCommits", value: depth });
-      postMessageWithTracing(vscode3, { type: "generateReport", mode: "selection", force: true });
-    };
-    console.log("[BundleStage] frame.data:", frame.data);
-    console.log("[BundleStage] frame.data.hotspots:", frame.data?.hotspots);
-    console.log("[BundleStage] frame.data.treemap:", frame.data?.treemap);
-    return /* @__PURE__ */ React5.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React5.createElement(
-      "div",
-      {
-        style: {
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "10px"
-        }
-      },
-      /* @__PURE__ */ React5.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, "Hotspots"),
-      /* @__PURE__ */ React5.createElement(
-        "button",
-        {
-          onClick: () => setIsConfigOpen(!isConfigOpen),
-          style: {
-            background: "none",
-            border: "none",
-            color: "var(--vscode-textLink-foreground)",
-            cursor: "pointer",
-            fontSize: "0.9em"
-          }
-        },
-        isConfigOpen ? "Hide Scope" : "Configure Scope"
-      )
-    ), isConfigOpen && /* @__PURE__ */ React5.createElement(
+  var ConfigPanel = ({ config, depth, isAnalyzing, onConfigChange, onDepthChange, onApply, onClose }) => {
+    return /* @__PURE__ */ React5.createElement(
       "div",
       {
         style: {
@@ -28779,8 +28654,8 @@ Churn: ${node.score.toFixed(1)}
       ), /* @__PURE__ */ React5.createElement(
         "select",
         {
-          value: formConfig.mode,
-          onChange: (e) => handleConfigChange({ mode: e.target.value }),
+          value: config.mode,
+          onChange: (e) => onConfigChange({ mode: e.target.value }),
           style: {
             width: "100%",
             padding: "4px",
@@ -28794,7 +28669,7 @@ Churn: ${node.score.toFixed(1)}
         /* @__PURE__ */ React5.createElement("option", { value: "changes" }, "My Changes (Staged + Unstaged)"),
         /* @__PURE__ */ React5.createElement("option", { value: "custom" }, "Custom Roots")
       )),
-      formConfig.mode === "custom" && /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
+      config.mode === "custom" && /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
         "label",
         {
           style: {
@@ -28809,8 +28684,8 @@ Churn: ${node.score.toFixed(1)}
         "input",
         {
           type: "text",
-          value: formConfig.roots.join(", "),
-          onChange: (e) => handleConfigChange({
+          value: config.roots.join(", "),
+          onChange: (e) => onConfigChange({
             roots: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
           }),
           placeholder: "src/auth, utils.ts",
@@ -28837,8 +28712,8 @@ Churn: ${node.score.toFixed(1)}
           "input",
           {
             type: "checkbox",
-            checked: formConfig.includeConnected,
-            onChange: (e) => handleConfigChange({ includeConnected: e.target.checked }),
+            checked: config.includeConnected,
+            onChange: (e) => onConfigChange({ includeConnected: e.target.checked }),
             style: { marginRight: "8px" }
           }
         ),
@@ -28859,8 +28734,8 @@ Churn: ${node.score.toFixed(1)}
         "input",
         {
           type: "text",
-          value: formConfig.exclusions.join(", "),
-          onChange: (e) => handleConfigChange({
+          value: config.exclusions.join(", "),
+          onChange: (e) => onConfigChange({
             exclusions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
           }),
           placeholder: "**/*.test.ts",
@@ -28894,7 +28769,7 @@ Churn: ${node.score.toFixed(1)}
           onChange: (e) => {
             const val = parseInt(e.target.value);
             if (!isNaN(val)) {
-              setDepth(val);
+              onDepthChange(val);
             }
           },
           style: {
@@ -28910,40 +28785,202 @@ Churn: ${node.score.toFixed(1)}
         "button",
         {
           onClick: () => {
-            applyConfig();
-            setIsConfigOpen(false);
+            onApply();
+            onClose();
           },
-          disabled: cockpitState?.isAnalyzing,
+          disabled: isAnalyzing,
           style: {
             flex: 1,
             padding: "6px",
-            background: cockpitState?.isAnalyzing ? "var(--vscode-button-secondaryBackground)" : "var(--vscode-button-background)",
-            color: cockpitState?.isAnalyzing ? "var(--vscode-button-secondaryForeground)" : "var(--vscode-button-foreground)",
+            background: isAnalyzing ? "var(--vscode-button-secondaryBackground)" : "var(--vscode-button-background)",
+            color: isAnalyzing ? "var(--vscode-button-secondaryForeground)" : "var(--vscode-button-foreground)",
             border: "none",
             borderRadius: "2px",
-            cursor: cockpitState?.isAnalyzing ? "not-allowed" : "pointer",
-            opacity: cockpitState?.isAnalyzing ? 0.7 : 1
+            cursor: isAnalyzing ? "not-allowed" : "pointer",
+            opacity: isAnalyzing ? 0.7 : 1
           }
         },
-        cockpitState?.isAnalyzing ? "Analyzing..." : "Apply & Analyze"
+        isAnalyzing ? "Analyzing..." : "Apply & Analyze"
       ))
-    ), cockpitState?.bundleSummary && /* @__PURE__ */ React5.createElement(
+    );
+  };
+
+  // src/webview/cockpit/components/StatsSection.tsx
+  var React6 = __toESM(require_react());
+  var StatsSection = ({ state, vscode: vscode3 }) => {
+    const selectionCount = state.selectedCommitShas.length + (state.selectedStagedPaths.length > 0 ? 1 : 0) + (state.selectedUnstagedPaths.length > 0 ? 1 : 0);
+    const bundleFacts = state.bundleFacts;
+    const bundleSummary = state.bundleSummary;
+    const findings = bundleFacts?.findings;
+    const criticalCount = (findings?.incompleteness?.missing || 0) + (findings?.incompleteness?.zombies || 0) + (findings?.legacyAudit?.dead || 0);
+    const warningCount = (findings?.legacyAudit?.legacyUsed || 0) + (findings?.legacyAudit?.replacedLeftovers?.length || 0) + (findings?.patternDrift?.conventionDrift?.driftSymbolCount || 0);
+    const stepTimings = Object.entries(state.pipelineStepTimings || {}).sort(
+      ([, a], [, b]) => (b || 0) - (a || 0)
+    );
+    const topSteps = stepTimings.slice(0, 3);
+    const pipelineErrors = state.pipelineErrors || [];
+    const currentStep = state.currentStepId ?? "idle";
+    let healthScore = 100;
+    if (findings) {
+      const warnings = (findings.patternDrift?.mixedTargets || 0) + (findings.patternDrift?.oldNamespaces || 0) + (findings.legacyAudit?.legacyUsed || 0);
+      const driftPct = findings.patternDrift?.conventionDrift?.driftPercent || 0;
+      healthScore -= criticalCount * 10;
+      healthScore -= warnings * 3;
+      healthScore -= driftPct * 0.5;
+      healthScore = Math.max(0, Math.min(100, healthScore));
+    }
+    const GroupStyle = {
+      marginBottom: "20px",
+      padding: "15px",
+      backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+      borderRadius: "6px"
+    };
+    const TitleStyle2 = {
+      fontSize: "1.1em",
+      fontWeight: 600,
+      marginBottom: "10px",
+      color: "var(--vscode-editor-foreground)",
+      textTransform: "uppercase",
+      letterSpacing: "0.5px"
+    };
+    const RowStyle = {
+      display: "flex",
+      gap: "20px",
+      marginBottom: "10px",
+      flexWrap: "wrap"
+    };
+    const ItemStyle = {
+      display: "flex",
+      flexDirection: "column"
+    };
+    const ValueStyle = {
+      fontSize: "1.4em",
+      fontWeight: "bold",
+      color: "var(--vscode-editor-foreground)"
+    };
+    const LabelStyle2 = {
+      fontSize: "0.85em",
+      color: "var(--vscode-descriptionForeground)",
+      marginTop: "2px"
+    };
+    return /* @__PURE__ */ React6.createElement("div", { style: { padding: "10px" } }, /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Global Health"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: { ...ValueStyle, color: healthScore > 70 ? "var(--vscode-charts-green)" : healthScore > 40 ? "var(--vscode-charts-yellow)" : "var(--vscode-charts-red)" } }, healthScore.toFixed(0), "%"), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Health Score")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: { ...ValueStyle, color: criticalCount > 0 ? "var(--vscode-charts-red)" : "inherit" } }, criticalCount), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Critical Issues")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: { ...ValueStyle, color: warningCount > 0 ? "var(--vscode-charts-yellow)" : "inherit" } }, warningCount), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Warnings")))), /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Scope Analysis"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.commitCount || state.selectedCommitShas.length), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Commits")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.fileCount || 0), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Files")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.symbolCount || 0), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Symbols"))), state.bundleReportId && /* @__PURE__ */ React6.createElement(
+      "button",
+      {
+        onClick: () => postMessageWithTracing(vscode3, {
+          type: "openReport",
+          reportId: state.bundleReportId
+        }),
+        style: {
+          marginTop: "10px",
+          padding: "6px 12px",
+          backgroundColor: "transparent",
+          border: "1px solid var(--vscode-button-background)",
+          color: "var(--vscode-button-background)",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "0.9em"
+        }
+      },
+      "Open Full Report"
+    )), /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Pipeline Diagnostics"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, currentStep), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Current Step")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: { ...ValueStyle, color: pipelineErrors.length > 0 ? "var(--vscode-charts-red)" : "inherit" } }, pipelineErrors.length), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Errors"))), topSteps.length > 0 && /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold", marginBottom: "5px" } }, "Top Step Timings"), topSteps.map(([stepId, duration]) => /* @__PURE__ */ React6.createElement("div", { key: stepId, style: { display: "flex", justifyContent: "space-between", fontSize: "0.85em", marginBottom: "4px" } }, /* @__PURE__ */ React6.createElement("span", null, stepId), /* @__PURE__ */ React6.createElement("span", { style: { fontFamily: "monospace" } }, Math.round(duration), "ms"))))));
+  };
+
+  // src/webview/cockpit/components/stages/templates/TreemapView.tsx
+  var React8 = __toESM(require_react());
+
+  // src/webview/cockpit/components/stages/TreemapNode.tsx
+  var React7 = __toESM(require_react());
+  var TreemapNode = ({ node, depth = 0 }) => {
+    const children = node.children || [];
+    const hasChildren = children.length > 0;
+    const baseColor = node.score > 10 ? "var(--vscode-charts-red)" : node.score > 5 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)";
+    return /* @__PURE__ */ React7.createElement(
       "div",
       {
         style: {
+          flex: node.weight || 1,
+          minWidth: 80,
+          minHeight: 60,
+          border: "1px solid var(--vscode-panel-border)",
+          borderRadius: 4,
+          padding: 6,
+          margin: 4,
+          background: hasChildren ? "var(--vscode-editor-background)" : "var(--vscode-editor-inactiveSelectionBackground)",
           display: "flex",
-          gap: "15px",
-          marginBottom: "15px",
-          fontSize: "0.85em",
-          color: "var(--vscode-descriptionForeground)",
-          borderBottom: "1px solid var(--vscode-panel-border)",
-          paddingBottom: "10px"
-        }
+          flexDirection: "column",
+          gap: 4
+        },
+        title: `${node.name}
+Churn: ${node.score.toFixed(1)}
++${node.added || 0} / -${node.removed || 0}`
       },
-      /* @__PURE__ */ React5.createElement("div", null, /* @__PURE__ */ React5.createElement("strong", null, cockpitState.bundleSummary.commitCount), " commits"),
-      /* @__PURE__ */ React5.createElement("div", null, /* @__PURE__ */ React5.createElement("strong", null, cockpitState.bundleSummary.fileCount), " files"),
-      cockpitState.bundleSummary.symbolCount && /* @__PURE__ */ React5.createElement("div", null, /* @__PURE__ */ React5.createElement("strong", null, cockpitState.bundleSummary.symbolCount), " symbols")
-    ), frame.data?.treemap && frame.data.treemap.length > 0 ? /* @__PURE__ */ React5.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, frame.data.treemap.map((node, index) => /* @__PURE__ */ React5.createElement(TreemapNode, { key: node.id || node.path || `${node.name}-${index}`, node }))) : /* @__PURE__ */ React5.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, cockpitState?.isAnalyzing ? "Loading heatmap..." : frame.data?.hotspots && frame.data.hotspots.length > 0 ? "" : "No churn data yet. Run Analyze to populate the heatmap."), frame.data?.hotspots && frame.data.hotspots.length > 0 && /* @__PURE__ */ React5.createElement(React5.Fragment, null, /* @__PURE__ */ React5.createElement(
+      /* @__PURE__ */ React7.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: "0.8em",
+            fontWeight: "bold",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap"
+          }
+        },
+        /* @__PURE__ */ React7.createElement("span", null, node.name),
+        /* @__PURE__ */ React7.createElement("span", { style: { color: baseColor } }, node.score)
+      ),
+      /* @__PURE__ */ React7.createElement(
+        "div",
+        {
+          style: {
+            height: 4,
+            borderRadius: 2,
+            background: "var(--vscode-progressBar-background)",
+            overflow: "hidden"
+          }
+        },
+        /* @__PURE__ */ React7.createElement(
+          "div",
+          {
+            style: {
+              height: "100%",
+              width: `${Math.min((node.score || 0) * 2, 100)}%`,
+              background: baseColor
+            }
+          }
+        )
+      ),
+      /* @__PURE__ */ React7.createElement("div", { style: { fontSize: "0.7em", opacity: 0.7 } }, "+", node.added || 0, " / -", node.removed || 0),
+      hasChildren && /* @__PURE__ */ React7.createElement("div", { style: { display: "flex", flexWrap: "wrap", flex: 1, overflow: "hidden" } }, children.map((child, index) => /* @__PURE__ */ React7.createElement(
+        TreemapNode,
+        {
+          key: child.id || child.path || `${child.name}-${index}`,
+          node: child,
+          depth: depth + 1
+        }
+      )))
+    );
+  };
+
+  // src/webview/cockpit/components/stages/templates/TreemapView.tsx
+  var TreemapView = ({ treemap, isAnalyzing, hasHotspots }) => {
+    if (treemap && treemap.length > 0) {
+      return /* @__PURE__ */ React8.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, treemap.map((node, index) => /* @__PURE__ */ React8.createElement(TreemapNode, { key: node.id || node.path || `${node.name}-${index}`, node })));
+    }
+    return /* @__PURE__ */ React8.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, isAnalyzing ? "Loading heatmap..." : hasHotspots ? "" : "No churn data yet. Run Analyze to populate the heatmap.");
+  };
+
+  // src/webview/cockpit/components/stages/templates/HotspotList.tsx
+  var React9 = __toESM(require_react());
+  var HotspotList = ({ hotspots, onFileClick, isAnalyzing }) => {
+    if (hotspots.length === 0 && !isAnalyzing) {
+      return /* @__PURE__ */ React9.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots available for this scope.");
+    }
+    if (hotspots.length === 0) {
+      return null;
+    }
+    return /* @__PURE__ */ React9.createElement(React9.Fragment, null, /* @__PURE__ */ React9.createElement(
       "p",
       {
         style: {
@@ -28953,7 +28990,7 @@ Churn: ${node.score.toFixed(1)}
         }
       },
       "Most modified files (3 months)"
-    ), /* @__PURE__ */ React5.createElement(
+    ), /* @__PURE__ */ React9.createElement(
       "div",
       {
         style: {
@@ -28962,16 +28999,11 @@ Churn: ${node.score.toFixed(1)}
           gap: "10px"
         }
       },
-      frame.data.hotspots.map((file, index) => /* @__PURE__ */ React5.createElement(
+      hotspots.map((file, index) => /* @__PURE__ */ React9.createElement(
         "div",
         {
           key: `${file.path}-${index}`,
-          onClick: () => onZoomIn({
-            level: "file",
-            id: file.path,
-            name: file.name || file.path.split("/").pop(),
-            status: "scanning"
-          }),
+          onClick: () => onFileClick(file.path, file.name || file.path.split("/").pop() || ""),
           style: {
             padding: "12px 10px",
             border: "1px solid var(--vscode-button-background)",
@@ -28987,7 +29019,7 @@ Churn: ${node.score.toFixed(1)}
 Churn: ${file.score || 0}
 +${file.added || 0} / -${file.removed || 0}`
         },
-        /* @__PURE__ */ React5.createElement(
+        /* @__PURE__ */ React9.createElement(
           "div",
           {
             style: {
@@ -29000,7 +29032,7 @@ Churn: ${file.score || 0}
           },
           file.name
         ),
-        /* @__PURE__ */ React5.createElement(
+        /* @__PURE__ */ React9.createElement(
           "div",
           {
             style: {
@@ -29013,8 +29045,8 @@ Churn: ${file.score || 0}
           },
           file.path
         ),
-        /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7 } }, "+", file.added || 0, " / -", file.removed || 0),
-        /* @__PURE__ */ React5.createElement(
+        /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7 } }, "+", file.added || 0, " / -", file.removed || 0),
+        /* @__PURE__ */ React9.createElement(
           "div",
           {
             style: {
@@ -29025,7 +29057,7 @@ Churn: ${file.score || 0}
               marginTop: "auto"
             }
           },
-          /* @__PURE__ */ React5.createElement(
+          /* @__PURE__ */ React9.createElement(
             "div",
             {
               style: {
@@ -29037,7 +29069,16 @@ Churn: ${file.score || 0}
           )
         )
       ))
-    )), frame.data?.hotspots && frame.data.hotspots.length === 0 && !cockpitState?.isAnalyzing && /* @__PURE__ */ React5.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots available for this scope."), frame.data?.risks?.length > 0 && /* @__PURE__ */ React5.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React5.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Top Risks"), /* @__PURE__ */ React5.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data.risks.map((risk, idx) => /* @__PURE__ */ React5.createElement(
+    ));
+  };
+
+  // src/webview/cockpit/components/stages/templates/RisksList.tsx
+  var React10 = __toESM(require_react());
+  var RisksList = ({ risks }) => {
+    if (risks.length === 0) {
+      return null;
+    }
+    return /* @__PURE__ */ React10.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React10.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Top Risks"), /* @__PURE__ */ React10.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, risks.map((risk, idx) => /* @__PURE__ */ React10.createElement(
       "li",
       {
         key: idx,
@@ -29049,20 +29090,218 @@ Churn: ${file.score || 0}
           marginBottom: "8px"
         }
       },
-      /* @__PURE__ */ React5.createElement("div", { style: { fontWeight: "bold" } }, risk.name || risk.path),
-      /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.issue),
-      risk.detail && /* @__PURE__ */ React5.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.detail)
-    )))));
+      /* @__PURE__ */ React10.createElement("div", { style: { fontWeight: "bold" } }, risk.name || risk.path),
+      /* @__PURE__ */ React10.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.issue),
+      risk.detail && /* @__PURE__ */ React10.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.detail)
+    ))));
+  };
+
+  // src/webview/cockpit/components/stages/BundleStage.tsx
+  var BundleStage = ({ frame, onZoomIn, cockpitState, vscode: vscode3 }) => {
+    const [isConfigOpen, setIsConfigOpen] = React11.useState(false);
+    const defaultConfig = {
+      mode: "repo",
+      roots: [],
+      includeConnected: false,
+      exclusions: []
+    };
+    const [formConfig, setFormConfig] = React11.useState(
+      cockpitState?.bundleConfig || defaultConfig
+    );
+    const [depth, setDepth] = React11.useState(cockpitState?.lastNCommits || 20);
+    React11.useEffect(() => {
+      setFormConfig(
+        cockpitState?.bundleConfig || {
+          mode: "repo",
+          roots: [],
+          includeConnected: false,
+          exclusions: []
+        }
+      );
+      setDepth(cockpitState?.lastNCommits || 20);
+    }, [cockpitState?.bundleConfig, cockpitState?.lastNCommits]);
+    const handleConfigChange = (updates) => {
+      setFormConfig((prev) => ({ ...prev, ...updates }));
+    };
+    const applyConfig = () => {
+      if (!vscode3) return;
+      postMessageWithTracing(vscode3, { type: "updateBundleConfig", config: formConfig });
+      postMessageWithTracing(vscode3, { type: "setLastNCommits", value: depth });
+      postMessageWithTracing(vscode3, { type: "generateReport", mode: "selection", force: true });
+    };
+    const handleFileClick = (file) => {
+      onZoomIn({
+        level: "file",
+        id: file.path,
+        name: file.name || file.path.split("/").pop(),
+        status: "scanning"
+      });
+    };
+    console.log("[BundleStage] frame.data:", frame.data);
+    console.log("[BundleStage] frame.data.hotspots:", frame.data?.hotspots);
+    console.log("[BundleStage] frame.data.treemap:", frame.data?.treemap);
+    return /* @__PURE__ */ React11.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React11.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "10px"
+        }
+      },
+      /* @__PURE__ */ React11.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, "Hotspots"),
+      /* @__PURE__ */ React11.createElement(
+        "button",
+        {
+          onClick: () => setIsConfigOpen(!isConfigOpen),
+          style: {
+            background: "none",
+            border: "none",
+            color: "var(--vscode-textLink-foreground)",
+            cursor: "pointer",
+            fontSize: "0.9em"
+          }
+        },
+        isConfigOpen ? "Hide Scope" : "Configure Scope"
+      )
+    ), isConfigOpen && /* @__PURE__ */ React11.createElement(
+      ConfigPanel,
+      {
+        config: formConfig,
+        depth,
+        isAnalyzing: cockpitState?.isAnalyzing,
+        onConfigChange: handleConfigChange,
+        onDepthChange: setDepth,
+        onApply: applyConfig,
+        onClose: () => setIsConfigOpen(false)
+      }
+    ), cockpitState && /* @__PURE__ */ React11.createElement(StatsSection, { state: cockpitState, vscode: vscode3 }), /* @__PURE__ */ React11.createElement(
+      TreemapView,
+      {
+        treemap: frame.data?.treemap,
+        isAnalyzing: cockpitState?.isAnalyzing,
+        hasHotspots: frame.data?.hotspots && frame.data.hotspots.length > 0
+      }
+    ), frame.data?.hotspots && frame.data.hotspots.length > 0 && /* @__PURE__ */ React11.createElement(
+      HotspotList,
+      {
+        hotspots: frame.data.hotspots,
+        onFileClick: handleFileClick,
+        isAnalyzing: cockpitState?.isAnalyzing
+      }
+    ), frame.data?.risks && frame.data.risks.length > 0 && /* @__PURE__ */ React11.createElement(RisksList, { risks: frame.data.risks }));
+  };
+
+  // src/webview/cockpit/components/stages/FolderStage.tsx
+  var React13 = __toESM(require_react());
+
+  // src/webview/cockpit/components/stages/templates/SummaryStats.tsx
+  var React12 = __toESM(require_react());
+  var SummaryStats = ({ commitCount, fileCount, symbolCount }) => {
+    return /* @__PURE__ */ React12.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          gap: "15px",
+          marginBottom: "15px",
+          fontSize: "0.85em",
+          color: "var(--vscode-descriptionForeground)",
+          borderBottom: "1px solid var(--vscode-panel-border)",
+          paddingBottom: "10px"
+        }
+      },
+      /* @__PURE__ */ React12.createElement("div", null, /* @__PURE__ */ React12.createElement("strong", null, commitCount), " commits"),
+      /* @__PURE__ */ React12.createElement("div", null, /* @__PURE__ */ React12.createElement("strong", null, fileCount), " files"),
+      symbolCount !== void 0 && /* @__PURE__ */ React12.createElement("div", null, /* @__PURE__ */ React12.createElement("strong", null, symbolCount), " symbols")
+    );
+  };
+
+  // src/webview/cockpit/components/stages/FolderStage.tsx
+  var FolderStage = ({ frame, onZoomIn, cockpitState }) => {
+    const handleFileClick = (file) => {
+      onZoomIn({
+        level: "file",
+        id: file.path,
+        name: file.name || file.path.split("/").pop(),
+        status: "scanning"
+      });
+    };
+    const folderPath = frame.id;
+    const bundleData = cockpitState?.bundleView;
+    const filteredHotspots = React13.useMemo(() => {
+      if (!bundleData?.hotspots) return [];
+      return bundleData.hotspots.filter((file) => file.path.startsWith(folderPath)).map((file) => ({
+        ...file,
+        name: file.name || file.path.split("/").pop() || "Unknown"
+      }));
+    }, [bundleData?.hotspots, folderPath]);
+    const filteredTreemap = React13.useMemo(() => {
+      if (!bundleData?.treemap) return [];
+      return bundleData.treemap.filter((node) => {
+        const nodePath = node.path || node.id;
+        return nodePath && nodePath.startsWith(folderPath);
+      });
+    }, [bundleData?.treemap, folderPath]);
+    const filteredRisks = React13.useMemo(() => {
+      if (!bundleData?.risks) return [];
+      return bundleData.risks.filter(
+        (risk) => risk.path && risk.path.startsWith(folderPath)
+      );
+    }, [bundleData?.risks, folderPath]);
+    const fileCount = filteredHotspots.length;
+    const symbolCount = filteredHotspots.reduce(
+      (sum, file) => sum + (file.symbols || 0),
+      0
+    );
+    console.log("[FolderStage] folderPath:", folderPath);
+    console.log("[FolderStage] filteredHotspots:", filteredHotspots);
+    console.log("[FolderStage] filteredTreemap:", filteredTreemap);
+    return /* @__PURE__ */ React13.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React13.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "10px"
+        }
+      },
+      /* @__PURE__ */ React13.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, frame.name),
+      /* @__PURE__ */ React13.createElement("div", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, folderPath)
+    ), cockpitState?.bundleSummary && /* @__PURE__ */ React13.createElement(
+      SummaryStats,
+      {
+        commitCount: cockpitState.bundleSummary.commitCount,
+        fileCount,
+        symbolCount: symbolCount > 0 ? symbolCount : void 0
+      }
+    ), /* @__PURE__ */ React13.createElement(
+      TreemapView,
+      {
+        treemap: filteredTreemap,
+        isAnalyzing: cockpitState?.isAnalyzing,
+        hasHotspots: filteredHotspots.length > 0
+      }
+    ), filteredHotspots.length > 0 && /* @__PURE__ */ React13.createElement(
+      HotspotList,
+      {
+        hotspots: filteredHotspots,
+        onFileClick: handleFileClick,
+        isAnalyzing: cockpitState?.isAnalyzing
+      }
+    ), filteredRisks.length > 0 && /* @__PURE__ */ React13.createElement(RisksList, { risks: filteredRisks }), filteredHotspots.length === 0 && !cockpitState?.isAnalyzing && /* @__PURE__ */ React13.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots found in this folder. Files may not have been modified recently."));
   };
 
   // src/webview/cockpit/components/stages/BlastRadiusStage.tsx
-  var React6 = __toESM(require_react());
+  var React14 = __toESM(require_react());
   var BlastRadiusStage = ({
     frame,
     onZoomIn
   }) => {
-    const [showIncoming, setShowIncoming] = React6.useState(true);
-    const [showOutgoing, setShowOutgoing] = React6.useState(true);
+    const [showIncoming, setShowIncoming] = React14.useState(true);
+    const [showOutgoing, setShowOutgoing] = React14.useState(true);
     const incoming = frame.data?.blastRadius?.incoming || [];
     const outgoing = frame.data?.blastRadius?.outgoing || [];
     const center = frame.name;
@@ -29085,7 +29324,7 @@ Churn: ${file.score || 0}
         type: e.type
       }))
     ];
-    return /* @__PURE__ */ React6.createElement(
+    return /* @__PURE__ */ React14.createElement(
       "div",
       {
         style: {
@@ -29098,8 +29337,8 @@ Churn: ${file.score || 0}
           gap: "12px"
         }
       },
-      /* @__PURE__ */ React6.createElement("h3", { style: { fontSize: "1.2em", marginBottom: "5px" } }, "Dependencies"),
-      /* @__PURE__ */ React6.createElement(
+      /* @__PURE__ */ React14.createElement("h3", { style: { fontSize: "1.2em", marginBottom: "5px" } }, "Dependencies"),
+      /* @__PURE__ */ React14.createElement(
         "p",
         {
           style: {
@@ -29110,14 +29349,14 @@ Churn: ${file.score || 0}
         },
         frame.name
       ),
-      /* @__PURE__ */ React6.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } }, /* @__PURE__ */ React6.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React6.createElement(
+      /* @__PURE__ */ React14.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } }, /* @__PURE__ */ React14.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React14.createElement(
         "input",
         {
           type: "checkbox",
           checked: showIncoming,
           onChange: (e) => setShowIncoming(e.target.checked)
         }
-      ), " ", "Incoming"), /* @__PURE__ */ React6.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React6.createElement(
+      ), " ", "Incoming"), /* @__PURE__ */ React14.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React14.createElement(
         "input",
         {
           type: "checkbox",
@@ -29125,7 +29364,7 @@ Churn: ${file.score || 0}
           onChange: (e) => setShowOutgoing(e.target.checked)
         }
       ), " ", "Outgoing")),
-      /* @__PURE__ */ React6.createElement(
+      /* @__PURE__ */ React14.createElement(
         "div",
         {
           style: {
@@ -29135,7 +29374,7 @@ Churn: ${file.score || 0}
             minHeight: 180
           }
         },
-        /* @__PURE__ */ React6.createElement("div", { style: { position: "relative", width: "100%", height: 200 } }, /* @__PURE__ */ React6.createElement(
+        /* @__PURE__ */ React14.createElement("div", { style: { position: "relative", width: "100%", height: 200 } }, /* @__PURE__ */ React14.createElement(
           "div",
           {
             style: {
@@ -29157,7 +29396,7 @@ Churn: ${file.score || 0}
           const radius = 65;
           const x = 50 + radius * Math.cos(angle);
           const y = 50 + radius * Math.sin(angle);
-          return /* @__PURE__ */ React6.createElement(
+          return /* @__PURE__ */ React14.createElement(
             "div",
             {
               key: n.id,
@@ -29196,7 +29435,7 @@ Churn: ${file.score || 0}
           const y1 = 50 + radius * Math.sin(angleFrom);
           const x2 = 50 + radius * Math.cos(angleTo);
           const y2 = 50 + radius * Math.sin(angleTo);
-          return /* @__PURE__ */ React6.createElement(
+          return /* @__PURE__ */ React14.createElement(
             "svg",
             {
               key: idx,
@@ -29209,7 +29448,7 @@ Churn: ${file.score || 0}
                 pointerEvents: "none"
               }
             },
-            /* @__PURE__ */ React6.createElement(
+            /* @__PURE__ */ React14.createElement(
               "line",
               {
                 x1: `${x1}%`,
@@ -29224,7 +29463,7 @@ Churn: ${file.score || 0}
           );
         }))
       ),
-      /* @__PURE__ */ React6.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", flex: 1 } }, /* @__PURE__ */ React6.createElement(
+      /* @__PURE__ */ React14.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", flex: 1 } }, /* @__PURE__ */ React14.createElement(
         "div",
         {
           style: {
@@ -29234,8 +29473,8 @@ Churn: ${file.score || 0}
             overflow: "auto"
           }
         },
-        /* @__PURE__ */ React6.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Incoming (", incoming.length, ")"),
-        incoming.length ? /* @__PURE__ */ React6.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, incoming.map((edge, idx) => /* @__PURE__ */ React6.createElement(
+        /* @__PURE__ */ React14.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Incoming (", incoming.length, ")"),
+        incoming.length ? /* @__PURE__ */ React14.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, incoming.map((edge, idx) => /* @__PURE__ */ React14.createElement(
           "li",
           {
             key: idx,
@@ -29258,8 +29497,8 @@ Churn: ${file.score || 0}
           " (",
           edge.type,
           ")"
-        ))) : /* @__PURE__ */ React6.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
-      ), /* @__PURE__ */ React6.createElement(
+        ))) : /* @__PURE__ */ React14.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
+      ), /* @__PURE__ */ React14.createElement(
         "div",
         {
           style: {
@@ -29269,8 +29508,8 @@ Churn: ${file.score || 0}
             overflow: "auto"
           }
         },
-        /* @__PURE__ */ React6.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Outgoing (", outgoing.length, ")"),
-        outgoing.length ? /* @__PURE__ */ React6.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, outgoing.map((edge, idx) => /* @__PURE__ */ React6.createElement(
+        /* @__PURE__ */ React14.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Outgoing (", outgoing.length, ")"),
+        outgoing.length ? /* @__PURE__ */ React14.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, outgoing.map((edge, idx) => /* @__PURE__ */ React14.createElement(
           "li",
           {
             key: idx,
@@ -29293,154 +29532,92 @@ Churn: ${file.score || 0}
           " (",
           edge.type,
           ")"
-        ))) : /* @__PURE__ */ React6.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
+        ))) : /* @__PURE__ */ React14.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
       ))
     );
   };
 
-  // src/webview/cockpit/components/stages/FileStage.tsx
-  var React7 = __toESM(require_react());
-  var FileStage = ({
-    frame,
-    onZoomIn
-  }) => {
-    const [showSymbols, setShowSymbols] = React7.useState(false);
-    return /* @__PURE__ */ React7.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React7.createElement(
-      "div",
-      {
-        style: {
-          padding: "10px",
-          borderBottom: "1px solid var(--vscode-panel-border)",
-          flexShrink: 0
-        }
-      },
-      /* @__PURE__ */ React7.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
-      /* @__PURE__ */ React7.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.lineCount, " lines \u2022 ", frame.data?.language, frame.data?.changeStats && /* @__PURE__ */ React7.createElement("span", { style: { marginLeft: "10px" } }, "+", frame.data.changeStats.added, " / -", frame.data.changeStats.removed), typeof frame.data?.hotspotScore === "number" && /* @__PURE__ */ React7.createElement("span", { style: { marginLeft: "10px", color: "var(--vscode-charts-red)" } }, "Hotspot: ", frame.data.hotspotScore))
-    ), /* @__PURE__ */ React7.createElement(
-      "div",
-      {
-        style: {
-          padding: "8px 10px",
-          borderBottom: "1px solid var(--vscode-panel-border)",
-          display: "flex",
-          gap: "10px",
-          flexShrink: 0
-        }
-      },
-      /* @__PURE__ */ React7.createElement(
-        "button",
-        {
-          onClick: () => setShowSymbols(false),
-          style: {
-            flex: 1,
-            padding: "6px",
-            border: "none",
-            background: !showSymbols ? "var(--vscode-button-background)" : "transparent",
-            color: !showSymbols ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)",
-            cursor: "pointer",
-            fontSize: "0.85em",
-            borderRadius: "4px"
-          }
-        },
-        "Content"
-      ),
-      /* @__PURE__ */ React7.createElement(
-        "button",
-        {
-          onClick: () => setShowSymbols(true),
-          style: {
-            flex: 1,
-            padding: "6px",
-            border: "none",
-            background: showSymbols ? "var(--vscode-button-background)" : "transparent",
-            color: showSymbols ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)",
-            cursor: "pointer",
-            fontSize: "0.85em",
-            borderRadius: "4px"
-          }
-        },
-        "Symbols (",
-        frame.data?.symbols?.length || 0,
-        ")"
-      )
-    ), /* @__PURE__ */ React7.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, !showSymbols ? /* @__PURE__ */ React7.createElement(
-      "div",
-      {
-        style: {
-          flex: 1,
-          overflow: "auto",
-          backgroundColor: "var(--vscode-editor-background)",
-          padding: "10px"
-        }
-      },
-      /* @__PURE__ */ React7.createElement(
-        "pre",
-        {
-          style: {
-            margin: 0,
-            fontFamily: "var(--vscode-editor-font-family)",
-            fontSize: "0.85em",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            lineHeight: "1.5"
-          }
-        },
-        frame.data?.content || "Loading..."
-      )
-    ) : /* @__PURE__ */ React7.createElement("div", { style: { flex: 1, overflow: "auto" } }, /* @__PURE__ */ React7.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.symbols?.map((symbol) => /* @__PURE__ */ React7.createElement(
-      "li",
-      {
-        key: symbol.id,
-        onClick: () => onZoomIn({
-          level: "symbol",
-          id: `${frame.id}:${symbol.name}`,
-          name: symbol.name,
-          status: "scanning"
-        }),
-        style: {
-          padding: "10px",
-          borderBottom: "1px solid var(--vscode-input-border)",
-          cursor: "pointer",
-          display: "flex",
-          flexDirection: "column",
-          gap: "4px"
-        }
-      },
-      /* @__PURE__ */ React7.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold" } }, /* @__PURE__ */ React7.createElement("span", { style: { opacity: 0.7, marginRight: "5px" } }, symbol.kind === "function" ? "\u{1D453}" : symbol.kind === "class" ? "C" : "\u2022"), symbol.name, symbol.drift && /* @__PURE__ */ React7.createElement(
-        "span",
-        {
-          style: {
-            marginLeft: "8px",
-            padding: "2px 6px",
-            borderRadius: "4px",
-            background: "var(--vscode-inputValidation-warningBackground)",
-            color: "var(--vscode-inputValidation-warningForeground)",
-            fontSize: "0.7em",
-            textTransform: "uppercase"
-          }
-        },
-        "Drift"
-      )),
-      symbol.signature && /* @__PURE__ */ React7.createElement(
-        "div",
-        {
-          style: {
-            fontSize: "0.75em",
-            opacity: 0.7,
-            marginTop: "2px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap"
-          }
-        },
-        symbol.signature
-      )
-    )), !frame.data?.symbols?.length && /* @__PURE__ */ React7.createElement("li", { style: { padding: "20px", opacity: 0.6, textAlign: "center" } }, "No symbols found")))));
+  // src/webview/cockpit/components/stages/ReportsStage.tsx
+  var React16 = __toESM(require_react());
+
+  // src/webview/cockpit/components/ReportList.tsx
+  var React15 = __toESM(require_react());
+
+  // src/webview/cockpit/utils.ts
+  var formatDate = (value) => {
+    if (!value) return "";
+    try {
+      return new Date(value).toLocaleDateString();
+    } catch {
+      return value;
+    }
   };
 
+  // src/webview/cockpit/components/ReportList.tsx
+  var ReportList = ({ state, vscode: vscode3 }) => {
+    const filter = state.reportsFilterText.toLowerCase();
+    const list = state.reports.filter(
+      (r) => (!filter || (r.title || "").toLowerCase().includes(filter) || (r.summary || "").toLowerCase().includes(filter)) && (!state.reportsShowPinnedOnly || r.pinned) && (state.reportsBranchFilter === "all" || r.branch === state.reportsBranchFilter)
+    );
+    if (!list.length) {
+      return /* @__PURE__ */ React15.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React15.createElement("div", null, "No reports yet"), /* @__PURE__ */ React15.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
+    }
+    return /* @__PURE__ */ React15.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React15.createElement(
+      "li",
+      {
+        key: r.id,
+        className: "cockpit__list-item cockpit__list-item--clickable",
+        onClick: () => postMessageWithTracing(vscode3, { type: "openReport", reportId: r.id })
+      },
+      /* @__PURE__ */ React15.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React15.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React15.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React15.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React15.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
+      r.summary ? /* @__PURE__ */ React15.createElement("div", { className: "cockpit__message" }, r.summary) : null,
+      /* @__PURE__ */ React15.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React15.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small",
+          onClick: (e) => {
+            e.stopPropagation();
+            postMessageWithTracing(vscode3, { type: "regenerateReport", reportId: r.id });
+          }
+        },
+        "Regenerate"
+      ), /* @__PURE__ */ React15.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small",
+          onClick: (e) => {
+            e.stopPropagation();
+            postMessageWithTracing(vscode3, { type: "togglePinReport", reportId: r.id });
+          }
+        },
+        r.pinned ? "Unpin" : "Pin"
+      ), /* @__PURE__ */ React15.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small danger",
+          onClick: (e) => {
+            e.stopPropagation();
+            if (confirm(
+              `Are you sure you want to delete the report "${r.title || "Untitled"}"? This cannot be undone.`
+            )) {
+              postMessageWithTracing(vscode3, { type: "deleteReport", reportId: r.id });
+            }
+          }
+        },
+        "Delete"
+      ))
+    )));
+  };
+
+  // src/webview/cockpit/components/stages/ReportsStage.tsx
+  var ReportsStage = ({
+    cockpitState,
+    vscode: vscode3
+  }) => /* @__PURE__ */ React16.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React16.createElement(ReportList, { state: cockpitState, vscode: vscode3 }));
+
   // src/webview/cockpit/components/stages/SymbolStage.tsx
-  var React8 = __toESM(require_react());
-  var SymbolStage = ({ frame, vscode: vscode3 }) => /* @__PURE__ */ React8.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React8.createElement(
+  var React17 = __toESM(require_react());
+  var SymbolStage = ({ frame, vscode: vscode3 }) => /* @__PURE__ */ React17.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React17.createElement(
     "div",
     {
       style: {
@@ -29449,9 +29626,9 @@ Churn: ${file.score || 0}
         flexShrink: 0
       }
     },
-    /* @__PURE__ */ React8.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
-    /* @__PURE__ */ React8.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.filePath),
-    frame.data?.drift?.length > 0 && /* @__PURE__ */ React8.createElement("div", { style: { marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React8.createElement(
+    /* @__PURE__ */ React17.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
+    /* @__PURE__ */ React17.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.filePath),
+    frame.data?.drift?.length > 0 && /* @__PURE__ */ React17.createElement("div", { style: { marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React17.createElement(
       "span",
       {
         key: idx,
@@ -29466,7 +29643,7 @@ Churn: ${file.score || 0}
       "Drift: ",
       d.suggestedName || d.issue || "Rename suggested"
     ))),
-    /* @__PURE__ */ React8.createElement("div", { style: { marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" } }, frame.data?.symbolId && vscode3 && /* @__PURE__ */ React8.createElement(
+    /* @__PURE__ */ React17.createElement("div", { style: { marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" } }, frame.data?.symbolId && vscode3 && /* @__PURE__ */ React17.createElement(
       "button",
       {
         onClick: () => {
@@ -29486,7 +29663,7 @@ Churn: ${file.score || 0}
         }
       },
       "Open in Editor"
-    ), frame.data?.drift?.[0]?.suggestedName && vscode3 && /* @__PURE__ */ React8.createElement(
+    ), frame.data?.drift?.[0]?.suggestedName && vscode3 && /* @__PURE__ */ React17.createElement(
       "button",
       {
         onClick: () => {
@@ -29511,7 +29688,7 @@ Churn: ${file.score || 0}
         }
       },
       "Apply Suggestion (manual)"
-    ), vscode3 && /* @__PURE__ */ React8.createElement(
+    ), vscode3 && /* @__PURE__ */ React17.createElement(
       "button",
       {
         onClick: () => {
@@ -29536,7 +29713,7 @@ Churn: ${file.score || 0}
       },
       "Ask Assistant"
     ))
-  ), /* @__PURE__ */ React8.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React8.createElement(
+  ), /* @__PURE__ */ React17.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React17.createElement(
     "div",
     {
       style: {
@@ -29547,7 +29724,7 @@ Churn: ${file.score || 0}
         borderBottom: "1px solid var(--vscode-panel-border)"
       }
     },
-    /* @__PURE__ */ React8.createElement(
+    /* @__PURE__ */ React17.createElement(
       "pre",
       {
         style: {
@@ -29561,7 +29738,7 @@ Churn: ${file.score || 0}
       },
       frame.data?.content || "Loading..."
     )
-  ), /* @__PURE__ */ React8.createElement("div", { style: { maxHeight: "220px", overflow: "auto", padding: "10px", flexShrink: 0 } }, /* @__PURE__ */ React8.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Evolution"), /* @__PURE__ */ React8.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.history?.map((commit) => /* @__PURE__ */ React8.createElement(
+  ), /* @__PURE__ */ React17.createElement("div", { style: { maxHeight: "220px", overflow: "auto", padding: "10px", flexShrink: 0 } }, /* @__PURE__ */ React17.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Evolution"), /* @__PURE__ */ React17.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.history?.map((commit) => /* @__PURE__ */ React17.createElement(
     "li",
     {
       key: commit.hash || commit.message || commit.date || commit.author,
@@ -29571,113 +29748,465 @@ Churn: ${file.score || 0}
         paddingLeft: "8px"
       }
     },
-    /* @__PURE__ */ React8.createElement("div", { style: { fontWeight: "bold", fontSize: "0.85em" } }, commit.message || commit.summary || commit.change),
-    /* @__PURE__ */ React8.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
-  )), !frame.data?.history?.length && /* @__PURE__ */ React8.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
+    /* @__PURE__ */ React17.createElement("div", { style: { fontWeight: "bold", fontSize: "0.85em" } }, commit.message || commit.summary || commit.change),
+    /* @__PURE__ */ React17.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
+  )), !frame.data?.history?.length && /* @__PURE__ */ React17.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
 
-  // src/webview/cockpit/components/stages/ReportsStage.tsx
-  var React10 = __toESM(require_react());
-
-  // src/webview/cockpit/components/ReportList.tsx
-  var React9 = __toESM(require_react());
-
-  // src/webview/cockpit/utils.ts
-  var formatDate = (value) => {
-    if (!value) return "";
-    try {
-      return new Date(value).toLocaleDateString();
-    } catch {
-      return value;
-    }
+  // src/webview/cockpit/components/stages/StageHeader.tsx
+  var React18 = __toESM(require_react());
+  var HeaderContainer = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "8px 16px",
+    borderBottom: "1px solid var(--vscode-panel-border)",
+    backgroundColor: "var(--vscode-editor-background)",
+    height: "40px",
+    flexShrink: 0
+  };
+  var TitleStyle = {
+    fontWeight: 600,
+    fontSize: "13px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px"
+  };
+  var HealthBarStyle = (riskScore) => {
+    const color = riskScore > 70 ? "var(--vscode-charts-red)" : riskScore > 40 ? "var(--vscode-charts-yellow)" : "var(--vscode-charts-green)";
+    return {
+      height: "4px",
+      width: "100%",
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      backgroundColor: color,
+      opacity: 0.5
+    };
+  };
+  var StageHeader = ({ fileName, metrics, onNavigate }) => {
+    return /* @__PURE__ */ React18.createElement("div", { style: { position: "relative" } }, /* @__PURE__ */ React18.createElement("div", { style: HeaderContainer }, /* @__PURE__ */ React18.createElement("div", { style: TitleStyle }, /* @__PURE__ */ React18.createElement("span", null, fileName), metrics && metrics.riskScore > 0 && /* @__PURE__ */ React18.createElement("span", { style: {
+      fontSize: "10px",
+      opacity: 0.7,
+      backgroundColor: "var(--vscode-badge-background)",
+      color: "var(--vscode-badge-foreground)",
+      padding: "1px 4px",
+      borderRadius: "4px"
+    } }, "Risk: ", metrics.riskScore)), /* @__PURE__ */ React18.createElement("div", { style: { display: "flex", alignItems: "center", gap: "12px", fontSize: "11px" } }, metrics && /* @__PURE__ */ React18.createElement(React18.Fragment, null, /* @__PURE__ */ React18.createElement("div", { title: "Bus Factor (Top Authors)", style: { display: "flex", gap: "4px" } }, metrics.authors?.map((author) => /* @__PURE__ */ React18.createElement("div", { key: author, style: {
+      width: "16px",
+      height: "16px",
+      borderRadius: "50%",
+      backgroundColor: "var(--vscode-button-background)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "9px",
+      color: "var(--vscode-button-foreground)",
+      cursor: "help"
+    }, title: author }, author.charAt(0).toUpperCase()))), /* @__PURE__ */ React18.createElement("div", { title: "Incoming References" }, "Refs: ", /* @__PURE__ */ React18.createElement("strong", null, metrics.incomingRefs))))), metrics && /* @__PURE__ */ React18.createElement("div", { style: HealthBarStyle(metrics.riskScore) }));
   };
 
-  // src/webview/cockpit/components/ReportList.tsx
-  var ReportList = ({ state, vscode: vscode3 }) => {
-    const filter = state.reportsFilterText.toLowerCase();
-    const list = state.reports.filter(
-      (r) => (!filter || (r.title || "").toLowerCase().includes(filter) || (r.summary || "").toLowerCase().includes(filter)) && (!state.reportsShowPinnedOnly || r.pinned) && (state.reportsBranchFilter === "all" || r.branch === state.reportsBranchFilter)
-    );
-    if (!list.length) {
-      return /* @__PURE__ */ React9.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React9.createElement("div", null, "No reports yet"), /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
-    }
-    return /* @__PURE__ */ React9.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React9.createElement(
-      "li",
+  // src/webview/cockpit/components/stages/SedimentGutter.tsx
+  var React19 = __toESM(require_react());
+  var GutterContainer = {
+    width: "12px",
+    height: "100%",
+    display: "flex",
+    flexDirection: "column",
+    flexShrink: 0,
+    borderRight: "1px solid var(--vscode-editor-lineHighlightBorder)",
+    backgroundColor: "var(--vscode-editor-background)"
+  };
+  var SedimentGutter = ({ lineCount, timestamps, currentTimeFilter }) => {
+    const getAgeColor = (lineIndex) => {
+      const mockAge = lineIndex % 20 / 20;
+      if (mockAge < 0.2) return "var(--vscode-charts-green)";
+      if (mockAge < 0.5) return "var(--vscode-charts-blue)";
+      return "var(--vscode-editor-lineHighlightBorder)";
+    };
+    return /* @__PURE__ */ React19.createElement("div", { style: GutterContainer }, Array.from({ length: lineCount }).map((_, i) => /* @__PURE__ */ React19.createElement(
+      "div",
       {
-        key: r.id,
-        className: "cockpit__list-item cockpit__list-item--clickable",
-        onClick: () => postMessageWithTracing(vscode3, { type: "openReport", reportId: r.id })
-      },
-      /* @__PURE__ */ React9.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React9.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React9.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React9.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React9.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
-      r.summary ? /* @__PURE__ */ React9.createElement("div", { className: "cockpit__message" }, r.summary) : null,
-      /* @__PURE__ */ React9.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React9.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small",
-          onClick: (e) => {
-            e.stopPropagation();
-            postMessageWithTracing(vscode3, { type: "regenerateReport", reportId: r.id });
-          }
+        key: i,
+        style: {
+          height: "20px",
+          // Must match CodeEditor line height
+          width: "100%",
+          backgroundColor: getAgeColor(i),
+          opacity: 0.6
         },
-        "Regenerate"
-      ), /* @__PURE__ */ React9.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small",
-          onClick: (e) => {
-            e.stopPropagation();
-            postMessageWithTracing(vscode3, { type: "togglePinReport", reportId: r.id });
-          }
-        },
-        r.pinned ? "Unpin" : "Pin"
-      ), /* @__PURE__ */ React9.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small danger",
-          onClick: (e) => {
-            e.stopPropagation();
-            if (confirm(
-              `Are you sure you want to delete the report "${r.title || "Untitled"}"? This cannot be undone.`
-            )) {
-              postMessageWithTracing(vscode3, { type: "deleteReport", reportId: r.id });
-            }
-          }
-        },
-        "Delete"
-      ))
+        title: `Line ${i + 1}: Modified recently`
+      }
     )));
   };
 
-  // src/webview/cockpit/components/stages/ReportsStage.tsx
-  var ReportsStage = ({
-    cockpitState,
-    vscode: vscode3
-  }) => /* @__PURE__ */ React10.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React10.createElement(ReportList, { state: cockpitState, vscode: vscode3 }));
+  // src/webview/cockpit/components/stages/CodeEditor.tsx
+  var React20 = __toESM(require_react());
+  var EditorContainer = {
+    flex: 1,
+    overflow: "auto",
+    backgroundColor: "var(--vscode-editor-background)",
+    fontFamily: "var(--vscode-editor-font-family)",
+    fontSize: "13px",
+    lineHeight: "20px",
+    padding: "0",
+    color: "var(--vscode-editor-foreground)"
+  };
+  var LineStyle = {
+    height: "20px",
+    paddingLeft: "12px",
+    whiteSpace: "pre",
+    display: "flex",
+    alignItems: "center",
+    position: "relative"
+  };
+  var DriftWarningStyle = {
+    position: "absolute",
+    right: "20px",
+    fontSize: "10px",
+    color: "var(--vscode-inputValidation-warningForeground)",
+    backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+    padding: "1px 6px",
+    borderRadius: "4px",
+    pointerEvents: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px"
+  };
+  var CodeEditor = ({ content, language, driftLines = [] }) => {
+    const lines = content.split("\n");
+    return /* @__PURE__ */ React20.createElement("div", { style: EditorContainer }, lines.map((line, i) => {
+      const lineNumber = i + 1;
+      const hasDrift = driftLines.includes(lineNumber) || line.includes("TODO") || line.includes("FIXME");
+      return /* @__PURE__ */ React20.createElement(
+        "div",
+        {
+          key: i,
+          style: {
+            ...LineStyle,
+            backgroundColor: hasDrift ? "rgba(255, 165, 0, 0.05)" : "transparent"
+          }
+        },
+        hasDrift && /* @__PURE__ */ React20.createElement("span", { style: DriftWarningStyle }, /* @__PURE__ */ React20.createElement("span", null, "\u26A0\uFE0F"), " DRIFT"),
+        line
+      );
+    }));
+  };
 
-  // src/webview/cockpit/components/Stage.tsx
-  var StageContainer = {
+  // src/webview/cockpit/components/stages/PortalsRail.tsx
+  var React21 = __toESM(require_react());
+  var RailContainer = {
+    width: "220px",
+    borderLeft: "1px solid var(--vscode-panel-border)",
+    backgroundColor: "var(--vscode-sideBar-background)",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "auto",
+    flexShrink: 0
+  };
+  var SectionHeader = {
+    padding: "10px",
+    fontSize: "10px",
+    fontWeight: 600,
+    textTransform: "uppercase",
+    opacity: 0.6,
+    letterSpacing: "0.5px",
+    borderBottom: "1px solid var(--vscode-panel-border)",
+    marginTop: "10px"
+  };
+  var PortalGroup = ({ name, count, type }) => /* @__PURE__ */ React21.createElement(
+    "div",
+    {
+      style: {
+        padding: "8px 12px",
+        borderBottom: "1px solid var(--vscode-panel-border)",
+        cursor: "pointer",
+        transition: "background-color 0.1s"
+      },
+      onMouseEnter: (e) => e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)",
+      onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent"
+    },
+    /* @__PURE__ */ React21.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ React21.createElement("span", { style: { fontWeight: 600, fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React21.createElement("span", null, type === "incoming" ? "\u2199" : "\u2197"), name), /* @__PURE__ */ React21.createElement(
+      "span",
+      {
+        style: {
+          backgroundColor: "var(--vscode-badge-background)",
+          color: "var(--vscode-badge-foreground)",
+          borderRadius: "10px",
+          padding: "1px 6px",
+          fontSize: "9px",
+          minWidth: "16px",
+          textAlign: "center"
+        }
+      },
+      count
+    ))
+  );
+  var PortalsRail = ({ incomingRefs = 0, outgoingRefs = 0 }) => {
+    return /* @__PURE__ */ React21.createElement("div", { style: RailContainer }, /* @__PURE__ */ React21.createElement("div", { style: SectionHeader }, "Incoming (Referenced By)"), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "UTILS", count: Math.max(1, Math.floor(incomingRefs * 0.6)), type: "incoming" }), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "CONTROLLERS", count: Math.max(0, Math.floor(incomingRefs * 0.4)), type: "incoming" }), /* @__PURE__ */ React21.createElement("div", { style: SectionHeader }, "Outgoing (References)"), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "TYPES", count: Math.max(1, Math.floor(outgoingRefs * 0.5)), type: "outgoing" }), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "SERVICES", count: Math.max(0, Math.floor(outgoingRefs * 0.5)), type: "outgoing" }));
+  };
+
+  // src/webview/cockpit/components/stages/SymbolBlock.tsx
+  var React22 = __toESM(require_react());
+  var BlockContainer = {
+    border: "1px solid var(--vscode-editor-lineHighlightBorder)",
+    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+    borderRadius: "4px",
+    padding: "8px",
+    margin: "4px 0",
+    cursor: "pointer",
+    transition: "transform 0.1s"
+  };
+  var HeaderStyle3 = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "4px"
+  };
+  var NameStyle = {
+    fontWeight: 600,
+    fontSize: "12px",
+    color: "var(--vscode-symbolIcon-functionForeground)"
+  };
+  var MetaStyle = {
+    fontSize: "10px",
+    color: "var(--vscode-descriptionForeground)"
+  };
+  var SymbolBlock = ({
+    name,
+    kind,
+    startLine,
+    endLine,
+    complexity = 0,
+    onClick
+  }) => {
+    const lineCount = endLine - startLine + 1;
+    const height = Math.max(40, lineCount * 2);
+    return /* @__PURE__ */ React22.createElement(
+      "div",
+      {
+        style: { ...BlockContainer, height: `${height}px` },
+        onClick,
+        title: `Click to zoom into ${name}`
+      },
+      /* @__PURE__ */ React22.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React22.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React22.createElement("span", { style: NameStyle }, name), /* @__PURE__ */ React22.createElement("span", { style: { fontSize: "10px", opacity: 0.7 } }, "(", kind, ")")), /* @__PURE__ */ React22.createElement("div", { style: MetaStyle }, lineCount, " lines \u2022 C", complexity)),
+      /* @__PURE__ */ React22.createElement("div", { style: { opacity: 0.3, fontSize: "8px", overflow: "hidden" } }, Array.from({ length: Math.min(5, lineCount) }).map((_, i) => /* @__PURE__ */ React22.createElement("div", { key: i, style: { height: "4px", backgroundColor: "currentColor", marginBottom: "2px", width: `${Math.random() * 60 + 40}%` } })))
+    );
+  };
+
+  // src/webview/cockpit/components/stages/TimeScrubber.tsx
+  var React23 = __toESM(require_react());
+  var ScrubberContainer = {
+    height: "40px",
+    borderTop: "1px solid var(--vscode-panel-border)",
+    backgroundColor: "var(--vscode-editor-background)",
+    display: "flex",
+    alignItems: "center",
+    padding: "0 16px",
+    gap: "12px",
+    flexShrink: 0
+  };
+  var SliderStyle2 = {
+    flex: 1,
+    cursor: "pointer"
+  };
+  var TimeScrubber = ({
+    currentTimeFilter,
+    onTimeFilterChange,
+    startTime = Date.now() - 30 * 24 * 60 * 60 * 1e3,
+    // Default 30 days ago
+    endTime = Date.now()
+  }) => {
+    const [isPlaying, setIsPlaying] = React23.useState(false);
+    const [currentValue, setCurrentValue] = React23.useState(currentTimeFilter || endTime);
+    React23.useEffect(() => {
+      if (currentTimeFilter) {
+        setCurrentValue(currentTimeFilter);
+      }
+    }, [currentTimeFilter]);
+    React23.useEffect(() => {
+      let interval;
+      if (isPlaying) {
+        interval = setInterval(() => {
+          setCurrentValue((prev) => {
+            const next = prev + (endTime - startTime) / 100;
+            if (next >= endTime) {
+              setIsPlaying(false);
+              return endTime;
+            }
+            return next;
+          });
+        }, 100);
+      }
+      return () => clearInterval(interval);
+    }, [isPlaying, startTime, endTime]);
+    React23.useEffect(() => {
+      if (Math.abs(currentValue - (currentTimeFilter || endTime)) > 1e3) {
+        onTimeFilterChange(currentValue);
+      }
+    }, [currentValue]);
+    const handleChange = (e) => {
+      const val = parseInt(e.target.value, 10);
+      setCurrentValue(val);
+      onTimeFilterChange(val);
+    };
+    const formatTime = (ts) => new Date(ts).toLocaleDateString();
+    return /* @__PURE__ */ React23.createElement("div", { style: ScrubberContainer }, /* @__PURE__ */ React23.createElement(
+      "button",
+      {
+        onClick: () => setIsPlaying(!isPlaying),
+        style: {
+          background: "none",
+          border: "none",
+          color: "var(--vscode-button-foreground)",
+          cursor: "pointer",
+          fontSize: "16px"
+        },
+        title: isPlaying ? "Pause" : "Play History"
+      },
+      isPlaying ? "\u23F8" : "\u25B6"
+    ), /* @__PURE__ */ React23.createElement("span", { style: { fontSize: "11px", opacity: 0.7, minWidth: "70px" } }, formatTime(currentValue)), /* @__PURE__ */ React23.createElement(
+      "input",
+      {
+        type: "range",
+        min: startTime,
+        max: endTime,
+        value: currentValue,
+        onChange: handleChange,
+        style: SliderStyle2
+      }
+    ), /* @__PURE__ */ React23.createElement(
+      "button",
+      {
+        onClick: () => {
+          setCurrentValue(endTime);
+          onTimeFilterChange(endTime);
+        },
+        style: {
+          fontSize: "11px",
+          background: "none",
+          border: "1px solid var(--vscode-button-border)",
+          borderRadius: "4px",
+          padding: "2px 6px",
+          color: "var(--vscode-foreground)",
+          cursor: "pointer"
+        }
+      },
+      "Reset"
+    ));
+  };
+
+  // src/webview/cockpit/components/CodeMicroscope.tsx
+  var MicroscopeContainer = {
     flex: 1,
     display: "flex",
     flexDirection: "column",
     backgroundColor: "var(--vscode-editor-background)",
     overflow: "hidden",
-    position: "relative"
+    position: "relative",
+    height: "100%"
   };
-  var HeaderStyle3 = {
-    padding: "10px 20px",
-    borderBottom: "1px solid var(--vscode-panel-border)",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "var(--vscode-editor-background)"
-  };
-  var ContentStyle2 = {
+  var DeepEditorLayout = {
     flex: 1,
-    padding: "20px",
-    overflow: "auto",
     display: "flex",
-    justifyContent: "center",
-    alignItems: "center"
+    overflow: "hidden"
   };
+  var CodeMicroscope = ({
+    frame,
+    onZoomIn,
+    onZoomOut,
+    cockpitState,
+    vscode: vscode3
+  }) => {
+    const handleZoomIn = (nextFrame) => {
+      onZoomIn({
+        ...nextFrame,
+        parentId: frame.id
+      });
+    };
+    const handleTimeFilterChange = (value) => {
+      vscode3.postMessage({ type: "updateTimeFilter", value });
+    };
+    const frameData = frame.level === "bundle" ? cockpitState?.bundleView || frame.data : frame.data;
+    const renderFrame = frame.level === "bundle" ? { ...frame, data: frameData } : frame;
+    const [zoomLevel, setZoomLevel] = React24.useState("focus");
+    const handleWheel = (e) => {
+      if (e.ctrlKey) {
+        if (e.deltaY > 0) {
+          setZoomLevel((prev) => prev === "focus" ? "normal" : "overview");
+        } else {
+          setZoomLevel((prev) => prev === "overview" ? "normal" : "focus");
+        }
+      }
+    };
+    if (renderFrame.level === "file") {
+      const metrics = cockpitState?.nodeMetrics?.[renderFrame.id] || renderFrame.data?.metrics;
+      const content = renderFrame.data?.content || "";
+      const lineCount = renderFrame.data?.lineCount || content.split("\n").length;
+      const symbols = renderFrame.data?.symbols || [];
+      return /* @__PURE__ */ React24.createElement("div", { style: MicroscopeContainer, onWheel: handleWheel }, /* @__PURE__ */ React24.createElement(
+        StageHeader,
+        {
+          fileName: renderFrame.name,
+          metrics,
+          onNavigate: () => {
+          }
+        }
+      ), /* @__PURE__ */ React24.createElement("div", { style: { position: "absolute", top: "50px", right: "240px", zIndex: 10, display: "flex", gap: "4px" } }, /* @__PURE__ */ React24.createElement("button", { onClick: () => setZoomLevel("overview"), style: { opacity: zoomLevel === "overview" ? 1 : 0.5 } }, "-"), /* @__PURE__ */ React24.createElement("button", { onClick: () => setZoomLevel("normal"), style: { opacity: zoomLevel === "normal" ? 1 : 0.5 } }, "="), /* @__PURE__ */ React24.createElement("button", { onClick: () => setZoomLevel("focus"), style: { opacity: zoomLevel === "focus" ? 1 : 0.5 } }, "+")), /* @__PURE__ */ React24.createElement("div", { style: DeepEditorLayout }, /* @__PURE__ */ React24.createElement(
+        SedimentGutter,
+        {
+          lineCount,
+          currentTimeFilter: cockpitState?.currentTimeFilter
+        }
+      ), zoomLevel === "focus" ? /* @__PURE__ */ React24.createElement(
+        CodeEditor,
+        {
+          content,
+          language: renderFrame.data?.language || "text"
+        }
+      ) : /* @__PURE__ */ React24.createElement("div", { style: { flex: 1, overflow: "auto", padding: "20px" } }, symbols.length > 0 ? symbols.map((sym) => /* @__PURE__ */ React24.createElement(
+        SymbolBlock,
+        {
+          key: sym.id,
+          name: sym.name,
+          kind: sym.kind,
+          startLine: sym.startLine,
+          endLine: sym.endLine,
+          complexity: metrics?.complexity || 0,
+          onClick: () => setZoomLevel("focus")
+        }
+      )) : /* @__PURE__ */ React24.createElement("div", { style: { opacity: 0.5, textAlign: "center", marginTop: "40px" } }, "No symbols found. Switch to Focus view.")), /* @__PURE__ */ React24.createElement(
+        PortalsRail,
+        {
+          incomingRefs: metrics?.incomingRefs,
+          outgoingRefs: metrics?.outgoingRefs
+        }
+      )), /* @__PURE__ */ React24.createElement(
+        TimeScrubber,
+        {
+          currentTimeFilter: cockpitState?.currentTimeFilter,
+          onTimeFilterChange: handleTimeFilterChange
+        }
+      ));
+    }
+    return /* @__PURE__ */ React24.createElement("div", { style: MicroscopeContainer }, renderFrame.level !== "bundle" && /* @__PURE__ */ React24.createElement("div", { style: { padding: "8px", borderBottom: "1px solid var(--vscode-panel-border)" } }, /* @__PURE__ */ React24.createElement("button", { onClick: onZoomOut, disabled: !frame.parentId }, "\u2190 Back")), /* @__PURE__ */ React24.createElement("div", { style: { flex: 1, overflow: "auto" } }, renderFrame.status === "scanning" ? /* @__PURE__ */ React24.createElement("div", { style: { padding: "20px", textAlign: "center" } }, "Scanning...") : /* @__PURE__ */ React24.createElement(React24.Fragment, null, renderFrame.id === "reports-root" ? cockpitState ? /* @__PURE__ */ React24.createElement(ReportsStage, { cockpitState, vscode: vscode3 }) : /* @__PURE__ */ React24.createElement("div", null, "Loading state...") : /* @__PURE__ */ React24.createElement(React24.Fragment, null, renderFrame.level === "bundle" && /* @__PURE__ */ React24.createElement(
+      BundleStage,
+      {
+        frame: renderFrame,
+        onZoomIn: handleZoomIn,
+        cockpitState,
+        vscode: vscode3
+      }
+    ), renderFrame.level === "folder" && /* @__PURE__ */ React24.createElement(
+      FolderStage,
+      {
+        frame: renderFrame,
+        onZoomIn: handleZoomIn,
+        cockpitState
+      }
+    ), renderFrame.level === "blast_radius" && /* @__PURE__ */ React24.createElement(BlastRadiusStage, { frame: renderFrame, onZoomIn: handleZoomIn }), renderFrame.level === "symbol" && /* @__PURE__ */ React24.createElement(SymbolStage, { frame: renderFrame, vscode: vscode3 })))));
+  };
+
+  // src/webview/cockpit/components/Stage.tsx
   var Stage = ({
     frame,
     onZoomIn,
@@ -29685,60 +30214,16 @@ Churn: ${file.score || 0}
     cockpitState,
     vscode: vscode3
   }) => {
-    const handleZoomIn = (id, name) => {
-      let nextLevel = "bundle";
-      if (frame.level === "bundle") nextLevel = "blast_radius";
-      else if (frame.level === "blast_radius") nextLevel = "file";
-      else if (frame.level === "file") nextLevel = "symbol";
-      else return;
-      onZoomIn({
-        level: nextLevel,
-        id,
-        name,
-        parentId: frame.id,
-        status: "ready"
-      });
-    };
-    const frameData = frame.level === "bundle" ? cockpitState?.bundleView || frame.data : frame.data;
-    const tier = frame.tier || frameData?.tier;
-    const renderFrame = frame.level === "bundle" ? { ...frame, data: frameData } : frame;
-    return /* @__PURE__ */ React11.createElement("div", { style: StageContainer }, /* @__PURE__ */ React11.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React11.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" } }, /* @__PURE__ */ React11.createElement(
-      "button",
+    return /* @__PURE__ */ React25.createElement(
+      CodeMicroscope,
       {
-        onClick: onZoomOut,
-        disabled: !frame.parentId,
-        style: {
-          marginRight: "6px",
-          background: "none",
-          border: "none",
-          color: "var(--vscode-button-foreground)",
-          cursor: "pointer",
-          opacity: !frame.parentId ? 0.5 : 1
-        }
-      },
-      "\u2190 Back"
-    ), /* @__PURE__ */ React11.createElement("strong", null, frame.name), " ", /* @__PURE__ */ React11.createElement("span", { style: { opacity: 0.7 } }, "(", frame.level, ")"), frame.breadcrumbs && /* @__PURE__ */ React11.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, frame.breadcrumbs.join(" / ")), tier && /* @__PURE__ */ React11.createElement(
-      "span",
-      {
-        style: {
-          padding: "2px 6px",
-          borderRadius: "4px",
-          background: tier === "structure" ? "var(--vscode-badge-background)" : tier === "hybrid" ? "var(--vscode-inputValidation-warningBackground)" : "var(--vscode-charts-green)",
-          color: tier === "structure" ? "var(--vscode-badge-foreground)" : "var(--vscode-foreground)",
-          fontSize: "0.75em",
-          textTransform: "uppercase"
-        }
-      },
-      tier
-    ), frame.level === "bundle" && frameData?.summary && /* @__PURE__ */ React11.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "\u2022 ", frameData.summary.files, " files \u2022 ", frameData.summary.symbols, " symbols"))), /* @__PURE__ */ React11.createElement("div", { style: ContentStyle2 }, frame.status === "scanning" ? /* @__PURE__ */ React11.createElement("div", { style: { textAlign: "center", color: "var(--vscode-descriptionForeground)" } }, /* @__PURE__ */ React11.createElement("div", { style: { fontSize: "2em", marginBottom: "10px" } }, "\u23F3"), /* @__PURE__ */ React11.createElement("h3", null, "Scanning ", frame.name, "..."), /* @__PURE__ */ React11.createElement("p", null, "Analyzing history, drift, and risks.")) : /* @__PURE__ */ React11.createElement(React11.Fragment, null, renderFrame.id === "reports-root" && cockpitState && vscode3 ? /* @__PURE__ */ React11.createElement(ReportsStage, { cockpitState, vscode: vscode3 }) : /* @__PURE__ */ React11.createElement(React11.Fragment, null, renderFrame.level === "bundle" && /* @__PURE__ */ React11.createElement(
-      BundleStage,
-      {
-        frame: renderFrame,
-        onZoomIn: (f) => onZoomIn(f),
+        frame,
+        onZoomIn,
+        onZoomOut,
         cockpitState,
         vscode: vscode3
       }
-    ), renderFrame.level === "blast_radius" && /* @__PURE__ */ React11.createElement(BlastRadiusStage, { frame: renderFrame, onZoomIn: (f) => onZoomIn(f) }), renderFrame.level === "file" && /* @__PURE__ */ React11.createElement(FileStage, { frame: renderFrame, onZoomIn: (f) => onZoomIn(f) }), renderFrame.level === "symbol" && /* @__PURE__ */ React11.createElement(SymbolStage, { frame: renderFrame, vscode: vscode3 })))));
+    );
   };
 
   // src/webview/cockpit/components/SuperWebview.tsx
@@ -29760,15 +30245,15 @@ Churn: ${file.score || 0}
     vscode: vscode3,
     cockpitState
   }) => {
-    const [assistantMessages, setAssistantMessages] = React12.useState([]);
-    const [width, setWidth] = React12.useState(window.innerWidth);
-    const [activeTab, setActiveTab] = React12.useState("stage");
-    const [isAssistantOpen, setIsAssistantOpen] = React12.useState(true);
+    const [assistantMessages, setAssistantMessages] = React26.useState([]);
+    const [width, setWidth] = React26.useState(window.innerWidth);
+    const [activeTab, setActiveTab] = React26.useState("stage");
+    const [isAssistantOpen, setIsAssistantOpen] = React26.useState(true);
     const activeFrame = cockpitState.activeFrame;
     const history = cockpitState.history;
     const explorerData = cockpitState.explorerData;
-    const [selection, setSelection] = React12.useState(null);
-    React12.useEffect(() => {
+    const [selection, setSelection] = React26.useState(null);
+    React26.useEffect(() => {
       postMessageWithTracing(vscode3, { type: "getExplorerTree" });
       postMessageWithTracing(vscode3, { type: "getBundleData" });
       const handler = (event) => {
@@ -29788,7 +30273,7 @@ Churn: ${file.score || 0}
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
     }, [vscode3]);
-    React12.useEffect(() => {
+    React26.useEffect(() => {
       const handleResize = () => setWidth(window.innerWidth);
       window.addEventListener("resize", handleResize);
       return () => window.removeEventListener("resize", handleResize);
@@ -29849,6 +30334,9 @@ Churn: ${file.score || 0}
         case "symbol":
           level = "symbol";
           break;
+        case "folder":
+          level = "folder";
+          break;
         default:
           level = "bundle";
       }
@@ -29888,16 +30376,22 @@ Churn: ${file.score || 0}
         setActiveTab("stage");
       }
     };
-    return /* @__PURE__ */ React12.createElement("div", { style: LayoutStyle }, /* @__PURE__ */ React12.createElement("div", { style: MainAreaStyle }, isWide && /* @__PURE__ */ React12.createElement(React12.Fragment, null, /* @__PURE__ */ React12.createElement(
+    const handleTimeFilterChange = (value) => {
+      postMessageWithTracing(vscode3, { type: "updateTimeFilter", value });
+    };
+    return /* @__PURE__ */ React26.createElement("div", { style: LayoutStyle }, /* @__PURE__ */ React26.createElement("div", { style: MainAreaStyle }, isWide && /* @__PURE__ */ React26.createElement(React26.Fragment, null, /* @__PURE__ */ React26.createElement(
       Sidebar,
       {
         data: explorerData,
         activeId: activeFrame.id,
         onSelect: handleSidebarSelect,
         repoName: cockpitState.repoName || void 0,
-        branchName: cockpitState.branchName || void 0
+        branchName: cockpitState.branchName || void 0,
+        allMetrics: cockpitState.nodeMetrics,
+        currentTimeFilter: cockpitState.currentTimeFilter,
+        onTimeFilterChange: handleTimeFilterChange
       }
-    ), /* @__PURE__ */ React12.createElement(
+    ), /* @__PURE__ */ React26.createElement(
       Stage,
       {
         frame: activeFrame,
@@ -29907,7 +30401,7 @@ Churn: ${file.score || 0}
         cockpitState,
         vscode: vscode3
       }
-    ), /* @__PURE__ */ React12.createElement(Inspector, { frame: activeFrame, selection }), cockpitState.bundleSummary && cockpitState.bundleSummary.cacheHits !== void 0 && /* @__PURE__ */ React12.createElement(
+    ), cockpitState.bundleSummary && cockpitState.bundleSummary.cacheHits !== void 0 && /* @__PURE__ */ React26.createElement(
       "div",
       {
         style: {
@@ -29927,7 +30421,7 @@ Churn: ${file.score || 0}
       " misses (",
       Math.round(cockpitState.bundleSummary.cacheHitRate * 100),
       "%)"
-    )), isMedium && /* @__PURE__ */ React12.createElement(
+    )), isMedium && /* @__PURE__ */ React26.createElement(
       "div",
       {
         style: {
@@ -29938,7 +30432,7 @@ Churn: ${file.score || 0}
           minHeight: 0
         }
       },
-      /* @__PURE__ */ React12.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "inspector" ? /* @__PURE__ */ React12.createElement(Inspector, { frame: activeFrame, selection }) : activeTab === "assistant" ? /* @__PURE__ */ React12.createElement(
+      /* @__PURE__ */ React26.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "assistant" ? /* @__PURE__ */ React26.createElement(
         Assistant,
         {
           frame: activeFrame,
@@ -29946,16 +30440,19 @@ Churn: ${file.score || 0}
           messages: assistantMessages,
           onSend: handleSendAssistant
         }
-      ) : /* @__PURE__ */ React12.createElement(React12.Fragment, null, /* @__PURE__ */ React12.createElement(
+      ) : /* @__PURE__ */ React26.createElement(React26.Fragment, null, /* @__PURE__ */ React26.createElement(
         Sidebar,
         {
           data: explorerData,
           activeId: activeFrame.id,
           onSelect: handleSidebarSelect,
           repoName: cockpitState.repoName || void 0,
-          branchName: cockpitState.branchName || void 0
+          branchName: cockpitState.branchName || void 0,
+          allMetrics: cockpitState.nodeMetrics,
+          currentTimeFilter: cockpitState.currentTimeFilter,
+          onTimeFilterChange: handleTimeFilterChange
         }
-      ), /* @__PURE__ */ React12.createElement(
+      ), /* @__PURE__ */ React26.createElement(
         Stage,
         {
           frame: activeFrame,
@@ -29966,7 +30463,7 @@ Churn: ${file.score || 0}
           vscode: vscode3
         }
       ))),
-      /* @__PURE__ */ React12.createElement(
+      /* @__PURE__ */ React26.createElement(
         "div",
         {
           style: {
@@ -29977,7 +30474,7 @@ Churn: ${file.score || 0}
             height: "40px"
           }
         },
-        /* @__PURE__ */ React12.createElement(
+        /* @__PURE__ */ React26.createElement(
           "div",
           {
             onClick: () => setActiveTab("stage"),
@@ -29986,30 +30483,14 @@ Churn: ${file.score || 0}
               padding: "8px",
               textAlign: "center",
               cursor: "pointer",
-              borderTop: activeTab !== "inspector" ? "2px solid var(--vscode-activityBar-foreground)" : "2px solid transparent",
-              color: activeTab !== "inspector" ? "var(--vscode-activityBar-foreground)" : "var(--vscode-activityBar-inactiveForeground)",
+              borderTop: activeTab !== "assistant" ? "2px solid var(--vscode-activityBar-foreground)" : "2px solid transparent",
+              color: activeTab !== "assistant" ? "var(--vscode-activityBar-foreground)" : "var(--vscode-activityBar-inactiveForeground)",
               fontSize: "0.85em"
             }
           },
           "Explorer + Stage"
         ),
-        /* @__PURE__ */ React12.createElement(
-          "div",
-          {
-            onClick: () => setActiveTab("inspector"),
-            style: {
-              flex: 1,
-              padding: "8px",
-              textAlign: "center",
-              cursor: "pointer",
-              borderTop: activeTab === "inspector" ? "2px solid var(--vscode-activityBar-foreground)" : "2px solid transparent",
-              color: activeTab === "inspector" ? "var(--vscode-activityBar-foreground)" : "var(--vscode-activityBar-inactiveForeground)",
-              fontSize: "0.85em"
-            }
-          },
-          "Inspector"
-        ),
-        /* @__PURE__ */ React12.createElement(
+        /* @__PURE__ */ React26.createElement(
           "div",
           {
             onClick: () => setActiveTab("assistant"),
@@ -30026,7 +30507,7 @@ Churn: ${file.score || 0}
           "Assistant"
         )
       )
-    ), isNarrow && /* @__PURE__ */ React12.createElement(
+    ), isNarrow && /* @__PURE__ */ React26.createElement(
       "div",
       {
         style: {
@@ -30037,16 +30518,19 @@ Churn: ${file.score || 0}
           minHeight: 0
         }
       },
-      /* @__PURE__ */ React12.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "explorer" && /* @__PURE__ */ React12.createElement(
+      /* @__PURE__ */ React26.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "explorer" && /* @__PURE__ */ React26.createElement(
         Sidebar,
         {
           data: explorerData,
           activeId: activeFrame.id,
           onSelect: handleSidebarSelectWrapper,
           repoName: cockpitState.repoName || void 0,
-          branchName: cockpitState.branchName || void 0
+          branchName: cockpitState.branchName || void 0,
+          allMetrics: cockpitState.nodeMetrics,
+          currentTimeFilter: cockpitState.currentTimeFilter,
+          onTimeFilterChange: handleTimeFilterChange
         }
-      ), activeTab === "stage" && /* @__PURE__ */ React12.createElement(
+      ), activeTab === "stage" && /* @__PURE__ */ React26.createElement(
         Stage,
         {
           frame: activeFrame,
@@ -30056,7 +30540,7 @@ Churn: ${file.score || 0}
           cockpitState,
           vscode: vscode3
         }
-      ), activeTab === "inspector" && /* @__PURE__ */ React12.createElement(Inspector, { frame: activeFrame, selection }), activeTab === "assistant" && /* @__PURE__ */ React12.createElement(
+      ), activeTab === "assistant" && /* @__PURE__ */ React26.createElement(
         Assistant,
         {
           frame: activeFrame,
@@ -30065,7 +30549,7 @@ Churn: ${file.score || 0}
           onSend: handleSendAssistant
         }
       )),
-      /* @__PURE__ */ React12.createElement(
+      /* @__PURE__ */ React26.createElement(
         "div",
         {
           style: {
@@ -30076,7 +30560,7 @@ Churn: ${file.score || 0}
             height: "40px"
           }
         },
-        ["explorer", "stage", "inspector", "assistant"].map((tab) => /* @__PURE__ */ React12.createElement(
+        ["explorer", "stage", "assistant"].map((tab) => /* @__PURE__ */ React26.createElement(
           "div",
           {
             key: tab,
@@ -30092,10 +30576,10 @@ Churn: ${file.score || 0}
               fontSize: "0.8em"
             }
           },
-          tab === "explorer" ? "\u{1F4C1}" : tab === "stage" ? "\u{1F3AF}" : tab === "inspector" ? "\u{1F50D}" : "\u{1F916}"
+          tab === "explorer" ? "\u{1F4C1}" : tab === "stage" ? "\u{1F3AF}" : "\u{1F916}"
         ))
       )
-    )), isAssistantOpen && isWide && /* @__PURE__ */ React12.createElement(
+    )), isAssistantOpen && isWide && /* @__PURE__ */ React26.createElement(
       Assistant,
       {
         frame: activeFrame,
@@ -30107,8 +30591,8 @@ Churn: ${file.score || 0}
   };
 
   // src/webview/cockpit/components/ErrorBoundary.tsx
-  var React13 = __toESM(require_react());
-  var ErrorBoundary = class extends React13.Component {
+  var React27 = __toESM(require_react());
+  var ErrorBoundary = class extends React27.Component {
     constructor(props) {
       super(props);
       this.handleReset = () => {
@@ -30125,7 +30609,7 @@ Churn: ${file.score || 0}
     }
     render() {
       if (this.state.hasError) {
-        return /* @__PURE__ */ React13.createElement(
+        return /* @__PURE__ */ React27.createElement(
           "div",
           {
             style: {
@@ -30136,9 +30620,9 @@ Churn: ${file.score || 0}
               margin: "10px"
             }
           },
-          /* @__PURE__ */ React13.createElement("h2", null, "Something went wrong"),
-          /* @__PURE__ */ React13.createElement("details", { style: { whiteSpace: "pre-wrap", marginTop: "10px" } }, /* @__PURE__ */ React13.createElement("summary", { style: { cursor: "pointer", marginBottom: "10px" } }, "Error Details"), /* @__PURE__ */ React13.createElement("div", { style: { fontSize: "12px", fontFamily: "monospace" } }, /* @__PURE__ */ React13.createElement("strong", null, "Error:"), " ", this.state.error?.toString(), /* @__PURE__ */ React13.createElement("br", null), /* @__PURE__ */ React13.createElement("br", null), /* @__PURE__ */ React13.createElement("strong", null, "Component Stack:"), /* @__PURE__ */ React13.createElement("br", null), this.state.errorInfo?.componentStack)),
-          /* @__PURE__ */ React13.createElement(
+          /* @__PURE__ */ React27.createElement("h2", null, "Something went wrong"),
+          /* @__PURE__ */ React27.createElement("details", { style: { whiteSpace: "pre-wrap", marginTop: "10px" } }, /* @__PURE__ */ React27.createElement("summary", { style: { cursor: "pointer", marginBottom: "10px" } }, "Error Details"), /* @__PURE__ */ React27.createElement("div", { style: { fontSize: "12px", fontFamily: "monospace" } }, /* @__PURE__ */ React27.createElement("strong", null, "Error:"), " ", this.state.error?.toString(), /* @__PURE__ */ React27.createElement("br", null), /* @__PURE__ */ React27.createElement("br", null), /* @__PURE__ */ React27.createElement("strong", null, "Component Stack:"), /* @__PURE__ */ React27.createElement("br", null), this.state.errorInfo?.componentStack)),
+          /* @__PURE__ */ React27.createElement(
             "button",
             {
               onClick: this.handleReset,
@@ -30218,11 +30702,13 @@ Churn: ${file.score || 0}
       status: "ready"
     },
     history: [],
-    explorerData: []
+    explorerData: [],
+    nodeMetrics: {},
+    currentTimeFilter: Date.now()
   };
   var App = () => {
-    const [state, setState] = React14.useState(defaultState);
-    React14.useEffect(() => {
+    const [state, setState] = React28.useState(defaultState);
+    React28.useEffect(() => {
       const handler = (event) => {
         const parsed = CockpitHostMessageSchema.safeParse(event.data);
         if (!parsed.success) {
@@ -30256,19 +30742,19 @@ Churn: ${file.score || 0}
       postMessageWithTracing(vscode2, { type: "ready" });
       return () => window.removeEventListener("message", handler);
     }, []);
-    return /* @__PURE__ */ React14.createElement(ErrorBoundary, null, /* @__PURE__ */ React14.createElement(
+    return /* @__PURE__ */ React28.createElement(ErrorBoundary, null, /* @__PURE__ */ React28.createElement(
       "div",
       {
         className: "cockpit",
         style: { padding: 0, margin: 0, height: "100vh", overflow: "hidden" }
       },
-      /* @__PURE__ */ React14.createElement(SuperWebview, { vscode: vscode2, cockpitState: state })
+      /* @__PURE__ */ React28.createElement(SuperWebview, { vscode: vscode2, cockpitState: state })
     ));
   };
   var rootEl = document.getElementById("root");
   if (rootEl) {
     const root = (0, import_client.createRoot)(rootEl);
-    root.render(/* @__PURE__ */ React14.createElement(App, null));
+    root.render(/* @__PURE__ */ React28.createElement(App, null));
   }
 })();
 /*! Bundled license information:

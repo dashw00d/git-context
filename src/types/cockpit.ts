@@ -118,6 +118,17 @@ export interface ReportDTO {
 
 /* ---------- Cockpit sidebar state (host → cockpit) ---------- */
 
+export interface NodeMetrics {
+  riskScore: number;      // 0–100 (Calculated from complexity + churn)
+  churnScore: number;     // 0–100 (Frequency of changes)
+  lastModified: number;   // Timestamp of last commit
+  driftCount: number;     // Number of drift warnings
+  incomingRefs: number;   // Count of incoming edges
+  outgoingRefs: number;   // Count of outgoing edges
+  authors: string[];      // Top 3 authors (Bus Factor)
+  ageDays: number;        // Days since creation or last major refactor
+}
+
 export interface CockpitState {
   /* Global context */
   repoName: string | null;
@@ -128,6 +139,10 @@ export interface CockpitState {
     symbolCount?: number;
     fileCount?: number;
   };
+
+  /* Phase 1: Data Foundation */
+  nodeMetrics: Record<string, NodeMetrics>; // key = node.path (or id)
+  currentTimeFilter: number; // timestamp for time travel (default Date.now())
 
   /** Which accordion should be open by default / last */
   activeSection: CockpitSectionKey;
@@ -362,10 +377,6 @@ export type CockpitClientMessage =
       type: 'askAssistant';
       payload?: any;
     }
-  | {
-      type: 'applyRefactorSuggestion';
-      payload: { symbolId: string; suggestedName: string; filePath?: string };
-    }
 
   /* Saved reports section */
   | {
@@ -455,7 +466,8 @@ export type CockpitClientMessage =
     }
   | { type: 'clearError' }
   | { type: 'navigateToFrame'; frame: ContextFrame }
-  | { type: 'navigateBack' };
+  | { type: 'navigateBack' }
+  | { type: 'updateTimeFilter'; value: number };
 
 /* ---------- Host → Cockpit messages ---------- */
 

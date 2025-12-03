@@ -49,132 +49,136 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
     healthScore = Math.max(0, Math.min(100, healthScore));
   }
 
+  const GroupStyle: React.CSSProperties = {
+    marginBottom: '20px',
+    padding: '15px',
+    backgroundColor: 'var(--vscode-editor-inactiveSelectionBackground)',
+    borderRadius: '6px',
+  };
+
+  const TitleStyle: React.CSSProperties = {
+    fontSize: '1.1em',
+    fontWeight: 600,
+    marginBottom: '10px',
+    color: 'var(--vscode-editor-foreground)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  };
+
+  const RowStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: '20px',
+    marginBottom: '10px',
+    flexWrap: 'wrap',
+  };
+
+  const ItemStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+  };
+
+  const ValueStyle: React.CSSProperties = {
+    fontSize: '1.4em',
+    fontWeight: 'bold',
+    color: 'var(--vscode-editor-foreground)',
+  };
+
+  const LabelStyle: React.CSSProperties = {
+    fontSize: '0.85em',
+    color: 'var(--vscode-descriptionForeground)',
+    marginTop: '2px',
+  };
+
   return (
-    <div className="cockpit__stats-section">
-      <div className="cockpit__stat-group">
-        <h3>Selection</h3>
-        <div className="cockpit__stat-value">
-          {selectionCount} <span className="cockpit__stat-label">commits/scopes</span>
-        </div>
-        <div className="cockpit__stat-list">
-          {state.selectedStagedPaths.length > 0 && (
-            <span className="tag">Staged ({state.selectedStagedPaths.length})</span>
-          )}
-          {state.selectedUnstagedPaths.length > 0 && (
-            <span className="tag">Unstaged ({state.selectedUnstagedPaths.length})</span>
-          )}
-          {state.selectedCommitShas.slice(0, 3).map(sha => (
-            <span key={sha} className="tag">
-              {sha.substring(0, 7)}
+    <div style={{ padding: '10px' }}>
+      {/* Global Stats */}
+      <div style={GroupStyle}>
+        <h3 style={TitleStyle}>Global Health</h3>
+        <div style={RowStyle}>
+          <div style={ItemStyle}>
+            <span style={{ ...ValueStyle, color: healthScore > 70 ? 'var(--vscode-charts-green)' : healthScore > 40 ? 'var(--vscode-charts-yellow)' : 'var(--vscode-charts-red)' }}>
+              {healthScore.toFixed(0)}%
             </span>
-          ))}
-          {state.selectedCommitShas.length > 3 && (
-            <span className="tag">+{state.selectedCommitShas.length - 3}</span>
-          )}
+            <span style={LabelStyle}>Health Score</span>
+          </div>
+          <div style={ItemStyle}>
+            <span style={{ ...ValueStyle, color: criticalCount > 0 ? 'var(--vscode-charts-red)' : 'inherit' }}>
+              {criticalCount}
+            </span>
+            <span style={LabelStyle}>Critical Issues</span>
+          </div>
+          <div style={ItemStyle}>
+            <span style={{ ...ValueStyle, color: warningCount > 0 ? 'var(--vscode-charts-yellow)' : 'inherit' }}>
+              {warningCount}
+            </span>
+            <span style={LabelStyle}>Warnings</span>
+          </div>
         </div>
       </div>
 
-      <div className="cockpit__stat-group">
-        <h3>Analysis Results</h3>
-        <div className="cockpit__stat-row">
-          <div className="cockpit__stat-item">
-            <span className="value">
-              {bundleSummary?.commitCount || state.selectedCommitShas.length}
-            </span>
-            <span className="label">Scope Commits</span>
+      {/* Analysis Results */}
+      <div style={GroupStyle}>
+        <h3 style={TitleStyle}>Scope Analysis</h3>
+        <div style={RowStyle}>
+          <div style={ItemStyle}>
+            <span style={ValueStyle}>{bundleSummary?.commitCount || state.selectedCommitShas.length}</span>
+            <span style={LabelStyle}>Commits</span>
           </div>
-          <div className="cockpit__stat-item">
-            <span className="value">{bundleSummary?.fileCount || 0}</span>
-            <span className="label">Scope Files</span>
+          <div style={ItemStyle}>
+            <span style={ValueStyle}>{bundleSummary?.fileCount || 0}</span>
+            <span style={LabelStyle}>Files</span>
           </div>
-          <div className="cockpit__stat-item">
-            <span className="value">{bundleSummary?.symbolCount || 0}</span>
-            <span className="label">Scope Symbols</span>
-          </div>
-        </div>
-        <div className="cockpit__stat-row">
-          <div className="cockpit__stat-item">
-            <span className="value danger">{criticalCount}</span>
-            <span className="label">Critical</span>
-          </div>
-          <div className="cockpit__stat-item">
-            <span className="value warning">{warningCount}</span>
-            <span className="label">Warnings</span>
-          </div>
-        </div>
-        <div className="cockpit__stat-row">
-          <div className="cockpit__stat-item">
-            <span className="value">{bundleFacts?.findings?.legacyAudit?.dead || 0}</span>
-            <span className="label">Dead code paths</span>
-          </div>
-          <div className="cockpit__stat-item">
-            <span className="value">{bundleFacts?.findings?.incompleteness?.missing || 0}</span>
-            <span className="label">Missing</span>
-          </div>
-          <div className="cockpit__stat-item">
-            <span className="value">{bundleFacts?.findings?.incompleteness?.zombies || 0}</span>
-            <span className="label">Zombies</span>
+          <div style={ItemStyle}>
+            <span style={ValueStyle}>{bundleSummary?.symbolCount || 0}</span>
+            <span style={LabelStyle}>Symbols</span>
           </div>
         </div>
         {state.bundleReportId && (
           <button
-            className="cockpit__button small ghost"
             onClick={() =>
               postMessageWithTracing(vscode, {
                 type: 'openReport',
                 reportId: state.bundleReportId!,
               })
             }
+            style={{
+              marginTop: '10px',
+              padding: '6px 12px',
+              backgroundColor: 'transparent',
+              border: '1px solid var(--vscode-button-background)',
+              color: 'var(--vscode-button-background)',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.9em',
+            }}
           >
             Open Full Report
           </button>
         )}
       </div>
 
-      <div className="cockpit__stat-group cockpit__stat-group--full">
-        <h3>Global Stats</h3>
-        <div className="cockpit__stat-cards">
-          <div className="stat-card">
-            <div className="stat-card__title">Health</div>
-            <div className="stat-card__value">{healthScore.toFixed(0)}%</div>
+      {/* Pipeline Health */}
+      <div style={GroupStyle}>
+        <h3 style={TitleStyle}>Pipeline Diagnostics</h3>
+        <div style={RowStyle}>
+          <div style={ItemStyle}>
+            <span style={ValueStyle}>{currentStep}</span>
+            <span style={LabelStyle}>Current Step</span>
           </div>
-          <div className="stat-card">
-            <div className="stat-card__title">Critical</div>
-            <div className="stat-card__value">{criticalCount}</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-card__title">Warnings</div>
-            <div className="stat-card__value">{warningCount}</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-card__title">Files</div>
-            <div className="stat-card__value">{state.bundleSummary?.fileCount || 0}</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-card__title">Symbols</div>
-            <div className="stat-card__value">{state.bundleSummary?.symbolCount || 0}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="cockpit__stat-group cockpit__stat-group--full">
-        <h3>Pipeline Health</h3>
-        <div className="cockpit__stat-row">
-          <div className="cockpit__stat-item">
-            <span className="label">Current step</span>
-            <span className="value">{currentStep}</span>
-          </div>
-          <div className="cockpit__stat-item">
-            <span className="label">Errors</span>
-            <span className="value warning">{pipelineErrors.length}</span>
+          <div style={ItemStyle}>
+            <span style={{ ...ValueStyle, color: pipelineErrors.length > 0 ? 'var(--vscode-charts-red)' : 'inherit' }}>
+              {pipelineErrors.length}
+            </span>
+            <span style={LabelStyle}>Errors</span>
           </div>
         </div>
         {topSteps.length > 0 && (
-          <div className="cockpit__stat-row" style={{ flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ fontSize: '0.9em', fontWeight: 'bold', marginBottom: '5px' }}>Top Step Timings</div>
             {topSteps.map(([stepId, duration]) => (
-              <div key={stepId} className="cockpit__stat-item">
-                <span className="label">{stepId}</span>
-                <span className="value">{Math.round(duration)}ms</span>
+              <div key={stepId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', marginBottom: '4px' }}>
+                <span>{stepId}</span>
+                <span style={{ fontFamily: 'monospace' }}>{Math.round(duration)}ms</span>
               </div>
             ))}
           </div>

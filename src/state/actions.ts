@@ -123,6 +123,8 @@ export type Action =
   | { type: 'WORKSPACE_FACTS_UPDATED'; payload: { workspaceFacts: any } }
   | { type: 'LIVE_STATE_UPDATED'; payload: { status: 'idle' | 'analyzing' | 'error' } }
   | { type: 'RESET_ALL_STATE' }
+  | { type: 'NODE_METRICS_UPDATED'; payload: { metrics: Record<string, any> } }
+  | { type: 'TIME_FILTER_UPDATED'; payload: { timestamp: number } }
   | {
       type: 'PIPELINE_HEALTH_UPDATED';
       payload: {

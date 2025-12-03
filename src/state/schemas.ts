@@ -284,6 +284,7 @@ export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('clearError') }),
   z.object({ type: z.literal('navigateToFrame'), frame: ContextFrameSchema }),
   z.object({ type: z.literal('navigateBack') }),
+  z.object({ type: z.literal('updateTimeFilter'), value: z.number() }),
 ]);
 
 export const CockpitStateSchema = z
