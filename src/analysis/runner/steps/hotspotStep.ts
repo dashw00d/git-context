@@ -9,11 +9,6 @@ import { GitOperations } from '../../git';
 import { HotspotDetectorV2 } from '../../hotspotDetector';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 
-function extractFileFromSymbolId(symbolId: string): string | null {
-  const parts = symbolId.split(':');
-  return parts.length >= 2 ? parts[0] : null;
-}
-
 export function createHotspotStep(): PipelineStep {
   return {
     id: 'hotspots',
@@ -55,8 +50,8 @@ export function createHotspotStep(): PipelineStep {
         if (!group) continue;
 
         const symbols: SymbolInfo[] = group.rows.map(row => ({
-          id: row.symbol_id,
-          dnaId: row.dna_id || row.symbol_id,
+          id: row.dna_id || row.symbol_id, // id is now the DNA hash
+          filePath: row.path || '',
           name: row.name,
           kind: row.kind as SymbolInfo['kind'],
           signature: row.signature || '',
@@ -72,7 +67,7 @@ export function createHotspotStep(): PipelineStep {
         for (let i = 0; i < symbols.length; i++) {
           const sym = symbols[i];
           const row = group.rows[i];
-          const file = extractFileFromSymbolId(sym.id) || row.path;
+          const file = sym.filePath || row.path;
           if (file) {
             if (!byFile.has(file)) byFile.set(file, []);
             byFile.get(file)!.push(sym);
@@ -138,8 +133,8 @@ export function createHotspotStep(): PipelineStep {
               }
 
               const cstSymbols: SymbolInfo[] = hybridFacts.filter(isCstFact).map(fact => ({
-                id: fact.id,
-                dnaId: fact.dnaId,
+                id: fact.id, // id is now the DNA hash
+                filePath: fact.filePath || '',
                 name: fact.name,
                 kind: fact.kind as SymbolInfo['kind'],
                 signature: fact.signature,

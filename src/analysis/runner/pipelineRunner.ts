@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import { withTimeout } from '../../utils/async';
-import { logDebug, logInfo } from '../../utils/logger';
+import { logDebug, logError, logInfo } from '../../utils/logger';
 import { PipelineEventHandler, PipelineState, PipelineStep } from './pipelineTypes';
 
 /**
@@ -91,16 +91,16 @@ export async function runPipeline(
   const depGraph = buildDepGraph(steps);
   const levels = topologicalSort(depGraph);
 
-  console.error(`🚀 [Pipeline] runPipeline called with ${steps.length} steps`);
-  console.error(`🚀 [Pipeline] Step IDs: ${steps.map(s => s.id).join(', ')}`);
-  console.error(`🚀 [Pipeline] Levels: ${levels.length}`, levels);
+  logDebug(`🚀 [Pipeline] runPipeline called with ${steps.length} steps`);
+  logDebug(`🚀 [Pipeline] Step IDs: ${steps.map(s => s.id).join(', ')}`);
+  logDebug(`🚀 [Pipeline] Levels: ${levels.length}`);
 
   logInfo(
     `[Pipeline] Starting pipeline execution with ${levels.length} levels and ${steps.length} steps`
   );
 
   for (const level of levels) {
-    console.error(`🔵 [Pipeline] Processing level with ${level.length} steps: ${level.join(', ')}`);
+    logDebug(`🔵 [Pipeline] Processing level with ${level.length} steps: ${level.join(', ')}`);
     const promises = level.map(stepId => {
       const step = steps.find(s => s.id === stepId)!;
       const startTime = Date.now();
@@ -109,14 +109,14 @@ export async function runPipeline(
 
       return Promise.resolve()
         .then(() => {
-          console.error(`⏩ [Pipeline] About to run step: ${step.id}`);
+          logDebug(`⏩ [Pipeline] About to run step: ${step.id}`);
           state.currentStepId = step.id;
           const timestamp = new Date().toISOString();
           onEvent?.({ type: 'start', step, state, timestamp });
           logDebug(`[Pipeline] Started step: ${step.label}`);
-          console.error(`▶️  [Pipeline] Calling step.run() for: ${step.id}`);
+          logDebug(`▶️  [Pipeline] Calling step.run() for: ${step.id}`);
           const runPromise = step.run(state);
-          console.error(`⏱️  [Pipeline] step.run() returned promise for: ${step.id}`);
+          logDebug(`⏱️  [Pipeline] step.run() returned promise for: ${step.id}`);
           return withTimeout(
             Promise.resolve(runPromise),
             300000, // 5 minutes default timeout for pipeline steps
@@ -162,14 +162,18 @@ export async function runPipeline(
           state.errors.push({ stepId: step.id, error });
 
           const optionalSteps = ['drift', 'legacy', 'hotspots', 'moved_blocks'];
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+
           if (optionalSteps.includes(step.id)) {
-            state.partialReasons!.push(
-              `${step.label} failed: ${error instanceof Error ? error.message : String(error)}`
-            );
+            state.partialReasons!.push(`${step.label} failed: ${errorMessage}`);
+          } else {
+            state.partialReasons!.push(`CRITICAL: ${step.label} failed: ${errorMessage}`);
+            logError(`[Pipeline] CRITICAL step failed: ${step.label}`, error);
           }
 
           const stepError = {
-            message: error instanceof Error ? error.message : String(error),
+            message: errorMessage,
             stack: error instanceof Error ? error.stack : undefined,
           };
 
@@ -187,6 +191,20 @@ export async function runPipeline(
     });
 
     await Promise.allSettled(promises);
+
+    // Check if any critical steps failed in this level
+    const optionalSteps = ['drift', 'legacy', 'hotspots', 'moved_blocks'];
+    const criticalFailuresInLevel = state.errors.filter(
+      err => level.includes(err.stepId) && !optionalSteps.includes(err.stepId)
+    );
+
+    if (criticalFailuresInLevel.length > 0) {
+      const failedStepIds = criticalFailuresInLevel.map(e => e.stepId).join(', ');
+      logError(
+        `[Pipeline] Critical step(s) failed in this level: ${failedStepIds}. Aborting remaining pipeline.`
+      );
+      break; // Stop processing further levels
+    }
   }
 
   const pipelineEndTime = Date.now();

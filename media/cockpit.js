@@ -27783,7 +27783,7 @@
     name: external_exports.string(),
     description: external_exports.string().optional(),
     parentId: external_exports.string().optional(),
-    status: external_exports.enum(["ready", "scanning", "unknown", "error"]),
+    status: external_exports.enum(["ready", "scanning", "analyzing", "unknown", "error"]),
     data: external_exports.any().optional(),
     breadcrumbs: external_exports.array(external_exports.string()).optional(),
     tier: external_exports.enum(["structure", "hybrid", "semantics"]).optional()
@@ -27794,52 +27794,81 @@
       name: external_exports.string(),
       description: external_exports.string().optional(),
       type: external_exports.enum(["file", "symbol", "folder"]),
-      status: external_exports.enum(["ready", "scanning", "unknown", "error"]),
+      status: external_exports.enum(["ready", "scanning", "analyzing", "unknown", "error"]),
       children: external_exports.array(ExplorerNodeSchema).optional()
     })
   );
+  var LiveAnalysisSummarySchema = external_exports.object({
+    missing: external_exports.number(),
+    zombies: external_exports.number(),
+    drift: external_exports.number(),
+    dead: external_exports.number(),
+    hybridDrifts: external_exports.number().optional()
+  });
+  var NodeMetricsSchema = external_exports.object({
+    riskScore: external_exports.number(),
+    churnScore: external_exports.number(),
+    lastModified: external_exports.number(),
+    driftCount: external_exports.number(),
+    incomingRefs: external_exports.number(),
+    outgoingRefs: external_exports.number(),
+    authors: external_exports.array(external_exports.string()),
+    ageDays: external_exports.number()
+  });
+  var CockpitPayloadSchema = external_exports.object({
+    bundleFacts: BundleFactsSchema.nullable().optional(),
+    bundleSummary: BundleSummarySchema.nullable().optional(),
+    bundleView: BundleViewSchema.nullable().optional(),
+    activeFrame: ContextFrameSchema.optional(),
+    history: external_exports.array(ContextFrameSchema).optional(),
+    explorerData: external_exports.array(ExplorerNodeSchema).optional(),
+    nodeMetrics: external_exports.record(NodeMetricsSchema).optional(),
+    isAnalyzing: external_exports.boolean().optional(),
+    analysisStep: external_exports.string().optional(),
+    analysisProgress: external_exports.number().optional(),
+    error: external_exports.string().nullable().optional(),
+    liveAnalysis: external_exports.object({
+      isTracking: external_exports.boolean(),
+      pendingChanges: external_exports.number(),
+      totalEdits: external_exports.number(),
+      status: external_exports.enum(["idle", "analyzing", "ready", "error"]),
+      summary: LiveAnalysisSummarySchema.nullable(),
+      facts: external_exports.any().nullable()
+    }).optional(),
+    repoName: external_exports.string().nullable().optional(),
+    branchName: external_exports.string().nullable().optional(),
+    bundleConfig: BundleConfigSchema.optional(),
+    lastNCommits: external_exports.number().optional(),
+    commits: external_exports.array(CommitDTOSchema).optional(),
+    hasMoreCommits: external_exports.boolean().optional(),
+    llmOutputs: external_exports.any().optional(),
+    retrievedHistory: external_exports.any().optional()
+  });
   var CockpitClientMessageSchema = external_exports.discriminatedUnion("type", [
+    external_exports.object({ type: external_exports.literal("ready") }),
     external_exports.object({
-      type: external_exports.literal("setActiveSection"),
-      section: external_exports.enum(["commits", "bundle", "symbols", "reports", "live"])
-    }),
-    external_exports.object({ type: external_exports.literal("resetAll") }),
-    external_exports.object({
-      type: external_exports.literal("generateReport"),
+      type: external_exports.literal("runAnalysis"),
       mode: external_exports.enum(["selection", "lastN", "staged", "unstaged", "changes"]),
       lastN: external_exports.number().optional(),
       force: external_exports.boolean().optional()
     }),
-    external_exports.object({ type: external_exports.literal("cancelAnalysis") }),
-    external_exports.object({ type: external_exports.literal("toggleCommit"), sha: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("addCommitBySha"), shaOrRef: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("loadMoreCommits") }),
-    external_exports.object({ type: external_exports.literal("setCommitsFilterText"), text: external_exports.string() }),
+    external_exports.object({ type: external_exports.literal("openReport"), reportId: external_exports.string() }),
+    external_exports.object({ type: external_exports.literal("regenerateReport"), reportId: external_exports.string() }),
+    external_exports.object({ type: external_exports.literal("togglePinReport"), reportId: external_exports.string() }),
+    external_exports.object({ type: external_exports.literal("deleteReport"), reportId: external_exports.string() }),
+    external_exports.object({ type: external_exports.literal("navigateToFrame"), frame: ContextFrameSchema }),
+    external_exports.object({ type: external_exports.literal("navigateBack") }),
+    external_exports.object({ type: external_exports.literal("switchBundle"), id: external_exports.string() }),
     external_exports.object({
-      type: external_exports.literal("setCommitsFilterScopes"),
-      scopes: external_exports.object({
-        staged: external_exports.boolean().optional(),
-        unstaged: external_exports.boolean().optional(),
-        history: external_exports.boolean().optional()
+      type: external_exports.literal("askAssistant"),
+      payload: external_exports.object({
+        text: external_exports.string().optional(),
+        frame: ContextFrameSchema.optional(),
+        symbolId: external_exports.string().optional(),
+        filePath: external_exports.string().optional(),
+        drift: external_exports.any().optional()
       })
     }),
-    external_exports.object({ type: external_exports.literal("selectAllStaged") }),
-    external_exports.object({ type: external_exports.literal("selectAllUnstaged") }),
-    external_exports.object({ type: external_exports.literal("clearSelection") }),
-    external_exports.object({ type: external_exports.literal("compareFilesToCommit"), sha: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("bundleRegenerate") }),
-    external_exports.object({ type: external_exports.literal("bundleClear") }),
-    external_exports.object({ type: external_exports.literal("bundleExport") }),
-    external_exports.object({ type: external_exports.literal("openActiveReport") }),
-    external_exports.object({ type: external_exports.literal("bundleCancel") }),
-    external_exports.object({ type: external_exports.literal("setSymbolFilterText"), text: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("setSymbolKindFilter"), kind: external_exports.string() }),
-    external_exports.object({
-      type: external_exports.literal("setSymbolChangeFilter"),
-      change: external_exports.enum(["all", "added", "modified", "removed"])
-    }),
-    external_exports.object({ type: external_exports.literal("openSymbolHistory"), symbolId: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("openSymbolInEditor"), symbolId: external_exports.string() }),
     external_exports.object({
       type: external_exports.literal("applyRefactorSuggestion"),
       payload: external_exports.object({
@@ -27848,32 +27877,14 @@
         filePath: external_exports.string().optional()
       })
     }),
-    external_exports.object({ type: external_exports.literal("askAssistant"), payload: external_exports.any().optional() }),
-    external_exports.object({ type: external_exports.literal("openReport"), reportId: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("regenerateReport"), reportId: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("deleteReport"), reportId: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("openSuperReport") }),
-    external_exports.object({ type: external_exports.literal("setLastNCommits"), value: external_exports.number() }),
-    external_exports.object({ type: external_exports.literal("togglePinReport"), reportId: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("setReportsFilterText"), text: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("setReportsBranchFilter"), branch: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("setReportsShowPinnedOnly"), value: external_exports.boolean() }),
-    external_exports.object({ type: external_exports.literal("scrollReportToSection"), sectionId: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("openEvidence"), evidenceId: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("generateLiveReport") }),
-    external_exports.object({ type: external_exports.literal("startLiveAnalysis") }),
-    external_exports.object({ type: external_exports.literal("getExplorerTree") }),
+    external_exports.object({ type: external_exports.literal("openSymbolInEditor"), symbolId: external_exports.string() }),
     external_exports.object({ type: external_exports.literal("analyzeFrame"), frameId: external_exports.string() }),
+    external_exports.object({ type: external_exports.literal("getExplorerTree") }),
     external_exports.object({ type: external_exports.literal("getBundleData") }),
-    external_exports.object({ type: external_exports.literal("createBundle"), name: external_exports.string(), config: BundleConfigSchema }),
-    external_exports.object({ type: external_exports.literal("deleteBundle"), id: external_exports.string() }),
-    external_exports.object({ type: external_exports.literal("switchBundle"), id: external_exports.string() }),
     external_exports.object({ type: external_exports.literal("updateBundleConfig"), config: BundleConfigSchema.partial() }),
-    external_exports.object({ type: external_exports.literal("ready") }),
-    external_exports.object({ type: external_exports.literal("clearError") }),
-    external_exports.object({ type: external_exports.literal("navigateToFrame"), frame: ContextFrameSchema }),
-    external_exports.object({ type: external_exports.literal("navigateBack") }),
-    external_exports.object({ type: external_exports.literal("updateCommitIndex"), value: external_exports.number() })
+    external_exports.object({ type: external_exports.literal("setLastNCommits"), value: external_exports.number() }),
+    external_exports.object({ type: external_exports.literal("updateCommitIndex"), value: external_exports.number() }),
+    external_exports.object({ type: external_exports.literal("clearError") })
   ]);
   var CockpitStateSchema = external_exports.object({
     repoName: external_exports.string().nullable(),
@@ -27947,11 +27958,11 @@
   }).passthrough();
   var CockpitHostMessageSchema = external_exports.discriminatedUnion("type", [
     external_exports.object({
-      type: external_exports.literal("updateState"),
-      payload: CockpitStateSchema
+      type: external_exports.literal("setData"),
+      payload: CockpitPayloadSchema
     }),
     external_exports.object({
-      type: external_exports.literal("analysisProgress"),
+      type: external_exports.literal("setProgress"),
       payload: external_exports.object({
         isAnalyzing: external_exports.boolean(),
         step: external_exports.string().optional(),
@@ -27978,14 +27989,6 @@
         frame: ContextFrameSchema,
         data: external_exports.any()
       })
-    }),
-    external_exports.object({
-      type: external_exports.literal("updateBundle"),
-      payload: external_exports.object({
-        view: BundleViewSchema.nullable().optional(),
-        summary: BundleSummarySchema.nullable().optional(),
-        facts: BundleFactsSchema.nullable().optional()
-      }).passthrough()
     })
   ]);
   var ActionPayloadSchemas = {
@@ -28005,6 +28008,47 @@
 
   // src/webview/cockpit/components/ErrorBoundary.tsx
   var React = __toESM(require_react());
+
+  // src/utils/logger.ts
+  var vscode;
+  try {
+    vscode = __require("vscode");
+  } catch {
+    vscode = null;
+  }
+  var infoChannel;
+  var debugChannel;
+  var isVsCode = vscode && vscode.window;
+  function getInfoChannel() {
+    if (!isVsCode) return void 0;
+    if (!infoChannel) {
+      infoChannel = vscode.window.createOutputChannel("Git Context");
+    }
+    return infoChannel;
+  }
+  function getDebugChannel() {
+    if (!isVsCode) return void 0;
+    if (!debugChannel) {
+      debugChannel = vscode.window.createOutputChannel("Git Context (Debug)");
+    }
+    return debugChannel;
+  }
+  function logDebug(message) {
+    const channel = getDebugChannel();
+    if (channel) {
+      channel.appendLine(message);
+    }
+    console.log(message);
+  }
+  function logWarn(message) {
+    const infoCh = getInfoChannel();
+    if (infoCh) infoCh.appendLine(`[WARN] ${message}`);
+    const debugCh = getDebugChannel();
+    if (debugCh) debugCh.appendLine(`[WARN] ${message}`);
+    console.warn(`[WARN] ${message}`);
+  }
+
+  // src/webview/cockpit/components/ErrorBoundary.tsx
   var ErrorBoundary = class extends React.Component {
     constructor(props) {
       super(props);
@@ -28017,7 +28061,7 @@
       return { hasError: true };
     }
     componentDidCatch(error, errorInfo) {
-      console.error("[ErrorBoundary] Caught error:", error, errorInfo);
+      logDebug(`[ErrorBoundary] Caught error: ${error.message}`);
       this.setState({ error, errorInfo });
     }
     render() {
@@ -28059,45 +28103,6 @@
 
   // src/webview/cockpit/components/SuperWebview.tsx
   var React27 = __toESM(require_react());
-
-  // src/utils/logger.ts
-  var vscode;
-  try {
-    vscode = __require("vscode");
-  } catch {
-    vscode = null;
-  }
-  var infoChannel;
-  var debugChannel;
-  var isVsCode = vscode && vscode.window;
-  function getInfoChannel() {
-    if (!isVsCode) return void 0;
-    if (!infoChannel) {
-      infoChannel = vscode.window.createOutputChannel("Git Context");
-    }
-    return infoChannel;
-  }
-  function getDebugChannel() {
-    if (!isVsCode) return void 0;
-    if (!debugChannel) {
-      debugChannel = vscode.window.createOutputChannel("Git Context (Debug)");
-    }
-    return debugChannel;
-  }
-  function logDebug(message) {
-    const channel = getDebugChannel();
-    if (channel) {
-      channel.appendLine(message);
-    }
-    console.log(message);
-  }
-  function logWarn(message) {
-    const infoCh = getInfoChannel();
-    if (infoCh) infoCh.appendLine(`[WARN] ${message}`);
-    const debugCh = getDebugChannel();
-    if (debugCh) debugCh.appendLine(`[WARN] ${message}`);
-    console.warn(`[WARN] ${message}`);
-  }
 
   // src/utils/messageTracer.ts
   var MessageTracer = class {
@@ -28216,9 +28221,12 @@
     return webviewTracer;
   }
   function postMessageWithTracing(vscode3, message) {
-    const parsed = CockpitClientMessageSchema.parse(message);
-    getMessageTracer().logOutgoing(parsed.type, parsed, "webview");
-    vscode3.postMessage(parsed);
+    const parsed = CockpitClientMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      return;
+    }
+    getMessageTracer().logOutgoing(parsed.data.type, parsed.data, "webview");
+    vscode3.postMessage(parsed.data);
   }
 
   // src/webview/cockpit/components/Assistant.tsx
@@ -29146,7 +29154,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
             opacity: isAnalyzing ? 0.7 : 1
           }
         },
-        isAnalyzing ? "Analyzing..." : "Apply & Analyze"
+        isAnalyzing ? "Analyzing..." : "Apply Scope"
       ))
     );
   };
@@ -29393,8 +29401,6 @@ Churn: ${node.score.toFixed(1)}
       if (!vscode3) return;
       postMessageWithTracing(vscode3, { type: "updateBundleConfig", config: formConfig });
       postMessageWithTracing(vscode3, { type: "setLastNCommits", value: depth });
-      const mode = formConfig.mode === "changes" ? "changes" : "selection";
-      postMessageWithTracing(vscode3, { type: "generateReport", mode, force: true });
     };
     const handleFileClick = (file) => {
       onZoomIn({
@@ -30748,18 +30754,30 @@ Churn: ${node.score.toFixed(1)}
       const lineCommits = renderFrame.data?.lineCommits || [];
       const blastRadius = renderFrame.data?.blastRadius;
       const driftIssues = renderFrame.data?.drift || [];
-      const orderedCommits = cockpitState?.selectedCommitShas || [];
-      const currentCommitIndex = cockpitState?.currentCommitIndex;
-      const commits = (cockpitState?.commits || []).filter((c) => orderedCommits.includes(c.sha)).sort((a, b) => {
-        const aIndex = orderedCommits.indexOf(a.sha);
-        const bIndex = orderedCommits.indexOf(b.sha);
-        return aIndex - bIndex;
-      }).map((c) => ({
-        sha: c.sha,
-        date: c.authoredAt,
-        message: c.message,
-        author: c.author
-      }));
+      let orderedCommits = cockpitState?.selectedCommitShas || [];
+      let commits = [];
+      if (orderedCommits.length > 0) {
+        commits = (cockpitState?.commits || []).filter((c) => orderedCommits.includes(c.sha)).sort((a, b) => {
+          const aIndex = orderedCommits.indexOf(a.sha);
+          const bIndex = orderedCommits.indexOf(b.sha);
+          return aIndex - bIndex;
+        }).map((c) => ({
+          sha: c.sha,
+          date: c.authoredAt,
+          message: c.message,
+          author: c.author
+        }));
+      } else if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
+        const fileHistory = [...renderFrame.data.history].reverse();
+        orderedCommits = fileHistory.map((c) => c.hash || c.sha);
+        commits = fileHistory.map((c) => ({
+          sha: c.hash || c.sha,
+          date: c.date,
+          message: c.message,
+          author: c.author_name || c.author
+        }));
+      }
+      const currentCommitIndex = cockpitState?.currentCommitIndex !== void 0 ? cockpitState.currentCommitIndex : orderedCommits.length > 0 ? orderedCommits.length - 1 : void 0;
       const handleNeighborClick = (filePath) => {
         if (vscode3) {
           const neighborFrame = {
@@ -31059,7 +31077,6 @@ Churn: ${node.score.toFixed(1)}
           type: "navigateToFrame",
           frame: newFrame
         });
-        postMessageWithTracing(vscode3, { type: "analyzeFrame", frameId: node.id });
       } else {
         const newFrame = {
           level,
@@ -31083,7 +31100,10 @@ Churn: ${node.score.toFixed(1)}
         setActiveTab("stage");
       }
     };
-    const ErrorBanner = ({ error, onDismiss }) => /* @__PURE__ */ React27.createElement(
+    const ErrorBanner = ({
+      error,
+      onDismiss
+    }) => /* @__PURE__ */ React27.createElement(
       "div",
       {
         style: {
@@ -31390,73 +31410,58 @@ Churn: ${node.score.toFixed(1)}
     const [state, setState] = React28.useState(defaultState);
     React28.useEffect(() => {
       const handler = (event) => {
-        console.log("[Webview] Received message event:", event.data?.type || "unknown");
-        if (event.data?.type === "analysisError" && event.data?.payload) {
-          console.log("[Webview] Analysis error received (legacy)");
-          setState((prev) => ({
-            ...prev,
-            error: event.data.payload?.error || event.data.payload?.message || "Analysis failed",
-            isAnalyzing: false
-          }));
-          return;
-        }
-        const parsed = CockpitHostMessageSchema.safeParse(event.data);
-        if (!parsed.success) {
-          console.warn("[Webview] Ignoring invalid host message", event.data, parsed.error);
-          return;
-        }
-        const message = parsed.data;
-        console.log(`[Webview] Processing message type: ${message.type}`);
-        if (message.type === "updateState") {
-          console.log("[Webview] Received updateState keys:", Object.keys(message.payload));
-          console.log(
-            "[Webview] bundleFacts:",
-            message.payload.bundleFacts ? "EXISTS" : "NULL/UNDEFINED"
-          );
-          console.log("[Webview] bundleSummary:", message.payload.bundleSummary);
-          console.log("[Webview] isAnalyzing:", message.payload.isAnalyzing);
-          setState((prev) => {
-            const newState = { ...prev };
-            for (const key in message.payload) {
-              const value = message.payload[key];
-              if (value && typeof value === "object" && !Array.isArray(value) && value.constructor === Object) {
-                newState[key] = { ...prev[key], ...value };
-              } else {
-                newState[key] = value;
-              }
-            }
-            console.log("[Webview] State updated, new keys:", Object.keys(newState));
-            return newState;
-          });
-        } else if (message.type === "analysisProgress") {
-          console.log("[Webview] Updating analysis progress");
-          setState((prev) => ({
-            ...prev,
-            isAnalyzing: message.payload.isAnalyzing,
-            analysisStep: message.payload.step,
-            analysisProgress: message.payload.progress
-          }));
-        } else if (message.type === "focusSection") {
-          console.log("[Webview] Focusing section:", message.payload.section);
-          setState((prev) => ({ ...prev, activeSection: message.payload.section }));
-        } else if (message.type === "updateExplorerTree") {
-          console.log("[Webview] Updating explorer tree");
-          setState((prev) => ({ ...prev, explorerData: message.payload }));
-        } else if (message.type === "updateBundle") {
-          console.log("[Webview] Updating bundle");
-          setState((prev) => ({
-            ...prev,
-            bundleView: message.payload.view ?? prev.bundleView,
-            bundleSummary: message.payload.summary ?? prev.bundleSummary,
-            bundleFacts: message.payload.facts ?? prev.bundleFacts
-          }));
+        try {
+          if (event.data?.type === "analysisError" && event.data?.payload) {
+            setState((prev) => ({
+              ...prev,
+              error: event.data.payload?.error || event.data.payload?.message || "Analysis failed",
+              isAnalyzing: false
+            }));
+            return;
+          }
+          const parsed = CockpitHostMessageSchema.safeParse(event.data);
+          if (!parsed.success) {
+            return;
+          }
+          const message = parsed.data;
+          if (message.type === "setData") {
+            setState(() => {
+              const newState = {
+                ...defaultState,
+                ...message.payload,
+                // Ensure required fields have defaults
+                activeFrame: message.payload.activeFrame || defaultState.activeFrame,
+                history: message.payload.history || [],
+                explorerData: message.payload.explorerData || [],
+                nodeMetrics: message.payload.nodeMetrics || {},
+                liveAnalysis: message.payload.liveAnalysis || defaultState.liveAnalysis
+              };
+              return newState;
+            });
+          } else if (message.type === "setProgress") {
+            setState((prev) => ({
+              ...prev,
+              isAnalyzing: message.payload.isAnalyzing,
+              analysisStep: message.payload.step,
+              analysisProgress: message.payload.progress
+            }));
+          } else if (message.type === "focusSection") {
+            setState((prev) => ({ ...prev, activeSection: message.payload.section }));
+          } else if (message.type === "assistantResponse") {
+          } else if (message.type === "updateExplorerTree") {
+            setState((prev) => ({ ...prev, explorerData: message.payload }));
+          } else if (message.type === "updateFrame") {
+            setState((prev) => ({
+              ...prev,
+              activeFrame: message.payload.frame
+            }));
+          }
+        } catch (error) {
         }
       };
-      console.log("[Webview] Setting up message listener");
       window.addEventListener("message", handler);
       postMessageWithTracing(vscode2, { type: "ready" });
       return () => {
-        console.log("[Webview] Cleaning up message listener");
         window.removeEventListener("message", handler);
       };
     }, []);

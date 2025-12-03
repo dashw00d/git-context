@@ -1,9 +1,9 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import pLimit = require('p-limit');
 import { Database } from 'sql.js';
 import { prepare } from '../storage/statement-wrapper';
+import type { HybridFact } from '../types/cstFacts';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
@@ -12,7 +12,7 @@ import { GitOperations } from './git';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
 import { getTreeSitterParser } from './tree-sitter';
-import type { HybridFact } from '../types/cstFacts';
+import pLimit = require('p-limit');
 
 export interface WorkspaceFacts {
   workspaceHash: string;
@@ -362,7 +362,7 @@ export class WorkspaceIndexer {
     }
 
     for (const symbol of changedSymbols) {
-      const symbolId = symbol.dnaId || symbol.id;
+      const symbolId = symbol.id; // id is now the DNA hash
 
       impactScore.set(symbolId, (impactScore.get(symbolId) || 0) + 10);
 
@@ -507,7 +507,7 @@ export class WorkspaceIndexer {
    * Get the workspace file tree for the Explorer
    */
   async getWorkspaceTree(): Promise<any[]> {
-    const allFiles = await this.git.getAllFiles();
+    const allFiles = await this.git.getAllFiles(); // Already excludes ignored files via --exclude-standard
     const gitRoot = this.git.getRoot();
 
     const filteredFiles: string[] = [];
@@ -518,6 +518,7 @@ export class WorkspaceIndexer {
           gitRoot,
           status: 'M',
           skipSizeCheck: true,
+          skipGitIgnore: true, // Skip redundant check since getAllFiles() already excluded ignored files
         })
       ) {
         filteredFiles.push(file);
@@ -784,6 +785,62 @@ export class WorkspaceIndexer {
       })),
       incoming: [], // TODO: Reverse index needed for incoming
     };
+  }
+
+  /**
+   * Quick scan for symbols in a list of files (for initial explorer population)
+   * Returns full symbol objects with id, name, kind, signature, location, and filePath
+   */
+  async quickScanSymbols(files: string[]): Promise<any[]> {
+    const limit = pLimit(10); // Concurrent processing
+    const gitRoot = this.git.getRoot();
+    const results: any[] = [];
+
+    await Promise.all(
+      files.map(filePath =>
+        limit(async () => {
+          try {
+            const fullPath = path.join(gitRoot, filePath);
+            const content = fs.readFileSync(fullPath, 'utf8');
+            const language = detectLanguage(filePath);
+
+            if (language) {
+              const symbols = await this.parser.extractHybridFacts(content, filePath, language);
+              // Filter to only symbol kinds (functions, classes, etc.)
+              const symbolKinds = new Set([
+                'function',
+                'method',
+                'class',
+                'const',
+                'variable',
+                'interface',
+                'enum',
+                'module',
+                'type',
+                'type_alias',
+              ]);
+              const filteredSymbols = symbols.filter((s: any) => symbolKinds.has(s.kind));
+
+              // Store full symbol objects with filePath
+              filteredSymbols.forEach((s: any) => {
+                results.push({
+                  id: s.id,
+                  name: s.name,
+                  kind: s.kind,
+                  signature: s.signature,
+                  location: s.location,
+                  filePath: filePath,
+                });
+              });
+            }
+          } catch (e) {
+            // Ignore errors during quick scan
+          }
+        })
+      )
+    );
+
+    return results;
   }
 
   async getSymbolContext(symbolId: string): Promise<any> {

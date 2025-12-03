@@ -410,7 +410,9 @@ function getWorkingLists(working: WorkingSnapshot): {
   edges: string[];
 } {
   return {
-    symbols: Array.from(working.symbolsById.keys()),
+    symbols: Array.from(working.symbolsById.values()).map(
+      s => `${s.filePath}:${s.name}:${s.symbol_id}`
+    ),
     edges: working.edges.map(e => `${e.from_symbol_id} -> ${e.to_symbol_id} (${e.edge_type})`),
   };
 }

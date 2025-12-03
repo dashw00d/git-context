@@ -62,7 +62,8 @@ async function getSymbolsForVersion(
         if (fullSymbol) {
           const symbolWithDna: SymbolInfo = {
             ...fullSymbol,
-            dnaId: row.dna_id || fullSymbol.dnaId || fullSymbol.id,
+            id: row.dna_id || fullSymbol.id, // id is now the DNA hash
+            filePath: fullSymbol.filePath || row.path || '',
           };
 
           if (row.change_type === 'removed') {
@@ -118,9 +119,11 @@ export function createMovedBlockStep(): PipelineStep {
 
           for (const match of matches) {
             let moveType: 'rename' | 'relocate' | 'refactor' = 'relocate';
-            if (match.removed.id !== match.added.id && match.removed.dnaId === match.added.dnaId) {
+            if (match.removed.id !== match.added.id && match.removed.id === match.added.id) {
+              // id is now DNA hash
               moveType = 'rename';
-            } else if (match.removed.id.split(':')[0] !== match.added.id.split(':')[0]) {
+            } else if (match.removed.filePath !== match.added.filePath) {
+              // Use filePath instead of parsing id
               moveType = 'relocate';
             } else {
               moveType = 'refactor';

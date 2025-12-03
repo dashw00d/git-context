@@ -87,12 +87,11 @@ export class CstExtractor {
       if (!name) return null;
 
       const bodyShape = this.hashCstSubset(node, true);
-      const id = `heading_${filePath}_${node.startPosition.row}_${name}`;
       const dnaId = this.computeCstDna('heading', name, level, bodyShape);
 
       return {
-        id,
-        dnaId,
+        id: dnaId, // id is now the DNA hash
+        filePath,
         name,
         kind: 'heading',
         signature: `#${'#'.repeat(level - 1)} ${name}`,
@@ -119,12 +118,11 @@ export class CstExtractor {
       if (!key) return null;
 
       const bodyShape = this.hashCstSubset(node, true);
-      const id = `property_${filePath}_${node.startPosition.row}_${key}`;
       const dnaId = this.computeCstDna('property', key, undefined, bodyShape);
 
       return {
-        id,
-        dnaId,
+        id: dnaId, // id is now the DNA hash
+        filePath,
         name: key,
         kind: 'property',
         signature: `"${key}": ...`,
@@ -150,12 +148,11 @@ export class CstExtractor {
       if (!key) return null;
 
       const bodyShape = this.hashCstSubset(node, true);
-      const id = `property_${filePath}_${node.startPosition.row}_${key}`;
       const dnaId = this.computeCstDna('property', key, undefined, bodyShape);
 
       return {
-        id,
-        dnaId,
+        id: dnaId, // id is now the DNA hash
+        filePath,
         name: key,
         kind: 'property',
         signature: `${key}: ...`,
@@ -181,12 +178,11 @@ export class CstExtractor {
       if (!selector) return null;
 
       const bodyShape = this.hashCstSubset(node, true);
-      const id = `rule_${filePath}_${node.startPosition.row}_${selector}`;
       const dnaId = this.computeCstDna('cst_node', selector, undefined, bodyShape);
 
       return {
-        id,
-        dnaId,
+        id: dnaId, // id is now the DNA hash
+        filePath,
         name: selector,
         kind: 'cst_node',
         signature: `${selector} { ... }`,
@@ -222,12 +218,11 @@ export class CstExtractor {
       if (overlaps) return null;
 
       const bodyShape = this.hashCstSubset(node, true);
-      const id = `comment_${filePath}_${node.startPosition.row}_${node.startPosition.column}`;
       const dnaId = this.computeCstDna('doc_comment', 'comment', undefined, bodyShape);
 
       return {
-        id,
-        dnaId,
+        id: dnaId, // id is now the DNA hash
+        filePath,
         name: 'comment',
         kind: 'doc_comment',
         signature: text.substring(0, 50) + (text.length > 50 ? '...' : ''),

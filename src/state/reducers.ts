@@ -1,5 +1,5 @@
 import { CockpitState, ContextFrame, ExplorerNode } from '../types/cockpit';
-import { logWarn } from '../utils/logger';
+import { logDebug, logWarn } from '../utils/logger';
 import { Action } from './actions';
 import { normalizeBundleConfig } from './bundleConfig';
 
@@ -258,16 +258,34 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
     case 'NAVIGATE_TO': {
       const cleanFrame: ContextFrame = {
         ...action.payload.frame,
-
         data: action.payload.frame.data || undefined,
       };
 
       const shouldPushHistory = state.activeFrame.id !== cleanFrame.id;
 
+      const cachedData = state.cachedTierResults?.[cleanFrame.id];
+      const frameWithCache: ContextFrame = cachedData
+        ? {
+            ...cleanFrame,
+            data: {
+              ...cleanFrame.data,
+              ...cachedData.tier1,
+              ...cachedData.tier2,
+              ...cachedData.tier3,
+            },
+            status: 'ready' as const,
+            tier: (cachedData.tier3 ? 'semantics' : cachedData.tier2 ? 'hybrid' : cachedData.tier1 ? 'structure' : undefined) as 'structure' | 'hybrid' | 'semantics' | undefined,
+          }
+        : cleanFrame;
+
+      logDebug(
+        `[Reducer] Navigating to ${cleanFrame.id}, cache ${cachedData ? 'found' : 'not found'}`
+      );
+
       return {
         ...state,
         history: shouldPushHistory ? [...state.history, state.activeFrame] : state.history,
-        activeFrame: cleanFrame,
+        activeFrame: frameWithCache,
       };
     }
     case 'NAVIGATE_BACK': {
@@ -305,13 +323,6 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
     case 'FRAME_ANALYSIS_TIER_1_COMPLETE':
     case 'FRAME_ANALYSIS_TIER_2_COMPLETE':
     case 'FRAME_ANALYSIS_TIER_3_COMPLETE': {
-      if (state.activeFrame.id !== action.payload.frameId) {
-        logWarn(
-          `[Reducer] Dropping stale tier data for ${action.payload.frameId} (current frame: ${state.activeFrame.id})`
-        );
-        return state;
-      }
-
       const tierNum =
         action.type === 'FRAME_ANALYSIS_TIER_1_COMPLETE'
           ? 1
@@ -319,6 +330,28 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
             ? 2
             : 3;
       const tier = tierNum === 1 ? 'structure' : tierNum === 2 ? 'hybrid' : 'semantics';
+      const tierKey = `tier${tierNum}` as 'tier1' | 'tier2' | 'tier3';
+
+      if (state.activeFrame.id !== action.payload.frameId) {
+        logWarn(
+          `[Reducer] Caching tier ${tierNum} data for ${action.payload.frameId} (current frame: ${state.activeFrame.id})`
+        );
+
+        const cachedTierResults = state.cachedTierResults || {};
+        const existingCache = cachedTierResults[action.payload.frameId] || { timestamp: Date.now() };
+
+        return {
+          ...state,
+          cachedTierResults: {
+            ...cachedTierResults,
+            [action.payload.frameId]: {
+              ...existingCache,
+              [tierKey]: action.payload.data,
+              timestamp: Date.now(),
+            },
+          },
+        };
+      }
 
       return {
         ...state,

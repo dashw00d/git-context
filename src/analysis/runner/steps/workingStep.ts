@@ -1,4 +1,6 @@
+/* eslint-disable no-restricted-syntax */
 import { getWorkingSnapshot } from '../../../facts/workingSnapshot';
+import { logDebug, logError } from '../../../utils/logger';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 
 function updateState<K extends keyof PipelineState>(
@@ -17,10 +19,17 @@ export function createWorkingStep(): PipelineStep {
 
     async run(state: PipelineState) {
       if (!state.scope?.allPaths) {
-        throw new Error('Scope required for working snapshot');
+        const message = 'Scope required for working snapshot';
+        logError(message);
+        state.partialReasons = state.partialReasons ?? [];
+        state.partialReasons.push(message);
+        updateState(state, 'working', null as any);
+        return;
       }
 
+      logDebug(`[WorkingStep] Scope paths: ${state.scope.allPaths.size}`);
       const working = await getWorkingSnapshot(state.scope.allPaths, state.liveOverrides);
+      logDebug(`[WorkingStep] Generated working snapshot with ${working.symbolsById.size} symbols`);
       updateState(state, 'working', working);
     },
   };

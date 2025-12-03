@@ -172,7 +172,7 @@ export function hooksCommand() {
     .action(async () => {
       const gitRoot = getGitRoot();
       if (!gitRoot) {
-        console.error('Not in a Git repository');
+        logDebug('Not in a Git repository');
         process.exit(1);
       }
 
@@ -255,7 +255,7 @@ CLI provides user-friendly error messages and proper exit codes:
 try {
   await runCommand(options);
 } catch (error) {
-  console.error(`Error: ${error.message}`);
+  logDebug(`Error: ${error.message}`);
   process.exit(1);
 }
 ```

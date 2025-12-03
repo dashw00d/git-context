@@ -197,7 +197,7 @@ export const ConfigPanel: React.FC<{
             opacity: isAnalyzing ? 0.7 : 1,
           }}
         >
-          {isAnalyzing ? 'Analyzing...' : 'Apply & Analyze'}
+          {isAnalyzing ? 'Analyzing...' : 'Apply Scope'}
         </button>
       </div>
     </div>

@@ -1,0 +1,645 @@
+Git Context extension is now deactivated!
+[initializeExtension] OTLP exporter initialized/updated with direct backend connection
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.load": ROOT_SPAN - sampleRate=0.1, random=0.7274, decision=NOT_RECORD
+Git Context extension is activating...
+Modules loaded successfully
+DatabaseManager initialized with path: /home/ryan/sites/homeforged/.git/commit-tracker/commit_tracker.db
+[Cockpit] Checking if initial commits need to be loaded...
+[DB-INIT] Starting database initialization...
+[DB-INIT] Loading SQL.js WASM...
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.loadCursorrules": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.loadRulesFromHierarchy": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.dirIsDirectory": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.loadRulesFromSubdirectories": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.loadMarkdownFilesFromSubdirectories": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.loadRulesFromDirectory": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.readRulesAtPath": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[DB-INIT] WASM loaded in 618ms
+[DB-INIT] Loading existing database file...
+[DB-INIT] Database file loaded in 2ms (475136 bytes)
+[DB-INIT] Initializing schema...
+[DB-INIT] Running modular schema migration...
+[DB-INIT] Schema initialized in 26ms
+[DB-INIT] Total initialization time: 649ms
+[Cockpit] Database already has 5 commits, skipping initial load
+Core features registered successfully
+[CockpitEffects] Constructed and subscribing to store
+Cockpit features registered successfully
+[BaseDetector:HotspotDetectorV2] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+[BaseDetector:MovedBlockDetectorV2] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+🔄 [REFRESH_REQUESTED] @ 16:11:22
+   Payload: {"scope":"all"}
+
+[StateLogger] REFRESH_REQUESTED
+[Store] Action: REFRESH_REQUESTED payloadKeys=scope
+[CockpitEffects] onAction received: REFRESH_REQUESTED
+🔄 [REPORTS_UPDATED] @ 16:11:22
+   Payload: {"reports":[]}
+
+[StateLogger] REPORTS_UPDATED
+[Store] Action: REPORTS_UPDATED payloadKeys=reports
+[CockpitEffects] onAction received: REPORTS_UPDATED
+Git Context extension activated successfully
+🔄 [SYMBOLS_UPDATED] @ 16:11:22
+   Payload: {"symbols":[]}
+
+[StateLogger] SYMBOLS_UPDATED
+[Store] Action: SYMBOLS_UPDATED payloadKeys=symbols
+[CockpitEffects] onAction received: SYMBOLS_UPDATED
+[Cockpit] Loaded bundle config from workspace settings
+🔄 [REPO_CONTEXT_UPDATED] @ 16:11:22
+   Payload: {"repoName":null,"branchName":"feat/db-backed-preview-refactor"}
+
+[StateLogger] REPO_CONTEXT_UPDATED
+[Store] Action: REPO_CONTEXT_UPDATED payloadKeys=repoName,branchName
+[CockpitEffects] onAction received: REPO_CONTEXT_UPDATED
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.loadRulesFromMarkdownFile": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+🔄 [WORKSPACE_FILES_UPDATED] @ 16:11:22
+   Payload: {"staged":[],"unstaged":[{"path":"apps/platform/app/Livewire/Builder/BuilderOrchestrator.php","status":"modified"},{"path":"apps/platform/app/Livewire/Builder/UnifiedOverlayManager.php","status":"modified"},{"path":"apps/platform/resources/css/filament/portal/theme.css","status":"modified"},{"path":"apps/platform/resources/views/livewire/builder/components/builder-header.blade.php","status":"modified"},{"path":"apps/platform/resources/views/livewire/builder/unified-overlay-manager.blade.php","status":"modified"},{"path":"apps/platform/registry/builder-overlay-registry.json","status":"unknown"}]}
+
+[StateLogger] WORKSPACE_FILES_UPDATED
+[Store] Action: WORKSPACE_FILES_UPDATED payloadKeys=staged,unstaged
+[CockpitEffects] onAction received: WORKSPACE_FILES_UPDATED
+Staged files: 0
+[CockpitProvider] Received message: getExplorerTree
+[CockpitProvider] Received message: getBundleData
+[CockpitProvider] Received message: ready
+[CockpitProvider] Posted message: setData
+[CockpitProvider] Updated explorer tree (2 root nodes)
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.dirIsDirectory": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+🔄 [COMMITS_UPDATED] @ 16:11:22
+   Payload: {"commits":[{"sha":"workspace-unstaged@feat/db-backed-preview-refactor","shortSha":"workspac","message":"Unstaged Changes","author":"You","authoredAt":"2025-12-03T16:11:22.767Z","changes":6,"inBundle":false,"files":[{"path":"apps/platform/app/Livewire/Builder/BuilderOrchestrator.php","status":"modified"},{"path":"apps/platform/app/Livewire/Builder/UnifiedOverlayManager.php","status":"modified"},{"path":"apps/platform/resources/css/filament/portal/theme.css","status":"modified"},{"path":"apps/platform/resources/views/livewire/builder/components/builder-header.blade.php","status":"modified"},{"path":"apps/platform/resources/views/livewire/builder/unified-overlay-manager.blade.php","status":"modified"},{"path":"apps/platform/registry/builder-overlay-registry.json","status":"unknown"}],"analyzed":false},{"sha":"c0c5b883f4255cf50e46aedd3fbb87b3e97a3a86","shortSha":"c0c5b883","message":"properties and permissions overlays working","author":"Homeforged","authoredAt":"2025-11-25 15:26:25 -0600...
+
+[StateLogger] COMMITS_UPDATED
+[Store] Action: COMMITS_UPDATED payloadKeys=commits,hasMore
+[CockpitEffects] onAction received: COMMITS_UPDATED
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.loadRulesFromMarkdownFile": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.dirIsDirectory": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.loadRulesFromMarkdownFile": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.dirIsDirectory": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.loadRulesFromMarkdownFile": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.dirIsDirectory": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+[ExtensionHostSampler] Sampling span "LocalCursorRulesService.loadRulesFromMarkdownFile": LOCAL_CHILD - inheriting parent's decision: NOT_RECORD
+(node:483291) MaxListenersExceededWarning: Possible EventTarget memory leak detected. 11 abort listeners added to [AbortSignal]. MaxListeners is 10. Use events.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+[CockpitProvider] Posted message: setData
+[CockpitProvider] Built bundle view (100 hotspots)
+[CockpitProvider] Posted message: setData
+[CockpitProvider] Updated explorer tree (2 root nodes)
+[CockpitProvider] Posted message: setData
+[CockpitProvider] Built bundle view (100 hotspots)
+[CockpitProvider] Received message: updateBundleConfig
+[CockpitProvider] Received message: setLastNCommits
+[CockpitProvider] Received message: runAnalysis
+🔄 [ANALYSIS_REQUESTED] @ 16:11:36
+   Payload: {"selection":[],"force":false}
+
+[StateLogger] ANALYSIS_REQUESTED
+[Store] Action: ANALYSIS_REQUESTED payloadKeys=selection,force
+[CockpitEffects] onAction received: ANALYSIS_REQUESTED
+[Effects] handleAnalysis triggered with selection=0, force=false
+🔄 [ANALYSIS_STARTED] @ 16:11:36
+   Payload: {"step":"Initializing..."}
+
+[StateLogger] ANALYSIS_STARTED
+[Store] Action: ANALYSIS_STARTED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STARTED
+[CockpitProvider] Triggered analysis via git-context.analyze (mode=selection)
+[Effects] ANALYSIS_REQUESTED -> ordered selection (1): workspac
+🔄 [SELECTION_SET] @ 16:11:36
+   Payload: {"shas":["workspace-unstaged@feat/db-backed-preview-refactor"]}
+
+[StateLogger] SELECTION_SET
+[Store] Action: SELECTION_SET payloadKeys=shas
+[CockpitEffects] onAction received: SELECTION_SET
+[Effects] Calling reportService.generateReport with scope=full, force=false
+🚀 [ReportService] generateReport called with 1 SHAs
+🔍 [ReportService] Cache lookup for 9e620d18327aac4cc89262f801a55bb9f377eee28e74f6ec7f05f3f83eba3cb3: miss
+🔄 [ANALYSIS_STARTED] @ 16:11:36
+   Payload: {"step":"Analyzing commits..."}
+
+[StateLogger] ANALYSIS_STARTED
+[Store] Action: ANALYSIS_STARTED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STARTED
+🔧 [ReportService] About to call pipeline.analyzeBundle with 0 commits
+🔧 [ReportService] Input shas: 1, filtered commitShas: 0, workspaceShas: 1
+🔧 [ReportService] commitShas:
+🎯 [RefactorPipeline] analyzeBundle called with 0 commits, workspace: true
+🎯 [RefactorPipeline] Built timeline with 2 entries
+🎯 [RefactorPipeline] Built steps: workspace_overlay, scope, index_commits, working, intended, hotspots, moved_blocks, drift, legacy, bundle_facts, embedding_index, retrieve_history
+🎯 [RefactorPipeline] About to call runPipeline with 12 steps
+🚀 [Pipeline] runPipeline called with 12 steps
+🚀 [Pipeline] Step IDs: workspace_overlay, scope, index_commits, working, intended, hotspots, moved_blocks, drift, legacy, bundle_facts, embedding_index, retrieve_history
+🚀 [Pipeline] Levels: 7
+[Pipeline] Starting pipeline execution with 7 levels and 12 steps
+🔵 [Pipeline] Processing level with 3 steps: workspace_overlay, scope, index_commits
+⏩ [Pipeline] About to run step: workspace_overlay
+📡 [Pipeline Event] start for workspace_overlay
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:36
+   Payload: {"step":"Analyze workspace changes"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:37
+   Payload: {"currentStepId":"workspace_overlay"}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Analyze workspace changes
+▶️  [Pipeline] Calling step.run() for: workspace_overlay
+🟦 [WorkspaceStep] Starting run
+⏱️  [Pipeline] step.run() returned promise for: workspace_overlay
+⏩ [Pipeline] About to run step: scope
+📡 [Pipeline Event] start for scope
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:37
+   Payload: {"step":"Calculate analysis scope"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:37
+   Payload: {"currentStepId":"scope"}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Calculate analysis scope
+▶️  [Pipeline] Calling step.run() for: scope
+🟩 [ScopeStep] Starting run
+🟩 [ScopeStep] Calling computeScope...
+⏱️  [Pipeline] step.run() returned promise for: scope
+⏩ [Pipeline] About to run step: index_commits
+📡 [Pipeline Event] start for index_commits
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:37
+   Payload: {"step":"Index commits"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:37
+   Payload: {"currentStepId":"index_commits"}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Index commits
+▶️  [Pipeline] Calling step.run() for: index_commits
+🟧 [IndexCommitsStep] Starting run
+[IndexCommitsStep] No commits to index (workspace-only analysis), setting empty commitFacts
+⏱️  [Pipeline] step.run() returned promise for: index_commits
+📡 [Pipeline Event] complete for index_commits
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:37
+   Payload: {"step":"Index commits","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:37
+   Payload: {"currentStepId":"index_commits","stepTimings":{"index_commits":39}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Index commits (39ms)
+[CockpitProvider] Posted message: setData
+[ContextSkeleton] Resolving skeleton for mode: repo
+Staged files: 0
+[ContextSkeleton] Resolved 2711 files
+Building tree for 2711 files (status=scanning)
+Sample files: .claude/settings.local.json, .claude/skills/filament-v4/SKILL.md, .claude/skills/filament-v4/references/breaking-changes-detailed.md
+[CockpitProvider] Posted message: setData
+🔄 [REFRESH_REQUESTED] @ 16:11:39
+   Payload: {"scope":"commits"}
+
+[StateLogger] REFRESH_REQUESTED
+[Store] Action: REFRESH_REQUESTED payloadKeys=scope
+[CockpitEffects] onAction received: REFRESH_REQUESTED
+🔄 [REPO_CONTEXT_UPDATED] @ 16:11:39
+   Payload: {"repoName":null,"branchName":"feat/db-backed-preview-refactor"}
+
+[StateLogger] REPO_CONTEXT_UPDATED
+[Store] Action: REPO_CONTEXT_UPDATED payloadKeys=repoName,branchName
+[CockpitEffects] onAction received: REPO_CONTEXT_UPDATED
+[CockpitProvider] Posted message: setData
+[CockpitProvider] Built bundle view (100 hotspots)
+[computeScope] Calling computeBlastRadiusNeighbors...
+🟩 [computeBlastRadius] Built DNA->path cache with 0 entries
+🟩 [computeBlastRadius] Querying edges table...
+🟩 [computeBlastRadius] Got 0 edges
+[computeScope] computeBlastRadiusNeighbors returned
+🔄 [WORKSPACE_FILES_UPDATED] @ 16:11:39
+   Payload: {"staged":[],"unstaged":[{"path":"apps/platform/app/Livewire/Builder/BuilderOrchestrator.php","status":"modified"},{"path":"apps/platform/app/Livewire/Builder/UnifiedOverlayManager.php","status":"modified"},{"path":"apps/platform/resources/css/filament/portal/theme.css","status":"modified"},{"path":"apps/platform/resources/views/livewire/builder/components/builder-header.blade.php","status":"modified"},{"path":"apps/platform/resources/views/livewire/builder/unified-overlay-manager.blade.php","status":"modified"},{"path":"apps/platform/registry/builder-overlay-registry.json","status":"unknown"}]}
+
+[StateLogger] WORKSPACE_FILES_UPDATED
+[Store] Action: WORKSPACE_FILES_UPDATED payloadKeys=staged,unstaged
+[CockpitEffects] onAction received: WORKSPACE_FILES_UPDATED
+Staged files: 0
+🔄 [COMMITS_UPDATED] @ 16:11:39
+   Payload: {"commits":[{"sha":"workspace-unstaged@feat/db-backed-preview-refactor","shortSha":"workspac","message":"Unstaged Changes","author":"You","authoredAt":"2025-12-03T16:11:39.329Z","changes":6,"inBundle":false,"files":[{"path":"apps/platform/app/Livewire/Builder/BuilderOrchestrator.php","status":"modified"},{"path":"apps/platform/app/Livewire/Builder/UnifiedOverlayManager.php","status":"modified"},{"path":"apps/platform/resources/css/filament/portal/theme.css","status":"modified"},{"path":"apps/platform/resources/views/livewire/builder/components/builder-header.blade.php","status":"modified"},{"path":"apps/platform/resources/views/livewire/builder/unified-overlay-manager.blade.php","status":"modified"},{"path":"apps/platform/registry/builder-overlay-registry.json","status":"unknown"}],"analyzed":false},{"sha":"c0c5b883f4255cf50e46aedd3fbb87b3e97a3a86","shortSha":"c0c5b883","message":"properties and permissions overlays working","author":"Homeforged","authoredAt":"2025-11-25 15:26:25 -0600...
+
+[StateLogger] COMMITS_UPDATED
+[Store] Action: COMMITS_UPDATED payloadKeys=commits,hasMore
+[CockpitEffects] onAction received: COMMITS_UPDATED
+🔄 [COMMITS_UPDATED] @ 16:11:39
+   Payload: {"commits":[{"sha":"workspace-unstaged@feat/db-backed-preview-refactor","shortSha":"workspac","message":"Unstaged Changes","author":"You","authoredAt":"2025-12-03T16:11:39.637Z","changes":6,"inBundle":false,"files":[{"path":"apps/platform/app/Livewire/Builder/BuilderOrchestrator.php","status":"modified"},{"path":"apps/platform/app/Livewire/Builder/UnifiedOverlayManager.php","status":"modified"},{"path":"apps/platform/resources/css/filament/portal/theme.css","status":"modified"},{"path":"apps/platform/resources/views/livewire/builder/components/builder-header.blade.php","status":"modified"},{"path":"apps/platform/resources/views/livewire/builder/unified-overlay-manager.blade.php","status":"modified"},{"path":"apps/platform/registry/builder-overlay-registry.json","status":"unknown"}],"analyzed":false},{"sha":"c0c5b883f4255cf50e46aedd3fbb87b3e97a3a86","shortSha":"c0c5b883","message":"properties and permissions overlays working","author":"Homeforged","authoredAt":"2025-11-25 15:26:25 -0600...
+
+[StateLogger] COMMITS_UPDATED
+[Store] Action: COMMITS_UPDATED payloadKeys=commits,hasMore
+[CockpitEffects] onAction received: COMMITS_UPDATED
+[WorkspaceIndexer] Cache hit for unstaged workspace
+[Scope] staged=0, unstaged=6, total working=6, commits=0, blast=0, all=6
+🟩 [ScopeStep] computeScope returned, updating state
+🟩 [ScopeStep] Completed successfully
+📡 [Pipeline Event] complete for scope
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:40
+   Payload: {"step":"Calculate analysis scope","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:40
+   Payload: {"currentStepId":"scope","stepTimings":{"scope":3086,"index_commits":39}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Calculate analysis scope (3086ms)
+🟦 [WorkspaceStep] Completed successfully
+📡 [Pipeline Event] complete for workspace_overlay
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:40
+   Payload: {"step":"Analyze workspace changes","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:40
+   Payload: {"currentStepId":"workspace_overlay","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Analyze workspace changes (3111ms)
+🔵 [Pipeline] Processing level with 4 steps: working, intended, hotspots, moved_blocks
+⏩ [Pipeline] About to run step: working
+📡 [Pipeline Event] start for working
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:40
+   Payload: {"step":"Compute working snapshot"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:40
+   Payload: {"currentStepId":"working","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Compute working snapshot
+▶️  [Pipeline] Calling step.run() for: working
+Initializing 15 workers...
+⏱️  [Pipeline] step.run() returned promise for: working
+⏩ [Pipeline] About to run step: intended
+📡 [Pipeline Event] start for intended
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:40
+   Payload: {"step":"Build intended map"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:40
+   Payload: {"currentStepId":"intended","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Build intended map
+▶️  [Pipeline] Calling step.run() for: intended
+Intended map: 0 symbols, 0 renamed
+[WARN] WARNING: Intended map is still empty after fallback. No symbols found in commits.
+⏱️  [Pipeline] step.run() returned promise for: intended
+⏩ [Pipeline] About to run step: hotspots
+📡 [Pipeline Event] start for hotspots
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:40
+   Payload: {"step":"Detect hotspots"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:40
+   Payload: {"currentStepId":"hotspots","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Detect hotspots
+▶️  [Pipeline] Calling step.run() for: hotspots
+[BaseDetector:HotspotDetectorV2] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+⏱️  [Pipeline] step.run() returned promise for: hotspots
+⏩ [Pipeline] About to run step: moved_blocks
+📡 [Pipeline Event] start for moved_blocks
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:40
+   Payload: {"step":"Detect moved blocks"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:40
+   Payload: {"currentStepId":"moved_blocks","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Detect moved blocks
+▶️  [Pipeline] Calling step.run() for: moved_blocks
+[BaseDetector:MovedBlockDetectorV2] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+[MovedBlockStep] Detecting cross-version moves across 2 versions
+⏱️  [Pipeline] step.run() returned promise for: moved_blocks
+[WARN] WARNING: Intended map is empty. No symbols found in 0 commits.
+[WARN] Attempting fallback: seeding from hotspots...
+[BaseDetector:HotspotDetectorV2] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+[MovedBlockStep] Found 0 cross-version symbol moves
+[WARN] Fallback failed: No hotspots with score >60 found.
+📡 [Pipeline Event] complete for hotspots
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:40
+   Payload: {"step":"Detect hotspots","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:40
+   Payload: {"currentStepId":"hotspots","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"hotspots":85}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Detect hotspots (85ms)
+📡 [Pipeline Event] complete for moved_blocks
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:40
+   Payload: {"step":"Detect moved blocks","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:40
+   Payload: {"currentStepId":"moved_blocks","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"hotspots":85,"moved_blocks":556}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Detect moved blocks (556ms)
+📡 [Pipeline Event] complete for intended
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:40
+   Payload: {"step":"Build intended map","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:40
+   Payload: {"currentStepId":"intended","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"intended":562,"hotspots":85,"moved_blocks":556}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Build intended map (562ms)
+📡 [Pipeline Event] complete for working
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:43
+   Payload: {"step":"Compute working snapshot","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:43
+   Payload: {"currentStepId":"working","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Compute working snapshot (3806ms)
+🔵 [Pipeline] Processing level with 1 steps: drift
+⏩ [Pipeline] About to run step: drift
+📡 [Pipeline Event] start for drift
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:43
+   Payload: {"step":"Detect drift"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:43
+   Payload: {"currentStepId":"drift","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Detect drift
+▶️  [Pipeline] Calling step.run() for: drift
+[BaseDetector:DriftDetector] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+⏱️  [Pipeline] step.run() returned promise for: drift
+[DriftStep] Processing 6 files for hybrid drift (CST: true, Augment: true)
+[DriftStep] Retrieved 0 hybrid facts across 0 files
+[DriftStep] Processed 6 files in 2ms (3000.0 files/sec)
+📡 [Pipeline Event] complete for drift
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:43
+   Payload: {"step":"Detect drift","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:43
+   Payload: {"currentStepId":"drift","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556,"drift":18}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Detect drift (18ms)
+🔵 [Pipeline] Processing level with 1 steps: legacy
+⏩ [Pipeline] About to run step: legacy
+📡 [Pipeline Event] start for legacy
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:43
+   Payload: {"step":"Detect legacy"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:43
+   Payload: {"currentStepId":"legacy","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556,"drift":18}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Detect legacy
+▶️  [Pipeline] Calling step.run() for: legacy
+[BaseDetector:LegacyDetector] Initialized with thresholds: {"similarityMin":0.7,"confidenceMin":0.5,"changeThreshold":3,"maxGroupSize":1000,"scoreWeight":1}
+⏱️  [Pipeline] step.run() returned promise for: legacy
+[BaseDetector:LegacyDetector] Cache miss, stored: detector:LegacyDetector:44136fa355b3678a1146ad16f7...
+📡 [Pipeline Event] complete for legacy
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:43
+   Payload: {"step":"Detect legacy","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:43
+   Payload: {"currentStepId":"legacy","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556,"drift":18,"legacy":17}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Detect legacy (17ms)
+🔵 [Pipeline] Processing level with 1 steps: bundle_facts
+⏩ [Pipeline] About to run step: bundle_facts
+📡 [Pipeline Event] start for bundle_facts
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:43
+   Payload: {"step":"Assemble bundle facts"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:43
+   Payload: {"currentStepId":"bundle_facts","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556,"drift":18,"legacy":17}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Assemble bundle facts
+▶️  [Pipeline] Calling step.run() for: bundle_facts
+[BundleFacts] Checking prerequisites...
+[BundleFacts] - commitFacts: 0 items
+[BundleFacts] - scope: present
+[BundleFacts] - intended: present
+[BundleFacts] - working: present
+⏱️  [Pipeline] step.run() returned promise for: bundle_facts
+Inputs: intended=0, hybridFacts=0 files, working.symbols=93
+[WARN] WARNING: intended.present === 0. Consider using --enable-cst to populate intended state.
+📡 [Pipeline Event] complete for bundle_facts
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:43
+   Payload: {"step":"Assemble bundle facts","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:43
+   Payload: {"currentStepId":"bundle_facts","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556,"drift":18,"legacy":17,"bundle_facts":16}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Assemble bundle facts (16ms)
+🔵 [Pipeline] Processing level with 1 steps: embedding_index
+⏩ [Pipeline] About to run step: embedding_index
+📡 [Pipeline Event] start for embedding_index
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:43
+   Payload: {"step":"Index embeddings"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:43
+   Payload: {"currentStepId":"embedding_index","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556,"drift":18,"legacy":17,"bundle_facts":16}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Index embeddings
+▶️  [Pipeline] Calling step.run() for: embedding_index
+⏱️  [Pipeline] step.run() returned promise for: embedding_index
+Connected to http://localhost:6333 (embedding dim: 1536, model: openai/text-embedding-3-small)
+[Qdrant] Indexed fields on symbols
+[Qdrant] Indexed fields on commits
+[Qdrant] Indexed fields on patterns
+[EmbeddingIndexer] Indexing 0 commits...
+[Qdrant] Indexed fields on commits_project_95679a07bc70e677
+[EmbeddingIndexer] Verified collection commits_project_95679a07bc70e677 has 0 points
+[Qdrant] Indexed fields on symbols_project_95679a07bc70e677
+[EmbeddingIndexer] Gathering symbol history from 0 commits...
+[EmbeddingIndexer] No symbols to index, skipping symbol indexing
+[Qdrant] Indexed fields on patterns_project_95679a07bc70e677
+[EmbeddingIndexer] Indexing complete
+📡 [Pipeline Event] complete for embedding_index
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:45
+   Payload: {"step":"Index embeddings","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:45
+   Payload: {"currentStepId":"embedding_index","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556,"drift":18,"legacy":17,"bundle_facts":16,"embedding_index":1161}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Index embeddings (1161ms)
+🔵 [Pipeline] Processing level with 1 steps: retrieve_history
+⏩ [Pipeline] About to run step: retrieve_history
+📡 [Pipeline Event] start for retrieve_history
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:45
+   Payload: {"step":"Retrieve history"}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:45
+   Payload: {"currentStepId":"retrieve_history","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556,"drift":18,"legacy":17,"bundle_facts":16,"embedding_index":1161}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Started step: Retrieve history
+▶️  [Pipeline] Calling step.run() for: retrieve_history
+⏱️  [Pipeline] step.run() returned promise for: retrieve_history
+[Qdrant] Indexed fields on commits_project_95679a07bc70e677
+[Qdrant] Indexed fields on symbols_project_95679a07bc70e677
+[BundleStory] Skipping search: both collections are empty
+📡 [Pipeline Event] complete for retrieve_history
+🔄 [ANALYSIS_STEP_UPDATED] @ 16:11:45
+   Payload: {"step":"Retrieve history","progress":100}
+
+[StateLogger] ANALYSIS_STEP_UPDATED
+[Store] Action: ANALYSIS_STEP_UPDATED payloadKeys=step,progress
+[CockpitEffects] onAction received: ANALYSIS_STEP_UPDATED
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:45
+   Payload: {"currentStepId":"retrieve_history","stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556,"drift":18,"legacy":17,"bundle_facts":16,"embedding_index":1161,"retrieve_history":736}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+[Pipeline] Completed step: Retrieve history (736ms)
+[Pipeline] Pipeline completed in 8906ms
+[Pipeline] Steps completed: 12/12
+[Pipeline] Step timing summary:
+  working: 3806ms
+  workspace_overlay: 3111ms
+  scope: 3086ms
+  embedding_index: 1161ms
+  retrieve_history: 736ms
+📡 [Pipeline Event] finished for no-step
+🔄 [PIPELINE_HEALTH_UPDATED] @ 16:11:45
+   Payload: {"currentStepId":null,"stepTimings":{"workspace_overlay":3111,"scope":3086,"index_commits":39,"working":3806,"intended":562,"hotspots":85,"moved_blocks":556,"drift":18,"legacy":17,"bundle_facts":16,"embedding_index":1161,"retrieve_history":736}}
+
+[StateLogger] PIPELINE_HEALTH_UPDATED
+[Store] Action: PIPELINE_HEALTH_UPDATED payloadKeys=currentStepId,stepTimings,pipelineErrors
+[CockpitEffects] onAction received: PIPELINE_HEALTH_UPDATED
+🎯 [RefactorPipeline] runPipeline returned
+🟢 Pipeline finished, checking results...
+🟢 Got bundleFacts, processing report...
+[ReportService] LLM not available, using fallback summary
+[ReportService] Computed config hash: 1263a14f...
+🟢 Updating cockpit with facts: 0 files, 93 symbols
+[CockpitProvider] showCockpit called: 0 files, 93 symbols
+[CockpitProvider] Posted message: setData
+[ReportService] Updated cockpit via provider
+🔄 [ANALYSIS_COMPLETED] @ 16:11:46
+   Payload: {"facts":{"commits":0,"files":0,"symbols":93}}
+   bundleFacts: null → present
+
+[StateLogger] ANALYSIS_COMPLETED
+[Store] Action: ANALYSIS_COMPLETED payloadKeys=facts,summary,reportId
+[CockpitEffects] onAction received: ANALYSIS_COMPLETED
+[Effects] reportService.generateReport completed successfully
+Building tree for 2711 files (status=scanning)
+Sample files: .claude/settings.local.json, .claude/skills/filament-v4/SKILL.md, .claude/skills/filament-v4/references/breaking-changes-detailed.md
+[CockpitProvider] Posted message: setData
+[CockpitProvider] Updated explorer tree (2 root nodes)
+[CockpitProvider] Posted message: setData
+[CockpitProvider] Built bundle view (100 hotspots)

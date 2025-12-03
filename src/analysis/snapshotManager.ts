@@ -256,8 +256,8 @@ export class SnapshotManager {
     const parentSymbols = parentSnapshot?.symbols || [];
     const currentSymbols = currentSnapshot.symbols;
 
-    const parentByDNA = new Map(parentSymbols.map(s => [s.dnaId, s]));
-    const currentByDNA = new Map(currentSymbols.map(s => [s.dnaId, s]));
+    const parentByDNA = new Map(parentSymbols.map(s => [s.id, s])); // id is now the DNA hash
+    const currentByDNA = new Map(currentSymbols.map(s => [s.id, s])); // id is now the DNA hash
 
     const added: SymbolInfo[] = [];
     const removed: SymbolInfo[] = [];
@@ -269,7 +269,7 @@ export class SnapshotManager {
     const renamed: Array<{ symbol: SymbolInfo; previousSymbol: SymbolInfo }> = [];
 
     for (const symbol of currentSymbols) {
-      const prev = parentByDNA.get(symbol.dnaId);
+      const prev = parentByDNA.get(symbol.id); // id is now the DNA hash
 
       if (!prev) {
         added.push(symbol);
@@ -289,7 +289,8 @@ export class SnapshotManager {
     }
 
     for (const symbol of parentSymbols) {
-      if (!currentByDNA.has(symbol.dnaId)) {
+      if (!currentByDNA.has(symbol.id)) {
+        // id is now the DNA hash
         removed.push(symbol);
       }
     }

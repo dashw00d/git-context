@@ -34,7 +34,7 @@ export class SymbolService extends ServiceBase {
                  sv.signature_hash, sv.body_hash,
                  ROW_NUMBER() OVER (PARTITION BY sv.dna_id ORDER BY sv.sha DESC) as rn
           FROM symbol_versions sv
-          JOIN symbols s ON sv.sha = s.sha AND sv.symbol_id = s.symbol_id
+          JOIN symbols s ON sv.sha = s.sha AND sv.dna_id = s.dna_id
           WHERE sv.dna_id = ?
         `);
 
@@ -44,9 +44,9 @@ export class SymbolService extends ServiceBase {
         return results
           .filter(row => row.rn === 1)
           .map(row => ({
-            id: row.symbol_id,
-            dnaId: row.dna_id,
-            semanticId: row.semantic_id,
+            id: row.dna_id, // id is now the DNA hash
+            semanticId: row.symbol_id, // Keep symbol_id as semanticId for reference
+            filePath: row.path || '',
             name: row.name,
             kind: row.kind as SymbolInfo['kind'],
             signature: row.signature,
@@ -80,9 +80,9 @@ export class SymbolService extends ServiceBase {
         stmt.free?.();
 
         return results.map(row => ({
-          id: row.symbol_id,
-          dnaId: row.dna_id,
-          semanticId: row.semantic_id,
+          id: row.dna_id || row.symbol_id, // id is now the DNA hash
+          semanticId: row.symbol_id, // Keep symbol_id as semanticId for reference
+          filePath: row.path || '',
           name: row.name,
           kind: row.kind as SymbolInfo['kind'],
           signature: row.signature,
@@ -146,7 +146,7 @@ export class SymbolService extends ServiceBase {
         const stmt = prepare(`
           SELECT DISTINCT s.*, sv.dna_id as dna
           FROM symbols s
-          JOIN symbol_versions sv ON s.sha = sv.sha AND s.symbol_id = sv.symbol_id
+          JOIN symbol_versions sv ON s.sha = sv.sha AND s.dna_id = sv.dna_id
           WHERE s.name LIKE ?
           ORDER BY s.name
           LIMIT ?
@@ -156,9 +156,9 @@ export class SymbolService extends ServiceBase {
         stmt.free?.();
 
         return results.map(row => ({
-          id: row.symbol_id,
-          dnaId: row.dna_id,
-          semanticId: row.semantic_id,
+          id: row.dna_id || row.symbol_id, // id is now the DNA hash
+          semanticId: row.symbol_id, // Keep symbol_id as semanticId for reference
+          filePath: row.path || '',
           name: row.name,
           kind: row.kind as SymbolInfo['kind'],
           signature: row.signature,
@@ -201,7 +201,7 @@ export class SymbolService extends ServiceBase {
         const symbolStmt = prepare(`
           SELECT DISTINCT s.*, sv.dna_id as dna
           FROM symbols s
-          JOIN symbol_versions sv ON s.sha = sv.sha AND s.symbol_id = sv.symbol_id
+          JOIN symbol_versions sv ON s.sha = sv.sha AND s.dna_id = sv.dna_id
           WHERE s.sha IN (${placeholders})
           ORDER BY s.name
         `);
@@ -210,9 +210,9 @@ export class SymbolService extends ServiceBase {
         symbolStmt.free?.();
 
         return results.map(row => ({
-          id: row.symbol_id,
-          dnaId: row.dna_id,
-          semanticId: row.semantic_id,
+          id: row.dna_id || row.symbol_id, // id is now the DNA hash
+          semanticId: row.symbol_id, // Keep symbol_id as semanticId for reference
+          filePath: row.path || '',
           name: row.name,
           kind: row.kind as SymbolInfo['kind'],
           signature: row.signature,

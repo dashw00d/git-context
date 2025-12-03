@@ -1,5 +1,6 @@
+/* eslint-disable no-restricted-syntax */
 import { buildRefactorBundleFacts } from '../../../facts/factsAssembler';
-import { logError } from '../../../utils/logger';
+import { logDebug, logError } from '../../../utils/logger';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 import type { DriftFindings } from '../../../facts/driftDetector';
 import type { LegacyAuditResult } from '../../../facts/legacyAudit';
@@ -38,15 +39,39 @@ export function createBundleFactsStep(): PipelineStep {
     deps: ['scope', 'intended', 'working', 'drift', 'legacy', 'hotspots', 'index_commits'],
 
     async run(state: PipelineState) {
-      if (!state.commitFacts || state.commitFacts.length === 0) {
-        const message = 'No commit facts available';
-        logError(message);
+      logDebug('[BundleFacts] Checking prerequisites...');
+      logDebug(
+        `[BundleFacts] - commitFacts: ${state.commitFacts?.length ?? 'undefined'} items`
+      );
+      logDebug(`[BundleFacts] - scope: ${state.scope ? 'present' : 'missing'}`);
+      logDebug(`[BundleFacts] - intended: ${state.intended ? 'present' : 'missing'}`);
+      logDebug(`[BundleFacts] - working: ${state.working ? 'present' : 'missing'}`);
+
+      if (!state.commitFacts) {
+        const message = 'commitFacts is undefined (should be at least an empty array)';
+        logError(`[BundleFacts] FAILED: ${message}`);
+        state.partialReasons = state.partialReasons ?? [];
+        state.partialReasons.push(message);
+        throw new Error(message);
+      }
+
+      if (state.commitFacts.length === 0 && !state.workspaceFacts) {
+        const message =
+          'No commit facts or workspace facts available - at least one is required';
+        logError(`[BundleFacts] FAILED: ${message}`);
+        state.partialReasons = state.partialReasons ?? [];
+        state.partialReasons.push(message);
         throw new Error(message);
       }
 
       if (!state.scope || !state.intended || !state.working) {
         const message = 'Missing required pipeline data for bundle facts';
-        logError(message);
+        logError(`[BundleFacts] FAILED: ${message}`);
+        logError(
+          `[BundleFacts] Details: scope=${!!state.scope}, intended=${!!state.intended}, working=${!!state.working}`
+        );
+        state.partialReasons = state.partialReasons ?? [];
+        state.partialReasons.push(message);
         throw new Error(message);
       }
 

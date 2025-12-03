@@ -1,4 +1,5 @@
 import { computeScope } from '../../../facts/scope';
+import { logDebug } from '../../../utils/logger';
 import { GitOperations } from '../../git';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 
@@ -17,12 +18,12 @@ export function createScopeStep(git?: GitOperations): PipelineStep {
     deps: [],
 
     async run(state: PipelineState) {
-      console.error('🟩 [ScopeStep] Starting run');
+      logDebug('🟩 [ScopeStep] Starting run');
       // Use workspaceParts from state (set by ReportService based on scope parameter)
       // Don't override it - this allows staged-only or unstaged-only analysis
       const workspaceParts = state.workspaceParts;
 
-      console.error('🟩 [ScopeStep] Calling computeScope...');
+      logDebug('🟩 [ScopeStep] Calling computeScope...');
       const scope = await computeScope(
         state.selectedCommitShas,
         workspaceParts,
@@ -30,9 +31,9 @@ export function createScopeStep(git?: GitOperations): PipelineStep {
         state.liveOverrides?.keys(),
         git
       );
-      console.error('🟩 [ScopeStep] computeScope returned, updating state');
+      logDebug('🟩 [ScopeStep] computeScope returned, updating state');
       updateState(state, 'scope', scope);
-      console.error('🟩 [ScopeStep] Completed successfully');
+      logDebug('🟩 [ScopeStep] Completed successfully');
     },
   };
 }

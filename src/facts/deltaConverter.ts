@@ -19,10 +19,12 @@ export function convertDeltasToSnapshot(deltas: {
   const addSymbol = (symbol: SymbolInfo) => {
     const ctx: SymbolContext = {
       id: 0, // Placeholder for working snapshot (not from database)
-      symbol_id: symbol.id,
+      symbol_id: symbol.id, // id is now the DNA hash
       name: symbol.name,
       kind: symbol.kind,
       signature: symbol.signature,
+      dnaId: symbol.id, // Keep for compatibility
+      filePath: symbol.filePath, // Store file path
       loc_pre: symbol.location
         ? {
             start: {
@@ -39,7 +41,7 @@ export function convertDeltasToSnapshot(deltas: {
 
     symbolsById.set(symbol.id, ctx);
 
-    const filePath = symbol.id.split(':')[0];
+    const filePath = symbol.filePath;
     if (!symbolsByFile.has(filePath)) {
       symbolsByFile.set(filePath, []);
     }

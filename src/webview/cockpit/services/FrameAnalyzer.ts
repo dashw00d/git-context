@@ -44,12 +44,13 @@ export class FrameAnalyzer {
    * - File content
    * - Line count
    * - Language detection
-   * - Symbol extraction
+   * - Symbol extraction (uses quick scan symbols if available)
    */
   async analyzeTier1(
     frameId: string,
     targetPath: string,
-    workspaceRoot: string
+    workspaceRoot: string,
+    bundleFacts?: BundleFactsDTO
   ): Promise<Tier1Data> {
     const fullPath = path.join(workspaceRoot, targetPath);
     const language =
@@ -63,7 +64,22 @@ export class FrameAnalyzer {
 
       // Extract symbols if language is supported
       let symbols: any[] = [];
-      if (language && language !== 'unknown') {
+
+      // First, try to use quick scan symbols from bundleFacts
+      if (bundleFacts?.evidence?.['working.symbols']) {
+        const quickSymbols = bundleFacts.evidence['working.symbols'] as any[];
+        // Filter symbols for this file
+        const fileSymbols = quickSymbols.filter((s: any) => s.filePath === targetPath);
+
+        if (fileSymbols.length > 0) {
+          // Quick scan symbols already have location/signature, use them directly
+          symbols = fileSymbols;
+          logDebug(`FrameAnalyzer: Using ${symbols.length} quick scan symbols for ${frameId}`);
+        }
+      }
+
+      // If no quick scan symbols, extract fresh
+      if (symbols.length === 0 && language && language !== 'unknown') {
         try {
           const parser = getTreeSitterParser();
           const hybridFacts = await parser.extractHybridFacts(content, targetPath, language);

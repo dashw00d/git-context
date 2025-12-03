@@ -171,13 +171,13 @@ export class SemanticChangeDetector {
 
       for (const prevSymbol of prevGroup) {
         for (const currSymbol of currGroup) {
-          if (prevSymbol.id.split(':')[0] !== currSymbol.id.split(':')[0]) {
+          if (prevSymbol.filePath !== currSymbol.filePath) {
             const confidence = this.calculateMoveConfidence(prevSymbol, currSymbol);
             if (confidence > 0.7) {
               moves.push({
                 symbol: currSymbol,
-                oldPath: prevSymbol.id.split(':')[0],
-                newPath: currSymbol.id.split(':')[0],
+                oldPath: prevSymbol.filePath,
+                newPath: currSymbol.filePath,
                 confidence,
               });
             }
@@ -211,8 +211,8 @@ export class SemanticChangeDetector {
       confidence += 0.3;
     }
 
-    const oldLang = detectLanguage(oldSymbol.id.split(':')[0]);
-    const newLang = detectLanguage(newSymbol.id.split(':')[0]);
+    const oldLang = detectLanguage(oldSymbol.filePath);
+    const newLang = detectLanguage(newSymbol.filePath);
     if (oldLang === newLang) {
       confidence += 0.1;
     }

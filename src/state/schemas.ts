@@ -188,7 +188,7 @@ export const ContextFrameSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   parentId: z.string().optional(),
-  status: z.enum(['ready', 'scanning', 'unknown', 'error']),
+  status: z.enum(['ready', 'scanning', 'analyzing', 'unknown', 'error']),
   data: z.any().optional(),
   breadcrumbs: z.array(z.string()).optional(),
   tier: z.enum(['structure', 'hybrid', 'semantics']).optional(),
@@ -200,53 +200,87 @@ export const ExplorerNodeSchema: z.ZodType<any> = z.lazy(() =>
     name: z.string(),
     description: z.string().optional(),
     type: z.enum(['file', 'symbol', 'folder']),
-    status: z.enum(['ready', 'scanning', 'unknown', 'error']),
+    status: z.enum(['ready', 'scanning', 'analyzing', 'unknown', 'error']),
     children: z.array(ExplorerNodeSchema).optional(),
   })
 );
 
+export const LiveAnalysisSummarySchema = z.object({
+  missing: z.number(),
+  zombies: z.number(),
+  drift: z.number(),
+  dead: z.number(),
+  hybridDrifts: z.number().optional(),
+});
+
+export const NodeMetricsSchema = z.object({
+  riskScore: z.number(),
+  churnScore: z.number(),
+  lastModified: z.number(),
+  driftCount: z.number(),
+  incomingRefs: z.number(),
+  outgoingRefs: z.number(),
+  authors: z.array(z.string()),
+  ageDays: z.number(),
+});
+
+export const CockpitPayloadSchema = z.object({
+  bundleFacts: BundleFactsSchema.nullable().optional(),
+  bundleSummary: BundleSummarySchema.nullable().optional(),
+  bundleView: BundleViewSchema.nullable().optional(),
+  activeFrame: ContextFrameSchema.optional(),
+  history: z.array(ContextFrameSchema).optional(),
+  explorerData: z.array(ExplorerNodeSchema).optional(),
+  nodeMetrics: z.record(NodeMetricsSchema).optional(),
+  isAnalyzing: z.boolean().optional(),
+  analysisStep: z.string().optional(),
+  analysisProgress: z.number().optional(),
+  error: z.string().nullable().optional(),
+  liveAnalysis: z
+    .object({
+      isTracking: z.boolean(),
+      pendingChanges: z.number(),
+      totalEdits: z.number(),
+      status: z.enum(['idle', 'analyzing', 'ready', 'error']),
+      summary: LiveAnalysisSummarySchema.nullable(),
+      facts: z.any().nullable(),
+    })
+    .optional(),
+  repoName: z.string().nullable().optional(),
+  branchName: z.string().nullable().optional(),
+  bundleConfig: BundleConfigSchema.optional(),
+  lastNCommits: z.number().optional(),
+  commits: z.array(CommitDTOSchema).optional(),
+  hasMoreCommits: z.boolean().optional(),
+  llmOutputs: z.any().optional(),
+  retrievedHistory: z.any().optional(),
+});
+
 export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('ready') }),
   z.object({
-    type: z.literal('setActiveSection'),
-    section: z.enum(['commits', 'bundle', 'symbols', 'reports', 'live']),
-  }),
-  z.object({ type: z.literal('resetAll') }),
-  z.object({
-    type: z.literal('generateReport'),
+    type: z.literal('runAnalysis'),
     mode: z.enum(['selection', 'lastN', 'staged', 'unstaged', 'changes']),
     lastN: z.number().optional(),
     force: z.boolean().optional(),
   }),
-  z.object({ type: z.literal('cancelAnalysis') }),
-  z.object({ type: z.literal('toggleCommit'), sha: z.string() }),
-  z.object({ type: z.literal('addCommitBySha'), shaOrRef: z.string() }),
-  z.object({ type: z.literal('loadMoreCommits') }),
-  z.object({ type: z.literal('setCommitsFilterText'), text: z.string() }),
+  z.object({ type: z.literal('openReport'), reportId: z.string() }),
+  z.object({ type: z.literal('regenerateReport'), reportId: z.string() }),
+  z.object({ type: z.literal('togglePinReport'), reportId: z.string() }),
+  z.object({ type: z.literal('deleteReport'), reportId: z.string() }),
+  z.object({ type: z.literal('navigateToFrame'), frame: ContextFrameSchema }),
+  z.object({ type: z.literal('navigateBack') }),
+  z.object({ type: z.literal('switchBundle'), id: z.string() }),
   z.object({
-    type: z.literal('setCommitsFilterScopes'),
-    scopes: z.object({
-      staged: z.boolean().optional(),
-      unstaged: z.boolean().optional(),
-      history: z.boolean().optional(),
+    type: z.literal('askAssistant'),
+    payload: z.object({
+      text: z.string().optional(),
+      frame: ContextFrameSchema.optional(),
+      symbolId: z.string().optional(),
+      filePath: z.string().optional(),
+      drift: z.any().optional(),
     }),
   }),
-  z.object({ type: z.literal('selectAllStaged') }),
-  z.object({ type: z.literal('selectAllUnstaged') }),
-  z.object({ type: z.literal('clearSelection') }),
-  z.object({ type: z.literal('compareFilesToCommit'), sha: z.string() }),
-  z.object({ type: z.literal('bundleRegenerate') }),
-  z.object({ type: z.literal('bundleClear') }),
-  z.object({ type: z.literal('bundleExport') }),
-  z.object({ type: z.literal('openActiveReport') }),
-  z.object({ type: z.literal('bundleCancel') }),
-  z.object({ type: z.literal('setSymbolFilterText'), text: z.string() }),
-  z.object({ type: z.literal('setSymbolKindFilter'), kind: z.string() }),
-  z.object({
-    type: z.literal('setSymbolChangeFilter'),
-    change: z.enum(['all', 'added', 'modified', 'removed']),
-  }),
-  z.object({ type: z.literal('openSymbolHistory'), symbolId: z.string() }),
-  z.object({ type: z.literal('openSymbolInEditor'), symbolId: z.string() }),
   z.object({
     type: z.literal('applyRefactorSuggestion'),
     payload: z.object({
@@ -255,33 +289,14 @@ export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
       filePath: z.string().optional(),
     }),
   }),
-  z.object({ type: z.literal('askAssistant'), payload: z.any().optional() }),
-  z.object({ type: z.literal('openReport'), reportId: z.string() }),
-  z.object({ type: z.literal('regenerateReport'), reportId: z.string() }),
-  z.object({ type: z.literal('deleteReport'), reportId: z.string() }),
-  z.object({ type: z.literal('openSuperReport') }),
-  z.object({ type: z.literal('setLastNCommits'), value: z.number() }),
-  z.object({ type: z.literal('togglePinReport'), reportId: z.string() }),
-  z.object({ type: z.literal('setReportsFilterText'), text: z.string() }),
-  z.object({ type: z.literal('setReportsBranchFilter'), branch: z.string() }),
-  z.object({ type: z.literal('setReportsShowPinnedOnly'), value: z.boolean() }),
-  z.object({ type: z.literal('scrollReportToSection'), sectionId: z.string() }),
-  z.object({ type: z.literal('openEvidence'), evidenceId: z.string() }),
-  z.object({ type: z.literal('generateLiveReport') }),
-  z.object({ type: z.literal('startLiveAnalysis') }),
-  z.object({ type: z.literal('getExplorerTree') }),
+  z.object({ type: z.literal('openSymbolInEditor'), symbolId: z.string() }),
   z.object({ type: z.literal('analyzeFrame'), frameId: z.string() }),
+  z.object({ type: z.literal('getExplorerTree') }),
   z.object({ type: z.literal('getBundleData') }),
-  z.object({ type: z.literal('createBundle'), name: z.string(), config: BundleConfigSchema }),
-  z.object({ type: z.literal('deleteBundle'), id: z.string() }),
-  z.object({ type: z.literal('switchBundle'), id: z.string() }),
   z.object({ type: z.literal('updateBundleConfig'), config: BundleConfigSchema.partial() }),
-
-  z.object({ type: z.literal('ready') }),
-  z.object({ type: z.literal('clearError') }),
-  z.object({ type: z.literal('navigateToFrame'), frame: ContextFrameSchema }),
-  z.object({ type: z.literal('navigateBack') }),
+  z.object({ type: z.literal('setLastNCommits'), value: z.number() }),
   z.object({ type: z.literal('updateCommitIndex'), value: z.number() }),
+  z.object({ type: z.literal('clearError') }),
 ]);
 
 export const CockpitStateSchema = z
@@ -363,11 +378,11 @@ export const CockpitStateSchema = z
 
 export const CockpitHostMessageSchema = z.discriminatedUnion('type', [
   z.object({
-    type: z.literal('updateState'),
-    payload: CockpitStateSchema,
+    type: z.literal('setData'),
+    payload: CockpitPayloadSchema,
   }),
   z.object({
-    type: z.literal('analysisProgress'),
+    type: z.literal('setProgress'),
     payload: z.object({
       isAnalyzing: z.boolean(),
       step: z.string().optional(),
@@ -394,16 +409,6 @@ export const CockpitHostMessageSchema = z.discriminatedUnion('type', [
       frame: ContextFrameSchema,
       data: z.any(),
     }),
-  }),
-  z.object({
-    type: z.literal('updateBundle'),
-    payload: z
-      .object({
-        view: BundleViewSchema.nullable().optional(),
-        summary: BundleSummarySchema.nullable().optional(),
-        facts: BundleFactsSchema.nullable().optional(),
-      })
-      .passthrough(),
   }),
 ]);
 

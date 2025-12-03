@@ -501,7 +501,7 @@ export class StateLogger extends ServiceBase {
       await fs.appendFile(this.logPath, JSON.stringify(logLine) + '\n');
     } catch (error) {
       // Don't throw - logging failures shouldn't crash the app
-      console.error('Failed to write state log:', error);
+      logDebug('Failed to write state log:', error);
     }
   }
 

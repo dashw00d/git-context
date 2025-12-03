@@ -87,23 +87,88 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     const driftIssues = renderFrame.data?.drift || [];
 
     // Get ordered commits from state (for commit index calculation)
-    const orderedCommits = cockpitState?.selectedCommitShas || [];
-    const currentCommitIndex = cockpitState?.currentCommitIndex;
+    // Get ordered commits from state or fallback to file history
+    let orderedCommits = cockpitState?.selectedCommitShas || [];
+    let commits: any[] = [];
 
-    // Build commits array for TimeScrubber from state commits
-    const commits = (cockpitState?.commits || [])
-      .filter(c => orderedCommits.includes(c.sha))
-      .sort((a, b) => {
-        const aIndex = orderedCommits.indexOf(a.sha);
-        const bIndex = orderedCommits.indexOf(b.sha);
-        return aIndex - bIndex;
-      })
-      .map(c => ({
-        sha: c.sha,
-        date: c.authoredAt,
+    // Get total commit count from bundleFacts for optimistic time travel
+    // Access via any to handle the dynamic totalCommits property
+    const totalCommits = (cockpitState?.bundleFacts as any)?.bundle?.totalCommits || 0;
+
+    // State for optimistic HEAD commit
+    const [optimisticHead, setOptimisticHead] = React.useState<{
+      sha: string;
+      date: string;
+      message: string;
+      author: string;
+    } | null>(null);
+
+    // Load HEAD commit for optimistic time travel if needed
+    React.useEffect(() => {
+      if (
+        orderedCommits.length === 0 &&
+        !renderFrame.data?.history &&
+        totalCommits > 0 &&
+        !optimisticHead
+      ) {
+        (async () => {
+          try {
+            const { GitOperations } = await import('../../../analysis/git');
+            const gitOps = new GitOperations();
+            const headSha = await gitOps.getHeadSha();
+            const headCommit = await gitOps.getCommitInfo(headSha);
+            setOptimisticHead({
+              sha: headSha,
+              date: headCommit.date,
+              message: headCommit.message,
+              author: headCommit.author,
+            });
+          } catch (e) {
+            // Silently fail - optimistic mode won't work without HEAD
+          }
+        })();
+      }
+    }, [orderedCommits.length, renderFrame.data?.history, totalCommits, optimisticHead]);
+
+    if (orderedCommits.length > 0) {
+      // Use global selection
+      commits = (cockpitState?.commits || [])
+        .filter(c => orderedCommits.includes(c.sha))
+        .sort((a, b) => {
+          const aIndex = orderedCommits.indexOf(a.sha);
+          const bIndex = orderedCommits.indexOf(b.sha);
+          return aIndex - bIndex;
+        })
+        .map(c => ({
+          sha: c.sha,
+          date: c.authoredAt,
+          message: c.message,
+          author: c.author,
+        }));
+    } else if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
+      // Fallback to file history
+      // History is usually newest to oldest, so we reverse for the timeline (oldest to newest)
+      const fileHistory = [...renderFrame.data.history].reverse();
+      orderedCommits = fileHistory.map((c: any) => c.hash || c.sha);
+      commits = fileHistory.map((c: any) => ({
+        sha: c.hash || c.sha,
+        date: c.date,
         message: c.message,
-        author: c.author,
+        author: c.author_name || c.author,
       }));
+    } else if (optimisticHead) {
+      // Optimistic: Use HEAD commit for time travel
+      orderedCommits = [optimisticHead.sha];
+      commits = [optimisticHead];
+    }
+
+    // Default to latest commit if index is undefined
+    const currentCommitIndex =
+      cockpitState?.currentCommitIndex !== undefined
+        ? cockpitState.currentCommitIndex
+        : orderedCommits.length > 0
+          ? orderedCommits.length - 1
+          : undefined;
 
     const handleNeighborClick = (filePath: string) => {
       if (vscode) {

@@ -21,7 +21,11 @@ export class AnalysisService {
     return AnalysisService.instance;
   }
 
-  async analyzeFrame(frameId: string, view?: any) {
+  async analyzeFrame(
+    frameId: string,
+    view?: any,
+    onTierComplete?: (tier: number, frameId: string) => void
+  ) {
     const store = getStore();
     const state = store.getState();
     const activeFrame = state.activeFrame.id;
@@ -49,8 +53,9 @@ export class AnalysisService {
     let tier1Data: any;
     this.pipelineDebugger.startTier(frameId, 1, activeFrame);
     try {
+      const facts = state.bundleFacts as BundleFactsDTO;
       tier1Data = await withTimeout(
-        analyzer.analyzeTier1(frameId, targetPath, gitRoot),
+        analyzer.analyzeTier1(frameId, targetPath, gitRoot, facts),
         120000,
         'Tier 1 analysis'
       );
@@ -60,6 +65,9 @@ export class AnalysisService {
         type: 'FRAME_ANALYSIS_TIER_1_COMPLETE',
         payload: { frameId, data: tier1Data },
       });
+      if (onTierComplete) {
+        onTierComplete(1, frameId);
+      }
     } catch (error) {
       this.pipelineDebugger.failTier(frameId, 1, String(error));
       logError(`[Tier 1] Failed for ${frameId}`, error);
@@ -86,6 +94,9 @@ export class AnalysisService {
         type: 'FRAME_ANALYSIS_TIER_2_COMPLETE',
         payload: { frameId, data: tier2Data },
       });
+      if (onTierComplete) {
+        onTierComplete(2, frameId);
+      }
     } catch (error) {
       this.pipelineDebugger.failTier(frameId, 2, String(error));
       logError(`[Tier 2] Failed for ${frameId}`, error);
@@ -111,6 +122,9 @@ export class AnalysisService {
         type: 'FRAME_ANALYSIS_TIER_3_COMPLETE',
         payload: { frameId, data: tier3Data },
       });
+      if (onTierComplete) {
+        onTierComplete(3, frameId);
+      }
       logInfo(`[AnalysisService] Analyzed frame ${frameId} (${level})`);
     } catch (error) {
       this.pipelineDebugger.failTier(frameId, 3, String(error));

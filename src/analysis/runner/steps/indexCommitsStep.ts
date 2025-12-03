@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 
-import { logDebug } from '../../../utils/logger';
+import { logDebug, logError } from '../../../utils/logger';
 import { CommitIndexer } from '../../commitIndexer';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 
@@ -14,12 +14,20 @@ export function createIndexCommitsStep(
     deps: [],
 
     async run(state: PipelineState) {
-      console.error('🟧 [IndexCommitsStep] Starting run');
+      logDebug('🟧 [IndexCommitsStep] Starting run');
       const shas = state.selectedCommitShas;
+
+      if (!shas || shas.length === 0) {
+        logDebug(
+          '[IndexCommitsStep] No commits to index (workspace-only analysis), setting empty commitFacts'
+        );
+        state.commitFacts = [];
+        return;
+      }
 
       const startTime = Date.now();
 
-      console.error(
+      logDebug(
         `🟧 [IndexCommitsStep] Processing ${shas.length} commits with concurrency=${concurrency}`
       );
       logDebug(
@@ -47,13 +55,13 @@ export function createIndexCommitsStep(
       );
 
       const duration = Date.now() - startTime;
-      console.error(`🟧 [IndexCommitsStep] ensureCommitsIndexed returned`);
+      logDebug(`🟧 [IndexCommitsStep] ensureCommitsIndexed returned`);
       logDebug(
         `[IndexCommits] Completed ${shas.length} commits in ${duration}ms (${(duration / shas.length).toFixed(0)}ms/commit avg)`
       );
 
       state.commitFacts = facts;
-      console.error('🟧 [IndexCommitsStep] Completed successfully');
+      logDebug('🟧 [IndexCommitsStep] Completed successfully');
     },
   };
 }
