@@ -38,20 +38,15 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     this._facts = facts;
 
     if (this._panel) {
-      // View is already resolved (sidebar)
       if (this._panel.visible) {
         this._update();
       } else {
-        // Focus the sidebar view using the view ID
         vscode.commands.executeCommand('gitContext.refactorReport.focus');
-        // Data will be updated via _update called implicitly or explicitly?
-        // resolveWebviewView posts initial data, but if already resolved but hidden, we need to update
+
         this._update();
       }
     } else {
-      // View not resolved yet - focus it to trigger resolution
       vscode.commands.executeCommand('gitContext.refactorReport.focus');
-      // Once resolved, resolveWebviewView will be called and will post the data
     }
   }
 
@@ -63,9 +58,8 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ): void {
-    this._panel = webviewView as any; // Maintaining internal property name for now to minimize changes
+    this._panel = webviewView as any;
 
-    // Set title if property exists (it does on WebviewView)
     webviewView.title = 'Refactor Intelligence Report';
 
     webviewView.webview.options = {
@@ -75,17 +69,14 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-    // Post initial data if available
     if (this._analysis && this._facts) {
       this._update();
     }
 
-    // Handle disposal
     webviewView.onDidDispose(() => {
       this._panel = undefined;
     });
 
-    // Setup message handling
     webviewView.webview.onDidReceiveMessage(async message => {
       const parsed = ReportClientMessageSchema.safeParse(message);
       if (!parsed.success) {
@@ -128,16 +119,15 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
 
     logDebug('[WEBVIEW] Posting message to webview with validated data');
 
-    // Create slim payload to avoid VS Code message size limits (approx 1MB)
     const slimAnalysis = this._analysis
       ? {
           ...this._analysis,
-          // Truncate markdown if too large (8000 chars ~ 2-3KB)
+
           markdown:
             this._analysis.markdown?.length > 8000
               ? this._analysis.markdown.slice(0, 8000) + '... [truncated]'
               : this._analysis.markdown,
-          // Limit block items
+
           blocks: this._analysis.blocks.map(b => ({
             ...b,
             claims: b.claims.slice(0, 20),
@@ -149,11 +139,11 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     const slimFacts = this._facts
       ? {
           ...this._facts,
-          // Remove large hybridFacts object - UI uses summaries anyway
+
           hybridFacts: undefined,
           evidence: {
             ...this._facts.evidence,
-            // Truncate large evidence arrays if they exist in evidence object
+
             'findings.incompleteness': this._truncateEvidenceArray(
               this._facts.evidence['findings.incompleteness']
             ),
@@ -171,16 +161,14 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       facts: validatedFacts,
     };
 
-    // Check size and warn/slim further if needed
     const messageStr = JSON.stringify(message);
     logDebug(`[WEBVIEW] Message size: ${messageStr.length} chars`);
 
     if (messageStr.length > 1000000) {
       logError('[WEBVIEW] Message too large, further slimming needed');
-      // Emergency slimming: drop markdown and more evidence
+
       if (message.analysis) message.analysis.markdown = '';
       if (message.facts && message.facts.evidence) {
-        // Clear specific evidence fields
         message.facts.evidence = {} as any;
       }
     }
@@ -202,9 +190,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     return result;
   }
 
-  /**
-   * Navigate to a specific commit section in the report
-   */
   public navigateToCommitSection(commitSha: string): void {
     this._postMessage({
       type: 'scrollToSection',
@@ -212,9 +197,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /**
-   * Scroll to a specific section in the report (e.g., "overview", "incompleteness", "drift", "legacy", "timeline")
-   */
   public scrollToSection(sectionId: string): void {
     this._postMessage({
       type: 'scrollToSection',
@@ -222,9 +204,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /**
-   * Handle evidence click from the webview
-   */
   private async _handleEvidenceClick(evidence: EvidenceLink): Promise<void> {
     try {
       if (!this._facts) {
@@ -232,7 +211,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      // Resolve evidence path to file location
       const resolved = resolveEvidencePath(evidence.path, this._facts);
 
       if (resolved) {
@@ -261,7 +239,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
 
         await vscode.window.showTextDocument(doc, options);
       } else if (evidence.filePath) {
-        // Fallback: Direct file path provided
         const uri = vscode.Uri.file(evidence.filePath);
         const doc = await vscode.workspace.openTextDocument(uri);
         await vscode.window.showTextDocument(doc, {
@@ -271,7 +248,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
             : undefined,
         });
       } else if (evidence.symbolId) {
-        // Symbol-based navigation
         const filePath = evidence.symbolId.split(':')[0];
         if (filePath) {
           const uri = vscode.Uri.file(filePath);
@@ -279,7 +255,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
           await vscode.window.showTextDocument(doc, { preview: false });
         }
       } else {
-        // Try to resolve from facts JSON path using utility function
         const resolved = resolveEvidencePath(evidence.path, this._facts!);
         if (resolved && resolved.filePath) {
           const gitRoot = getGitRoot();
@@ -298,7 +273,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
               : undefined,
           });
         } else {
-          // Fallback: show a notification
           vscode.window.showInformationMessage(
             `Evidence: ${evidence.description}\nPath: ${evidence.path}`
           );
@@ -309,9 +283,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /**
-   * Post a message to the report webview (helper for external callers)
-   */
   public postMessage(message: any): void {
     const webview = this._panel?.webview;
     if (!webview) {
@@ -327,13 +298,9 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    // eslint-disable-next-line no-restricted-syntax
     this._panel?.webview.postMessage(parsed.data);
   }
 
-  /**
-   * Resolve evidence path to file location
-   */
   private _resolveEvidencePath(
     pathParts: string[],
     facts?: RefactorBundleFacts
@@ -347,7 +314,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
         const part = pathParts[i];
 
         if (part.includes('[')) {
-          // Handle array access like findings.incompleteness.missing[2]
           const match = part.match(/^([^[]+)\[(\d+)\]$/);
           if (match) {
             const [, arrayName, index] = match;
@@ -361,7 +327,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
         }
       }
 
-      // Try to extract file information from the resolved data
       if (current && typeof current === 'object') {
         if (current.symbol_id) {
           const filePath = current.symbol_id.split(':')[0];
@@ -371,16 +336,11 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
           return { filePath: current.filePath || current.path };
         }
       }
-    } catch (error) {
-      // Ignore resolution errors
-    }
+    } catch (error) {}
 
     return null;
   }
 
-  /**
-   * Generate HTML for the webview
-   */
   private _getHtmlForWebview(webview: vscode.Webview): string {
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'main.js')
@@ -389,7 +349,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
       vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'styles.css')
     );
 
-    // Use a nonce to only allow specific scripts to run
     const nonce = getNonce();
 
     return `<!DOCTYPE html>
@@ -409,9 +368,6 @@ export class RefactorReportProvider implements vscode.WebviewViewProvider {
   }
 }
 
-/**
- * Generate a nonce for CSP
- */
 function getNonce(): string {
   let text = '';
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

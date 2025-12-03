@@ -7,13 +7,12 @@ export async function installHooks(): Promise<void> {
   const gitRoot = getGitRoot();
   if (!gitRoot) {
     logError('Not in a git repository');
-    return; // Return early instead of throwing
+    return;
   }
 
   const hooksDir = path.join(gitRoot, '.git', 'hooks');
   const postCommitHook = path.join(hooksDir, 'post-commit');
 
-  // Create post-commit hook
   const hookContent = `#!/bin/sh
 # Git Context post-commit hook
 # Automatically analyze new commits
@@ -27,11 +26,9 @@ if [ -x "$CLI_PATH" ]; then
 fi
 `;
 
-  // Write hook file
   fs.writeFileSync(postCommitHook, hookContent, { mode: 0o755 });
   logInfo(`Installed post-commit hook at: ${postCommitHook}`);
 
-  // Install post-checkout hook (optional - for branch switching)
   const postCheckoutHook = path.join(hooksDir, 'post-checkout');
   const postCheckoutContent = `#!/bin/sh
 # Git Context post-checkout hook
@@ -48,7 +45,6 @@ fi
   fs.writeFileSync(postCheckoutHook, postCheckoutContent, { mode: 0o755 });
   logInfo(`Installed post-checkout hook at: ${postCheckoutHook}`);
 
-  // Install post-merge hook (optional - for pulling updates)
   const postMergeHook = path.join(hooksDir, 'post-merge');
   const postMergeContent = `#!/bin/sh
 # Git Context post-merge hook
@@ -70,7 +66,7 @@ export async function uninstallHooks(): Promise<void> {
   const gitRoot = getGitRoot();
   if (!gitRoot) {
     logError('Not in a git repository');
-    return; // Return early instead of throwing
+    return;
   }
 
   const hooksDir = path.join(gitRoot, '.git', 'hooks');

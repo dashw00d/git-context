@@ -6,7 +6,6 @@ import { CommitsProvider } from '../providers/commitsProvider';
 import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
 import { GitCommitWatcher } from '../watchers/gitCommitWatcher';
 
-// Store providers globally for the git watcher callback
 let globalProviders: {
   commitsProvider: CommitsProvider;
   activeBundleProvider: ActiveBundleProvider;
@@ -35,6 +34,5 @@ export async function registerGitWatcherFeature(
   });
   await watcher.start();
 
-  // Register the watcher directly as a disposable
   context.subscriptions.push(watcher);
 }

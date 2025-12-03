@@ -30,11 +30,9 @@ program
       const db = getDatabaseManager().getDatabase();
       const branchManager = new BranchManager(db);
 
-      // Load recent commits directly
       const recentCommits = await git.getRecentCommits(count);
       const shas = recentCommits.map(c => c.sha);
 
-      // Record commits in branch manager
       const branch = await git.getCurrentBranch();
       if (branch && recentCommits.length > 0) {
         for (const commit of recentCommits) {
@@ -43,7 +41,6 @@ program
         branchManager.updateBranchHead(branch, recentCommits[0].sha);
       }
 
-      // Then analyze
       await refactorPipeline.analyzeBundle(shas, false, undefined);
 
       logInfo(chalk.green('Analysis complete!'));
@@ -63,7 +60,6 @@ program
       const { getRefactorPipeline } = await import('../services/pipelineFactory');
       const refactorPipeline = await getRefactorPipeline();
 
-      // Analyze with workspace enabled to include staged and unstaged changes
       await refactorPipeline.analyzeBundle([], true, new Set(['staged', 'unstaged']));
 
       logInfo(chalk.green('Staged analysis complete!'));
@@ -83,7 +79,6 @@ program
       const { getRefactorPipeline } = await import('../services/pipelineFactory');
       const refactorPipeline = await getRefactorPipeline();
 
-      // Index and analyze the specific commit
       await refactorPipeline.indexCommits([sha]);
       await refactorPipeline.analyzeBundle([sha], false, undefined);
 
@@ -175,14 +170,12 @@ program
       let shas: string[] = [];
 
       if (options.reindex) {
-        // Force reindex all commits
         const allShas = prepare('SELECT sha FROM commits_metadata')
           .all()
           .map((r: any) => r.sha);
         shas = allShas;
         logInfo(chalk.blue(`Reindexing ${shas.length} commits...`));
       } else if (options.modules) {
-        // Reindex commits for specific modules
         const modules = options.modules.split(',').map((m: string) => m.trim());
         const modulePattern = modules
           .map((m: string) => `%legacy_${m}%`)
@@ -195,7 +188,6 @@ program
           chalk.blue(`Reindexing ${shas.length} commits for modules: ${modules.join(', ')}...`)
         );
       } else {
-        // Index recent commits
         const recentCommits = await git.getRecentCommits(10);
         shas = recentCommits.map(c => c.sha);
         logInfo(chalk.blue(`Indexing ${shas.length} recent commits...`));

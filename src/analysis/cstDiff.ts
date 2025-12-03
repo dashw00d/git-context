@@ -42,16 +42,13 @@ export class CstDiffManager {
       };
     }
 
-    // Parse both versions
     const oldTree = await this.parser.parse(oldContent, language);
     const newTree = await this.parser.parse(newContent, language);
 
     if (!oldTree || !newTree) {
-      // Fallback: simple fact comparison
       return this.simpleFactDiff(oldFacts, newFacts);
     }
 
-    // Try Difftastic first (for text-based CST)
     try {
       const difftasticResult = await this.difftastic.runDifftastic(
         oldContent,
@@ -63,7 +60,7 @@ export class CstDiffManager {
       return this.mapDifftasticToFacts(difftasticResult, oldFacts, newFacts, oldTree, newTree);
     } catch (error) {
       logDebug(`[CstDiff] Difftastic failed, using tree-sitter diff: ${error}`);
-      // Fallback: Tree-sitter query-based diff
+
       return this.treeSitterDiff(oldTree, newTree, oldFacts, newFacts);
     }
   }
@@ -82,21 +79,17 @@ export class CstDiffManager {
     const addedFacts: HybridFact[] = [];
     const removedFacts: HybridFact[] = [];
 
-    // Create maps for quick lookup
     const oldFactMap = new Map<string, HybridFact>();
     const newFactMap = new Map<string, HybridFact>();
 
     oldFacts.forEach(f => oldFactMap.set(f.id, f));
     newFacts.forEach(f => newFactMap.set(f.id, f));
 
-    // Find added facts (in new but not in old)
     for (const newFact of newFacts) {
       const oldFact = oldFactMap.get(newFact.id);
       if (!oldFact) {
-        // Check if it's a rename (same DNA, different ID)
         const oldByDna = Array.from(oldFactMap.values()).find(f => f.dnaId === newFact.dnaId);
         if (oldByDna) {
-          // Renamed/modified
           const delta: DeltaChange = {
             type: 'modified',
             oldDna: oldByDna.dnaId,
@@ -111,7 +104,6 @@ export class CstDiffManager {
           addedFacts.push(newFact);
         }
       } else {
-        // Check if modified
         const isModified = this.isFactModified(
           oldFact,
           newFact,
@@ -137,10 +129,8 @@ export class CstDiffManager {
       }
     }
 
-    // Find removed facts (in old but not in new)
     for (const oldFact of oldFacts) {
       if (!newFactMap.has(oldFact.id)) {
-        // Check if it's a rename (same DNA, different ID)
         const newByDna = Array.from(newFactMap.values()).find(f => f.dnaId === oldFact.dnaId);
         if (!newByDna) {
           removedFacts.push(oldFact);
@@ -161,27 +151,22 @@ export class CstDiffManager {
     oldTree?: any,
     newTree?: any
   ): boolean {
-    // Check DNA change
     if (oldFact.dnaId !== newFact.dnaId) {
       return true;
     }
 
-    // Check location change
     if (oldFact.location.start.line !== newFact.location.start.line) {
       return true;
     }
 
-    // Check if line is in difftastic highlights
     const factLine = newFact.location.start.line;
     const isHighlighted = difftasticResult.highlights.some(h => {
-      // Parse highlight line number (simplified)
       const match = h.match(/line (\d+)/i);
       return match && parseInt(match[1]) === factLine;
     });
 
     if (isHighlighted) return true;
 
-    // Check structural type change if trees are available
     if (oldTree && newTree) {
       const oldNode = this.findNodeForFact(oldTree, oldFact);
       const newNode = this.findNodeForFact(newTree, newFact);
@@ -195,7 +180,6 @@ export class CstDiffManager {
 
   private findNodeForFact(tree: any, fact: HybridFact): any {
     try {
-      // Assuming fact.location is 0-indexed (standard for VS Code / Tree-sitter in this codebase)
       return tree.rootNode.descendantForPosition(
         { row: fact.location.start.line, column: fact.location.start.column },
         { row: fact.location.end.line, column: fact.location.end.column }
@@ -214,7 +198,6 @@ export class CstDiffManager {
     oldFacts: HybridFact[],
     newFacts: HybridFact[]
   ): CstDiffResult {
-    // Simplified diff: compare facts directly
     return this.simpleFactDiff(oldFacts, newFacts);
   }
 
@@ -232,11 +215,9 @@ export class CstDiffManager {
     oldFacts.forEach(f => oldFactMap.set(f.id, f));
     newFacts.forEach(f => newFactMap.set(f.id, f));
 
-    // Find added and modified
     for (const newFact of newFacts) {
       const oldFact = oldFactMap.get(newFact.id);
       if (!oldFact) {
-        // Check for rename by DNA
         const oldByDna = Array.from(oldFactMap.values()).find(f => f.dnaId === newFact.dnaId);
         if (oldByDna) {
           const delta: DeltaChange = {
@@ -272,7 +253,6 @@ export class CstDiffManager {
       }
     }
 
-    // Find removed
     for (const oldFact of oldFacts) {
       if (!newFactMap.has(oldFact.id)) {
         const newByDna = Array.from(newFactMap.values()).find(f => f.dnaId === oldFact.dnaId);
@@ -293,14 +273,11 @@ export class CstDiffManager {
     newSerialized: string,
     filePath: string
   ): Promise<CstDiffResult> {
-    // Parse serialized ASTs back to trees (if needed)
-    // For now, use content-based diff
     const language = detectLanguage(filePath);
     if (!language) {
       return { changedFacts: [], addedFacts: [], removedFacts: [] };
     }
 
-    // Try to parse as content
     const oldTree = await this.parser.parse(oldSerialized, language);
     const newTree = await this.parser.parse(newSerialized, language);
 
@@ -308,7 +285,6 @@ export class CstDiffManager {
       return { changedFacts: [], addedFacts: [], removedFacts: [] };
     }
 
-    // Use Difftastic on serialized strings
     try {
       const difftasticResult = await this.difftastic.runDifftastic(
         oldSerialized,
@@ -317,7 +293,6 @@ export class CstDiffManager {
         filePath
       );
 
-      // Extract facts from both trees
       const oldFacts = await this.extractFactsFromTree(oldTree, filePath);
       const newFacts = await this.extractFactsFromTree(newTree, filePath);
 
@@ -328,19 +303,14 @@ export class CstDiffManager {
     }
   }
 
-  /**
-   * Extract facts from a tree (helper for delta computation)
-   */
   private async extractFactsFromTree(tree: any, filePath: string): Promise<HybridFact[]> {
     const language = detectLanguage(filePath);
     if (!language) return [];
 
-    // Use parser's hybrid extraction
     return this.parser.extractHybridFacts(tree, filePath, language);
   }
 }
 
-// Singleton instance
 let cstDiffManagerInstance: CstDiffManager | null = null;
 
 export function getCstDiffManager(): CstDiffManager {

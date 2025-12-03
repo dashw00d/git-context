@@ -45,7 +45,6 @@ export class CockpitEffects {
       case 'BUNDLE_CLEARED':
         await this.updateContexts();
         break;
-      // Add other side effects here
     }
   }
 
@@ -66,7 +65,7 @@ export class CockpitEffects {
     if (scope === 'all' || scope === 'bundle') promises.push(this.refreshBundle());
     if (scope === 'all' || scope === 'symbols') promises.push(this.refreshSymbols());
     if (scope === 'all' || scope === 'reports') promises.push(this.refreshReports());
-    // Workspace is usually part of commits refresh in the old logic, but let's be explicit
+
     if (scope === 'all' || scope === 'commits') promises.push(this.refreshWorkspace());
 
     await Promise.all(promises);
@@ -86,13 +85,10 @@ export class CockpitEffects {
     const commits = await this.providers.commitsProvider.exportCommitsDto(
       effectiveLimit + this.providers.commitsProvider.loadMoreOffset
     );
-    const hasMore = commits.length >= baseLimit; // Simplified check
+    const hasMore = commits.length >= baseLimit;
 
-    // We need to map commits to DTOs (including 'analyzed' status)
-    // This requires DB access similar to updateCommitsState
     const { ANALYSIS_VERSION } = await import('../storage/schema');
 
-    // Check analysis status
     const analyzedStatuses = await Promise.all(
       commits.map(async (commit: any) => {
         const result = prepare(
@@ -153,16 +149,8 @@ export class CockpitEffects {
 
   private async refreshBundle() {
     if (!this.providers.activeBundleProvider) return;
-    // activeBundleProvider updates are usually reactive to report generation
-    // But if we need to pull:
+
     const bundleFacts = this.providers.activeBundleProvider.exportBundleFacts();
-    // We don't have a BUNDLE_UPDATED action that takes facts directly?
-    // ANALYSIS_COMPLETED does.
-    // But if we just want to refresh the UI from existing provider state:
-    // We might need a generic BUNDLE_REFRESHED action or reuse LEGACY
-    // For now, let's assume bundle is pushed via ANALYSIS_COMPLETED.
-    // But if we reload window, we need to pull.
-    // Let's use LEGACY for now to update bundleFacts/Summary
 
     if (bundleFacts) {
       const summary = {
@@ -233,17 +221,14 @@ export class CockpitEffects {
   }
 
   private mapScope(sha: string): 'staged' | 'unstaged' | 'history' {
-    // Use proper workspace SHA parsing instead of string matching
     try {
       const { parseWorkspaceSha } = require('../utils/workspace');
       const parsed = parseWorkspaceSha(sha);
       if (parsed) {
         return parsed.scope;
       }
-    } catch {
-      // Fall through to heuristic
-    }
-    // Fallback heuristic
+    } catch {}
+
     if (sha.includes('staged')) return 'staged';
     if (sha.includes('unstaged')) return 'unstaged';
     return 'history';
@@ -269,9 +254,7 @@ export class CockpitEffects {
       try {
         const current = await git.getCurrentBranch();
         branch = current ?? 'HEAD';
-      } catch {
-        // fall back to HEAD marker when branch is unavailable
-      }
+      } catch {}
 
       const stagedFiles = await git.getStagedFiles().catch(() => []);
       const unstagedFiles = await git.getUnstagedFiles().catch(() => []);
@@ -301,9 +284,7 @@ export class CockpitEffects {
         try {
           const headSha = await git.getHeadSha();
           pushUnique(headSha);
-        } catch {
-          // no HEAD available
-        }
+        } catch {}
 
         const recent = await git.getRecentCommits(depth * 2);
         for (const commit of recent) {
@@ -323,7 +304,6 @@ export class CockpitEffects {
           `${ordered.map(s => s.slice(0, 8)).join(', ')}`
       );
 
-      // keep store selection in sync with the computed order
       this.store.dispatch({
         type: 'SELECTION_SET',
         payload: { shas: ordered },

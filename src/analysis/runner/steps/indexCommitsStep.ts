@@ -16,15 +16,12 @@ export function createIndexCommitsStep(
     async run(state: PipelineState) {
       const shas = state.selectedCommitShas;
 
-      // Explicit worker pool: Wrap ensureCommitsIndexed with p-limit
-      // to enforce true concurrency across all commits (not just topo-level parallelism)
       const startTime = Date.now();
 
       logDebug(
         `[IndexCommits] Starting with concurrency=${concurrency} for ${shas.length} commits`
       );
 
-      // Process commits with explicit concurrency control
       const facts = await commitIndexer.ensureCommitsIndexed(shas, concurrency);
 
       const duration = Date.now() - startTime;

@@ -1,9 +1,9 @@
+import type { ScopeSet } from '../facts/scope';
 import { getDatabase } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
 import { DeltaChange, HybridFact, isCstFact } from '../types/cstFacts';
 import { logDebug, logError } from '../utils/logger';
 import { computeHybridDna } from './symbolDna';
-import type { ScopeSet } from '../facts/scope';
 
 /**
  * Manager for CST timeline tracking (hybrid facts evolution)
@@ -24,22 +24,17 @@ export class CstTimelineManager {
       return;
     }
 
-    // Ensure hybrid_facts table exists
     this.ensureTableExists();
 
-    // Compute file hash for this version
     const fileHash = this.computeFileHash(facts);
 
-    // Get prior facts if prevHash provided
     const priorFacts = prevHash ? await this.getFactsByHash(filePath, prevHash) : null;
 
-    // Compute deltas for each fact
     const factsWithDeltas = facts.map(fact => {
       const delta = this.computeDelta(fact, priorFacts);
       return { fact, delta };
     });
 
-    // Update timelines
     for (const { fact, delta } of factsWithDeltas) {
       await this.appendToTimeline(filePath, commitSha, fact, delta, fileHash);
     }
@@ -61,7 +56,6 @@ export class CstTimelineManager {
     this.ensureTableExists();
 
     try {
-      // Get all facts for this file/version
       const stmt = prepare(`
         SELECT serialized_fact FROM hybrid_facts
         WHERE file_path = ? AND version = ?
@@ -71,7 +65,6 @@ export class CstTimelineManager {
       const rows = stmt.all([filePath, commitSha]) as any[];
       if (!rows || rows.length === 0) return null;
 
-      // Deserialize all facts
       return rows.map(row => JSON.parse(row.serialized_fact)) as HybridFact[];
     } catch (error) {
       logDebug(`[CstTimeline] Error getting prior facts: ${error}`);
@@ -93,7 +86,6 @@ export class CstTimelineManager {
     this.ensureTableExists();
 
     try {
-      // Use IN clause for batch retrieval
       const placeholders = filePaths.map(() => '?').join(',');
       const stmt = prepare(`
         SELECT file_path, serialized_fact
@@ -105,7 +97,6 @@ export class CstTimelineManager {
       const rows = stmt.all([...filePaths, version]) as any[];
       if (!rows || rows.length === 0) return new Map();
 
-      // Group by file path
       const factsByFile = new Map<string, HybridFact[]>();
       for (const row of rows) {
         if (!factsByFile.has(row.file_path)) {
@@ -126,13 +117,12 @@ export class CstTimelineManager {
    * Accepts a map of filePath → version for efficient batch queries
    */
   async getPriorFactsBatchWithVersions(
-    versionMap: Map<string, string> // filePath → version
+    versionMap: Map<string, string>
   ): Promise<Map<string, HybridFact[]>> {
     if (!versionMap || versionMap.size === 0) {
       return new Map();
     }
 
-    // Group by version for efficient batch queries
     const byVersion = new Map<string, string[]>();
     for (const [path, version] of versionMap) {
       if (!byVersion.has(version)) {
@@ -141,7 +131,6 @@ export class CstTimelineManager {
       byVersion.get(version)!.push(path);
     }
 
-    // Batch query per version
     const allFacts = new Map<string, HybridFact[]>();
     for (const [version, paths] of byVersion) {
       const facts = await this.getPriorFactsBatch(paths, version);
@@ -160,7 +149,6 @@ export class CstTimelineManager {
     if (!db) return null;
 
     try {
-      // Get all facts for this file/hash
       const stmt = prepare(`
         SELECT serialized_fact FROM hybrid_facts
         WHERE file_path = ? AND hash = ?
@@ -170,7 +158,6 @@ export class CstTimelineManager {
       const rows = stmt.all([filePath, hash]) as any[];
       if (!rows || rows.length === 0) return null;
 
-      // Deserialize all facts
       return rows.map(row => JSON.parse(row.serialized_fact)) as HybridFact[];
     } catch (error) {
       logDebug(`[CstTimeline] Error getting facts by hash: ${error}`);
@@ -198,18 +185,14 @@ export class CstTimelineManager {
       delta,
     };
 
-    // Get existing timeline or create new
     let timeline: Array<{ version: string; dna: string; delta: DeltaChange }> = [];
 
     if (isCstFact(fact)) {
-      // For CST facts, use existing timeline
       timeline = [...fact.timeline, timelineEntry];
     } else {
-      // For symbols, create new timeline entry
       timeline = [timelineEntry];
     }
 
-    // Update or insert fact
     const stmt = prepare(`
       INSERT OR REPLACE INTO hybrid_facts
       (file_path, version, fact_id, dna_id, serialized_fact, timeline_json, hash, created_at)
@@ -239,7 +222,6 @@ export class CstTimelineManager {
       };
     }
 
-    // Find matching fact in prior version (by DNA or name)
     const priorFact = priorFacts.find(
       p => p.dnaId === fact.dnaId || (p.name === fact.name && this.sameKind(p, fact))
     );
@@ -251,10 +233,6 @@ export class CstTimelineManager {
       };
     }
 
-    // Check if removed (fact exists in prior but not in current)
-    // This is handled at file level, so here we assume it's modified if it exists
-
-    // Check if modified (DNA changed or location changed)
     const dnaChanged = priorFact.dnaId !== fact.dnaId;
     const locationChanged =
       priorFact.location.start.line !== fact.location.start.line ||
@@ -274,9 +252,8 @@ export class CstTimelineManager {
       };
     }
 
-    // No change
     return {
-      type: 'modified', // Still mark as modified for timeline tracking
+      type: 'modified',
       oldDna: priorFact.dnaId,
       newDna: fact.dnaId,
     };
@@ -319,7 +296,6 @@ export class CstTimelineManager {
     if (!db) return;
 
     try {
-      // Check if table exists
       const checkStmt = prepare(`
         SELECT name FROM sqlite_master
         WHERE type='table' AND name='hybrid_facts'
@@ -327,7 +303,6 @@ export class CstTimelineManager {
       const exists = checkStmt.get();
 
       if (!exists) {
-        // Create table
         const createStmt = prepare(`
           CREATE TABLE IF NOT EXISTS hybrid_facts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -344,7 +319,6 @@ export class CstTimelineManager {
         `);
         createStmt.run();
 
-        // Create indexes
         const idx1 = prepare(`
           CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version
           ON hybrid_facts(file_path, version)
@@ -371,7 +345,6 @@ export class CstTimelineManager {
   }
 }
 
-// Singleton instance
 let timelineManagerInstance: CstTimelineManager | null = null;
 
 export function getCstTimelineManager(): CstTimelineManager {
@@ -381,56 +354,46 @@ export function getCstTimelineManager(): CstTimelineManager {
   return timelineManagerInstance;
 }
 
-/**
- * Determine prior version in timeline chain: unstaged → staged → HEAD → commits
- * Used for drift detection to compare current vs prior state
- * Throws error if version is not in expected timeline chain (fail-fast behavior)
- */
 export function getPriorVersionInChain(
   currentVersion: string,
   scope: ScopeSet,
   filePath: string,
   commitShas: string[]
 ): string {
-  // Unstaged → check for staged, then HEAD/oldest commit
   if (currentVersion === 'workspace-unstaged') {
     if (scope.stagedFiles?.has(filePath)) return 'workspace-staged';
     return 'HEAD';
   }
 
-  // Staged → HEAD or most recent commit
   if (currentVersion === 'workspace-staged') {
     return 'HEAD';
   }
 
-  // HEAD → most recent commit (if available)
   if (currentVersion === 'HEAD') {
     if (commitShas.length === 0) {
       logError(
         `Cannot determine prior version for HEAD - no commits in timeline chain. ` +
           `File: ${filePath}`
       );
-      return ''; // Return empty string instead of throwing
+      return '';
     }
     return commitShas[0];
   }
 
-  // Commit SHA → previous commit in chain (older)
   const index = commitShas.indexOf(currentVersion);
   if (index === -1) {
     logError(
       `Version ${currentVersion.substring(0, 8)} not found in timeline chain. ` +
         `File: ${filePath}, Expected chain: [${commitShas.map(s => s.substring(0, 8)).join(', ')}]`
     );
-    return ''; // Return empty string instead of throwing
+    return '';
   }
   if (index === commitShas.length - 1) {
-    // At oldest commit - no prior version available
     logError(
       `No prior version for ${currentVersion.substring(0, 8)} - already at oldest commit. ` +
         `File: ${filePath}`
     );
-    return ''; // Return empty string instead of throwing
+    return '';
   }
-  return commitShas[index + 1]; // Previous (older) commit
+  return commitShas[index + 1];
 }

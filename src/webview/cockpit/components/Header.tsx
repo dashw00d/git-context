@@ -91,7 +91,6 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           className="cockpit__button ghost danger"
           onClick={() => {
-            // Reset all logic is handled by backend command with confirmation
             postMessageWithTracing(vscode, { type: 'resetAll' });
           }}
           disabled={state.isAnalyzing}

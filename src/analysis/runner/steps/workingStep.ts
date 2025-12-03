@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-syntax */
 import { getWorkingSnapshot } from '../../../facts/workingSnapshot';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 

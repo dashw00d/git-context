@@ -20,15 +20,12 @@ async function getSymbolsForVersion(
   const removed: SymbolInfo[] = [];
   const added: SymbolInfo[] = [];
 
-  // For workspace versions, skip for now (would need snapshot manager comparison)
   if (version === 'workspace-unstaged' || version === 'workspace-staged') {
     return { removed, added };
   }
 
-  // For HEAD, use the newest commit SHA
   const sha = version === 'HEAD' ? state.selectedCommitShas?.[0] || 'HEAD' : version;
 
-  // Get symbols with change types
   const symbolsStmt = prepare(`
     SELECT s.symbol_id, s.name, s.kind, s.path, s.signature, s.change_type,
            sv.dna_id
@@ -42,19 +39,16 @@ async function getSymbolsForVersion(
     try {
       let blobSha: string;
 
-      // For deleted symbols, get blob SHA from parent commit
       if (row.change_type === 'removed') {
         const commitInfo = await git.getCommitInfo(sha);
         if (!commitInfo.parent) {
-          continue; // Can't get parent, skip
+          continue;
         }
         blobSha = await git.getBlobSha(commitInfo.parent, row.path);
       } else {
-        // For added symbols, get blob SHA from current commit
         blobSha = await git.getBlobSha(sha, row.path);
       }
 
-      // Get snapshot with full symbol data
       const snapshotStmt = prepare(`
         SELECT symbols_json FROM file_snapshots
         WHERE blob_sha = ? AND file_path = ?
@@ -66,7 +60,6 @@ async function getSymbolsForVersion(
         const fullSymbol = symbols.find(s => s.id === row.symbol_id);
 
         if (fullSymbol) {
-          // Ensure dnaId is set
           const symbolWithDna: SymbolInfo = {
             ...fullSymbol,
             dnaId: row.dna_id || fullSymbol.dnaId || fullSymbol.id,
@@ -80,7 +73,6 @@ async function getSymbolsForVersion(
         }
       }
     } catch (error) {
-      // Skip symbols where we can't get full data
       continue;
     }
   }
@@ -95,13 +87,12 @@ export function createMovedBlockStep(): PipelineStep {
     deps: ['index_commits'],
 
     async run(state: PipelineState) {
-      const detector = new MovedBlockDetectorV2(); // V2 detector with BaseDetector enhancements
+      const detector = new MovedBlockDetectorV2();
       const git = new GitOperations();
       const db = getDatabaseManager().getDatabase();
       const allMoved: any[] = [];
       const crossVersionLineage: CrossVersionSymbolLineage[] = [];
 
-      // 1. Original single-commit move detection (keep for backward compatibility)
       for (const sha of state.selectedCommitShas) {
         const { removed, added } = await getSymbolsForVersion(sha, state, db, git);
 
@@ -111,27 +102,21 @@ export function createMovedBlockStep(): PipelineStep {
         }
       }
 
-      // 2. Cross-version move detection (loop through timeline pairs)
       if (state.explicitTimeline && state.explicitTimeline.length > 1) {
         logDebug(
           `[MovedBlockStep] Detecting cross-version moves across ${state.explicitTimeline.length} versions`
         );
 
         for (let i = 0; i < state.explicitTimeline.length - 1; i++) {
-          const currentVersion = state.explicitTimeline[i]; // Newer version
-          const nextVersion = state.explicitTimeline[i + 1]; // Older version
+          const currentVersion = state.explicitTimeline[i];
+          const nextVersion = state.explicitTimeline[i + 1];
 
-          // Get symbols for both versions
           const currentSymbols = await getSymbolsForVersion(currentVersion, state, db, git);
           const nextSymbols = await getSymbolsForVersion(nextVersion, state, db, git);
 
-          // Match removed symbols from older version (nextVersion) with added symbols from newer version (currentVersion)
-          // This finds symbols that were moved: removed in older commit, added in newer commit
           const matches = detector.matchByDna(nextSymbols.removed, currentSymbols.added);
 
-          // Generate lineage entries
           for (const match of matches) {
-            // Determine move type
             let moveType: 'rename' | 'relocate' | 'refactor' = 'relocate';
             if (match.removed.id !== match.added.id && match.removed.dnaId === match.added.dnaId) {
               moveType = 'rename';
@@ -144,8 +129,8 @@ export function createMovedBlockStep(): PipelineStep {
             crossVersionLineage.push({
               symbolId: match.added.id,
               previousSymbolId: match.removed.id,
-              sourceVersion: nextVersion, // Older version where it was removed
-              destVersion: currentVersion, // Newer version where it was added
+              sourceVersion: nextVersion,
+              destVersion: currentVersion,
               moveType,
               versionDescription: `${describeVersionPosition(
                 nextVersion,
@@ -158,7 +143,7 @@ export function createMovedBlockStep(): PipelineStep {
         logDebug(`[MovedBlockStep] Found ${crossVersionLineage.length} cross-version symbol moves`);
       }
 
-      state.movedBlocks = allMoved.slice(0, 50); // Top moves
+      state.movedBlocks = allMoved.slice(0, 50);
       state.movedLineage = crossVersionLineage;
     },
   };

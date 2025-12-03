@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-// Basic Types
-// Basic Types
 export const HotspotSchema = z.object({
   path: z.string(),
   score: z.number(),
@@ -37,7 +35,6 @@ export const TreemapNodeSchema: z.ZodType<TreemapNode> = z.object({
   removed: z.number().optional(),
 });
 
-// Bundle Facts Schema (RefactorBundleFacts)
 export const BundleFactsSchema = z
   .object({
     version: z.string(),
@@ -69,7 +66,7 @@ export const BundleFactsSchema = z
         'scope.files': z.array(z.string()).optional(),
         'working.symbols': z.array(z.any()).optional(),
       })
-      .passthrough(), // Allow other evidence keys
+      .passthrough(),
     findings: z
       .object({
         hotspots: z.array(HotspotSchema).optional(),
@@ -84,7 +81,7 @@ export const BundleFactsSchema = z
           .object({
             mixedTargets: z.number(),
             oldNamespaces: z.number(),
-            conventionDrift: z.any().optional(), // Detailed schema can be added later if needed
+            conventionDrift: z.any().optional(),
             mixedConventionFiles: z.number().optional(),
           })
           .optional(),
@@ -106,7 +103,6 @@ export const BundleFactsSchema = z
   })
   .passthrough();
 
-// Bundle View Schema
 export const BundleViewSchema = z
   .object({
     tier: z.enum(['hybrid', 'structure', 'semantics']),
@@ -125,7 +121,6 @@ export const BundleViewSchema = z
   })
   .passthrough();
 
-// DTO Schemas
 export const CommitDTOSchema = z.object({
   sha: z.string(),
   shortSha: z.string(),
@@ -141,7 +136,7 @@ export const CommitDTOSchema = z.object({
 
 export const FileDTOSchema = z.object({
   path: z.string(),
-  status: z.string(), // 'added' | 'modified' | ...
+  status: z.string(),
 });
 
 export const SymbolDTOSchema = z.object({
@@ -207,7 +202,6 @@ export const ExplorerNodeSchema: z.ZodType<any> = z.lazy(() =>
   })
 );
 
-// Client Message Schemas
 export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('setActiveSection'),
@@ -243,7 +237,7 @@ export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('openActiveReport') }),
   z.object({ type: z.literal('bundleCancel') }),
   z.object({ type: z.literal('setSymbolFilterText'), text: z.string() }),
-  z.object({ type: z.literal('setSymbolKindFilter'), kind: z.string() }), // Kind is dynamic, keep string or use enum if known
+  z.object({ type: z.literal('setSymbolKindFilter'), kind: z.string() }),
   z.object({
     type: z.literal('setSymbolChangeFilter'),
     change: z.enum(['all', 'added', 'modified', 'removed']),
@@ -279,7 +273,7 @@ export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('deleteBundle'), id: z.string() }),
   z.object({ type: z.literal('switchBundle'), id: z.string() }),
   z.object({ type: z.literal('updateBundleConfig'), config: BundleConfigSchema.partial() }),
-  // Special internal types
+
   z.object({ type: z.literal('ready') }),
   z.object({ type: z.literal('clearError') }),
   z.object({ type: z.literal('navigateToFrame'), frame: ContextFrameSchema }),
@@ -332,9 +326,9 @@ export const CockpitStateSchema = z
     symbols: z.array(SymbolDTOSchema),
     symbolFilterText: z.string(),
     symbolKindFilter: z.string(),
-    symbolChangeFilter: z.string(), // 'all' | SymbolChangeType
+    symbolChangeFilter: z.string(),
     activeSymbolId: z.string().nullable(),
-    activeSymbolHistory: z.array(z.any()), // SymbolHistoryEntryDTO
+    activeSymbolHistory: z.array(z.any()),
     reports: z.array(ReportDTOSchema),
     reportsFilterText: z.string(),
     reportsBranchFilter: z.string(),
@@ -410,7 +404,6 @@ export const CockpitHostMessageSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
-// Action Payloads
 export const ActionPayloadSchemas: Record<string, z.ZodType<any>> = {
   BUNDLE_VIEW_UPDATED: z.object({
     view: BundleViewSchema,
@@ -422,6 +415,6 @@ export const ActionPayloadSchemas: Record<string, z.ZodType<any>> = {
   }),
   FRAME_DATA_UPDATED: z.object({
     frameId: z.string(),
-    data: z.union([BundleViewSchema, z.any()]), // Could be bundle view or other frame data
+    data: z.union([BundleViewSchema, z.any()]),
   }),
 };

@@ -33,26 +33,20 @@ export class AnalysisController {
     const gitRoot = (await import('../../../utils/config')).getGitRoot();
     if (!gitRoot || !this.view) return;
 
-    // Symbol IDs use single colon separator (e.g., "file.php:method_name")
-    // Detect symbols by checking if there's a colon after a file extension
     const symbolMatch = frameId.match(/^(.+\.\w+):(.+)$/);
     const level: 'file' | 'symbol' = symbolMatch ? 'symbol' : 'file';
     let targetPath = frameId;
 
     if (level === 'symbol' && symbolMatch) {
-      targetPath = symbolMatch[1]; // Extract file path before the colon
+      targetPath = symbolMatch[1];
     }
 
-    // Navigation is handled by the webview before calling analyzeFrame.
-    // We only enrich the frame with analysis data via tier completion actions.
     const { FrameAnalyzer } = await import('./FrameAnalyzer');
     const analyzer = new FrameAnalyzer(this.view);
     const state = getStore().getState();
     const facts = state.bundleFacts;
     const activeFrame = state.activeFrame.id;
 
-    // TIER 1: Structure (Always succeeds)
-    // Capture tier1Data to thread through to tier 3
     let tier1Data: any;
     this.pipelineDebugger.startTier(frameId, 1, activeFrame);
     try {
@@ -73,7 +67,6 @@ export class AnalysisController {
       return;
     }
 
-    // TIER 2: Hybrid Metadata (Best effort)
     this.pipelineDebugger.startTier(frameId, 2, getStore().getState().activeFrame.id);
     try {
       const tier2Data = await analyzer.analyzeTier2(frameId, targetPath, facts);
@@ -90,11 +83,8 @@ export class AnalysisController {
         type: 'FRAME_ANALYSIS_TIER_FAILED',
         payload: { frameId, tier: 2, error: String(error) },
       });
-      // Continue to Tier 3 even if Tier 2 fails
     }
 
-    // TIER 3: Semantics (Optional)
-    // Use tier1Data.content directly to avoid race condition with reducer
     this.pipelineDebugger.startTier(frameId, 3, getStore().getState().activeFrame.id);
     try {
       const content = tier1Data?.content || '';
@@ -120,26 +110,22 @@ export class AnalysisController {
     try {
       const { getRefactorPipeline } = await import('../../../services/pipelineFactory');
       const pipeline = await getRefactorPipeline();
-      // Resolve the skeleton of files based on the configuration
+
       const skeleton = await pipeline.workspaceIndexer.getSkeleton(config);
       this.skeletonCache = skeleton;
 
       if (skeleton) {
-        // Convert skeleton files to explorer nodes with 'scanning' status
-        // This provides immediate visual feedback in the Explorer tree
         const nodes = skeleton.files.map((f: string) => ({
           id: f,
           name: f.split('/').slice(-1)[0] || f,
           type: 'file',
-          status: 'scanning', // Visual feedback
+          status: 'scanning',
           children: [],
         }));
 
         getStore().dispatch({ type: 'EXPLORER_UPDATED', payload: { nodes } });
         logInfo(`[Cockpit] Sent skeleton update (${nodes.length} files scanning)`);
 
-        // NEW: Update Bundle View with Skeleton immediately
-        // This populates the main Bundle Stage with "Scanning..." cards
         const pendingHotspots = skeleton.files.map((f: string) => ({
           path: f,
           name: f.split('/').slice(-1)[0] || f,
@@ -170,19 +156,12 @@ export class AnalysisController {
 
   async updateBundleData() {
     try {
-      // Always fetch the latest state to avoid race conditions with async updates
       const state = getStore().getState();
       const facts = state.bundleFacts;
 
-      // If we have no facts yet, check if we have a skeleton to at least show something
       if (!facts && this.skeletonCache) {
-        // We are likely in the "scanning" phase, don't overwrite with empty data
-        // unless we explicitly want to clear.
-        // However, if we are called, it might be to refresh the view.
-        // Let's proceed but be careful not to clear existing hotspots if we are just waiting.
       }
 
-      // Fix: Use stable cache key (SHA set or bundle id) instead of just newestSha
       const cacheKey = facts?.bundle?.shas ? facts.bundle.shas.join(',') : 'workspace';
       let hotspots: any[] = [];
       if (facts) {
@@ -205,7 +184,6 @@ export class AnalysisController {
             removed: h.removed,
           }));
 
-          // If hotspots are missing in facts, fetch churn from git as a fallback
           if (!hotspots.length) {
             try {
               const { GitOperations } = await import('../../../analysis/git');
@@ -224,7 +202,7 @@ export class AnalysisController {
               logDebug(`[Cockpit] Fallback hotspots failed: ${err}`);
             }
           }
-          // Cache Management: LRU with max 10 entries
+
           if (this.hotspotCache.size >= 10) {
             const firstKey = this.hotspotCache.keys().next().value;
             if (firstKey) this.hotspotCache.delete(firstKey);
@@ -232,16 +210,12 @@ export class AnalysisController {
           this.hotspotCache.set(cacheKey, hotspots);
         }
       } else {
-        // If no cache and no facts, fetch churn to populate heatmap
         if (!hotspots.length) {
           try {
             const { GitOperations } = await import('../../../analysis/git');
             const gitOps = new GitOperations();
             const churn = await gitOps.getHotspots(100);
 
-            // RACE CONDITION CHECK:
-            // If facts arrived while we were awaiting gitOps, abort this fallback update
-            // because the facts-based update (triggered by store change) should take precedence.
             const currentState = getStore().getState();
             if (currentState.bundleFacts) {
               logInfo('[Cockpit] Aborting fallback bundle update (facts arrived)');
@@ -263,7 +237,6 @@ export class AnalysisController {
         }
       }
 
-      // Basic risk summary for bundle inspector
       const driftSymbols =
         ((facts?.findings as any)?.patternDrift?.conventionDrift?.driftSymbols as any[]) || [];
       const topRisks = driftSymbols.slice(0, 5).map((d: any) => ({
@@ -296,16 +269,16 @@ export class AnalysisController {
       logInfo(`[Cockpit] Sent bundle data (${hotspots.length} hotspots)`);
     } catch (error) {
       logError('[Cockpit] Failed to update bundle data', error);
-      // Send empty data to stop loading state
+
       this.pushBundleView({ hotspots: [], error: String(error) });
     }
   }
 
   private pushBundleView(view: BundleView) {
     const store = getStore();
-    // Increment version to ensure monotonic ordering
+
     this.bundleViewVersion++;
-    // Only dispatch BUNDLE_VIEW_UPDATED - the reducer will update activeFrame.data for root
+
     store.dispatch({
       type: 'BUNDLE_VIEW_UPDATED',
       payload: { view, version: this.bundleViewVersion },
@@ -314,12 +287,10 @@ export class AnalysisController {
 
   private buildTreemap(hotspots: any[]) {
     try {
-      // Guard against excessive size
       const MAX_HOTSPOTS = 1000;
       const MAX_DEPTH = 10;
       const limitedHotspots = hotspots.slice(0, MAX_HOTSPOTS);
 
-      // Aggregate churn per folder/file for a simple treemap structure, weight by churn*log(size)
       const root: any = {};
       const scores: number[] = [];
 
@@ -327,7 +298,6 @@ export class AnalysisController {
         if (!h.path) continue;
         const parts = h.path.split('/').filter(Boolean);
 
-        // Enforce depth limit
         if (parts.length > MAX_DEPTH) {
           logDebug(`[Treemap] Skipping deep path (${parts.length} levels): ${h.path}`);
           continue;
@@ -360,7 +330,6 @@ export class AnalysisController {
       }
 
       const flatten = (nodeMap: any, depth = 0): any[] => {
-        // Prevent runaway recursion
         if (depth > MAX_DEPTH) return [];
 
         return Object.values(nodeMap).map((node: any) => {
@@ -376,7 +345,7 @@ export class AnalysisController {
           return {
             id: node.id,
             name: node.name,
-            value: totalScore, // Satisfy schema
+            value: totalScore,
             score: totalScore,
             added: totalAdded,
             removed: totalRemoved,
@@ -397,7 +366,7 @@ export class AnalysisController {
       return normalize(tree);
     } catch (error) {
       logError('[Treemap] Build failed', error);
-      // Return empty treemap on error to prevent crashes
+
       return [];
     }
   }
@@ -519,7 +488,7 @@ export class AnalysisController {
         skeleton: {
           mode: skeleton.mode,
           roots: skeleton.roots,
-          files: skeleton.files.slice(0, 200), // cap to avoid huge payloads
+          files: skeleton.files.slice(0, 200),
         },
         hotspots: skeleton.files.slice(0, 200).map((path: string) => ({
           path,
@@ -553,7 +522,6 @@ export class AnalysisController {
         .catch(() => ({ added: 0, removed: 0 }));
       const hybridHotspots = await git.getHotspots(50).catch(() => []);
 
-      // Use cached hotspots/treemap if available for quick churn signal, otherwise fallback to fresh git churn
       let hotspots = this.hotspotCache.values().next().value || [];
       if (!hotspots.length) {
         hotspots = hybridHotspots.map((h: any) => ({
@@ -566,7 +534,7 @@ export class AnalysisController {
           removed: h.removed,
         }));
       }
-      // Filter hotspots to skeleton scope if available
+
       if (this.skeletonCache) {
         const skeletonSet = new Set(this.skeletonCache.files);
         hotspots = hotspots.filter((h: any) => skeletonSet.has(h.path));

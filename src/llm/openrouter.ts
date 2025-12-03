@@ -10,17 +10,15 @@ export class LLMClient {
   constructor() {
     const config = getExtensionConfig();
 
-    // Check if API key is required (OpenRouter needs it, Ollama doesn't)
     const isOpenRouter = config.apiEndpoint.includes('openrouter.ai');
     if (isOpenRouter && !config.openRouterApiKey) {
-      // eslint-disable-next-line no-restricted-syntax
       throw new Error(
         'OpenRouter API key not configured. Please set OPENROUTER_API_KEY environment variable or configure it in VS Code settings.'
       );
     }
 
     this.client = new OpenAI({
-      apiKey: config.openRouterApiKey || 'not-needed-for-ollama', // Ollama doesn't need API keys
+      apiKey: config.openRouterApiKey || 'not-needed-for-ollama',
       baseURL: config.apiEndpoint,
     });
 
@@ -60,19 +58,16 @@ export class LLMClient {
           ? 'OpenRouter'
           : 'API endpoint';
 
-        // Don't retry on certain errors (auth, invalid request, etc.)
         if (error.status === 401 || error.status === 400 || error.status === 404) {
           logError(`${endpointName} API error: ${error.message}`);
-          return ''; // Return empty string instead of throwing
+          return '';
         }
 
-        // If this was the last attempt, log and return empty
         if (attempt === maxRetries) {
           logError(`${endpointName} API error after ${maxRetries + 1} attempts: ${error.message}`);
-          return ''; // Return empty string instead of throwing
+          return '';
         }
 
-        // Exponential backoff: wait 1s, 2s, 4s, etc.
         const delayMs = Math.pow(2, attempt) * 1000;
         logWarn(
           `LLM API call failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...: ${error.message}`
@@ -84,12 +79,9 @@ export class LLMClient {
     logError(
       `${this.endpoint.includes('openrouter.ai') ? 'OpenRouter' : 'API endpoint'} API error: ${lastError?.message || 'Unknown error'}`
     );
-    return ''; // Return empty string instead of throwing
+    return '';
   }
 
-  /**
-   * Check if the client is properly configured
-   */
   async validateConnection(): Promise<boolean> {
     try {
       await this.complete(
@@ -108,7 +100,6 @@ export class LLMClient {
   }
 }
 
-// Singleton instance
 let llmClient: LLMClient | null = null;
 
 export function getLLMClient(): LLMClient {
@@ -118,6 +109,5 @@ export function getLLMClient(): LLMClient {
   return llmClient;
 }
 
-// Backward compatibility
 export const getOpenRouterClient = getLLMClient;
 export type OpenRouterClient = LLMClient;

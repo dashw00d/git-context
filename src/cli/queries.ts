@@ -21,17 +21,14 @@ export async function showCommit(sha: string): Promise<void> {
   logInfo(chalk.yellow(`Message: ${commit.message}`));
   logInfo('');
 
-  // Get additional commit data using service
   const analysis = await dbService.getCommitAnalysis(sha);
 
-  // Display summary
   if (analysis?.summary_md) {
     logInfo(chalk.green('Summary:'));
     logInfo(analysis.summary_md);
     logInfo('');
   }
 
-  // Display stats
   if (analysis) {
     logInfo(chalk.cyan('Statistics:'));
     logInfo(`Files changed: ${commit.filesChanged}`);
@@ -41,7 +38,6 @@ export async function showCommit(sha: string): Promise<void> {
     logInfo(`Edges: +${analysis.edges_added} -${analysis.edges_removed}`);
   }
 
-  // Display risks
   if (analysis?.risks) {
     const risks = JSON.parse(analysis.risks);
     if (risks.length > 0) {
@@ -51,16 +47,12 @@ export async function showCommit(sha: string): Promise<void> {
     }
   }
 
-  // Display symbol changes using service
   const symbolService = getSymbolService();
   const symbols = await symbolService.getSymbolsByCommit(sha);
   if (symbols.length > 0) {
     logInfo('');
     logInfo(chalk.cyan('Symbol changes:'));
 
-    // Note: SymbolService returns SymbolInfo, but we need change_type
-    // For now, we'll need to query change_type separately or enhance the service
-    // This is a temporary solution - the service should be enhanced to include change_type
     await import('../storage/database').then(m => m.ensureDatabaseInitialized());
     const symbolsWithChange = prepare(`
       SELECT name, kind, change_type FROM symbols

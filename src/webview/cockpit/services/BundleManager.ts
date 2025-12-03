@@ -13,7 +13,7 @@ export class BundleManager {
       return id;
     } catch (error) {
       logError('[BundleManager] Failed to create bundle', error);
-      return ''; // Return empty string on error instead of throwing
+      return '';
     }
   }
 

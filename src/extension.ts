@@ -5,10 +5,10 @@ import { registerCockpitFeatures } from './features/cockpitFeatures';
 import { registerCoreFeatures } from './features/coreFeatures';
 import { registerGitWatcherFeature, setGlobalProviders } from './features/gitWatcherFeature';
 import { LiveDiffTracker } from './liveTracker';
-import { logDebug, logError, logInfo } from './utils/logger';
 import type { ActiveBundleProvider } from './providers/activeBundleProvider';
 import type { CommitsProvider } from './providers/commitsProvider';
 import type { SymbolHistoryProvider } from './providers/symbolHistoryProvider';
+import { logDebug, logError, logInfo } from './utils/logger';
 import type { CockpitProvider } from './webview/cockpit/CockpitProvider';
 
 let activeBundleProvider: ActiveBundleProvider;
@@ -43,10 +43,8 @@ export async function activate(context: vscode.ExtensionContext) {
     outputChannel.appendLine('[ACTIVATION] Git Context extension is activating...');
     logInfo('Git Context extension is activating...');
 
-    // Initialize AppShell
     const shell = new AppShell(context);
 
-    // Dynamically import providers to prevent load-time errors
     const { ActiveBundleProvider } = await import('./providers/activeBundleProvider');
     const { CommitsProvider } = await import('./providers/commitsProvider');
     const { SymbolHistoryProvider } = await import('./providers/symbolHistoryProvider');
@@ -55,30 +53,24 @@ export async function activate(context: vscode.ExtensionContext) {
 
     logDebug('Modules loaded successfully');
 
-    // Initialize providers
     activeBundleProvider = new ActiveBundleProvider(context);
     commitsProvider = new CommitsProvider(context, activeBundleProvider);
     symbolHistoryProvider = new SymbolHistoryProvider(context);
     cockpitProvider = new CockpitProvider(context.extensionUri);
 
-    // Set global providers for git watcher callback
     setGlobalProviders({
       commitsProvider,
       activeBundleProvider,
       symbolHistoryProvider,
     });
 
-    // Initialize LiveDiffTracker
     const liveTracker = new LiveDiffTracker();
 
-    // Initialize LiveAnalysisEngine
     const { LiveAnalysisEngine } = await import('./analysis/liveAnalysis');
     const liveEngine = new LiveAnalysisEngine(liveTracker, shell.getOrchestrator());
 
-    // Store liveEngine reference for command access
     (shell.getOrchestrator() as any).liveEngine = liveEngine;
 
-    // Subscribe to live tracker events for state synchronization
     liveTracker.on(
       'changesUpdated',
       (data: {
@@ -100,7 +92,6 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     );
 
-    // Cleanup event listeners on deactivation
     context.subscriptions.push({
       dispose: () => {
         liveTracker.removeAllListeners('changesUpdated');
@@ -109,7 +100,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(liveTracker);
 
-    // Register webview providers
     const refactorReportProvider = new RefactorReportProvider(context.extensionUri);
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(
@@ -118,7 +108,6 @@ export async function activate(context: vscode.ExtensionContext) {
       )
     );
 
-    // Register command to show report
     const showReportCommand = vscode.commands.registerCommand(
       'gitContext.showRefactorReport',
       async () => {
@@ -126,7 +115,6 @@ export async function activate(context: vscode.ExtensionContext) {
         const orchestrator = getCockpitOrchestrator();
         const { llmOutputs } = orchestrator.getState();
 
-        // Analysis might be nested in llmOutputs (legacy) or directly available
         const analysis = llmOutputs?.llmAnalysis || llmOutputs;
 
         if (analysis && analysis.markdown) {
@@ -146,7 +134,6 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.window.registerWebviewViewProvider('cockpit', cockpitProvider)
     );
 
-    // Lightweight working directory watcher (debounced)
     let workspaceRefreshTimeout: NodeJS.Timeout | null = null;
     const { updateWorkspaceFilesState } = await import('./core/stateUpdaters');
     const scheduleWorkspaceRefresh = (reason: string) => {
@@ -160,22 +147,18 @@ export async function activate(context: vscode.ExtensionContext) {
     };
     context.subscriptions.push(
       vscode.workspace.onDidChangeTextDocument(e => {
-        // Ignore output channel updates to prevent infinite loops
         if (e.document.uri.scheme === 'output') return;
         scheduleWorkspaceRefresh('workspace:textChange');
       }),
       vscode.workspace.onDidSaveTextDocument(() => scheduleWorkspaceRefresh('workspace:save'))
     );
 
-    // Auto-load initial commits on activation
     try {
       logInfo('[Cockpit] Checking if initial commits need to be loaded...');
 
-      // Ensure database is initialized first
       const { ensureDatabaseInitialized, getDatabaseManager } = await import('./storage/database');
       await ensureDatabaseInitialized();
 
-      // Check for legacy DB issues
       const { auditAllModules } = await import('./storage/schema');
       const db = getDatabaseManager().getDatabase();
       const gaps = auditAllModules(db);
@@ -195,7 +178,6 @@ export async function activate(context: vscode.ExtensionContext) {
       const { getDatabaseService } = await import('./services/databaseService');
       const config = getExtensionConfig();
 
-      // Check if database has any commits
       const commitService = getDatabaseService();
       const commitCount = await commitService.countCommits();
 
@@ -204,13 +186,11 @@ export async function activate(context: vscode.ExtensionContext) {
           `[Cockpit] Database is empty, loading initial ${config.defaultCommitCount} commit metadata (without full analysis)...`
         );
 
-        // Load recent commits metadata only (no tree-sitter parsing)
         const { GitOperations } = await import('./analysis/git');
         const git = new GitOperations();
         const branchManager = new BranchManager(db);
         const recentCommits = await git.getRecentCommits(config.defaultCommitCount);
 
-        // Record commits in branch manager
         const branch = await git.getCurrentBranch();
         if (branch && recentCommits.length > 0) {
           for (const commit of recentCommits) {
@@ -219,7 +199,6 @@ export async function activate(context: vscode.ExtensionContext) {
           branchManager.updateBranchHead(branch, recentCommits[0].sha);
         }
 
-        // Store commit metadata (lightweight, no tree-sitter parsing)
         const { DatabaseHelpers } = await import('./storage/database');
         for (const commit of recentCommits) {
           DatabaseHelpers.insertCommitMetadata({
@@ -228,7 +207,7 @@ export async function activate(context: vscode.ExtensionContext) {
             date: commit.date,
             message: commit.message,
             parent: commit.parent,
-            files_changed: 0, // Will be populated on actual analysis
+            files_changed: 0,
             loaded_at: new Date().toISOString(),
           });
         }
@@ -242,10 +221,8 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     } catch (error) {
       logError('[Cockpit] Failed to auto-load initial commits', error);
-      // Continue activation even if initial load fails
     }
 
-    // Set up file watchers
     const fileWatchers = setupFileWatchers(
       context,
       {
@@ -257,7 +234,6 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     context.subscriptions.push(fileWatchers);
 
-    // Register core features
     await registerCoreFeatures(shell, {
       activeBundleProvider,
       commitsProvider,
@@ -266,7 +242,6 @@ export async function activate(context: vscode.ExtensionContext) {
       refactorReportProvider,
     });
 
-    // Register cockpit-specific features
     await registerCockpitFeatures(shell, {
       activeBundleProvider,
       commitsProvider,
@@ -274,10 +249,8 @@ export async function activate(context: vscode.ExtensionContext) {
       refactorReportProvider,
     });
 
-    // Register git watcher feature
     await registerGitWatcherFeature(shell, context);
 
-    // Register debug commands
     context.subscriptions.push(
       vscode.commands.registerCommand('git-context.debug.dumpState', async () => {
         if (!cockpitProvider) {
@@ -324,10 +297,8 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     );
 
-    // Refresh providers when workspace changes
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
-        // Re-setup watchers for new workspace structure
         const _newWatchers = setupFileWatchers(
           context,
           {
@@ -355,7 +326,6 @@ export async function activate(context: vscode.ExtensionContext) {
       })
     );
 
-    // Initial state sync
     const { refreshCockpitState } = await import('./core/stateUpdaters');
     await refreshCockpitState(shell.getOrchestrator(), {
       commitsProvider,
@@ -384,14 +354,9 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 }
 
-// Pipeline factory moved to src/services/pipelineFactory.ts
-// State updaters moved to src/core/stateUpdaters.ts
-// File watchers moved to src/core/fileWatchers.ts
-
 export function deactivate() {
   logInfo('Git Context extension is now deactivated!');
 
-  // Cleanup: Close database connection
   try {
     const { closeDatabase } = require('./storage/database');
     closeDatabase();

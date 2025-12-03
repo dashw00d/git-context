@@ -3,8 +3,8 @@ import * as React from 'react';
 interface TimeScrubberProps {
   currentTimeFilter?: number;
   onTimeFilterChange: (timestamp: number) => void;
-  startTime?: number; // Earliest commit
-  endTime?: number;   // Latest commit (usually Date.now())
+  startTime?: number;
+  endTime?: number;
 }
 
 const ScrubberContainer: React.CSSProperties = {
@@ -26,7 +26,7 @@ const SliderStyle: React.CSSProperties = {
 export const TimeScrubber: React.FC<TimeScrubberProps> = ({
   currentTimeFilter,
   onTimeFilterChange,
-  startTime = Date.now() - 30 * 24 * 60 * 60 * 1000, // Default 30 days ago
+  startTime = Date.now() - 30 * 24 * 60 * 60 * 1000,
   endTime = Date.now(),
 }) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
@@ -43,7 +43,7 @@ export const TimeScrubber: React.FC<TimeScrubberProps> = ({
     if (isPlaying) {
       interval = setInterval(() => {
         setCurrentValue(prev => {
-          const next = prev + (endTime - startTime) / 100; // 1% increment
+          const next = prev + (endTime - startTime) / 100;
           if (next >= endTime) {
             setIsPlaying(false);
             return endTime;
@@ -55,10 +55,9 @@ export const TimeScrubber: React.FC<TimeScrubberProps> = ({
     return () => clearInterval(interval);
   }, [isPlaying, startTime, endTime]);
 
-  // Debounce updates to parent
   React.useEffect(() => {
     if (Math.abs(currentValue - (currentTimeFilter || endTime)) > 1000) {
-       onTimeFilterChange(currentValue);
+      onTimeFilterChange(currentValue);
     }
   }, [currentValue]);
 
@@ -81,7 +80,7 @@ export const TimeScrubber: React.FC<TimeScrubberProps> = ({
           cursor: 'pointer',
           fontSize: '16px',
         }}
-        title={isPlaying ? "Pause" : "Play History"}
+        title={isPlaying ? 'Pause' : 'Play History'}
       >
         {isPlaying ? '⏸' : '▶'}
       </button>
@@ -98,20 +97,20 @@ export const TimeScrubber: React.FC<TimeScrubberProps> = ({
         onChange={handleChange}
         style={SliderStyle}
       />
-      
+
       <button
         onClick={() => {
-            setCurrentValue(endTime);
-            onTimeFilterChange(endTime);
+          setCurrentValue(endTime);
+          onTimeFilterChange(endTime);
         }}
         style={{
-            fontSize: '11px',
-            background: 'none',
-            border: '1px solid var(--vscode-button-border)',
-            borderRadius: '4px',
-            padding: '2px 6px',
-            color: 'var(--vscode-foreground)',
-            cursor: 'pointer'
+          fontSize: '11px',
+          background: 'none',
+          border: '1px solid var(--vscode-button-border)',
+          borderRadius: '4px',
+          padding: '2px 6px',
+          color: 'var(--vscode-foreground)',
+          cursor: 'pointer',
         }}
       >
         Reset

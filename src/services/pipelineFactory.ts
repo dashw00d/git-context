@@ -18,9 +18,7 @@ export class PipelineFactory {
   private static instance: PipelineFactory;
   private pipeline: RefactorPipeline | null = null;
 
-  private constructor() {
-    // Singleton: use getInstance()
-  }
+  private constructor() {}
 
   static getInstance(): PipelineFactory {
     if (!PipelineFactory.instance) {
@@ -73,8 +71,6 @@ export class PipelineFactory {
         storyEngine
       );
 
-      // Only cache the pipeline if we successfully got a database connection
-      // Otherwise we might cache a broken pipeline that will crash later
       if (db) {
         this.pipeline = pipeline;
       } else {

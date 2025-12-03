@@ -15,17 +15,16 @@ import {
 } from '../analysis/namingConventions';
 import { EdgeContext, SymbolContext } from '../contracts/llmContext';
 import { prepare } from '../storage/statement-wrapper';
+import type { HybridFact } from '../types/cstFacts';
 import { detectLanguage, getGitRoot } from '../utils/config';
 import { logWarn } from '../utils/logger';
 import { IntendedState } from './intendedMap';
 import { WorkingSnapshot } from './workingSnapshot';
-import type { HybridFact } from '../types/cstFacts';
 
 /**
  * Safely extract line number from symbol location
  */
 function extractLineFromSymbol(symbol: SymbolContext): number | undefined {
-  // Try post location first (more recent), then pre location
   const loc = symbol.loc_post || symbol.loc_pre;
   return loc?.start?.line;
 }
@@ -158,7 +157,7 @@ export interface UnresolvedCallerFact {
   callee_name: string;
   guessed_target_dna_id?: string | null;
   occurrence_count: number;
-  severity: number; // 0-1
+  severity: number;
 }
 
 /**
@@ -177,7 +176,6 @@ function detectDivergentClusters(
     similarity: number;
   }> = [];
 
-  // Get symbols that exist in working tree and are intended present
   const workingIntendedSymbols = Array.from(working.symbolsById.entries())
     .filter(([symbolId]) => {
       const intendedState = intended.get(symbolId);
@@ -189,25 +187,20 @@ function detectDivergentClusters(
     return { divergentClusters, suggestedConsolidations };
   }
 
-  // Cluster by AST shape similarity
   const clusters = clusterByShape(workingIntendedSymbols);
 
-  // Find divergent clusters (clusters with high internal similarity but behavioral differences)
   for (const cluster of clusters) {
     if (cluster.size >= 2) {
       const symbols = Array.from(cluster);
       const names = symbols.map(s => s.name);
 
-      // Check if symbols have different names OR same names but different signatures
       const uniqueNames = new Set(names);
       const hasDifferentNames = uniqueNames.size > 1;
 
-      // For same-named symbols, check if they have different signatures
       const hasDifferentSignatures =
         uniqueNames.size === 1 && new Set(symbols.map(s => s.signature)).size > 1;
 
       if (hasDifferentNames || hasDifferentSignatures) {
-        // Calculate average similarity within cluster
         let totalSimilarity = 0;
         let pairCount = 0;
 
@@ -221,11 +214,9 @@ function detectDivergentClusters(
 
         const avgSimilarity = pairCount > 0 ? totalSimilarity / pairCount : 0;
 
-        // Only consider clusters with high similarity (>0.7) as potentially divergent
         if (avgSimilarity > 0.7) {
           divergentClusters.push(new Set(symbols));
 
-          // Suggest consolidation if similarity is very high (>0.9)
           if (avgSimilarity > 0.9) {
             suggestedConsolidations.push({
               symbols: symbols.map(s => s.symbol_id),
@@ -237,14 +228,11 @@ function detectDivergentClusters(
     }
   }
 
-  // Reachability analysis for intended symbols
   const reachableSymbols = findReachableSymbols(working, intended);
   for (const [symbolId, intendedState] of intended) {
     if (intendedState.expect === 'present' && !reachableSymbols.has(symbolId)) {
-      // Symbol is intended present but not reachable from entry points
       const symbol = working.symbolsById.get(symbolId);
       if (symbol) {
-        // Add to divergent clusters as potentially unreachable/dead code
         const unreachableCluster = new Set([symbol]);
         divergentClusters.push(unreachableCluster);
       }
@@ -260,7 +248,6 @@ function detectDivergentClusters(
 function clusterByShape(symbols: SymbolContext[]): Set<SymbolContext>[] {
   const clusters: Set<SymbolContext>[] = [];
 
-  // Group symbols by their DNA hash (if available)
   const dnaClusters = new Map<string, Set<SymbolContext>>();
   const symbolsWithoutDna: SymbolContext[] = [];
 
@@ -268,25 +255,21 @@ function clusterByShape(symbols: SymbolContext[]): Set<SymbolContext>[] {
     const dnaHash = symbol.dnaId;
 
     if (dnaHash) {
-      // Has DNA hash - cluster by DNA
       if (!dnaClusters.has(dnaHash)) {
         dnaClusters.set(dnaHash, new Set());
       }
       dnaClusters.get(dnaHash)!.add(symbol);
     } else {
-      // No DNA hash - will use signature clustering
       symbolsWithoutDna.push(symbol);
     }
   }
 
-  // Convert DNA clusters to array
   for (const cluster of dnaClusters.values()) {
     if (cluster.size > 0) {
       clusters.push(cluster);
     }
   }
 
-  // For symbols without DNA, use signature-based similarity
   if (symbolsWithoutDna.length > 0) {
     const signatureClusters = clusterBySignature(symbolsWithoutDna);
     clusters.push(...signatureClusters);
@@ -304,7 +287,6 @@ function clusterBySignature(symbols: SymbolContext[]): Set<SymbolContext>[] {
   for (const symbol of symbols) {
     let foundCluster = false;
 
-    // Try to find existing cluster with similar signature
     for (const cluster of clusters) {
       const clusterSymbol = Array.from(cluster)[0];
       if (
@@ -316,7 +298,6 @@ function clusterBySignature(symbols: SymbolContext[]): Set<SymbolContext>[] {
       }
     }
 
-    // Create new cluster if no similar signature found
     if (!foundCluster) {
       clusters.push(new Set([symbol]));
     }
@@ -329,15 +310,13 @@ function clusterBySignature(symbols: SymbolContext[]): Set<SymbolContext>[] {
  * Calculate similarity between two symbols (0-1 scale)
  */
 function calculateSymbolSimilarity(a: SymbolContext, b: SymbolContext): number {
-  // Use DNA hash similarity if available
   const aDna = a.dnaId;
   const bDna = b.dnaId;
 
   if (aDna && bDna) {
-    return aDna === bDna ? 1.0 : 0.0; // Exact DNA match = perfect similarity
+    return aDna === bDna ? 1.0 : 0.0;
   }
 
-  // Fallback to signature similarity
   return calculateSignatureSimilarity(a.signature || '', b.signature || '');
 }
 
@@ -347,11 +326,9 @@ function calculateSymbolSimilarity(a: SymbolContext, b: SymbolContext): number {
 function calculateSignatureSimilarity(sigA: string, sigB: string): number {
   if (!sigA || !sigB) return 0;
 
-  // Tokenize signatures (simple split on non-word chars)
   const tokensA = new Set(sigA.split(/\W+/).filter(t => t.length > 0));
   const tokensB = new Set(sigB.split(/\W+/).filter(t => t.length > 0));
 
-  // Calculate Jaccard similarity: |intersection| / |union|
   const intersection = new Set([...tokensA].filter(x => tokensB.has(x)));
   const union = new Set([...tokensA, ...tokensB]);
 
@@ -368,11 +345,9 @@ function findReachableSymbols(
   const reachable = new Set<string>();
   const queue: string[] = [];
 
-  // Start with entry points: symbols marked as entry points or with entry-point names
   for (const [symbolId, symbol] of working.symbolsById) {
     const intendedState = intended.get(symbolId);
 
-    // Include symbols that are explicitly intended present or have entry-point names
     if (
       (intendedState && intendedState.expect === 'present') ||
       symbol.name.startsWith('main') ||
@@ -383,11 +358,9 @@ function findReachableSymbols(
     }
   }
 
-  // BFS traversal following edges
   while (queue.length > 0) {
     const currentSymbolId = queue.shift()!;
 
-    // Find all edges where current symbol is the source
     const outgoingEdges = working.edges.filter(edge => edge.from_symbol_id === currentSymbolId);
 
     for (const edge of outgoingEdges) {
@@ -420,9 +393,6 @@ export function detectDrift(
     hotspots: [],
   };
 
-  // Check symbol completeness
-  // CRITICAL: Only check symbols in intended map. Do NOT add fake zombies for symbols
-  // that exist in working tree but not in intended map - those are out of scope.
   for (const [symbolKey, expected] of intended) {
     const found = working.symbolsById.get(symbolKey);
 
@@ -430,7 +400,6 @@ export function detectDrift(
       if (!found) {
         findings.missing_symbols.push({ symbol_id: symbolKey, expected });
       } else {
-        // Check for divergence (simplified - could check signature/content hash)
         if (expected.lastName && found.name !== expected.lastName) {
           findings.divergent_symbols.push({
             symbol_id: symbolKey,
@@ -440,23 +409,16 @@ export function detectDrift(
         }
       }
     } else if (expected.expect === 'absent') {
-      // Only add zombies for symbols explicitly marked as absent in intended map
       if (found) {
         findings.zombie_symbols.push({ symbol_id: symbolKey, expected, found });
       }
     }
   }
 
-  // NOTE: We intentionally do NOT iterate over working.symbolsById to find "fake zombies"
-  // (symbols in working tree but not in intended map). Those are out of scope and not
-  // part of the refactor bundle analysis.
-
-  // Check edge drift if commit SHAs are provided
   if (commitShas && commitShas.length > 0) {
     try {
       const placeholders = commitShas.map(() => '?').join(',');
 
-      // Query intended edges from database (edges added/modified in commits)
       const intendedEdgesStmt = prepare(`
         SELECT DISTINCT from_symbol_id, to_symbol_id, COALESCE(edge_type, 'unknown') AS edge_type
         FROM edges
@@ -470,7 +432,6 @@ export function detectDrift(
         edge_type: string;
       }>;
 
-      // Check for missing edges (intended present but not in working)
       for (const intendedEdge of intendedEdges) {
         const found = working.edges.find(
           e =>
@@ -480,7 +441,6 @@ export function detectDrift(
         );
 
         if (!found) {
-          // Only report as missing if both symbols are in intended map
           const fromIntended = intended.has(intendedEdge.from_symbol_id);
           const toIntended = intended.has(intendedEdge.to_symbol_id);
 
@@ -499,12 +459,10 @@ export function detectDrift(
         }
       }
 
-      // Check for zombie edges (in working but not intended)
       for (const workingEdge of working.edges) {
         const fromIntended = intended.has(workingEdge.from_symbol_id);
         const toIntended = intended.has(workingEdge.to_symbol_id);
 
-        // Skip edges where both symbols are out of scope (not in intended map)
         if (!fromIntended && !toIntended) {
           continue;
         }
@@ -512,7 +470,6 @@ export function detectDrift(
         const fromState = intended.get(workingEdge.from_symbol_id);
         const toState = intended.get(workingEdge.to_symbol_id);
 
-        // Check if this edge exists in intended edges from database
         const edgeInIntended = intendedEdges.some(
           intendedEdge =>
             intendedEdge.from_symbol_id === workingEdge.from_symbol_id &&
@@ -520,9 +477,6 @@ export function detectDrift(
             intendedEdge.edge_type === workingEdge.edge_type
         );
 
-        // Flag as zombie if:
-        // 1. Edge doesn't exist in intended edges from database, OR
-        // 2. Edge connects to a symbol that should be absent
         if (
           !edgeInIntended ||
           (fromState && fromState.expect === 'absent') ||
@@ -540,18 +494,15 @@ export function detectDrift(
       const errorMsg = error instanceof Error ? error.message : String(error);
       logWarn(`Failed to detect edge drift for commits [${commitShas?.join(', ')}]: ${errorMsg}`);
       logWarn('Continuing without edge drift detection. This may miss some zombie/missing edges.');
-      // Continue without edge drift detection
     }
   }
 
-  // Build file hotspots
   const fileDrift = new Map<string, number>();
   for (const finding of [
     ...findings.missing_symbols,
     ...findings.zombie_symbols,
     ...findings.divergent_symbols,
   ]) {
-    // Extract path from symbol key safely
     const path = extractPathFromSymbolId(finding.symbol_id);
     fileDrift.set(path, (fileDrift.get(path) || 0) + 1);
   }
@@ -561,17 +512,14 @@ export function detectDrift(
     .sort((a, b) => b.drift_count - a.drift_count)
     .slice(0, 10);
 
-  // Detect convention drift
   const conventionDrift = detectConventionDrift(working);
   if (conventionDrift) {
     findings.conventionDrift = conventionDrift.conventionDrift;
     findings.mixedConventionFiles = conventionDrift.mixedConventionFiles;
   }
 
-  // Detect unresolved callers (call sites that don't resolve to a current symbol)
   findings.unresolved_callers = detectUnresolvedCallers(working, intended);
 
-  // Enhanced divergent detection with AST shape clustering
   const enhancedDivergent = detectDivergentClusters(working, intended);
   if (enhancedDivergent.divergentClusters.length > 0) {
     findings.divergentClusters = enhancedDivergent.divergentClusters;
@@ -583,17 +531,13 @@ export function detectDrift(
   return findings;
 }
 
-/**
- * Detect unresolved callers (call sites that don't resolve to a current symbol)
- */
 function detectUnresolvedCallers(
   working: WorkingSnapshot,
   intended?: Map<string, IntendedState>
 ): UnresolvedCallerFact[] {
-  // Only build name index if we have intended states that might need name matching
   let nameIndex: Map<string, string[]> | undefined;
   if (intended && Array.from(intended.values()).some(state => state.lastName)) {
-    nameIndex = new Map<string, string[]>(); // lowerName -> symbol_ids
+    nameIndex = new Map<string, string[]>();
     for (const [symbolId, symbol] of working.symbolsById) {
       const key = symbol.name.toLowerCase();
       if (!nameIndex.has(key)) {
@@ -608,14 +552,12 @@ function detectUnresolvedCallers(
   for (const edge of working.edges) {
     if (edge.edge_type !== 'calls') continue;
 
-    // Skip if target is a known symbol
     if (edge.to_symbol_id && working.symbolsById.has(edge.to_symbol_id)) continue;
 
     const caller = edge.from_symbol_id ? working.symbolsById.get(edge.from_symbol_id) : undefined;
     const calleeRaw = edge.to_symbol_id || '';
     const calleeName = extractCalleeName(calleeRaw);
 
-    // Try to guess a target by name match
     const guessed = guessTarget(calleeName, nameIndex, intended);
 
     const key = `${edge.from_symbol_id || 'unknown'}::${calleeName || calleeRaw}`;
@@ -637,13 +579,9 @@ function detectUnresolvedCallers(
 
   const results: UnresolvedCallerFact[] = [];
   for (const fact of facts.values()) {
-    // Base severity from occurrence count using logarithmic scaling
-    // log1p(count) / log1p(5) gives severity that grows slowly with count
-    // At count=1: ~0.43, count=5: ~0.70, count=25: ~0.89, count=100: ~0.96
     const OCCURRENCE_SCALE_FACTOR = 5;
     const baseSeverity = Math.min(1, Math.log1p(fact.count) / Math.log1p(OCCURRENCE_SCALE_FACTOR));
 
-    // Additional severity bump for calls that can't be guessed (no target found)
     const UNKNOWN_TARGET_BUMP = 0.1;
     const unknownBump = fact.guessed_target_dna_id ? 0 : UNKNOWN_TARGET_BUMP;
 
@@ -658,7 +596,7 @@ function detectUnresolvedCallers(
 
 function extractCalleeName(raw: string): string {
   if (!raw) return '';
-  // Try to take the last identifier-like token
+
   const tokens = raw.split(/[:.\s]/).filter(Boolean);
   const last = tokens[tokens.length - 1] || raw;
   return last.replace(/[^A-Za-z0-9_]/g, '');
@@ -671,7 +609,6 @@ function guessTarget(
 ): string | null | undefined {
   if (!calleeName) return null;
 
-  // First try intended map names (more reliable)
   if (intended) {
     const intendedMatch = Array.from(intended.entries()).find(
       ([, st]) => st.lastName && st.lastName.toLowerCase() === calleeName.toLowerCase()
@@ -681,7 +618,6 @@ function guessTarget(
     }
   }
 
-  // Then try working symbol name index if available
   if (nameIndex) {
     const matches = nameIndex.get(calleeName.toLowerCase()) || [];
     if (matches.length === 1) {
@@ -692,9 +628,6 @@ function guessTarget(
   return null;
 }
 
-/**
- * Detect naming convention drift across working symbols
- */
 function detectConventionDrift(working: WorkingSnapshot): {
   conventionDrift?: {
     dominantConvention: NamingConvention;
@@ -734,7 +667,6 @@ function detectConventionDrift(working: WorkingSnapshot): {
   }>;
 } | null {
   try {
-    // Get symbols from working snapshot
     const symbols = Array.from(working.symbolsById.values()).map(s => ({
       name: s.name,
       kind: s.kind,
@@ -745,10 +677,8 @@ function detectConventionDrift(working: WorkingSnapshot): {
       return null;
     }
 
-    // Analyze overall convention drift
     const driftResult = analyzeConventionDrift(symbols);
 
-    // Build drift symbols with suggestions
     const driftSymbols = driftResult.driftSymbols
       .map(ds => {
         const symbolId =
@@ -764,9 +694,8 @@ function detectConventionDrift(working: WorkingSnapshot): {
           path: ds.path,
         };
       })
-      .filter(ds => ds.symbolId !== ''); // Only include symbols we found
+      .filter(ds => ds.symbolId !== '');
 
-    // Analyze file-level convention mixing
     const symbolsByFile = new Map<string, Array<{ name: string; kind: string; path: string }>>();
     for (const symbol of symbols) {
       if (!symbolsByFile.has(symbol.path)) {
@@ -783,14 +712,13 @@ function detectConventionDrift(working: WorkingSnapshot): {
     }> = [];
 
     for (const [filePath, fileSymbols] of symbolsByFile.entries()) {
-      if (fileSymbols.length < 2) continue; // Need at least 2 symbols to have mixing
+      if (fileSymbols.length < 2) continue;
 
       const fileDrift = analyzeConventionDrift(fileSymbols);
       const uniqueConventions = new Set(
         fileSymbols.map(s => detectNamingConvention(s.name).convention)
       );
 
-      // Only include files with multiple conventions
       if (uniqueConventions.size > 1 && fileDrift.driftPercent > 0) {
         mixedConventionFiles.push({
           path: filePath,
@@ -801,10 +729,8 @@ function detectConventionDrift(working: WorkingSnapshot): {
       }
     }
 
-    // Analyze import path conventions (JS/TS/PHP)
     const importDrift = detectImportPathConventionDrift(working);
 
-    // Analyze file naming conventions
     const fileNamingDrift = detectFileNamingConventionDrift(working);
 
     return {
@@ -866,7 +792,7 @@ function detectImportPathConventionDrift(working: WorkingSnapshot):
   const drift = analyzeImportPathDrift(imports);
   const driftImports = drift.driftImports
     .map(imp => ({
-      file: (imp as any).file || '', // file is attached above; fallback to blank if missing
+      file: (imp as any).file || '',
       line: imp.line,
       importPath: imp.path,
       style: imp.style,
@@ -927,28 +853,21 @@ function detectFileNamingConventionDrift(working: WorkingSnapshot):
   };
 }
 
-/**
- * Input type for drift detection
- */
 export interface DriftDetectorInput {
   intended: Map<string, IntendedState>;
   working: WorkingSnapshot;
   commitShas?: string[];
 }
 
-/**
- * Drift detector that extends BaseDetector for unified analysis patterns
- */
 export class DriftDetector extends BaseDetector<DriftDetectorInput, DriftFindings> {
   constructor(config: Partial<DetectorConfig> = {}) {
     super({
-      enableCaching: false, // Drift detection should always be fresh
+      enableCaching: false,
       ...config,
     });
   }
 
   async detect(input: DriftDetectorInput): Promise<DriftFindings> {
-    // Drift detection should always be fresh - no caching
     return detectDrift(input.intended, input.working, input.commitShas);
   }
 }

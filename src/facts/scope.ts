@@ -4,20 +4,19 @@ import { logDebug } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
 
 export interface ScopeSet {
-  commitFiles: Set<string>; // Files touched by selected commits
-  workingChanged: Set<string>; // Files changed in working tree (backward compat)
-  stagedFiles: Set<string>; // Files in staged working tree
-  unstagedFiles: Set<string>; // Files in unstaged working tree
-  blastRadius: Set<string>; // Neighbor files from dependency analysis
-  allPaths: Set<string>; // Union of all paths to analyze
-  fileVersionMap?: Map<string, string>; // filePath → first version in timeline where it appeared
+  commitFiles: Set<string>;
+  workingChanged: Set<string>;
+  stagedFiles: Set<string>;
+  unstagedFiles: Set<string>;
+  blastRadius: Set<string>;
+  allPaths: Set<string>;
+  fileVersionMap?: Map<string, string>;
 }
 
 /**
  * Extract file path from symbol ID (heuristic)
  */
 function extractFileFromSymbolId(symbolId: string): string | null {
-  // Symbol IDs are typically like "path/to/file.ts:ClassName" or "path/to/file:functionName"
   const parts = symbolId.split(':');
   if (parts.length >= 2) {
     return parts[0];
@@ -34,7 +33,6 @@ async function computeBlastRadiusNeighbors(
   workingChangedFiles: Set<string>,
   maxNeighbors: number
 ): Promise<string[]> {
-  // Extract symbol IDs that changed in selected commits (batched query)
   const changedSymbols = new Set<string>();
   if (commitShas.length > 0) {
     const placeholders = commitShas.map(() => '?').join(',');
@@ -45,22 +43,18 @@ async function computeBlastRadiusNeighbors(
     allSymbols.forEach(s => changedSymbols.add(s.symbol_id));
   }
 
-  // Extract symbols from working tree changes (batched by directory prefix)
   const workingSymbols = new Set<string>();
   if (workingChangedFiles.size > 0) {
-    // Group files by directory prefix to batch queries
     const dirPrefixes = new Set<string>();
     for (const filePath of workingChangedFiles) {
       const dir = filePath.substring(0, filePath.lastIndexOf('/') + 1);
       if (dir) {
         dirPrefixes.add(dir);
       } else {
-        // Root-level file, query by exact path
         dirPrefixes.add(filePath);
       }
     }
 
-    // Batch query by directory prefix
     for (const prefix of dirPrefixes) {
       const symbolsStmt = prepare(`
         SELECT symbol_id FROM symbols
@@ -73,12 +67,10 @@ async function computeBlastRadiusNeighbors(
     }
   }
 
-  // Merge working symbols into changed symbols for BFS
   for (const symbolId of workingSymbols) {
     changedSymbols.add(symbolId);
   }
 
-  // Build full repo adjacency map from all edges (not just selected commits)
   const adjacencyMap = new Map<string, Array<{ neighborId: string; confidence: number }>>();
   const edgesStmt = prepare(`
     SELECT from_symbol_id, to_symbol_id, confidence
@@ -88,33 +80,29 @@ async function computeBlastRadiusNeighbors(
   `);
   const allEdges = edgesStmt.all() as any[];
 
-  // Build bidirectional adjacency map
   for (const edge of allEdges) {
     const fromId = edge.from_symbol_id;
     const toId = edge.to_symbol_id;
     const confidence = edge.confidence || 1.0;
 
-    // Add forward edge
     if (!adjacencyMap.has(fromId)) {
       adjacencyMap.set(fromId, []);
     }
     adjacencyMap.get(fromId)!.push({ neighborId: toId, confidence });
 
-    // Add reverse edge (bidirectional)
     if (!adjacencyMap.has(toId)) {
       adjacencyMap.set(toId, []);
     }
     adjacencyMap.get(toId)!.push({ neighborId: fromId, confidence });
   }
 
-  // Depth-limited BFS from changed symbols (depth 2-3)
   const queue: Array<{ symbolId: string; depth: number }> = Array.from(changedSymbols).map(id => ({
     symbolId: id,
     depth: 0,
   }));
   const visited = new Set<string>(changedSymbols);
   const maxDepth = 3;
-  const maxTotalFiles = Math.max(maxNeighbors * 2, 50); // Allow more files for BFS exploration
+  const maxTotalFiles = Math.max(maxNeighbors * 2, 50);
   const neighborFiles = new Map<string, number>();
 
   while (queue.length > 0 && neighborFiles.size < maxTotalFiles) {
@@ -124,16 +112,14 @@ async function computeBlastRadiusNeighbors(
 
     const neighbors = adjacencyMap.get(symbolId) || [];
     for (const { neighborId, confidence } of neighbors) {
-      if (changedSymbols.has(neighborId)) continue; // Skip changed symbols
+      if (changedSymbols.has(neighborId)) continue;
 
       const filePath = extractFileFromSymbolId(neighborId);
       if (filePath && !commitFiles.has(filePath)) {
-        // Weight by depth: closer neighbors get higher scores
         const depthWeight = 1.0 / (depth + 1);
         const weightedConfidence = confidence * depthWeight;
         neighborFiles.set(filePath, (neighborFiles.get(filePath) || 0) + weightedConfidence);
 
-        // Continue BFS to next depth
         if (depth < maxDepth) {
           queue.push({ symbolId: neighborId, depth: depth + 1 });
         }
@@ -141,7 +127,6 @@ async function computeBlastRadiusNeighbors(
     }
   }
 
-  // Return top N neighbors by weighted confidence score
   return Array.from(neighborFiles.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, maxNeighbors)
@@ -171,20 +156,17 @@ export async function computeScope(
     allPaths: new Set(),
   };
 
-  // 1. Files touched by selected commits
   for (const sha of commitShas) {
     const commitFiles = await git.getFileChanges(sha);
     commitFiles.forEach(f => scope.commitFiles.add(f.path));
   }
 
-  // 2. Files changed in working tree (filtered by workspaceParts)
   const workingChanges = await git.getWorkingDirectoryChanges();
 
   if (workspaceParts) {
     const includeStaged = workspaceParts.has('staged');
     const includeUnstaged = workspaceParts.has('unstaged');
 
-    // Get staged and unstaged files separately
     const stagedFiles = await git.getStagedFiles();
     const unstagedFiles = await git.getUnstagedFiles();
 
@@ -202,36 +184,29 @@ export async function computeScope(
       });
     }
   } else {
-    // Default: include all working changes
     workingChanges.forEach(f => scope.workingChanged.add(f.path));
   }
 
-  // Add live overrides to working changes
   if (liveOverridePaths) {
     for (const path of liveOverridePaths) {
       scope.workingChanged.add(path);
-      // If checking unstaged, treat live overrides as unstaged
+
       if (!workspaceParts || workspaceParts.has('unstaged')) {
         scope.unstagedFiles.add(path);
       }
     }
   }
 
-  // 3. Blast-radius neighbors (top N by confidence)
   const blastRadiusFiles = await computeBlastRadiusNeighbors(
     commitShas,
     scope.commitFiles,
     scope.workingChanged,
     20
-  ); // Max 20 extra files
+  );
   blastRadiusFiles.forEach(f => scope.blastRadius.add(f));
 
-  // Union all paths
   const allPaths = new Set([...scope.commitFiles, ...scope.workingChanged, ...scope.blastRadius]);
 
-  // Filter out build artifacts, ignored directories, and unsupported extensions
-  // Use centralized path filter (scope doesn't have commitSha/gitRoot for size checks,
-  // but that's acceptable since scope is pre-filtered by commitIndexer/workspaceIndexer)
   const filteredPaths = new Set<string>();
 
   for (const p of allPaths) {
@@ -242,12 +217,9 @@ export async function computeScope(
 
   scope.allPaths = filteredPaths;
 
-  // Track which version each file first appeared in (if timeline provided)
   if (explicitTimeline && explicitTimeline.length > 0) {
     const fileVersionMap = new Map<string, string>();
 
-    // Iterate through timeline from oldest to newest to find first appearance
-    // (timeline is newest → oldest, so reverse to get chronological order)
     for (let i = explicitTimeline.length - 1; i >= 0; i--) {
       const version = explicitTimeline[i];
       let versionFiles: Set<string>;
@@ -257,16 +229,13 @@ export async function computeScope(
       } else if (version === 'workspace-staged') {
         versionFiles = scope.stagedFiles;
       } else if (version === 'HEAD') {
-        // HEAD is typically the newest commit, use commitFiles
         versionFiles = scope.commitFiles;
       } else {
-        // Specific commit SHA - check if this commit touched the file
         const git = new GitOperations();
         const commitFiles = await git.getFileChanges(version);
         versionFiles = new Set(commitFiles.map(f => f.path));
       }
 
-      // Track first appearance (oldest version wins - this is the first time it appeared)
       for (const filePath of versionFiles) {
         if (filteredPaths.has(filePath) && !fileVersionMap.has(filePath)) {
           fileVersionMap.set(filePath, version);
@@ -274,10 +243,8 @@ export async function computeScope(
       }
     }
 
-    // Also track blast radius files (they entered scope when blast radius was computed)
     for (const filePath of scope.blastRadius) {
       if (filteredPaths.has(filePath) && !fileVersionMap.has(filePath)) {
-        // Blast radius files entered scope at the newest version (workspace or HEAD)
         const newestVersion = explicitTimeline[0] || 'HEAD';
         fileVersionMap.set(filePath, newestVersion);
       }
@@ -286,7 +253,6 @@ export async function computeScope(
     scope.fileVersionMap = fileVersionMap;
   }
 
-  // Log scope composition for debugging
   logDebug(
     `[Scope] staged=${scope.stagedFiles.size}, unstaged=${scope.unstagedFiles.size}, total working=${scope.workingChanged.size}, commits=${scope.commitFiles.size}, blast=${scope.blastRadius.size}, all=${scope.allPaths.size}`
   );

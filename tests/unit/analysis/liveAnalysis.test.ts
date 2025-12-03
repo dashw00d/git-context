@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LiveAnalysisEngine } from '../../../src/analysis/liveAnalysis';
 import { LiveDiffTracker } from '../../../src/liveTracker';
 import { CockpitOrchestrator } from '../../../src/state/cockpitOrchestrator';
@@ -9,17 +9,17 @@ vi.mock('../../../src/liveTracker', () => ({
     getDirtyContent = vi.fn(() => new Map());
     on = vi.fn();
     removeAllListeners = vi.fn();
-  }
+  },
 }));
 
 const mockOrchestratorInstance = {
   getState: vi.fn(() => ({
     bundleFacts: {
       bundle: { shas: [] },
-      evidence: {}
-    }
+      evidence: {},
+    },
   })),
-  updateLiveState: vi.fn()
+  updateLiveState: vi.fn(),
 };
 
 vi.mock('../../../src/state/cockpitOrchestrator', () => ({
@@ -28,41 +28,43 @@ vi.mock('../../../src/state/cockpitOrchestrator', () => ({
     getState = vi.fn(() => ({
       bundleFacts: {
         bundle: { shas: [] },
-        evidence: {}
-      }
+        evidence: {},
+      },
     }));
     updateLiveState = vi.fn();
   },
-  getCockpitOrchestrator: vi.fn(() => mockOrchestratorInstance)
+  getCockpitOrchestrator: vi.fn(() => mockOrchestratorInstance),
 }));
 
 vi.mock('../../../src/facts/workingSnapshot', () => ({
-  getWorkingSnapshot: vi.fn(() => Promise.resolve(new Map()))
+  getWorkingSnapshot: vi.fn(() => Promise.resolve(new Map())),
 }));
 
 vi.mock('../../../src/facts/driftDetector', () => ({
   detectDrift: vi.fn(() => ({
     missing_symbols: [],
     zombie_symbols: [],
-    divergent_symbols: []
-  }))
+    divergent_symbols: [],
+  })),
 }));
 
 vi.mock('../../../src/facts/legacyAudit', () => ({
-  auditLegacy: vi.fn(() => Promise.resolve({
-    dead: [],
-    legacy: []
-  }))
+  auditLegacy: vi.fn(() =>
+    Promise.resolve({
+      dead: [],
+      legacy: [],
+    })
+  ),
 }));
 
 vi.mock('../../../src/facts/intendedMap', () => ({
-  buildIntendedMap: vi.fn(() => Promise.resolve(new Map()))
+  buildIntendedMap: vi.fn(() => Promise.resolve(new Map())),
 }));
 
 vi.mock('../../../src/utils/logger', () => ({
   logInfo: vi.fn(),
   logDebug: vi.fn(),
-  logError: vi.fn()
+  logError: vi.fn(),
 }));
 
 describe('LiveAnalysisEngine', () => {
@@ -83,12 +85,11 @@ describe('LiveAnalysisEngine', () => {
 
   it('should skip analysis if no bundle facts', async () => {
     (orchestrator.getState as any).mockReturnValue({
-      bundleFacts: null
+      bundleFacts: null,
     });
 
     await engine.analyze();
-    
-    // Should not throw and should not call updateLiveState when bundleFacts is null
+
     expect(orchestrator.updateLiveState).not.toHaveBeenCalled();
   });
 
@@ -96,17 +97,16 @@ describe('LiveAnalysisEngine', () => {
     (orchestrator.getState as any).mockReturnValue({
       bundleFacts: {
         bundle: { shas: ['abc123'] },
-        evidence: {}
-      }
+        evidence: {},
+      },
     });
 
     await engine.analyze();
 
-    // Should be called at least twice: once for 'analyzing' and once for final state
     expect(orchestrator.updateLiveState).toHaveBeenCalled();
     expect(orchestrator.updateLiveState).toHaveBeenCalledWith(
       expect.objectContaining({
-        status: expect.any(String)
+        status: expect.any(String),
       })
     );
   });

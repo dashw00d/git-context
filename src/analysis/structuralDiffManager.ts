@@ -1,17 +1,17 @@
 import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
+import type { CstDiffResult } from './cstDiff';
 import { getCstDiffManager } from './cstDiff';
 import { getDifftasticIntegration } from './difftastic';
-import type { CstDiffResult } from './cstDiff';
 
 export interface StructuralDiffMetrics {
-  structuralChangeScore: number; // 0-1
+  structuralChangeScore: number;
   controlFlowChanged: boolean;
   interfaceChanged: boolean;
   movedBlocks: number;
   linesAdded: number;
   linesRemoved: number;
-  rawData?: any; // Full difftastic output
+  rawData?: any;
 }
 
 interface QueuedDiff {
@@ -39,7 +39,6 @@ export class StructuralDiffManager {
     parentContent: string,
     currentContent: string
   ): Promise<StructuralDiffMetrics> {
-    // Quick check: if blob SHAs are identical, file content is unchanged
     if (parentBlobSha === currentBlobSha) {
       logDebug(`[StructDiff] Skipping diff for ${filePath} - identical blob SHA`);
       const emptyDiff: StructuralDiffMetrics = {
@@ -50,12 +49,11 @@ export class StructuralDiffManager {
         linesAdded: 0,
         linesRemoved: 0,
       };
-      // Cache the empty diff to avoid future checks
+
       this.storeDiff(parentBlobSha, currentBlobSha, filePath, emptyDiff);
       return emptyDiff;
     }
 
-    // Check cache
     const cached = this.getCachedDiff(parentBlobSha, currentBlobSha, filePath);
     if (cached) {
       logDebug(
@@ -67,7 +65,6 @@ export class StructuralDiffManager {
       return cached;
     }
 
-    // Run difftastic
     logDebug(`[StructDiff] Computing diff for ${filePath}`);
     const difftasticResult = await this.difftastic.runDifftastic(
       parentContent,
@@ -78,24 +75,16 @@ export class StructuralDiffManager {
 
     const metrics = this.extractMetrics(difftasticResult);
 
-    // Refine with CST diff if possible (uses tree-based verification)
     try {
       const cstResult = await this.computeCstDelta(parentContent, currentContent, filePath);
       if (cstResult.changedFacts.length > 0) {
-        // If we have verified CST changes, ensure score is at least 0.1 per change
-        // This helps surface structural changes that might be small in line count
         const cstScore = Math.min(cstResult.changedFacts.length * 0.1, 1.0);
         metrics.structuralChangeScore = Math.max(metrics.structuralChangeScore, cstScore);
-
-        // Also set interface/control flow flags if CST facts indicate it
-        // (This is a heuristic, as HybridFacts don't explicitly say "interface" vs "control flow" yet,
-        // but we can infer from kinds if needed. For now, just boosting score is good.)
       }
     } catch (e) {
       logDebug(`[StructDiff] Failed to compute CST delta for refinement: ${e}`);
     }
 
-    // Queue for batch write
     this.queueDiff(parentBlobSha, currentBlobSha, filePath, metrics);
 
     return metrics;
@@ -149,7 +138,6 @@ export class StructuralDiffManager {
     if (this.writeQueue.length === 0) return;
     const batch = this.writeQueue.splice(0, this.BATCH_SIZE);
 
-    // Get wrapped database with transaction support
     const stmt = prepare(`
       INSERT OR REPLACE INTO structural_diffs
       (parent_blob_sha, current_blob_sha, file_path, structural_change_score,
@@ -160,7 +148,6 @@ export class StructuralDiffManager {
 
     const now = new Date().toISOString();
 
-    // Use transaction wrapper instead of manual BEGIN/COMMIT
     this.db.transaction(() => {
       for (const diff of batch) {
         stmt.run([
@@ -188,18 +175,15 @@ export class StructuralDiffManager {
     filePath: string,
     metrics: StructuralDiffMetrics
   ): void {
-    // Legacy method - use queueDiff instead
     this.queueDiff(parentBlobSha, currentBlobSha, filePath, metrics);
   }
 
   private extractMetrics(difftasticOutput: any): StructuralDiffMetrics {
-    // Use parsed hunks and tags from enhanced difftastic output
     const hunks = difftasticOutput.hunks || [];
     const tags = difftasticOutput.tags || new Map<number, string[]>();
     const highlights = difftasticOutput.highlights || [];
     const morphs = difftasticOutput.morphs || [];
 
-    // Calculate lines added/removed from hunks
     let linesAdded = 0;
     let linesRemoved = 0;
 
@@ -208,14 +192,12 @@ export class StructuralDiffManager {
       linesRemoved += hunk.linesRemoved || 0;
     }
 
-    // Fallback: if hunks not available, parse raw difftastic output text
     if (hunks.length === 0 && difftasticOutput.rawData) {
       const rawOutput =
         typeof difftasticOutput.rawData === 'string'
           ? difftasticOutput.rawData
           : JSON.stringify(difftasticOutput.rawData);
 
-      // Parse @@ hunk headers with regex to identify valid hunk blocks
       const hunkRegex = /^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/gm;
       const hunkLines = rawOutput.split('\n');
 
@@ -223,10 +205,9 @@ export class StructuralDiffManager {
       for (let i = 0; i < hunkLines.length; i++) {
         const line = hunkLines[i];
 
-        // Check for hunk header
         if (hunkRegex.test(line)) {
           inHunk = true;
-          // Reset regex lastIndex because test() advances it
+
           hunkRegex.lastIndex = 0;
           continue;
         }
@@ -241,7 +222,6 @@ export class StructuralDiffManager {
       }
     }
 
-    // Detect control-flow changes from tagged lines
     let controlFlowChanged = false;
     for (const [, lineTags] of tags) {
       if (lineTags.includes('control-flow')) {
@@ -250,7 +230,6 @@ export class StructuralDiffManager {
       }
     }
 
-    // Detect interface changes from tagged lines or morphs
     let interfaceChanged = false;
     for (const [, lineTags] of tags) {
       if (lineTags.includes('interface')) {
@@ -259,22 +238,15 @@ export class StructuralDiffManager {
       }
     }
 
-    // Count moved blocks from morphs or heuristics
     const movedBlocks = morphs.filter((m: any) => m.type === 'moved_block').length;
 
-    // Calculate structural change score: min(linesChanged / 10, 1.0)
     const linesChanged = linesAdded + linesRemoved;
     let structuralChangeScore = Math.min(linesChanged / 10, 1.0);
 
-    // Refine with highlights if available (highlighted volume)
     if (highlights.length > 0 && linesChanged > 0) {
-      // Heuristic: if we have highlights, use them to weight the score
-      // A fully highlighted line counts more than a partially highlighted one
-      // For now, we'll just boost the score if there are many highlights relative to lines changed
       const highlightCount = highlights.length;
       const highlightRatio = Math.min(highlightCount / linesChanged, 1.0);
 
-      // Boost score based on highlight density, but cap at 1.0
       structuralChangeScore = Math.min(structuralChangeScore * (1 + highlightRatio), 1.0);
     }
 
@@ -289,9 +261,6 @@ export class StructuralDiffManager {
     };
   }
 
-  /**
-   * Compute CST delta for hybrid facts (CST-only or hybrid augmentation)
-   */
   async computeCstDelta(
     oldSerialized: string,
     newSerialized: string,

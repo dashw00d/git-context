@@ -7,12 +7,10 @@ import { logWarn } from '../utils/logger';
 import { CstExtractor } from './cstExtractor';
 const { Parser, Language } = require('web-tree-sitter');
 
-// Initialize parser state
 let isInitialized = false;
 const parsers = new Map<string, any>();
 const cstExtractor = new CstExtractor();
 
-// Message types
 type WorkerMessage =
   | { type: 'init'; wasmDir: string; languages: string[] }
   | {
@@ -26,15 +24,12 @@ type WorkerMessage =
     }
   | { type: 'serialize'; id: number; content: string; languageId: string; maxDepth?: number };
 
-// ... (init and extract functions remain) ...
-
 function serializeNode(node: any, depth: number): any {
   const serialized: any = {
     type: node.type,
     range: [node.startPosition.row + 1, node.endPosition.row + 1],
   };
 
-  // Include text for leaf nodes or specific interesting nodes
   if (node.childCount === 0 || isInterestingNode(node.type)) {
     const text = node.text;
     if (text.length > 200) {
@@ -75,10 +70,6 @@ function isInterestingNode(type: string): boolean {
 }
 
 function extractSymbolFromNode(node: any, filePath: string, language: string): SymbolInfo | null {
-  // Basic symbol extraction logic mirroring TreeSitterParser
-  // Note: Full implementation should match TreeSitterParser exactly.
-  // For brevity in this worker implementation, I'll include the core logic.
-
   if (language === LANGUAGES.PHP) {
     if (node.type === 'function_definition' || node.type === 'method_declaration') {
       const nameNode = node.childForFieldName('name');
@@ -153,7 +144,6 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
   return null;
 }
 
-// Extract symbols helper (duplicated from TreeSitterParser to run in worker)
 function extractSymbols(tree: any, filePath: string, language: string): SymbolInfo[] {
   const symbols: SymbolInfo[] = [];
   const cursor = tree.walk();
@@ -172,7 +162,6 @@ function extractSymbols(tree: any, filePath: string, language: string): SymbolIn
   }
 }
 
-// Initialize parsers
 async function initialize(wasmDir: string, languages: string[]) {
   if (isInitialized) return;
 
@@ -200,7 +189,6 @@ async function initialize(wasmDir: string, languages: string[]) {
   }
 }
 
-// Handle messages
 parentPort?.on('message', async (msg: WorkerMessage) => {
   if (msg.type === 'init') {
     await initialize(msg.wasmDir, msg.languages);

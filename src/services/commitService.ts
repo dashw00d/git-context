@@ -151,7 +151,6 @@ export class CommitService {
   }
 }
 
-// Singleton instance
 let commitServiceInstance: CommitService | null = null;
 
 export function getCommitService(): CommitService {
@@ -161,7 +160,6 @@ export function getCommitService(): CommitService {
   return commitServiceInstance;
 }
 
-// Types
 export interface CommitMetadata {
   sha: string;
   author: string;

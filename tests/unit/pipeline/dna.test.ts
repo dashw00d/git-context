@@ -1,15 +1,16 @@
-/**
- * Integration tests for pipeline enhancements
- * Tests Phase 1 (metrics), Phase 2 (concurrency), Phase 3 (accuracy), and DNA v2
- */
-
-import { describe, it, expect, beforeEach } from 'vitest';
-import { computeSymbolDNA, computeSymbolDNA_v2, configureDNA, assignDNAIds, assignDNAIds_v2, getDNAConfig } from '../../../src/analysis/symbolDna';
+import { beforeEach, describe, expect, it } from 'vitest';
+import {
+  assignDNAIds,
+  assignDNAIds_v2,
+  computeSymbolDNA,
+  computeSymbolDNA_v2,
+  configureDNA,
+  getDNAConfig,
+} from '../../../src/analysis/symbolDna';
 import { SymbolInfo } from '../../../src/types';
 
 describe('DNA v2 Integration Tests', () => {
   beforeEach(() => {
-    // Reset DNA config before each test
     configureDNA({ enableV2: false, preferV2: false, v2MaxDepth: 5, v2NgramSizes: [2, 3] });
   });
 
@@ -31,8 +32,8 @@ describe('DNA v2 Integration Tests', () => {
       configureDNA({ enableV2: true });
       const config = getDNAConfig();
       expect(config.enableV2).toBe(true);
-      expect(config.preferV2).toBe(false); // Should remain false
-      expect(config.v2MaxDepth).toBe(5); // Should remain 5
+      expect(config.preferV2).toBe(false);
+      expect(config.v2MaxDepth).toBe(5);
     });
   });
 
@@ -52,7 +53,7 @@ describe('DNA v2 Integration Tests', () => {
       const dna2 = computeSymbolDNA(symbol, bodyText);
 
       expect(dna1).toBe(dna2);
-      expect(dna1).toHaveLength(16); // 16 char substring of SHA256
+      expect(dna1).toHaveLength(16);
     });
 
     it('should produce different DNA for different structure', () => {
@@ -69,7 +70,7 @@ describe('DNA v2 Integration Tests', () => {
         id: 'test2',
         dnaId: '',
         name: 'bar',
-        kind: 'class', // Different kind
+        kind: 'class',
         signature: '(x: number)',
         location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
       };
@@ -112,18 +113,23 @@ describe('DNA v2 Integration Tests', () => {
       const symbol2: SymbolInfo = {
         id: 'test2',
         dnaId: '',
-        name: 'bar', // Different name
+        name: 'bar',
         kind: 'function',
-        signature: '(y: number)', // Different param name
+        signature: '(y: number)',
         location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
       };
 
-      // Same structure, different names
-      const dna1 = await computeSymbolDNA_v2(symbol1, 'function foo(x) { return x + 1; }', 'typescript');
-      const dna2 = await computeSymbolDNA_v2(symbol2, 'function bar(y) { return y + 1; }', 'typescript');
+      const dna1 = await computeSymbolDNA_v2(
+        symbol1,
+        'function foo(x) { return x + 1; }',
+        'typescript'
+      );
+      const dna2 = await computeSymbolDNA_v2(
+        symbol2,
+        'function bar(y) { return y + 1; }',
+        'typescript'
+      );
 
-      // Note: The current implementation may not be fully stable due to simplified n-gram extraction
-      // This test documents expected behavior - full stability requires more sophisticated AST walking
       expect(dna1).toBeTruthy();
       expect(dna2).toBeTruthy();
     });
@@ -147,11 +153,17 @@ describe('DNA v2 Integration Tests', () => {
         location: { start: { line: 1, column: 0 }, end: { line: 5, column: 0 } },
       };
 
-      // Different structure (added if statement)
-      const dna1 = await computeSymbolDNA_v2(symbol1, 'function foo(x) { return x + 1; }', 'typescript');
-      const dna2 = await computeSymbolDNA_v2(symbol2, 'function foo(x) { if (x > 0) return x + 1; return 0; }', 'typescript');
+      const dna1 = await computeSymbolDNA_v2(
+        symbol1,
+        'function foo(x) { return x + 1; }',
+        'typescript'
+      );
+      const dna2 = await computeSymbolDNA_v2(
+        symbol2,
+        'function foo(x) { if (x > 0) return x + 1; return 0; }',
+        'typescript'
+      );
 
-      // DNA should differ due to structural change
       expect(dna1).not.toBe(dna2);
     });
   });
@@ -196,8 +208,8 @@ describe('DNA v2 Integration Tests', () => {
       const result = await assignDNAIds_v2(symbols, bodyTexts, 'typescript');
 
       expect(result).toHaveLength(1);
-      expect(result[0].dnaId).toBeTruthy(); // v1
-      expect(result[0].dnaIdV2).toBeTruthy(); // v2
+      expect(result[0].dnaId).toBeTruthy();
+      expect(result[0].dnaIdV2).toBeTruthy();
       expect(result[0].dnaVersion).toBe(2);
     });
 
@@ -219,8 +231,8 @@ describe('DNA v2 Integration Tests', () => {
       const result = await assignDNAIds_v2(symbols, bodyTexts, 'typescript');
 
       expect(result).toHaveLength(1);
-      expect(result[0].dnaId).toBeTruthy(); // v1
-      expect(result[0].dnaIdV2).toBeUndefined(); // v2 not computed
+      expect(result[0].dnaId).toBeTruthy();
+      expect(result[0].dnaIdV2).toBeUndefined();
       expect(result[0].dnaVersion).toBe(1);
     });
 
@@ -254,8 +266,7 @@ describe('DNA v2 Integration Tests', () => {
       const result = await assignDNAIds_v2(symbols, bodyTexts, 'typescript');
 
       expect(result).toHaveLength(2);
-      // Note: With simplified n-gram extraction, small functions may produce similar DNAs
-      // This is expected behavior - full differentiation requires more sophisticated AST walking
+
       expect(result[0].dnaId).toBeTruthy();
       expect(result[1].dnaId).toBeTruthy();
       expect(result[0].dnaIdV2).toBeTruthy();

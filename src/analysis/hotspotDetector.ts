@@ -1,18 +1,18 @@
 import * as crypto from 'crypto';
+import type { CommitFacts } from '../analysis/commitIndexer';
 import { DatabaseService, getDatabaseService } from '../services/databaseService';
 import { getDatabaseManager } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
 import { BaseDetector, DetectorConfig } from './detectors/BaseDetector';
-import type { CommitFacts } from '../analysis/commitIndexer';
 
 export interface HotspotMetrics {
-  commitFrequency: number; // How often the entity changes (0-1)
-  recency: number; // How recently it changed (0-1, decay factor)
-  authorDiversity: number; // How many different authors touched it (0-1)
-  changeIntensity: number; // Average size/impact of changes (0-1)
-  temporalClustering: number; // Are changes clustered in time or spread out? (0-1)
+  commitFrequency: number;
+  recency: number;
+  authorDiversity: number;
+  changeIntensity: number;
+  temporalClustering: number;
 }
 
 export interface FileHotspot {
@@ -25,8 +25,8 @@ export interface FileHotspot {
   hotspotScore: number;
   firstSeenSha: string;
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
-  touchedInVersions?: string[]; // Which timeline versions modified this file
-  touchedInVersionsDescription?: string; // Human-readable summary (e.g., "3/5 versions")
+  touchedInVersions?: string[];
+  touchedInVersionsDescription?: string;
 }
 
 export interface SymbolHotspot {
@@ -62,13 +62,12 @@ export class HotspotDetector {
    * Calculate hotspot score from metrics (0-100)
    */
   calculateHotspotScore(metrics: HotspotMetrics): number {
-    // Weighted combination
     const weights = {
-      commitFrequency: 0.35, // Most important: how often it changes
-      recency: 0.2, // Recent changes matter more
-      authorDiversity: 0.15, // Multiple authors = coordination issues
-      changeIntensity: 0.2, // Large changes = higher risk
-      temporalClustering: 0.1, // Burst changes = instability
+      commitFrequency: 0.35,
+      recency: 0.2,
+      authorDiversity: 0.15,
+      changeIntensity: 0.2,
+      temporalClustering: 0.1,
     };
 
     const rawScore =
@@ -78,7 +77,6 @@ export class HotspotDetector {
       metrics.changeIntensity * weights.changeIntensity +
       metrics.temporalClustering * weights.temporalClustering;
 
-    // Normalize to 0-100 and apply logarithmic scaling to prevent outliers
     return Math.min(100, Math.log10(1 + rawScore * 9) * 100);
   }
 
@@ -103,13 +101,10 @@ export class HotspotDetector {
   ): Promise<void> {
     const now = new Date().toISOString();
 
-    // Get current file hotspot data
     const existing = this.getFileHotspot(filePath);
 
-    // Calculate metrics for this file
     const metrics = await this.calculateFileMetrics(filePath, sha, symbolChanges, author);
 
-    // Update or insert file hotspot
     const stmt = this.dbManager.getDatabase().prepare(`
       INSERT OR REPLACE INTO file_hotspots
       (file_path, total_commits, total_changes, unique_authors,
@@ -149,18 +144,15 @@ export class HotspotDetector {
 
     const now = new Date().toISOString();
 
-    // Generate cache key from symbols + SHA
     const cacheKey = this.generateCacheKey(symbols, sha);
     const cacheHash = crypto.createHash('sha256').update(cacheKey).digest('hex');
 
-    // Check cache (TTL 3600s)
     const cached = this.getCachedResult(cacheHash);
     if (cached) {
       logDebug(`[HotspotDetector] Cache hit for batch update (${symbols.length} symbols)`);
       return;
     }
 
-    // Get existing hotspots for deduplication
     const dnaIds = symbols.filter(s => s.dnaId).map(s => s.dnaId!);
     if (dnaIds.length === 0) return;
 
@@ -175,7 +167,6 @@ export class HotspotDetector {
       existing.set(row.symbol_id, row.hotspot_score);
     }
 
-    // Prepare batch insert statement
     const insertStmt = prepare(`
       INSERT OR REPLACE INTO symbol_hotspots
       (symbol_id, file_path, symbol_type, symbol_name,
@@ -184,7 +175,6 @@ export class HotspotDetector {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    // Calculate metrics for all symbols first (before transaction)
     const symbolMetrics = new Map<string, { hotspotScore: number; riskLevel: string }>();
     for (const symbol of symbols) {
       if (!symbol.dnaId) continue;
@@ -198,7 +188,6 @@ export class HotspotDetector {
       }
     }
 
-    // Process symbols in batch transaction
     const batch = this.dbManager.getDatabase().transaction((symbols: SymbolInfo[]) => {
       let skipped = 0;
       let updated = 0;
@@ -222,10 +211,8 @@ export class HotspotDetector {
         }
 
         try {
-          // Get existing hotspot
           const existingHotspot = this.getSymbolHotspot(symbol.dnaId);
 
-          // Deduplication: skip if score delta < 5%
           const existingScore = existing.get(symbol.dnaId);
           if (existingScore !== undefined) {
             const scoreDelta = Math.abs(metrics.hotspotScore - existingScore);
@@ -270,7 +257,6 @@ export class HotspotDetector {
       `[HotspotDetector] Batch updated ${result.updated} symbols, skipped ${result.skipped} (dedup/cache)`
     );
 
-    // Cache the result (pass original cacheKey for cache_key, hash for cache_hash)
     this.setCachedResult(cacheKey, cacheHash, now);
   }
 
@@ -278,16 +264,13 @@ export class HotspotDetector {
    * Update hotspot metrics for a symbol
    */
   async updateSymbolHotspot(symbol: SymbolInfo, sha: string): Promise<void> {
-    // Early validation
     if (!symbol.id || !symbol.dnaId) {
       logDebug(`[HotspotDetector] Skipping invalid symbol ${symbol.name}: missing id/dnaId`);
       return;
     }
 
-    // Extract file path from symbol ID (format: "file/path.ext:symbolName")
     const filePath = symbol.id.includes(':') ? symbol.id.split(':')[0] : '';
 
-    // Skip if we can't extract a valid file path
     if (!filePath || filePath.trim() === '') {
       logDebug(
         `[HotspotDetector] Skipping symbol ${symbol.name}: no valid file path from ID ${symbol.id}`
@@ -298,13 +281,10 @@ export class HotspotDetector {
     try {
       const now = new Date().toISOString();
 
-      // Get current symbol hotspot data
       const existing = this.getSymbolHotspot(symbol.dnaId);
 
-      // Calculate metrics for this symbol
       const metrics = await this.calculateSymbolMetrics(symbol.dnaId, sha);
 
-      // Update or insert symbol hotspot
       const stmt = this.dbManager.getDatabase().prepare(`
         INSERT OR REPLACE INTO symbol_hotspots
         (symbol_id, file_path, symbol_type, symbol_name,
@@ -339,7 +319,6 @@ export class HotspotDetector {
       logDebug(
         `[HotspotDetector] Failed to update symbol hotspot ${symbol.name} (id: ${symbol.id}): ${error.message}`
       );
-      // Don't throw - gracefully skip problematic symbols
     }
   }
 
@@ -443,10 +422,9 @@ export class HotspotDetector {
   async createSnapshot(sha: string): Promise<void> {
     const now = new Date().toISOString();
 
-    // Snapshot file hotspots
-    const fileHotspots = await this.getTopFileHotspots(1000); // Get all
+    const fileHotspots = await this.getTopFileHotspots(1000);
     for (const hotspot of fileHotspots) {
-      if (!hotspot.filePath) continue; // Skip hotspots with null file paths
+      if (!hotspot.filePath) continue;
 
       const stmt = this.dbManager.getDatabase().prepare(`
         INSERT INTO hotspot_snapshots
@@ -456,10 +434,9 @@ export class HotspotDetector {
       stmt.run([sha, now, 'file', hotspot.filePath, hotspot.hotspotScore, hotspot.totalChanges]);
     }
 
-    // Snapshot symbol hotspots
-    const symbolHotspots = await this.getTopSymbolHotspots(1000); // Get all
+    const symbolHotspots = await this.getTopSymbolHotspots(1000);
     for (const hotspot of symbolHotspots) {
-      if (!hotspot.symbolId) continue; // Skip hotspots with null symbol IDs
+      if (!hotspot.symbolId) continue;
 
       const stmt = this.dbManager.getDatabase().prepare(`
         INSERT INTO hotspot_snapshots
@@ -493,29 +470,23 @@ export class HotspotDetector {
     hotspotScore: number;
     riskLevel: 'low' | 'medium' | 'high' | 'critical';
   }> {
-    // Get historical data for this file
     const history = await this.getFileHistory(filePath);
 
-    // Calculate commit frequency (how often it changes relative to total commits)
     const totalCommits = await this.getTotalCommitCount();
     const fileCommits = history.length;
     const commitFrequency =
       totalCommits > 0 ? Math.min(1, fileCommits / Math.sqrt(totalCommits)) : 0;
 
-    // Calculate recency (exponential decay from last change)
     const lastChange = history.length > 0 ? new Date(history[history.length - 1]) : new Date();
     const daysSinceLastChange = (Date.now() - lastChange.getTime()) / (1000 * 60 * 60 * 24);
-    const recency = Math.exp(-daysSinceLastChange / 30); // 30-day half-life
+    const recency = Math.exp(-daysSinceLastChange / 30);
 
-    // Calculate author diversity
     const uniqueAuthors = await this.getFileAuthorCount(filePath);
-    const authorDiversity = Math.min(1, uniqueAuthors / 5); // Normalize to 0-1
+    const authorDiversity = Math.min(1, uniqueAuthors / 5);
 
-    // Calculate change intensity (average symbol changes per commit)
     const avgChangesPerCommit = fileCommits > 0 ? symbolChanges.length / fileCommits : 0;
-    const changeIntensity = Math.min(1, avgChangesPerCommit / 10); // Normalize
+    const changeIntensity = Math.min(1, avgChangesPerCommit / 10);
 
-    // Calculate temporal clustering (burstiness of changes)
     const temporalClustering = this.calculateTemporalClustering(history);
 
     const metrics: HotspotMetrics = {
@@ -542,10 +513,8 @@ export class HotspotDetector {
     hotspotScore: number;
     riskLevel: 'low' | 'medium' | 'high' | 'critical';
   }> {
-    // Get historical data for this symbol
     const history = await this.getSymbolHistory(symbolId);
 
-    // Similar calculations as file metrics but for symbols
     const totalCommits = await this.getTotalCommitCount();
     const symbolCommits = history.length;
     const commitFrequency =
@@ -555,7 +524,6 @@ export class HotspotDetector {
     const daysSinceLastChange = (Date.now() - lastChange.getTime()) / (1000 * 60 * 60 * 24);
     const recency = Math.exp(-daysSinceLastChange / 30);
 
-    // For symbols, use a simpler model
     const authorDiversity = 0.5; // Placeholder
     const changeIntensity = Math.min(1, symbolCommits / 20);
     const temporalClustering = this.calculateTemporalClustering(history);
@@ -580,24 +548,20 @@ export class HotspotDetector {
   private calculateTemporalClustering(history: Date[]): number {
     if (history.length < 2) return 0;
 
-    // Calculate gaps between changes
     const gaps: number[] = [];
     for (let i = 1; i < history.length; i++) {
       const gap = history[i].getTime() - history[i - 1].getTime();
-      gaps.push(gap / (1000 * 60 * 60 * 24)); // Convert to days
+      gaps.push(gap / (1000 * 60 * 60 * 24));
     }
 
-    // Calculate coefficient of variation (CV) of gaps
     const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
     const variance = gaps.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / gaps.length;
     const stdDev = Math.sqrt(variance);
     const cv = mean > 0 ? stdDev / mean : 0;
 
-    // Higher CV means more clustered (bursty) changes
     return Math.min(1, cv / 2);
   }
 
-  // Helper methods
   private getFileHotspot(filePath: string): FileHotspot | null {
     const stmt = this.dbManager.getDatabase().prepare(`
       SELECT * FROM file_hotspots WHERE file_path = ?
@@ -672,7 +636,6 @@ export class HotspotDetector {
 
   private async getFileAuthorCount(filePath: string): Promise<number> {
     try {
-      // Get unique authors who have modified this file from git history
       const stmt = prepare(`
         SELECT COUNT(DISTINCT m.author) as author_count
         FROM commits_metadata m
@@ -681,17 +644,13 @@ export class HotspotDetector {
       `);
       const result = stmt.get(filePath) as { author_count: number } | undefined;
 
-      // Return author count, or default to 1 if no data (file might be new/untracked)
       return result?.author_count || 1;
     } catch (error) {
-      // If query fails, return a conservative estimate
       return 1;
     }
   }
 
   private async updateAuthorCount(filePath: string, author: string): Promise<number> {
-    // This is a simplified implementation
-    // In a real system, we'd maintain an author count per file
     const current = this.getFileHotspot(filePath);
     return (current?.uniqueAuthors || 0) + (author !== 'unknown' ? 1 : 0);
   }
@@ -716,14 +675,13 @@ export class HotspotDetector {
       SELECT expires_at FROM hotspot_cache
       WHERE cache_hash = ?
     `);
-    // Use array syntax for consistency with sql.js
+
     const row = stmt.get([cacheHash]) as any;
 
     if (!row) return false;
 
     const expiresAt = new Date(row.expires_at);
     if (expiresAt < new Date()) {
-      // Expired, clean up
       const deleteStmt = prepare(`DELETE FROM hotspot_cache WHERE cache_hash = ?`);
       deleteStmt.run([cacheHash]);
       return false;
@@ -741,7 +699,7 @@ export class HotspotDetector {
       return;
     }
 
-    const expiresAt = new Date(new Date(cachedAt).getTime() + 3600 * 1000); // TTL 3600s
+    const expiresAt = new Date(new Date(cachedAt).getTime() + 3600 * 1000);
 
     try {
       const stmt = prepare(`
@@ -750,11 +708,9 @@ export class HotspotDetector {
         VALUES (?, ?, ?, ?)
       `);
 
-      // Use array syntax for sql.js (consistent with other batch operations)
       stmt.run([cacheKey, cacheHash, cachedAt, expiresAt.toISOString()]);
     } catch (error: any) {
       logDebug(`[HotspotDetector] Cache insert failed: ${error.message}`);
-      // Don't throw - caching is non-critical
     }
   }
 
@@ -771,10 +727,6 @@ export class HotspotDetector {
   }
 }
 
-/**
- * Hotspot detector that extends BaseDetector for unified analysis patterns
- * Delegates operational methods to legacy detector for backward compatibility
- */
 export class HotspotDetectorV2 extends BaseDetector<
   CommitFacts[],
   Array<FileHotspot | SymbolHotspot>
@@ -783,21 +735,14 @@ export class HotspotDetectorV2 extends BaseDetector<
 
   constructor(config: Partial<DetectorConfig> = {}) {
     super({
-      enableCaching: true, // Enable caching for hotspot calculations
+      enableCaching: true,
       ...config,
     });
     this.legacyDetector = new HotspotDetector();
   }
 
-  /**
-   * Detect hotspots from commit facts (BaseDetector interface)
-   */
   async detect(commitFacts: CommitFacts[]): Promise<Array<FileHotspot | SymbolHotspot>> {
     return this.getCachedResult(this.generateCacheKey(commitFacts), async () => {
-      // For now, this is a wrapper that calls the existing detector methods
-      // In a full migration, this would compute hotspots from commit facts directly
-
-      // Get hotspots from the legacy detector
       const fileHotspots = await this.legacyDetector.getTopFileHotspots(25);
       const symbolHotspots = await this.legacyDetector.getTopSymbolHotspots(25);
 
@@ -805,10 +750,6 @@ export class HotspotDetectorV2 extends BaseDetector<
     });
   }
 
-  /**
-   * Update hotspot metrics for a file
-   * Delegates to legacy detector
-   */
   async updateFileHotspot(
     filePath: string,
     sha: string,
@@ -818,50 +759,26 @@ export class HotspotDetectorV2 extends BaseDetector<
     return this.legacyDetector.updateFileHotspot(filePath, sha, symbolChanges, author);
   }
 
-  /**
-   * Batch update hotspot metrics for multiple symbols
-   * Delegates to legacy detector
-   */
   async batchUpdateSymbols(symbols: SymbolInfo[], sha: string): Promise<void> {
     return this.legacyDetector.batchUpdateSymbols(symbols, sha);
   }
 
-  /**
-   * Get top N hotspot files
-   * Delegates to legacy detector
-   */
   async getTopFileHotspots(limit: number = 20): Promise<FileHotspot[]> {
     return this.legacyDetector.getTopFileHotspots(limit);
   }
 
-  /**
-   * Get top N hotspot symbols
-   * Delegates to legacy detector
-   */
   async getTopSymbolHotspots(limit: number = 20, filterByFile?: string): Promise<SymbolHotspot[]> {
     return this.legacyDetector.getTopSymbolHotspots(limit, filterByFile);
   }
 
-  /**
-   * Calculate hotspot score from metrics
-   * Delegates to legacy detector
-   */
   calculateHotspotScore(metrics: HotspotMetrics): number {
     return this.legacyDetector.calculateHotspotScore(metrics);
   }
 
-  /**
-   * Classify risk level based on hotspot score
-   * Delegates to legacy detector
-   */
   classifyRiskLevel(score: number): 'low' | 'medium' | 'high' | 'critical' {
     return this.legacyDetector.classifyRiskLevel(score);
   }
 
-  /**
-   * Create periodic snapshot for trend analysis
-   * Delegates to legacy detector
-   */
   async createSnapshot(sha: string): Promise<void> {
     return this.legacyDetector.createSnapshot(sha);
   }

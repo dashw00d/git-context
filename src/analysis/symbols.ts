@@ -43,7 +43,6 @@ export class SymbolExtractor {
     const removed: SymbolInfo[] = [];
     const modified: SymbolDelta[] = [];
 
-    // Collect symbols from all files
     for (const file of files) {
       if (await this.shouldAnalyzeFile(file.path)) {
         const fileSymbols = await this.extractFileSymbols(sha, file);
@@ -53,19 +52,14 @@ export class SymbolExtractor {
       }
     }
 
-    // Get parent commit for comparison
     let parentSha: string | undefined;
     try {
       const commitInfo = await this.git.getCommitInfo(sha);
       parentSha = commitInfo.parent;
-    } catch (error) {
-      // No parent commit available
-    }
+    } catch (error) {}
 
-    // Perform semantic analysis for renames and moves
     const renames = parentSha ? this.semanticDetector.detectRenames(removed, added) : [];
 
-    // For moves, we need symbols from previous commit
     let previousSymbols: SymbolInfo[] = [];
     if (parentSha) {
       try {
@@ -75,9 +69,7 @@ export class SymbolExtractor {
           ...previousCommitSymbols.removed,
           ...previousCommitSymbols.modified.map(m => m.symbol),
         ];
-      } catch (error) {
-        // Can't get previous symbols
-      }
+      } catch (error) {}
     }
 
     const currentSymbols = [...added, ...modified.map(m => m.symbol)];
@@ -102,22 +94,18 @@ export class SymbolExtractor {
     const modified: SymbolDelta[] = [];
 
     try {
-      // Skip deleted files - they don't exist in the commit
       if (file.status === 'D') {
         return { added, removed, modified };
       }
 
-      // Get current file content (use safe method to handle path mismatches)
       logInfo(`Extracting ${file.path} at ${sha.substring(0, 8)} (status: ${file.status})`);
       const currentContent = await this.git.safeGetFileContent(sha, file.path);
 
-      // Skip if file doesn't exist at this SHA (path mismatch, rename, or file added later)
       if (!currentContent) {
         logInfo(`Skipping ${file.path} at ${sha.substring(0, 8)} - not found in commit`);
         return { added, removed, modified };
       }
 
-      // Get previous file content (if it exists)
       let previousContent: string | null = null;
       if (file.status !== 'A' && file.oldPath) {
         try {
@@ -126,9 +114,7 @@ export class SymbolExtractor {
           if (parentSha) {
             previousContent = await this.git.safeGetFileContent(parentSha, file.oldPath);
           }
-        } catch {
-          // File didn't exist in parent, treat as new
-        }
+        } catch {}
       } else if (file.status !== 'A') {
         try {
           const commitInfo = await this.git.getCommitInfo(sha);
@@ -136,12 +122,9 @@ export class SymbolExtractor {
           if (parentSha) {
             previousContent = await this.git.safeGetFileContent(parentSha, file.path);
           }
-        } catch {
-          // File didn't exist in parent, treat as new
-        }
+        } catch {}
       }
 
-      // Extract symbols from both versions
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
       const bodyTexts = new Map([[file.path, currentContent]]);
       const currentSymbolsWithDNA = await assignDNAIds_v2(
@@ -156,11 +139,6 @@ export class SymbolExtractor {
 
       let previousSymbolsWithDNA = previousSymbols;
       if (previousContent) {
-        // We might want to resolve previous symbols too if they haven't been resolved
-        // But typically we rely on them being in the DB already.
-        // For robustness in this flow, we can try to resolve them if needed,
-        // but let's assume for now we focus on the current commit's DNA.
-        // Actually, for diffing, having DNA on both sides helps.
         const bodyTexts = new Map([[file.oldPath || file.path, previousContent]]);
         previousSymbolsWithDNA = await assignDNAIds_v2(
           previousSymbols,
@@ -169,19 +147,15 @@ export class SymbolExtractor {
         );
       }
 
-      // Compare and categorize changes using DNA-based symbols for accurate tracking
       const changes = this.compareSymbolSets(
         previousSymbolsWithDNA,
         currentSymbolsWithDNA,
         file.path
       );
 
-      // Enhance modified symbols with semantic information
       for (const delta of changes.modified) {
-        // Classify modification reason
         delta.modReason = this.semanticDetector.classifyModificationReason(delta);
 
-        // Capture diff snippets if content available
         if (previousContent && currentContent) {
           const snippets = this.semanticDetector.extractDiffSnippets(
             previousContent,
@@ -246,7 +220,6 @@ export class SymbolExtractor {
     const modified: SymbolDelta[] = [];
 
     try {
-      // Get current working tree content (staged or unstaged)
       const currentContent = options.staged
         ? await this.git.safeGetStagedContent(file.path)
         : this.git.safeGetWorkingContent(file.path);
@@ -256,10 +229,8 @@ export class SymbolExtractor {
         return { added, removed, modified };
       }
 
-      // Get HEAD content for comparison
       const headContent = await this.git.safeGetFileContent('HEAD', file.path);
 
-      // Extract symbols from both versions
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
       const bodyTexts = new Map([[file.path, currentContent]]);
       const currentSymbolsWithDNA = await assignDNAIds_v2(
@@ -282,14 +253,11 @@ export class SymbolExtractor {
         );
       }
 
-      // Compare and categorize changes
       const changes = this.compareSymbolSets(headSymbolsWithDNA, currentSymbolsWithDNA, file.path);
 
-      // Enhance modified symbols with semantic information
       for (const delta of changes.modified) {
         delta.modReason = this.semanticDetector.classifyModificationReason(delta);
 
-        // Capture diff snippets if content available
         if (headContent && currentContent) {
           const snippets = this.semanticDetector.extractDiffSnippets(
             headContent,
@@ -331,10 +299,8 @@ export class SymbolExtractor {
       modified: SymbolDelta[];
     };
   }> {
-    // Parse current content to get new symbols
     const newSymbols = await this.extractSymbolsFromContent(content, path);
 
-    // Use existing compareSymbolSets for change classification
     const delta = this.compareSymbolSets(prevSymbols, newSymbols, path);
 
     return {
@@ -353,11 +319,8 @@ export class SymbolExtractor {
       return [];
     }
 
-    // Use worker to extract all facts, then filter for semantic symbols
     const facts = await this.parser.extractHybridFacts(content, filePath, language);
 
-    // Filter for semantic symbols (exclude CST nodes)
-    // Note: We strictly filter for known symbol kinds to avoid CST noise
     const symbolKinds = new Set([
       'function',
       'method',
@@ -370,7 +333,6 @@ export class SymbolExtractor {
     ]);
     const symbols = facts.filter(f => symbolKinds.has(f.kind)) as SymbolInfo[];
 
-    // Add unique IDs and ensure they include file path for uniqueness
     return symbols.map(symbol => ({
       ...symbol,
       semanticId: symbol.id,
@@ -389,7 +351,6 @@ export class SymbolExtractor {
     const symbols = await this.extractSymbolsFromContent(content, filePath);
     const bodyTexts = new Map<string, string>();
 
-    // For each symbol, extract body text from content
     for (const symbol of symbols) {
       const bodyText = this.extractBodyText(
         content,
@@ -423,31 +384,26 @@ export class SymbolExtractor {
     const removed: SymbolInfo[] = [];
     const modified: SymbolDelta[] = [];
 
-    // Create maps for efficient lookup
     const previousMap = new Map(previous.map(s => [s.id, s]));
     const currentMap = new Map(current.map(s => [s.id, s]));
 
-    // Find added symbols
     for (const symbol of current) {
       if (!previousMap.has(symbol.id)) {
         added.push(symbol);
       }
     }
 
-    // Find removed symbols
     for (const symbol of previous) {
       if (!currentMap.has(symbol.id)) {
         removed.push(symbol);
       }
     }
 
-    // Find modified symbols
     for (const currentSymbol of current) {
       const previousSymbol = previousMap.get(currentSymbol.id);
       if (previousSymbol) {
         const changeType = this.determineSymbolChange(previousSymbol, currentSymbol);
         if (changeType !== 'body_changed') {
-          // Only report significant changes
           modified.push({
             symbol: currentSymbol,
             changeType,
@@ -464,24 +420,19 @@ export class SymbolExtractor {
    * Determine the type of change between two symbol versions
    */
   private determineSymbolChange(previous: SymbolInfo, current: SymbolInfo): SymbolChangeType {
-    // Check if signature changed
     if (previous.signature !== current.signature) {
-      // Check if it's a breaking change (public API change)
       if (this.isPublicSymbol(previous) && this.isPublicSymbol(current)) {
         return 'signature_changed';
       }
     }
 
-    // Check if location changed significantly (might indicate move/refactor)
     const prevLines = previous.location.end.line - previous.location.start.line;
     const currLines = current.location.end.line - current.location.start.line;
 
     if (Math.abs(prevLines - currLines) > 10) {
-      // Arbitrary threshold
       return 'body_changed';
     }
 
-    // Default to body change
     return 'body_changed';
   }
 
@@ -489,7 +440,6 @@ export class SymbolExtractor {
    * Check if a symbol is public (exported)
    */
   private isPublicSymbol(symbol: SymbolInfo): boolean {
-    // Simple heuristic: symbols starting with underscore are private
     return !symbol.name.startsWith('_');
   }
 
@@ -500,12 +450,10 @@ export class SymbolExtractor {
     const language = detectLanguage(filePath);
     if (!language) return false;
 
-    // Use centralized path filter (primary check)
     if (!(await filterPath(filePath, { git: this.git }))) {
       return false;
     }
 
-    // Additional skip patterns for workspace-specific exclusions
     const skipPatterns = [/vendor/, /\.min\./, getTestFilePattern()];
 
     return !skipPatterns.some(pattern => pattern.test(filePath));
@@ -527,17 +475,14 @@ export class SymbolExtractor {
     for (const file of stagedChanges) {
       if (file.status === 'M' && (await this.shouldAnalyzeFile(file.path))) {
         try {
-          // Get staged content from git index
           const stagedContent = await this.git.safeGetStagedContent(file.path);
           if (!stagedContent) {
             logDebug(`[SymbolExtractor] No staged content for ${file.path}`);
             continue;
           }
 
-          // Get HEAD content for comparison
           const headContent = await this.git.safeGetFileContent('HEAD', file.path);
 
-          // Extract symbols from both versions
           const stagedSymbols = await this.extractSymbolsFromContent(stagedContent, file.path);
           const bodyTexts = new Map([[file.path, stagedContent]]);
           const stagedSymbolsWithDNA = await assignDNAIds_v2(
@@ -560,7 +505,6 @@ export class SymbolExtractor {
             );
           }
 
-          // Compare and categorize changes
           const changes = this.compareSymbolSets(
             headSymbolsWithDNA,
             stagedSymbolsWithDNA,

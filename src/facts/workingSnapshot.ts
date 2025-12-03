@@ -11,7 +11,7 @@ export interface WorkingSnapshot {
   symbolsById: Map<string, SymbolContext>;
   symbolsByFile: Map<string, SymbolContext[]>;
   edges: EdgeContext[];
-  analyzedPaths: Set<string>; // Track which paths were analyzed
+  analyzedPaths: Set<string>;
 }
 
 /**
@@ -29,7 +29,7 @@ export async function getWorkingSnapshot(
       symbolsByFile: new Map(),
       edges: [],
       analyzedPaths: new Set(),
-    }; // Return empty snapshot instead of throwing
+    };
   }
 
   const symbolsById = new Map<string, SymbolContext>();
@@ -37,23 +37,19 @@ export async function getWorkingSnapshot(
   const edges: EdgeContext[] = [];
   const analyzedPaths = new Set<string>();
 
-  // Initialize analyzers
   const git = new GitOperations();
   const symbolExtractor = new SymbolExtractor(git);
   const dependencyExtractor = new DependencyExtractor();
 
-  // Only analyze files in scope
   for (const filePath of scopePaths) {
     try {
       const fullPath = path.join(gitRoot, filePath);
 
-      // Check if file exists
       if (!fs.existsSync(fullPath)) {
         logInfo(`Skipping non-existent path: ${filePath}`);
         continue;
       }
 
-      // Check if it's a file (not a directory)
       const stat = fs.statSync(fullPath);
       if (!stat.isFile()) {
         logInfo(`Skipping non-file (directory or link): ${filePath}`);
@@ -70,13 +66,9 @@ export async function getWorkingSnapshot(
         content = fs.readFileSync(fullPath, 'utf8');
       }
 
-      // Extract symbols from current file using the same SymbolExtractor as commit analysis
-      // CRITICAL: This MUST use the exact same extractor and ID format as commit analysis
-      // to ensure semantic ID consistency (symbol.id format: `${filePath}:${semanticId}`)
       const symbols = await symbolExtractor.extractSymbolsFromContent(content, filePath);
 
       for (const symbol of symbols) {
-        // Verify symbol ID format matches commit analysis format
         if (!symbol.id || !symbol.id.includes(':')) {
           logWarn(
             `Invalid symbol ID format in ${filePath}: ${symbol.id}. Expected format: path:semanticId`
@@ -86,7 +78,7 @@ export async function getWorkingSnapshot(
 
         const symbolContext: SymbolContext = {
           id: 0, // Placeholder for working snapshot (not from database)
-          symbol_id: symbol.id, // This MUST match the symbol_id stored in database from commit analysis
+          symbol_id: symbol.id,
           name: symbol.name,
           kind: symbol.kind,
           signature: symbol.signature,
@@ -106,7 +98,6 @@ export async function getWorkingSnapshot(
         symbolsByFile.get(filePath)!.push(symbolContext);
       }
 
-      // Extract edges from current file
       const fileEdges = dependencyExtractor.extractDependencies(content, filePath, symbols);
       edges.push(
         ...fileEdges.map(edge => ({

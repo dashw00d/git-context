@@ -22,10 +22,8 @@ export async function registerCockpitFeatures(
   const orchestrator = shell.getOrchestrator();
   const store = getStore();
 
-  // Initialize Effects System
   new CockpitEffects(store, providers);
 
-  // Live Analysis Commands
   shell.registerCommand('git-context.startLiveAnalysis', async () => {
     const liveEngine = (orchestrator as any).liveEngine;
     if (liveEngine) {
@@ -40,11 +38,6 @@ export async function registerCockpitFeatures(
     }
   });
 
-  // Check if command already exists to avoid duplication error
-  // shell.registerCommand already handles registration, but VS Code throws if ID exists.
-  // Since we can't easily check existing commands API-side, we rely on single activation.
-  // If this error happens, it means registerCockpitFeatures is called twice.
-
   shell.registerCommand('git-context.generateLiveReport', async () => {
     const liveEngine = (orchestrator as any).liveEngine;
     if (liveEngine) {
@@ -52,7 +45,6 @@ export async function registerCockpitFeatures(
     }
   });
 
-  // Open evidence
   shell.registerCommand('git-context.openEvidence', async (_context, args) => {
     try {
       if (Array.isArray(args) && args.length > 0) {
@@ -93,7 +85,6 @@ export async function registerCockpitFeatures(
     }
   });
 
-  // Apply refactor action
   shell.registerCommand('git-context.applyRefactor', async (_context, args) => {
     try {
       if (Array.isArray(args) && args.length > 0) {
@@ -101,7 +92,6 @@ export async function registerCockpitFeatures(
       }
       const { action, symbolId, filePath, range, suggestedName } = args;
 
-      // Basic "Delete Symbol" implementation
       if (action === 'delete' && filePath && range) {
         const { getGitRoot } = await import('../utils/config');
         const gitRoot = getGitRoot();
@@ -134,14 +124,13 @@ export async function registerCockpitFeatures(
 
         if (applied) {
           vscode.window.showInformationMessage(`Applied refactor: Deleted symbol in ${filePath}`);
-          // Optionally save document
+
           const doc = await vscode.workspace.openTextDocument(uri);
           await doc.save();
         } else {
           vscode.window.showErrorMessage(`Failed to apply edit to ${filePath}`);
         }
       } else if (action === 'rename' && suggestedName && symbolId) {
-        // Try a conservative textual rename with user selection if multiple matches exist
         if (!filePath) {
           vscode.window.showInformationMessage(
             `Suggested rename for ${symbolId}: ${suggestedName} (no file path to apply)`
@@ -213,7 +202,6 @@ export async function registerCockpitFeatures(
     }
   });
 
-  // Main analyze command
   shell.registerCommand('git-context.analyze', async (context, forceReanalyze = false) => {
     try {
       const selection = store.getState().selectedCommitShas || [];
@@ -233,7 +221,6 @@ export async function registerCockpitFeatures(
     }
   });
 
-  // Open report
   shell.registerCommand('git-context.openReport', async (_context, reportId) => {
     try {
       const { getReportManager } = await import('../storage/reportManager');
@@ -241,7 +228,6 @@ export async function registerCockpitFeatures(
       const report = reportManager.load(reportId);
 
       if (report && report.analysis && report.analysis.markdown) {
-        // Open as markdown document
         const doc = await vscode.workspace.openTextDocument({
           content: report.analysis.markdown,
           language: 'markdown',
@@ -255,7 +241,6 @@ export async function registerCockpitFeatures(
     }
   });
 
-  // Regenerate report
   shell.registerCommand('git-context.regenerateReport', async (_context, reportId) => {
     try {
       const { getReportManager } = await import('../storage/reportManager');
@@ -269,7 +254,6 @@ export async function registerCockpitFeatures(
     }
   });
 
-  // Delete report
   shell.registerCommand('git-context.deleteReport', async (_context, reportId) => {
     try {
       const { getReportManager } = await import('../storage/reportManager');
@@ -281,7 +265,6 @@ export async function registerCockpitFeatures(
     }
   });
 
-  // Toggle pin report
   shell.registerCommand('git-context.togglePinReport', async (_context, reportId) => {
     try {
       const { getReportManager } = await import('../storage/reportManager');
@@ -297,18 +280,15 @@ export async function registerCockpitFeatures(
     }
   });
 
-  // Bundle regenerate
   shell.registerCommand('git-context.bundle.regenerate', async _context => {
     await vscode.commands.executeCommand('git-context.analyze');
   });
 
-  // Register state effects
   shell.registerFeature({
     effects: [
       {
         key: 'bundleFacts',
         handler: async _change => {
-          // Auto-update context keys when bundle changes
           await updateContexts();
         },
         priority: 50,

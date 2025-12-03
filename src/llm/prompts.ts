@@ -1,4 +1,3 @@
-// Stage 1 prompt: Compress diff and symbol data for efficient processing
 export const STAGE_1_COMPRESSION_PROMPT = `You are analyzing a git commit to create a compact summary of changes.
 
 INPUT DATA:
@@ -27,7 +26,6 @@ OUTPUT FORMAT (strict JSON):
   "change_patterns": ["pattern 1", "pattern 2"]
 }`;
 
-// Stage 2 prompt: Generate final structured commit summary
 export const STAGE_2_SUMMARY_PROMPT = `You are a senior software engineer analyzing a git commit for a code review.
 
 COMPRESSED ANALYSIS:
@@ -57,7 +55,6 @@ GUIDELINES:
 - Be concise but comprehensive
 - Use technical language appropriate for senior developers`;
 
-// Symbol change explanation prompt
 export const SYMBOL_EXPLANATION_PROMPT = `You are explaining how a specific symbol changed between two commits.
 
 SYMBOL: {symbol_name}
@@ -80,7 +77,6 @@ TASK: Explain the semantic impact of this symbol change:
 
 Provide a clear, technical explanation suitable for code review.`;
 
-// File comparison prompt
 export const FILE_COMPARISON_PROMPT = `Compare these files between two commits and explain the semantic changes.
 
 COMMIT A: {commit_a_sha} - {commit_a_message}
@@ -103,10 +99,6 @@ TASK: Provide a focused comparison explaining:
 
 Focus on the most important changes and their impact.`;
 
-// ============================================================================
-// Refactor Bundle Analysis Prompts (from llmAnalyst/prompts.ts)
-// ============================================================================
-
 /**
  * Build concise timeline summary for LLM prompts
  */
@@ -115,12 +107,11 @@ export function buildTimelineSummary(timeline?: string[]): { summary: string; co
     return { summary: 'Single version analysis', count: 1 };
   }
 
-  // Format: "abc123 → def456 → HEAD → staged → unstaged (5 versions)"
   const shortVersions = timeline.map(v => {
     if (v === 'workspace-unstaged') return 'unstaged';
     if (v === 'workspace-staged') return 'staged';
     if (v === 'HEAD') return 'HEAD';
-    return v.substring(0, 12); // Short SHA
+    return v.substring(0, 12);
   });
 
   const summary = `Timeline: ${shortVersions.join(' → ')} (${timeline.length} versions)`;
@@ -171,17 +162,12 @@ Then provide:
   ]
 }
 
-**IMPORTANT:** 
+**IMPORTANT:**
 - Only include claims with severity >= "medium" OR confidence >= 0.8
 - Focus on VALUE: What matters most? What should be done first? What's actionable?
 - Do not make assumptions beyond what's in the facts. Cite specific evidence paths from the JSON.
 `;
 
-/**
- * Prompt 2: Drift Verification
- * Validates every incompleteness and drift flag in the facts
- * Emphasizes REAL ISSUES vs false positives, prioritizes high-severity findings
- */
 export const PROMPT_DRIFT_VERIFICATION = `
 You are a senior engineer validating refactor completeness. Review every incompleteness and drift flag in the attached facts JSON.
 
@@ -239,11 +225,6 @@ For each finding, determine if it's a real issue or a false positive:
 - Explain why each confirmed issue is a real problem that needs attention
 `;
 
-/**
- * Prompt 3: Cleanup Plan
- * Produces an ordered checklist of exact deletions/migrations needed
- * Orders by VALUE: priority/effort ratio, groups high-value actions first
- */
 export const PROMPT_CLEANUP_PLAN = `
 You are a senior engineer creating a cleanup plan for an incomplete refactor. Using the attached facts JSON, produce an ordered checklist of exact deletions, migrations, and completions needed to reach zero legacy in the scoped area.
 
@@ -288,9 +269,6 @@ Requirements:
 Every item MUST cite a JSON evidence path. Prioritize actions that provide maximum value with minimum risk.
 `;
 
-/**
- * System prompt for all LLM analyst interactions
- */
 export const SYSTEM_PROMPT = `
 You are an expert software engineering analyst specializing in code refactoring and technical debt assessment.
 
@@ -303,10 +281,6 @@ Guidelines:
 - Acknowledge uncertainty when facts are ambiguous
 `;
 
-/**
- * Prompt 4: Generic Pattern Discovery
- * Scans raw AST, diffs, and graph for emergent anomalies
- */
 export const PROMPT_DISCOVER = `
 Analyze the provided FEED JSON to DISCOVER emergent patterns.
 
@@ -333,10 +307,6 @@ If analyzing RAW FEED (AST/Diff/Graph):
 Output ONLY JSON: {patterns: [{name:"naming_drift", desc:"...", examples:["User.ts shows old camelCase methods"], count:15, pct:12}]}
 `;
 
-/**
- * Prompt 5: Pattern Quantification
- * Quantifies impact and coverage of discovered patterns
- */
 export const PROMPT_QUANTIFY = `
 From discovered patterns, compute:
 - %COVERAGE: matches/total_symbols
@@ -350,13 +320,9 @@ Prioritize top-5 by impact.
 - Format: "diff[FileName.php] shows <specific change>"
 - Format: "ast[FileName.php].method_name - <what it demonstrates>"
 
-JSON: {quantified: [{...pattern, coverage_pct:30, impact: "high", examples:["diff[PaymentService.php] shows consistent defaultSort() additions"]}]} 
+JSON: {quantified: [{...pattern, coverage_pct:30, impact: "high", examples:["diff[PaymentService.php] shows consistent defaultSort() additions"]}]}
 `;
 
-/**
- * Prompt 6: Fix Planning
- * Generates concrete fixes for top patterns
- */
 export const PROMPT_PLAN = `
 Weave top patterns → fixes. Gen code snippets/diffs for each.
 

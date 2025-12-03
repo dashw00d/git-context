@@ -9,7 +9,7 @@ export interface DifftasticResult {
   morphs: MorphHighlight[];
   hasStructuralChanges: boolean;
   hunks?: DiffHunk[];
-  tags?: Map<number, string[]>; // line number -> array of tags
+  tags?: Map<number, string[]>;
 }
 
 export interface DiffHunk {
@@ -44,26 +44,23 @@ export class DifftasticIntegration {
   private findDifftasticPath(): string {
     const config = getExtensionConfig();
 
-    // Check configured path first
     if (config.difftasticPath && fs.existsSync(config.difftasticPath)) {
       return config.difftasticPath;
     }
 
-    // Check common installation paths
     const homeDir = process.env.HOME || process.env.USERPROFILE || '';
     const workspaceRoot = path.join(__dirname, '..', '..');
 
     const commonPaths = [
-      // User-specific paths (for testing)
       path.join(homeDir, 'bin', 'difftastic'),
-      // Extension resources folder (bundled or for tests)
+
       path.join(workspaceRoot, 'resources', 'difftastic'),
-      // System paths
+
       '/usr/local/bin/difftastic',
       '/usr/bin/difftastic',
-      '/opt/homebrew/bin/difftastic', // macOS Homebrew
-      '/home/linuxbrew/.linuxbrew/bin/difftastic', // Linux Homebrew
-      'difftastic', // In PATH
+      '/opt/homebrew/bin/difftastic',
+      '/home/linuxbrew/.linuxbrew/bin/difftastic',
+      'difftastic',
     ];
 
     for (const binPath of commonPaths) {
@@ -72,7 +69,6 @@ export class DifftasticIntegration {
       }
     }
 
-    // Return empty string if not found (optional dependency)
     logWarn('[DIFFTASTIC] Binary not found. Structural diff analysis will be disabled.');
     logWarn(`[DIFFTASTIC] Searched paths: ${commonPaths.slice(0, 3).join(', ')}`);
     return '';
@@ -100,7 +96,6 @@ export class DifftasticIntegration {
     newFilePath: string
   ): Promise<DifftasticResult> {
     return new Promise((resolve, reject) => {
-      // Create temporary files
       const tempDir = require('os').tmpdir();
       const oldFile = path.join(tempDir, `old_${Date.now()}_${path.basename(oldFilePath)}`);
       const newFile = path.join(tempDir, `new_${Date.now()}_${path.basename(newFilePath)}`);
@@ -109,18 +104,10 @@ export class DifftasticIntegration {
         fs.writeFileSync(oldFile, oldContent);
         fs.writeFileSync(newFile, newContent);
 
-        // Run difftastic with fixed width to prevent side-by-side overflow panics
-        const width = '200'; // Fixed wide terminal
+        const width = '200';
         const difft = spawn(
           this.difftasticPath,
-          [
-            '--color=never', // No ANSI colors for parsing
-            '--exit-code', // Exit with code based on differences
-            '--width',
-            width, // Prevent panic on wide diffs
-            oldFile,
-            newFile,
-          ],
+          ['--color=never', '--exit-code', '--width', width, oldFile, newFile],
           {
             stdio: ['pipe', 'pipe', 'pipe'],
             env: { ...process.env, COLUMNS: width, DIFT_WIDTH: width },
@@ -139,16 +126,12 @@ export class DifftasticIntegration {
         });
 
         difft.on('close', code => {
-          // Clean up temp files
           try {
             fs.unlinkSync(oldFile);
             fs.unlinkSync(newFile);
-          } catch {
-            // Ignore cleanup errors
-          }
+          } catch {}
 
           if (code !== null && code > 1) {
-            // 1 is success with differences, >1 is error
             reject(new Error(`Difftastic failed: ${stderr}`));
             return;
           }
@@ -158,31 +141,22 @@ export class DifftasticIntegration {
         });
 
         difft.on('error', error => {
-          // Clean up temp files
           try {
             fs.unlinkSync(oldFile);
             fs.unlinkSync(newFile);
-          } catch {
-            // Ignore cleanup errors
-          }
+          } catch {}
           reject(error);
         });
       } catch (error) {
-        // Clean up temp files
         try {
           fs.unlinkSync(oldFile);
           fs.unlinkSync(newFile);
-        } catch {
-          // Ignore cleanup errors
-        }
+        } catch {}
         reject(error);
       }
     });
   }
 
-  /**
-   * Parse difftastic output to extract structural highlights, hunks, and tagged tokens
-   */
   private parseDifftasticOutput(output: string, hasDifferences: boolean): DifftasticResult {
     const highlights: string[] = [];
     const morphs: MorphHighlight[] = [];
@@ -203,7 +177,6 @@ export class DifftasticIntegration {
     let currentHunk: Partial<DiffHunk> | null = null;
     let inHunkContext = false;
 
-    // Control-flow and interface keywords to tag
     const controlFlowKeywords =
       /\b(if|while|for|switch|return|throw|catch|try|else|do|break|continue)\b/;
     const interfaceKeywords =
@@ -213,20 +186,16 @@ export class DifftasticIntegration {
       const line = lines[i];
       const trimmed = line.trim();
 
-      // Skip file headers
       if (trimmed.startsWith('File ')) {
         continue;
       }
 
-      // Parse hunk headers: @@ -oldStart,oldCount +newStart,newCount @@
       const hunkMatch = trimmed.match(/^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
       if (hunkMatch) {
-        // Save previous hunk if exists
         if (currentHunk && currentHunk.lines) {
           hunks.push(currentHunk as DiffHunk);
         }
 
-        // Start new hunk
         const [, oldStart, oldCount, newStart, newCount] = hunkMatch;
         currentHunk = {
           oldStart: parseInt(oldStart),
@@ -239,30 +208,25 @@ export class DifftasticIntegration {
         };
         inHunkContext = true;
 
-        // Add hunk header as highlight
         highlights.push(trimmed);
         continue;
       }
 
-      // Process lines within hunk context
       if (inHunkContext && currentHunk) {
         currentHunk.lines!.push(line);
 
-        // Count added/removed lines
         if (line.startsWith('+') && !line.startsWith('+++')) {
           currentHunk.linesAdded!++;
         } else if (line.startsWith('-') && !line.startsWith('---')) {
           currentHunk.linesRemoved!++;
         }
 
-        // Tag control-flow keywords
         if (controlFlowKeywords.test(line)) {
           const lineTags = tags.get(i + 1) || [];
           lineTags.push('control-flow');
           tags.set(i + 1, lineTags);
         }
 
-        // Tag interface keywords
         if (interfaceKeywords.test(line)) {
           const lineTags = tags.get(i + 1) || [];
           lineTags.push('interface');
@@ -270,53 +234,38 @@ export class DifftasticIntegration {
         }
       }
 
-      // Add non-empty lines as highlights
       if (trimmed) {
         highlights.push(trimmed);
       }
     }
 
-    // Save final hunk
     if (currentHunk && currentHunk.lines) {
       hunks.push(currentHunk as DiffHunk);
     }
 
     return {
       highlights,
-      morphs, // Empty for now as we don't want to overfit
+      morphs,
       hasStructuralChanges: true,
       hunks,
       tags,
     };
   }
 
-  /**
-   * Extract location information from a difftastic output line
-   */
   private extractLocationFromLine(_line: string): { file: string; line: number } | undefined {
-    // Difftastic doesn't always include location info in basic output
-    // This would need enhancement based on actual difftastic output format
     return undefined;
   }
 
-  /**
-   * Run difftastic on a git commit to get structural highlights
-   */
-  /**
-   * Run difftastic on a git commit to get structural highlights
-   */
   async getCommitStructuralHighlights(
     sha: string,
     filePath: string,
     oldPath?: string
   ): Promise<DifftasticResult> {
     try {
-      // Get file content at commit and its parent
       const git = new (require('./git').GitOperations)();
       const commitInfo = git.getCommitInfo(sha);
 
       if (!commitInfo.parent) {
-        // First commit, no parent to compare
         return {
           highlights: [],
           morphs: [],
@@ -351,9 +300,6 @@ export class DifftasticIntegration {
     }
   }
 
-  /**
-   * Check if difftastic is available
-   */
   isAvailable(): boolean {
     if (!this.difftasticPath) {
       return false;
@@ -366,7 +312,6 @@ export class DifftasticIntegration {
   }
 }
 
-// Singleton instance
 let difftasticInstance: DifftasticIntegration | null = null;
 
 export function getDifftasticIntegration(): DifftasticIntegration {

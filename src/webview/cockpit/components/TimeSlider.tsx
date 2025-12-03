@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 interface TimeSliderProps {
-  value: number; // timestamp
+  value: number;
   onChange: (value: number) => void;
 }
 
@@ -33,13 +33,6 @@ const SliderStyle: React.CSSProperties = {
 };
 
 export const TimeSlider: React.FC<TimeSliderProps> = ({ value, onChange }) => {
-  // Map slider range (0-100) to time ranges
-  // 100 = Now
-  // 75 = 1 Week ago
-  // 50 = 1 Month ago
-  // 25 = 3 Months ago
-  // 0 = 1 Year ago
-  
   const now = Date.now();
   const oneWeek = 7 * 24 * 60 * 60 * 1000;
   const oneMonth = 30 * 24 * 60 * 60 * 1000;
@@ -49,16 +42,16 @@ export const TimeSlider: React.FC<TimeSliderProps> = ({ value, onChange }) => {
   const timestampToSlider = (ts: number): number => {
     const diff = now - ts;
     if (diff <= 0) return 100;
-    if (diff <= oneWeek) return 75 + (25 * (1 - diff / oneWeek));
-    if (diff <= oneMonth) return 50 + (25 * (1 - (diff - oneWeek) / (oneMonth - oneWeek)));
-    if (diff <= threeMonths) return 25 + (25 * (1 - (diff - oneMonth) / (threeMonths - oneMonth)));
+    if (diff <= oneWeek) return 75 + 25 * (1 - diff / oneWeek);
+    if (diff <= oneMonth) return 50 + 25 * (1 - (diff - oneWeek) / (oneMonth - oneWeek));
+    if (diff <= threeMonths) return 25 + 25 * (1 - (diff - oneMonth) / (threeMonths - oneMonth));
     if (diff <= oneYear) return 25 * (1 - (diff - threeMonths) / (oneYear - threeMonths));
     return 0;
   };
 
   const sliderToTimestamp = (val: number): number => {
     if (val >= 100) return now;
-    if (val >= 75) return now - (oneWeek * (1 - (val - 75) / 25));
+    if (val >= 75) return now - oneWeek * (1 - (val - 75) / 25);
     if (val >= 50) return now - (oneWeek + (oneMonth - oneWeek) * (1 - (val - 50) / 25));
     if (val >= 25) return now - (oneMonth + (threeMonths - oneMonth) * (1 - (val - 25) / 25));
     return now - (threeMonths + (oneYear - threeMonths) * (1 - val / 25));
@@ -89,10 +82,10 @@ export const TimeSlider: React.FC<TimeSliderProps> = ({ value, onChange }) => {
             {getLabel(value)}
           </span>
           {value < now - 60000 && (
-            <span 
-              onClick={reset} 
-              style={{ 
-                cursor: 'pointer', 
+            <span
+              onClick={reset}
+              style={{
+                cursor: 'pointer',
                 fontSize: '14px',
                 display: 'flex',
                 alignItems: 'center',
@@ -102,7 +95,7 @@ export const TimeSlider: React.FC<TimeSliderProps> = ({ value, onChange }) => {
                 borderRadius: '50%',
                 backgroundColor: 'var(--vscode-badge-background)',
                 color: 'var(--vscode-badge-foreground)',
-              }} 
+              }}
               title="Reset to Now"
             >
               ↺

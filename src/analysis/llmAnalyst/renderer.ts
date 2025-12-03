@@ -8,7 +8,6 @@ export function resolveEvidencePath(
   evidencePath: string,
   facts: RefactorBundleFacts
 ): { filePath: string; lineNumber?: number; description: string } | null {
-  // Parse JSON path like "findings.incompleteness.missing[0]"
   const pathParts = evidencePath.split('.');
   const arrayMatch = pathParts[pathParts.length - 1].match(/^(\w+)\[(\d+)\]$/);
 
@@ -16,7 +15,6 @@ export function resolveEvidencePath(
     const [_unused, arrayName, index] = arrayMatch;
     const arrayPath = pathParts.slice(0, -1).join('.');
 
-    // Navigate to the array in facts
     let current: any = facts;
     for (const part of arrayPath.split('.')) {
       current = current[part];
@@ -26,14 +24,13 @@ export function resolveEvidencePath(
     const item = current[parseInt(index)];
     if (item && item.symbol_id) {
       const filePath = item.symbol_id.split(':')[0];
-      // Try to extract line number from location data
+
       let lineNumber: number | undefined;
       if (item.loc_pre?.start?.line) {
         lineNumber = item.loc_pre.start.line;
       } else if (item.loc_post?.start?.line) {
         lineNumber = item.loc_post.start.line;
       } else if (item.expected?.lastPath) {
-        // Try to get from expected state
         lineNumber = undefined;
       }
 
@@ -44,7 +41,6 @@ export function resolveEvidencePath(
       };
     }
 
-    // Also check evidence object directly
     if (facts.evidence && facts.evidence[arrayName]) {
       const evidenceArray = facts.evidence[arrayName];
       if (Array.isArray(evidenceArray) && evidenceArray[parseInt(index)]) {
@@ -61,7 +57,6 @@ export function resolveEvidencePath(
     }
   }
 
-  // Try direct path access (e.g., "bundle.shas")
   let current: any = facts;
   for (const part of evidencePath.split('.')) {
     if (current && typeof current === 'object') {
@@ -71,10 +66,9 @@ export function resolveEvidencePath(
     }
   }
 
-  // If we found something but it's not a symbol, return path info
   if (current !== undefined && current !== null) {
     return {
-      filePath: evidencePath, // Use path as file path for non-symbol evidence
+      filePath: evidencePath,
       description: evidencePath,
     };
   }
@@ -93,13 +87,10 @@ export class AnalysisRenderer {
   renderAnalysis(analysis: LlmAnalysis, facts: RefactorBundleFacts): string {
     let markdown = this.renderHeader(analysis, facts);
 
-    // Add findings sections with stable anchors for navigation
     markdown += this.renderFindingsSections(facts);
 
-    // Filter low-value content before sorting
     const filteredBlocks = this.filterLowValueContent(analysis.blocks);
 
-    // Sort blocks by value score (high-value first)
     const sortedBlocks = this.sortBlocks(filteredBlocks);
 
     for (const block of sortedBlocks) {
@@ -133,7 +124,6 @@ export class AnalysisRenderer {
     let content = `## 🔍 Findings Overview\n\n`;
     content += `This section provides structured findings data for navigation from the Commit Tracker sidebar.\n\n`;
 
-    // Incompleteness section
     if (facts.findings.incompleteness.missing > 0 || facts.findings.incompleteness.zombies > 0) {
       content += `### {#incompleteness} Incompleteness Analysis\n\n`;
 
@@ -167,7 +157,6 @@ export class AnalysisRenderer {
       content += `\n`;
     }
 
-    // Drift section
     if (
       facts.findings.patternDrift.mixedTargets > 0 ||
       facts.findings.patternDrift.oldNamespaces > 0
@@ -196,12 +185,10 @@ export class AnalysisRenderer {
       content += `\n`;
     }
 
-    // Convention drift section
     if (facts.findings.patternDrift.conventionDrift) {
       content += this.renderConventionDriftSection(facts);
     }
 
-    // Legacy section
     if (
       facts.findings.legacyAudit.dead > 0 ||
       facts.findings.legacyAudit.replacedLeftovers.length > 0
@@ -229,7 +216,6 @@ export class AnalysisRenderer {
       content += `\n`;
     }
 
-    // Timeline section (if we have commit data)
     if (facts.bundle.shas.length > 0) {
       content += `### {#timeline} Timeline Rewind\n\n`;
       content += `Evolution of changes across ${facts.bundle.shas.length} commit(s).\n\n`;
@@ -274,7 +260,6 @@ export class AnalysisRenderer {
     footer += `**Analysis Details:** ${analysis.metadata.totalCalls} LLM calls, `;
     footer += `~${analysis.metadata.totalTokens.toLocaleString()} tokens\n`;
 
-    // Include health score in footer if available
     if (analysis.metadata.healthScore !== undefined) {
       const healthIndicator =
         analysis.metadata.healthScore >= 80
@@ -297,24 +282,21 @@ export class AnalysisRenderer {
   private calculateBlockValue(block: AnalysisBlock): number {
     let score = 0;
 
-    // Claims value: severity-weighted by confidence
     const severityWeight = { critical: 10, high: 5, medium: 2, low: 1 };
     block.claims.forEach(claim => {
       score += severityWeight[claim.severity] * claim.confidence;
     });
 
-    // Actions value: priority + impact/effort ratio
     const priorityWeight = { urgent: 10, high: 5, medium: 2, low: 1 };
     const effortWeight = { xs: 5, s: 4, m: 3, l: 2, xl: 1 };
 
     block.actions.forEach(action => {
       const impactScore = priorityWeight[action.priority] * effortWeight[action.effort];
-      // Prefer low-risk actions (multiply by 1.5 for low risk)
+
       const riskMultiplier = action.risk === 'low' ? 1.5 : action.risk === 'medium' ? 1.0 : 0.7;
       score += impactScore * riskMultiplier;
     });
 
-    // Bonus for actionable items (has evidence paths)
     const hasActionableClaims = block.claims.some(c => c.evidence.length > 0);
     const hasActionableActions = block.actions.some(a => a.evidence.length > 0);
     if (hasActionableClaims || hasActionableActions) {
@@ -337,14 +319,10 @@ export class AnalysisRenderer {
     const totalSymbols = facts.working.symbols;
     const issueRate = totalSymbols > 0 ? totalIssues / totalSymbols : 0;
 
-    // Base score: 100 = perfect, 0 = terrible
-    // Lower issue rate = higher score
     const baseScore = Math.max(0, 100 - issueRate * 100);
 
-    // Penalties for critical issues (missing symbols are most critical)
     const criticalPenalty = facts.findings.incompleteness.missing * 2;
 
-    // Additional penalty for high zombie count (indicates incomplete cleanup)
     const zombiePenalty = facts.findings.incompleteness.zombies * 0.5;
 
     return Math.max(0, Math.min(100, baseScore - criticalPenalty - zombiePenalty));
@@ -359,12 +337,10 @@ export class AnalysisRenderer {
       const valueA = this.calculateBlockValue(a);
       const valueB = this.calculateBlockValue(b);
 
-      // Sort by value score (descending)
       if (valueB !== valueA) {
         return valueB - valueA;
       }
 
-      // Fallback to confidence within same value tier
       return b.confidence - a.confidence;
     });
   }
@@ -376,14 +352,12 @@ export class AnalysisRenderer {
     const icon = this.getBlockIcon(block.type);
     const valueScore = this.calculateBlockValue(block);
 
-    // Show value indicator for high-value blocks
     let content = `## ${icon} ${block.title}`;
     if (valueScore > 20) {
       content += ` ⭐ High Value`;
     }
     content += `\n\n`;
 
-    // Separate critical/high claims from others
     const criticalClaims = block.claims.filter(
       c => c.severity === 'critical' || c.severity === 'high'
     );
@@ -391,19 +365,16 @@ export class AnalysisRenderer {
       c => c.severity !== 'critical' && c.severity !== 'high'
     );
 
-    // Render critical findings first
     if (criticalClaims.length > 0) {
       content += `### 🚨 Critical Findings\n\n`;
       content += this.renderClaims(criticalClaims, facts);
     }
 
-    // Render other findings
     if (otherClaims.length > 0) {
       content += `### Other Findings\n\n`;
       content += this.renderClaims(otherClaims, facts);
     }
 
-    // Separate urgent/high actions from others
     const urgentActions = block.actions.filter(
       a => a.priority === 'urgent' || a.priority === 'high'
     );
@@ -411,19 +382,16 @@ export class AnalysisRenderer {
       a => a.priority !== 'urgent' && a.priority !== 'high'
     );
 
-    // Render immediate actions first
     if (urgentActions.length > 0) {
       content += `### ⚡ Immediate Actions\n\n`;
       content += this.renderActions(urgentActions, facts);
     }
 
-    // Render additional actions
     if (otherActions.length > 0) {
       content += `### 📋 Additional Actions\n\n`;
       content += this.renderActions(otherActions, facts);
     }
 
-    // Add confidence indicator
     if (block.confidence < 0.8) {
       content += `\n⚠️ **Low Confidence:** This analysis has ${(block.confidence * 100).toFixed(0)}% confidence. Verify manually.\n`;
     }
@@ -456,7 +424,6 @@ export class AnalysisRenderer {
    * Render claims section (sorted by severity, limited evidence)
    */
   private renderClaims(claims: any[], facts: RefactorBundleFacts): string {
-    // Sort by severity (critical > high > medium > low) then confidence
     const severityOrder: Record<'critical' | 'high' | 'medium' | 'low', number> = {
       critical: 4,
       high: 3,
@@ -481,7 +448,6 @@ export class AnalysisRenderer {
         content += `  *(confidence: ${(claim.confidence * 100).toFixed(0)}%)*\n`;
       }
 
-      // Render evidence links (limit to top 5)
       if (claim.evidence && claim.evidence.length > 0) {
         const evidenceToShow = claim.evidence.slice(0, 5);
         content += `  **Evidence:**\n`;
@@ -503,7 +469,6 @@ export class AnalysisRenderer {
    * Render actions section (sorted by priority, limited evidence)
    */
   private renderActions(actions: any[], facts: RefactorBundleFacts): string {
-    // Sort actions by priority (already sorted by AnalysisBlockUtils.sortActions)
     const sortedActions = AnalysisBlockUtils.sortActions(actions);
 
     let content = '';
@@ -519,12 +484,10 @@ export class AnalysisRenderer {
         content += `  ${riskIcon} **Risk:** ${action.risk}\n`;
       }
 
-      // Show dependencies
       if (action.dependsOn && action.dependsOn.length > 0) {
         content += `  ⏳ **Depends on:** ${action.dependsOn.join(', ')}\n`;
       }
 
-      // Render evidence links (limit to top 5)
       if (action.evidence && action.evidence.length > 0) {
         const evidenceToShow = action.evidence.slice(0, 5);
         content += `  **Evidence:**\n`;
@@ -546,9 +509,6 @@ export class AnalysisRenderer {
    * Render evidence link with clickable reference
    */
   private renderEvidenceLink(evidence: EvidenceLink, facts: RefactorBundleFacts): string {
-    // Create a clickable link format that triggers the openEvidence command
-    // Format: [description](command:git-context.openEvidence?encodedArgs)
-
     const args = {
       path: evidence.path,
       description: evidence.description,
@@ -558,38 +518,30 @@ export class AnalysisRenderer {
       origin: (evidence as any).origin,
     };
 
-    // If we have symbolId but no filePath, try to resolve it
     if (!args.filePath && args.symbolId) {
       args.filePath = AnalysisBlockUtils.extractFilePath(args.symbolId);
     }
 
-    // Try to extract file path from evidence path if not already set
     if (!args.filePath) {
       const parsed = AnalysisBlockUtils.parseEvidencePath(evidence.path);
       if (parsed.filePath) args.filePath = parsed.filePath;
       if (parsed.symbolId && !args.symbolId) args.symbolId = parsed.symbolId;
     }
 
-    // VS Code command URIs require arguments to be a JSON array, URI encoded
     const encodedArgs = encodeURIComponent(JSON.stringify([args]));
 
-    // Generate smart link text
     let linkText = evidence.description;
 
-    // If description looks like a raw path, generate a better one
     if (this.looksLikeRawPath(evidence.description)) {
       linkText = AnalysisBlockUtils.parseEvidencePathToDescription(evidence.path);
     }
 
-    // Build additional context info
     let extraInfo = '';
 
-    // Try to resolve count from facts
     const count = this.resolveEvidenceCount(evidence.path, facts);
     if (count !== null) {
       extraInfo = ` (${count} items)`;
     } else if (evidence.filePath && !linkText.includes(evidence.filePath)) {
-      // Only add file info if not already in the link text
       const shortFile = evidence.filePath.split('/').pop() || evidence.filePath;
       extraInfo = ` in ${shortFile}`;
       if (evidence.lineNumber) {
@@ -597,7 +549,6 @@ export class AnalysisRenderer {
       }
     }
 
-    // Append origin tag if available
     const originTag = evidence.origin ? ` [${evidence.origin}]` : '';
 
     return `[${linkText}${originTag}${extraInfo}](command:git-context.openEvidence?${encodedArgs})`;
@@ -608,7 +559,7 @@ export class AnalysisRenderer {
    */
   private looksLikeRawPath(text: string): boolean {
     if (!text) return true;
-    // Looks like path if it contains dots with no spaces, or starts with common path prefixes
+
     return (
       text === 'Example' ||
       /^(findings|intended|working|scope|bundle|evidence|diff|ast|graph)\./.test(text) ||
@@ -629,7 +580,6 @@ export class AnalysisRenderer {
 
       for (const part of parts) {
         if (part.includes('[')) {
-          // Handle array access like findings.incompleteness.missing
           const arrayMatch = part.match(/^([^[]+)/);
           if (arrayMatch) {
             current = current[arrayMatch[1]];
@@ -644,9 +594,7 @@ export class AnalysisRenderer {
       } else if (typeof current === 'number') {
         return current;
       }
-    } catch (error) {
-      // Ignore errors in path resolution
-    }
+    } catch (error) {}
 
     return null;
   }
@@ -707,13 +655,9 @@ export class AnalysisRenderer {
    * Format duration (placeholder for now)
    */
   private formatDuration(callCount: number): string {
-    // This is a placeholder - in a real implementation we'd track actual timing
     return `~${callCount * 30}s`;
   }
 
-  /**
-   * Generate quick stats summary
-   */
   static generateQuickStats(analysis: LlmAnalysis, _facts: RefactorBundleFacts): string {
     const totalActions = analysis.blocks.reduce((sum, block) => sum + block.actions.length, 0);
     const highPriorityActions = analysis.blocks.reduce(
@@ -733,9 +677,6 @@ export class AnalysisRenderer {
     return stats;
   }
 
-  /**
-   * Render convention drift section
-   */
   private renderConventionDriftSection(facts: RefactorBundleFacts): string {
     const conventionDrift = facts.findings.patternDrift.conventionDrift;
     if (!conventionDrift) {
@@ -749,7 +690,6 @@ export class AnalysisRenderer {
 
     const driftEvidence = facts.evidence?.['findings.patternDrift.conventionDrift'] || {};
 
-    // Show drift symbols with suggestions
     const driftSymbols = driftEvidence?.driftSymbols || [];
     if (driftSymbols.length > 0) {
       content += `#### Symbols to Migrate (${driftSymbols.length})\n\n`;
@@ -766,7 +706,6 @@ export class AnalysisRenderer {
       content += `\n`;
     }
 
-    // Import path drift
     if (conventionDrift.importDrift) {
       const driftImports = driftEvidence?.importDrift?.driftImports || [];
       content += `#### Import Path Drift (${conventionDrift.importDrift.driftPercent.toFixed(1)}% drift)\n\n`;
@@ -784,7 +723,6 @@ export class AnalysisRenderer {
       }
     }
 
-    // File naming drift
     if (conventionDrift.fileNamingDrift) {
       const driftFiles = driftEvidence?.fileNamingDrift?.driftFiles || [];
       content += `#### File Naming Drift (${conventionDrift.fileNamingDrift.driftPercent.toFixed(1)}% drift)\n\n`;
@@ -802,7 +740,6 @@ export class AnalysisRenderer {
       }
     }
 
-    // Show files with mixed conventions
     const mixedFiles = facts.findings.patternDrift.mixedConventionFiles || 0;
     if (mixedFiles > 0) {
       const mixedFilesList = facts.evidence?.['findings.patternDrift.mixedConventionFiles'] || [];

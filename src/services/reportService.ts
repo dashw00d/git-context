@@ -17,9 +17,7 @@ export class ReportService {
   private readonly mermaid = new MermaidGenerator();
   private readonly store = getStore();
 
-  private constructor() {
-    // Singleton: use getInstance()
-  }
+  private constructor() {}
 
   static getInstance(): ReportService {
     if (!ReportService.instance) {
@@ -52,13 +50,7 @@ export class ReportService {
     const reportManager = getReportManager();
     let serializedHistory: any = undefined;
 
-    // 1. Check Cache (Layer 3)
-    const fingerprint = makeBundleFingerprint(
-      shas,
-      scope as any, // 'selection' | 'staged' | 'unstaged' | 'lastN' | 'full'
-      PIPELINE_VERSION,
-      PROMPT_VERSION
-    );
+    const fingerprint = makeBundleFingerprint(shas, scope as any, PIPELINE_VERSION, PROMPT_VERSION);
 
     const tempAnalyzed: Set<string> = new Set();
 
@@ -76,11 +68,9 @@ export class ReportService {
           const commitShas = shas.filter(s => !isWorkspaceSha(s));
           await pipeline.indexCommits(commitShas);
           commitShas.forEach(s => tempAnalyzed.add(s));
-          // Fall through to full generation (cache bypassed)
         } else {
           logInfo(`[ReportService] Cache hit for ${fingerprint}`);
 
-          // Build proper BundleSummaryDTO from cached report
           const summary = {
             id: cachedReport.id,
             commitCount: cachedReport.commitShas.length,
@@ -122,12 +112,10 @@ export class ReportService {
     });
 
     try {
-      // 2. Run Analysis with new layered pipeline
       const includeWorkspace = scope === 'staged' || scope === 'unstaged' || scope === 'full';
       const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
       const workspaceShas = shas.filter(isWorkspaceSha);
 
-      // Determine workspaceParts based on scope
       let workspaceParts: Set<'staged' | 'unstaged'> | undefined;
       if (scope === 'staged') {
         workspaceParts = new Set(['staged']);
@@ -136,15 +124,12 @@ export class ReportService {
       } else if (scope === 'full') {
         workspaceParts = new Set(['staged', 'unstaged']);
       }
-      // 'partial' or other scopes -> undefined (no workspace)
 
-      // Use the new RefactorPipeline.analyzeBundle method
       const result = await pipeline.analyzeBundle(
         commitShas,
         includeWorkspace,
         workspaceParts,
         event => {
-          // Map pipeline events to orchestrator state
           const timings: Record<string, number> = {};
           if (event.state?.stepTimings) {
             Object.entries(event.state.stepTimings).forEach(([stepId, timing]) => {
@@ -206,7 +191,6 @@ export class ReportService {
               this.store.dispatch(pipelineActions.health(healthPayload));
               getStore().dispatch(pipelineActions.health(healthPayload));
               if (event.state.errors.length === 0) {
-                // Serialize symbolEvolution map
                 const history = event.state.history;
                 serializedHistory = history
                   ? {
@@ -216,9 +200,6 @@ export class ReportService {
                         : {},
                     }
                   : undefined;
-
-                // Don't dispatch ANALYSIS_COMPLETED here - it will be dispatched after
-                // the report is saved with proper summary and reportId (line ~345)
               }
               break;
           }
@@ -227,7 +208,7 @@ export class ReportService {
 
       if (result.errors.length > 0) {
         logError(`Pipeline failed: ${result.errors[0].error}`);
-        return null; // Return null instead of throwing
+        return null;
       }
 
       if (options.cancellationToken?.isCancellationRequested) {
@@ -235,12 +216,10 @@ export class ReportService {
         return null;
       }
 
-      // 3. Use facts and analysis from new pipeline
       const facts = result.bundleFacts;
       const llmOutputs = result.llmOutputs;
       const llmAnalysis = llmOutputs?.llmAnalysis;
 
-      // 4. Prepare analysis results
       let summary: string;
       let analysis: any = undefined;
 
@@ -266,10 +245,8 @@ export class ReportService {
         analysis = { summary };
       }
 
-      // 4.0 Always build a facts-driven markdown so the report is useful without LLM
       const factsMarkdown = this.buildFactsMarkdown(facts);
 
-      // 4.1 Append detailed sections (Legacy/Detailed View)
       const llmMarkdown = analysis?.markdown || '';
       const baseMarkdown = [
         factsMarkdown,
@@ -289,20 +266,17 @@ export class ReportService {
         analysis = { summary, markdown: detailedMarkdown };
       }
 
-      // 4.5. Compute workspace hash
       let workspaceHash = '';
       if (scope === 'staged' || scope === 'unstaged') {
-        // Workspace-based: capture actual file state
         try {
           workspaceHash = await reportManager.computeWorkspaceHash();
           logDebug(`[ReportService] Computed workspace hash: ${workspaceHash.substring(0, 8)}...`);
         } catch (error) {
           logError('[ReportService] Failed to compute workspace hash', error);
-          // Continue with empty hash rather than failing entire report
+
           workspaceHash = '';
         }
       } else {
-        // Commit-based: use configuration hash
         const selectedFiles = (facts.evidence['scope.files'] as string[]) || [];
         const input = JSON.stringify({
           shas: [...shas].sort(),
@@ -313,7 +287,6 @@ export class ReportService {
         logDebug(`[ReportService] Computed config hash: ${workspaceHash.substring(0, 8)}...`);
       }
 
-      // 5. Save Report
       const reportId = options.existingReportId || crypto.randomUUID();
       const title = options.title || this.generateTitle([...commitShas, ...workspaceShas]);
 
@@ -338,14 +311,12 @@ export class ReportService {
         mode: scope,
       };
 
-      // Include treemap/hotspots in persisted report for faster rehydration
       reportManager.save({
         ...report,
         treemap: (facts as any).treemap,
         hotspots: (facts as any).evidence?.hotspots || (facts as any).findings?.hotspots,
       });
 
-      // 6. Update State
       this.store.dispatch({
         type: 'ANALYSIS_COMPLETED',
         payload: {
@@ -371,7 +342,7 @@ export class ReportService {
           error: error instanceof Error ? error.message : String(error),
         },
       });
-      return null; // Return null instead of throwing
+      return null;
     }
   }
 
@@ -385,26 +356,21 @@ export class ReportService {
   }
 
   private aggregateFacts(commits: CommitAnalysis[], shas: string[] = []): RefactorBundleFacts {
-    // Simple aggregation for now - can be expanded
     const totalFiles = new Set<string>();
     let totalBlastRadius = 0;
     let addedSymbols = 0;
     let addedEdges = 0;
 
     const process = (c: CommitAnalysis) => {
-      // Blast radius
       totalBlastRadius += c.blastRadius;
 
-      // Symbols
       addedSymbols += c.symbols.added.length;
 
-      // Edges
       addedEdges += c.edges.added.length;
     };
 
     commits.forEach(process);
 
-    // For commit-based analysis, query database to get file lists
     if (commits.length > 0 && shas.length > 0) {
       try {
         const placeholders = shas.map(() => '?').join(',');
@@ -416,14 +382,13 @@ export class ReportService {
         fileRows.forEach(row => totalFiles.add(row.path));
       } catch (error) {
         logError('[ReportService] Failed to fetch files from database', error);
-        // Continue with whatever files we have
       }
     }
 
     return {
       version: '2.0',
       generated_at: new Date().toISOString(),
-      confidence: 0.2, // Low confidence - basic aggregation only
+      confidence: 0.2,
       bundle: {
         oldestSha: shas[shas.length - 1] || '',
         newestSha: shas[0] || '',
@@ -541,7 +506,6 @@ export class ReportService {
     const reportManager = getReportManager();
     let reports = reportManager.list();
 
-    // Apply filters
     if (filterText && filterText.trim()) {
       const searchTerm = filterText.trim().toLowerCase();
       reports = reports.filter(
@@ -552,7 +516,6 @@ export class ReportService {
     }
 
     if (filterBranch && filterBranch !== 'all') {
-      // reports don't have branch field in SavedReport interface yet, but let's keep it safe
       reports = reports.filter((report: any) => (report as any).branch === filterBranch);
     }
 
@@ -585,7 +548,6 @@ export class ReportService {
     const edges: EdgeInfo[] = [];
     const highlight: string[] = [];
 
-    // Collect drift-related symbol IDs to highlight
     const missing = (facts.evidence?.['findings.incompleteness.missing'] as any[]) || [];
     const zombies = (facts.evidence?.['findings.incompleteness.zombies'] as any[]) || [];
     highlight.push(
@@ -653,7 +615,6 @@ export class ReportService {
     lines.push(`- Symbols: ${facts.working.symbols}`);
     lines.push(`- Edges: ${facts.working.edges}\n`);
 
-    // Incompleteness
     lines.push(`## Incompleteness`);
     lines.push(`- Missing: ${findings.incompleteness.missing}`);
     lines.push(`- Zombies: ${findings.incompleteness.zombies}`);
@@ -675,7 +636,6 @@ export class ReportService {
       lines.push('');
     }
 
-    // Drift
     lines.push(`## Pattern Drift`);
     lines.push(`- Mixed targets: ${findings.patternDrift.mixedTargets}`);
     lines.push(`- Old namespaces: ${findings.patternDrift.oldNamespaces}`);
@@ -713,7 +673,6 @@ export class ReportService {
       lines.push('');
     }
 
-    // Legacy
     lines.push(`## Legacy Audit`);
     lines.push(`- Dead: ${findings.legacyAudit.dead}`);
     lines.push(`- Legacy used: ${findings.legacyAudit.legacyUsed}`);
@@ -739,13 +698,11 @@ export class ReportService {
       lines.push('');
     }
 
-    // Unresolved callers
     const unresolved =
       findings.unresolvedCallers || (facts.findings as any).unresolved_callers?.length || 0;
     lines.push(`## Unresolved Callers`);
     lines.push(`- Total: ${unresolved}\n`);
 
-    // Hotspots
     if (facts.evidence?.hotspots?.length) {
       lines.push(`## Hotspots`);
       (facts.evidence.hotspots as any[]).slice(0, 10).forEach((h: any) => {
@@ -754,7 +711,6 @@ export class ReportService {
       lines.push('');
     }
 
-    // Timeline
     lines.push(`## Timeline`);
     facts.bundle.shas.forEach((sha, idx) => {
       lines.push(`${idx + 1}. \`${sha.substring(0, 8)}\``);
@@ -781,7 +737,6 @@ export class ReportService {
     try {
       let detailedMarkdown = markdown + '\n\n---\n\n# 📊 Detailed Analysis\n\n';
 
-      // Filter out workspace SHAs for detailed commit analysis
       const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
 
       for (const sha of commitShas) {
@@ -794,7 +749,6 @@ export class ReportService {
         const title = commitInfo.message.split('\n')[0];
         detailedMarkdown += `## Commit: ${shortSha}\n**${title}**\n\n`;
 
-        // 1. Symbol Changes
         const symbolsStmt = prepare(`
                     SELECT name, kind, path, symbol_id, change_type
                     FROM symbols
@@ -822,14 +776,12 @@ export class ReportService {
           detailedMarkdown += '\n';
         }
 
-        // 2. Call Graph
         const edgesStmt = prepare('SELECT COUNT(*) as count FROM edges WHERE sha = ?').get(
           sha
         ) as any;
         if (edgesStmt && edgesStmt.count > 0) {
           detailedMarkdown += `### 🔗 Call Graph (${edgesStmt.count} connections)\n\n`;
 
-          // Top callers
           const topCallers = prepare(`
                         SELECT from_symbol_id, COUNT(*) as call_count
                         FROM edges
@@ -855,7 +807,7 @@ export class ReportService {
       return detailedMarkdown;
     } catch (error) {
       logError('[ReportService] Failed to append detailed sections', error);
-      return markdown; // Return original on error
+      return markdown;
     }
   }
 
@@ -870,7 +822,6 @@ export class ReportService {
       if (grouped[s.change_type]) {
         grouped[s.change_type].push(s);
       } else {
-        // Fallback for unknown types
         if (!grouped[s.change_type]) grouped[s.change_type] = [];
         grouped[s.change_type].push(s);
       }
@@ -880,7 +831,7 @@ export class ReportService {
 
   private formatSymbolList(symbols: any[], _sha: string, _type: string): string {
     let md = '';
-    // Group by kind
+
     const byKind: Record<string, any[]> = {};
     for (const s of symbols) {
       if (!byKind[s.kind]) byKind[s.kind] = [];

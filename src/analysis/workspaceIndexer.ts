@@ -1,9 +1,9 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import pLimit = require('p-limit');
 import { Database } from 'sql.js';
 import { prepare } from '../storage/statement-wrapper';
+import type { HybridFact } from '../types/cstFacts';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
@@ -12,9 +12,7 @@ import { GitOperations } from './git';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
 import { getTreeSitterParser } from './tree-sitter';
-import type { HybridFact } from '../types/cstFacts';
-// p-limit is CommonJS; use require style to avoid default-import issues
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+import pLimit = require('p-limit');
 
 export interface WorkspaceFacts {
   workspaceHash: string;
@@ -28,8 +26,8 @@ export interface WorkspaceFacts {
   filesChanged: number;
   structuralChangeScore: number;
   blastRadius: number;
-  incoming?: Map<string, string[]>; // Reverse edge index (to -> from[])
-  outgoing?: Map<string, string[]>; // Forward edge index (from -> to[])
+  incoming?: Map<string, string[]>;
+  outgoing?: Map<string, string[]>;
 }
 
 export class WorkspaceIndexer {
@@ -51,7 +49,6 @@ export class WorkspaceIndexer {
     const changedFiles =
       mode === 'staged' ? await this.git.getStagedFiles() : await this.git.getUnstagedFiles();
 
-    // Filter files using centralized path filter
     const gitRoot = this.git.getRoot();
 
     const filteredFiles = [];
@@ -72,17 +69,14 @@ export class WorkspaceIndexer {
       return null;
     }
 
-    // Compute CONTENT-AWARE workspace hash
     const workspaceHash = await this.computeWorkspaceHash(filteredFiles);
 
-    // Check cache
     const cached = this.getCachedWorkspace(headSha, workspaceHash);
     if (cached) {
       logDebug(`[WorkspaceIndexer] Cache hit for ${mode} workspace`);
       return cached;
     }
 
-    // Analyze changes with enhanced processing
     let totalAdded = 0;
     let totalModified = 0;
     let totalRemoved = 0;
@@ -91,11 +85,9 @@ export class WorkspaceIndexer {
     let maxStructuralChange = 0;
     const allRisks: string[] = [];
 
-    // Collect for blast radius calculation
     const changedSymbols: any[] = [];
     const allEdges: any[] = [];
 
-    // Parallelize file processing with concurrency limit
     const limit = pLimit(8);
     const startTime = Date.now();
     const version = mode === 'staged' ? 'workspace-staged' : 'workspace-unstaged';
@@ -106,7 +98,6 @@ export class WorkspaceIndexer {
 
         try {
           if (status === 'D') {
-            // FILE DELETED
             const headBlobSha = await this.git.getBlobSha('HEAD', filePath);
             const headContent = await this.git.safeGetFileContent('HEAD', filePath);
             const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
@@ -128,7 +119,6 @@ export class WorkspaceIndexer {
             };
           }
 
-          // Get workspace content
           const fullPath = path.join(gitRoot, filePath);
           let workingContent: string;
           try {
@@ -138,14 +128,13 @@ export class WorkspaceIndexer {
               workingContent = fs.readFileSync(fullPath, 'utf8');
             }
           } catch (error: any) {
-            // Provide detailed error with path information
             logError(
               `Failed to read workspace file "${filePath}" (resolved to "${fullPath}"): ${error.message}\n` +
                 `This may indicate a git path parsing issue. File exists: ${fs.existsSync(
                   fullPath
                 )}`
             );
-            // Return empty result instead of throwing
+
             return {
               added: 0,
               modified: 0,
@@ -167,7 +156,6 @@ export class WorkspaceIndexer {
             workingContent
           );
 
-          // Extract and save hybrid facts for workspace with mode-specific version
           await this.extractAndSaveHybridFacts(
             filePath,
             version,
@@ -176,7 +164,6 @@ export class WorkspaceIndexer {
           );
 
           if (status === 'A' || status === 'U') {
-            // FILE ADDED or UNTRACKED (both don't exist at HEAD)
             return {
               added: workspaceSnapshot.symbols.length,
               modified: 0,
@@ -189,7 +176,6 @@ export class WorkspaceIndexer {
               structuralChange: 0,
             };
           } else {
-            // FILE MODIFIED (exists at HEAD)
             const headBlobSha = await this.git.getBlobSha('HEAD', filePath);
             const headContent = await this.git.safeGetFileContent('HEAD', filePath);
             const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
@@ -200,7 +186,6 @@ export class WorkspaceIndexer {
 
             const diff = this.snapshotManager.compareSnapshots(headSnapshot, workspaceSnapshot);
 
-            // Edge diff
             const headEdgeIds = new Set(headSnapshot.edges.map(e => `${e.from}-${e.to}`));
             const workspaceEdgeIds = new Set(workspaceSnapshot.edges.map(e => `${e.from}-${e.to}`));
             const edgesAdded = workspaceSnapshot.edges.filter(
@@ -210,7 +195,6 @@ export class WorkspaceIndexer {
               e => !workspaceEdgeIds.has(`${e.from}-${e.to}`)
             ).length;
 
-            // Structural diff (optional - can be slow for workspace)
             const structDiff = await this.structuralDiffManager.getOrCreateStructuralDiff(
               headBlobSha,
               workspaceBlobSha,
@@ -219,7 +203,6 @@ export class WorkspaceIndexer {
               workingContent
             );
 
-            // Extract and save hybrid facts for modified workspace files with mode-specific version
             const headFileHash = await this.computeFileHashForFacts(filePath, headContent);
             await this.extractAndSaveHybridFacts(
               filePath,
@@ -229,7 +212,6 @@ export class WorkspaceIndexer {
               headFileHash
             );
 
-            // Risk detection
             const risks: string[] = [];
             if (structDiff.interfaceChanged) risks.push('breaking-api');
             if (structDiff.controlFlowChanged) risks.push('refactor');
@@ -248,7 +230,7 @@ export class WorkspaceIndexer {
           }
         } catch (error: any) {
           logDebug(`[WorkspaceIndexer] Error processing ${filePath}: ${error.message}`);
-          // Return empty result to allow other files to continue
+
           return {
             added: 0,
             modified: 0,
@@ -273,7 +255,6 @@ export class WorkspaceIndexer {
       ).toFixed(1)} files/sec)`
     );
 
-    // Aggregate results
     for (const result of fileResults) {
       totalAdded += result.added;
       totalModified += result.modified;
@@ -286,14 +267,12 @@ export class WorkspaceIndexer {
       maxStructuralChange = Math.max(maxStructuralChange, result.structuralChange);
     }
 
-    // Calculate blast radius
     const blastRadiusResult = this.calculateBlastRadius(changedSymbols, allEdges);
     const totalImpact = Array.from(blastRadiusResult.impactScore.values()).reduce(
       (a, b) => a + b,
       0
     );
 
-    // Flush any pending snapshot and diff writes
     this.snapshotManager.flushSnapshotQueue();
     this.structuralDiffManager.flushDiffQueue();
 
@@ -313,7 +292,6 @@ export class WorkspaceIndexer {
       outgoing: blastRadiusResult.outgoing,
     };
 
-    // Cache result
     this.cacheWorkspace(facts);
 
     return facts;
@@ -333,7 +311,6 @@ export class WorkspaceIndexer {
           const gitRoot = this.git.getRoot();
           const fullPath = path.join(gitRoot, f.path);
 
-          // Check if it's a file (not a directory)
           const stats = fs.statSync(fullPath);
           if (!stats.isFile()) {
             return `${f.path}:${f.status}:directory`;
@@ -367,40 +344,32 @@ export class WorkspaceIndexer {
     const incoming = new Map<string, string[]>();
     const outgoing = new Map<string, string[]>();
 
-    // Build bidirectional edge index
     for (const edge of allEdges) {
       const fromId = edge.from;
       const toId = edge.to;
 
-      // Outgoing edges: from → to
       if (!outgoing.has(fromId)) {
         outgoing.set(fromId, []);
       }
       outgoing.get(fromId)!.push(toId);
 
-      // Incoming edges: to ← from (reverse index)
       if (!incoming.has(toId)) {
         incoming.set(toId, []);
       }
       incoming.get(toId)!.push(fromId);
     }
 
-    // Simple blast radius calculation based on edge connectivity
     for (const symbol of changedSymbols) {
       const symbolId = symbol.dnaId || symbol.id;
 
-      // Direct impact
       impactScore.set(symbolId, (impactScore.get(symbolId) || 0) + 10);
 
-      // Indirect impact through edges (use outgoing for forward impact)
       const connectedSymbols = outgoing.get(symbolId) || [];
 
-      // Secondary impact (reduced weight)
       for (const connectedId of connectedSymbols) {
         impactScore.set(connectedId, (impactScore.get(connectedId) || 0) + 5);
       }
 
-      // Also consider reverse impact (symbols that depend on this one)
       const dependentSymbols = incoming.get(symbolId) || [];
       for (const dependentId of dependentSymbols) {
         impactScore.set(dependentId, (impactScore.get(dependentId) || 0) + 3);
@@ -484,7 +453,6 @@ export class WorkspaceIndexer {
     }
 
     try {
-      // Parse file via worker
       const hybridFacts: HybridFact[] = await this.parser.extractHybridFacts(
         content,
         filePath,
@@ -492,7 +460,6 @@ export class WorkspaceIndexer {
         existingSymbols
       );
 
-      // Save via timeline manager
       await this.cstTimelineManager.saveFacts(filePath, version, hybridFacts, prevHash);
       if (hybridFacts.length > 0) {
         logDebug(
@@ -515,7 +482,6 @@ export class WorkspaceIndexer {
     if (!language) return undefined;
 
     try {
-      // Use worker to extract facts for hash computation
       const hybridFacts: HybridFact[] = await this.parser.extractHybridFacts(
         content,
         filePath,
@@ -542,14 +508,13 @@ export class WorkspaceIndexer {
     const allFiles = await this.git.getAllFiles();
     const gitRoot = this.git.getRoot();
 
-    // Filter files
     const filteredFiles: string[] = [];
     for (const file of allFiles) {
       if (
         await filterPath(file, {
           git: this.git,
           gitRoot,
-          status: 'M', // Dummy status for filtering
+          status: 'M',
           skipSizeCheck: true,
         })
       ) {
@@ -557,7 +522,6 @@ export class WorkspaceIndexer {
       }
     }
 
-    // Build Tree
     const root: any[] = [];
     const map = new Map<string, any>();
 
@@ -577,7 +541,7 @@ export class WorkspaceIndexer {
             id: currentPath,
             name: part,
             type: isFile ? 'file' : 'folder',
-            status: 'unknown', // Default status
+            status: 'unknown',
             children: isFile ? [] : [],
           };
           map.set(currentPath, node);
@@ -590,7 +554,6 @@ export class WorkspaceIndexer {
       }
     }
 
-    // Sort: Folders first, then files, alphabetical
     const sortNodes = (nodes: any[]) => {
       nodes.sort((a, b) => {
         if (a.type === b.type) return a.name.localeCompare(b.name);
@@ -611,26 +574,22 @@ export class WorkspaceIndexer {
     const gitRoot = this.git.getRoot();
     const fullPath = path.join(gitRoot, filePath);
 
-    // 1. Basic Metadata
     let content = '';
     try {
       content = fs.readFileSync(fullPath, 'utf8');
     } catch {
-      return null; // File not found
+      return null;
     }
 
-    // 2. Git Metadata & Timeline
     let lastCommit = null;
     let timeline: any[] = [];
 
     try {
-      // Fetch history
       timeline = await this.git.getFileHistory(filePath, 10);
       if (timeline.length > 0) {
         lastCommit = timeline[0];
       }
 
-      // Check Staged Changes (Virtual Commit)
       const stagedFiles = await this.git.getStagedFiles();
       const stagedFile = stagedFiles.find(f => f.path === filePath);
       if (stagedFile) {
@@ -645,7 +604,6 @@ export class WorkspaceIndexer {
         });
       }
 
-      // Check Unstaged Changes (Virtual Commit)
       const unstagedFiles = await this.git.getUnstagedFiles();
       const unstagedFile = unstagedFiles.find(f => f.path === filePath);
       if (unstagedFile) {
@@ -659,11 +617,8 @@ export class WorkspaceIndexer {
           stats: { additions: stats.added, deletions: stats.removed },
         });
       }
-    } catch (e) {
-      // Ignore git errors for new files
-    }
+    } catch (e) {}
 
-    // 3. Symbols (CST)
     let symbols: any[] = [];
     const language = detectLanguage(filePath);
     if (language) {
@@ -703,7 +658,6 @@ export class WorkspaceIndexer {
 
     for (const symbol of symbols) {
       if (symbol.kind === 'function' || symbol.kind === 'method') {
-        // Expect camelCase
         if (!/^[a-z][a-zA-Z0-9]*$/.test(symbol.name)) {
           drift.push({
             symbol: symbol.name,
@@ -713,7 +667,6 @@ export class WorkspaceIndexer {
           });
         }
       } else if (symbol.kind === 'class' || symbol.kind === 'interface') {
-        // Expect PascalCase
         if (!/^[A-Z][a-zA-Z0-9]*$/.test(symbol.name)) {
           drift.push({
             symbol: symbol.name,
@@ -736,9 +689,6 @@ export class WorkspaceIndexer {
     includeConnected: boolean;
     exclusions: string[];
   }): Promise<any> {
-    // 1. Resolve Skeleton
-    // Use the ContextSkeletonService to determine the exact list of files to analyze
-    // based on the provided configuration (mode, roots, exclusions).
     const { ContextSkeletonService } = await import('../services/contextSkeleton');
     const skeletonService = new ContextSkeletonService();
     const skeleton = await skeletonService.resolveSkeleton(
@@ -750,15 +700,11 @@ export class WorkspaceIndexer {
       }
     );
 
-    // 2. Get hotspots for resolved files
-    // We need to filter hotspots by the files in the skeleton
     const hotspots = await this.git.getHotspots(20);
     const skeletonSet = new Set(skeleton.files);
 
     const filteredHotspots = hotspots.filter((h: any) => skeletonSet.has(h.path));
 
-    // If 'changes' mode, ensure all changed files are included even if not in hotspots
-    // This handles new files that haven't been committed yet.
     if (config?.mode === 'changes') {
       for (const file of skeleton.files) {
         if (!filteredHotspots.find(h => h.path === file)) {
@@ -776,7 +722,7 @@ export class WorkspaceIndexer {
     return {
       hotspots: filteredHotspots.map(h => ({
         path: h.path,
-        score: h.count, // Churn count
+        score: h.count,
         name: h.path.split('/').pop(),
         added: h.added,
         removed: h.removed,
@@ -811,25 +757,17 @@ export class WorkspaceIndexer {
     const imports: Set<string> = new Set();
     const basedir = path.dirname(filePath);
 
-    // Regex for JS/TS imports
     const importRegex = /from\s+['"]([^'"]+)['"]|require\(['"]([^'"]+)['"]\)/g;
     let match;
 
     while ((match = importRegex.exec(content)) !== null) {
       const importPath = match[1] || match[2];
       if (importPath && importPath.startsWith('.')) {
-        // Resolve relative path
         try {
           const _resolved = path.resolve(basedir, importPath);
-          // Try to find the file with extensions
-          // This is a simplification; in reality we'd check file existence
-          // For the prototype, we'll just return the resolved path relative to root if possible
-          // But we need to map it back to workspace relative path
-          // Let's just store the raw import for now, or try to resolve simple cases
+
           imports.add(importPath);
-        } catch (e) {
-          // ignore
-        }
+        } catch (e) {}
       }
     }
 
@@ -842,11 +780,7 @@ export class WorkspaceIndexer {
     };
   }
 
-  /**
-   * Get context for a specific symbol
-   */
   async getSymbolContext(symbolId: string): Promise<any> {
-    // symbolId format: "path/to/file.ts::symbolName"
     const [filePath, symbolName] = symbolId.split('::');
 
     if (!filePath || !symbolName) return null;
@@ -854,7 +788,6 @@ export class WorkspaceIndexer {
     const content = await this.snapshotManager.getFileContent(filePath);
     if (!content) return null;
 
-    // 1. Find symbol range
     const language = detectLanguage(filePath);
     let symbolRange = null;
     let symbolContent = '';
@@ -865,23 +798,19 @@ export class WorkspaceIndexer {
         const symbol = symbols.find((s: any) => s.name === symbolName) as any;
         if (symbol && symbol.range) {
           symbolRange = symbol.range;
-          // Extract content based on range (1-based lines)
+
           const lines = content.split('\n');
           symbolContent = lines
             .slice(symbol.range.start.line - 1, symbol.range.end.line)
             .join('\n');
         }
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
     }
 
     if (!symbolContent) {
       return { id: symbolId, error: 'Symbol not found' };
     }
 
-    // 2. Get history for this symbol (git log -L)
-    // Note: git log -L requires start,end:file
     let history: any[] = [];
     if (symbolRange) {
       try {
@@ -900,10 +829,7 @@ export class WorkspaceIndexer {
             const [hash, author, date, message] = line.split('|');
             return { hash, author, date, message };
           });
-      } catch (e) {
-        // git log -L can fail if lines don't match history, fallback to file history?
-        // For now, just return empty
-      }
+      } catch (e) {}
     }
 
     return {

@@ -1,20 +1,20 @@
 /**
  * @vitest-environment jsdom
  */
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
 import '@testing-library/jest-dom';
+import { fireEvent, render, screen } from '@testing-library/react';
+import React from 'react';
+import { describe, expect, it, vi } from 'vitest';
 import { BundleStage } from '../../../src/webview/cockpit/components/stages/BundleStage';
 
 // Mock TreemapNode to avoid complex rendering
 vi.mock('../../../src/webview/cockpit/components/stages/TreemapNode', () => ({
-  TreemapNode: () => <div data-testid="treemap-node">Treemap Node</div>
+  TreemapNode: () => <div data-testid="treemap-node">Treemap Node</div>,
 }));
 
 describe('BundleStage', () => {
   const mockVscode = {
-    postMessage: vi.fn()
+    postMessage: vi.fn(),
   };
 
   const defaultProps = {
@@ -25,12 +25,12 @@ describe('BundleStage', () => {
         mode: 'repo',
         roots: [],
         includeConnected: false,
-        exclusions: []
+        exclusions: [],
       },
       lastNCommits: 20,
-      isAnalyzing: false
+      isAnalyzing: false,
     } as any,
-    vscode: mockVscode
+    vscode: mockVscode,
   };
 
   it('should render configuration toggle', () => {
@@ -41,19 +41,15 @@ describe('BundleStage', () => {
   it('should update config and submit analysis', () => {
     render(<BundleStage {...defaultProps} />);
 
-    // Open configuration
     const configToggle = screen.getByText(/Configure Scope/i);
     fireEvent.click(configToggle);
 
-    // Change mode to custom
     const modeSelect = screen.getByRole('combobox');
     fireEvent.change(modeSelect, { target: { value: 'custom' } });
 
-    // Enter custom roots
     const rootsInput = screen.getByPlaceholderText('src/auth, utils.ts');
     fireEvent.change(rootsInput, { target: { value: 'src/test' } });
 
-    // Click Apply & Analyze
     const applyButton = screen.getByText('Apply & Analyze');
     fireEvent.click(applyButton);
 
@@ -61,13 +57,13 @@ describe('BundleStage', () => {
       type: 'updateBundleConfig',
       config: expect.objectContaining({
         mode: 'custom',
-        roots: ['src/test']
-      })
+        roots: ['src/test'],
+      }),
     });
     expect(mockVscode.postMessage).toHaveBeenCalledWith({
       type: 'generateReport',
       mode: 'selection',
-      force: true
+      force: true,
     });
   });
 
@@ -76,12 +72,11 @@ describe('BundleStage', () => {
       ...defaultProps,
       cockpitState: {
         ...defaultProps.cockpitState,
-        isAnalyzing: true
-      }
+        isAnalyzing: true,
+      },
     };
     render(<BundleStage {...props} />);
-    
-    // Open configuration to see the button
+
     const configToggle = screen.getByText(/Configure Scope/i);
     fireEvent.click(configToggle);
 

@@ -4,9 +4,7 @@ import { logInfo } from '../utils/logger';
 export class ExplorerService {
   private static instance: ExplorerService;
 
-  private constructor() {
-    // Singleton
-  }
+  private constructor() {}
 
   static getInstance(): ExplorerService {
     if (!ExplorerService.instance) {
@@ -33,11 +31,10 @@ export class ExplorerService {
         description: `${fileCount} files`,
         type: 'folder',
         status: 'ready',
-        children: [], // We'll populate the active bundle's children below
+        children: [],
       };
     });
 
-    // Add "New Bundle" node
     const newBundleNode: ExplorerNode = {
       id: 'new-bundle',
       name: 'New Bundle',
@@ -46,12 +43,7 @@ export class ExplorerService {
       children: [],
     };
 
-    // If no bundles exist, create a default "New Bundle" placeholder or similar?
-    // For now, let's assume we always have at least one or we show an empty list.
-
-    // Logic to populate the *active* bundle's children
     // TODO: We need to know WHICH bundle is active to populate it.
-    // For this refactor step, we'll assume the first one or a specific one is active if we have facts.
 
     let fileNodes: ExplorerNode[] = [];
 
@@ -63,28 +55,19 @@ export class ExplorerService {
       this.hydrateSymbols(fileNodes, bundleFacts);
     }
 
-    // If we have bundles, we should probably attach the fileNodes to the ACTIVE bundle.
-    // If we don't have a concept of "active bundle" passed in yet, we might need to adjust.
-    // For now, let's append the "Bundle Overview" (legacy) if no bundles are passed,
-    // OR if bundles are passed, put the files in the first one?
-
     if (bundles.length > 0) {
-      // Find active bundle node
       const activeNode = activeBundleId
         ? bundleNodes.find(n => n.id === `bundle-${activeBundleId}`)
         : bundleNodes[0];
 
       if (activeNode) {
         activeNode.children = fileNodes;
-        // Expand active bundle by default? Maybe not strictly required but good UX
       } else if (bundleNodes.length > 0) {
-        // Fallback to first bundle if active not found
         bundleNodes[0].children = fileNodes;
       }
 
       return [newBundleNode, ...bundleNodes];
     } else {
-      // Legacy fallback
       const bundleNode: ExplorerNode = {
         id: 'bundle-root',
         name: 'Bundle Overview',
@@ -132,7 +115,6 @@ export class ExplorerService {
           };
           map.set(currentPath, node);
 
-          // Attach to parent
           const parent = map.get(parentPath);
           if (parent) {
             parent.children = parent.children || [];
@@ -146,7 +128,6 @@ export class ExplorerService {
   }
 
   private hydrateSymbols(nodes: ExplorerNode[], bundleFacts: BundleFactsDTO) {
-    // Build map of file -> symbols
     const fileSymbols = new Map<string, any[]>();
     const workingSymbols = (bundleFacts?.evidence as any)?.['working.symbols'] || [];
 
@@ -158,7 +139,6 @@ export class ExplorerService {
       fileSymbols.get(filePath)?.push({ id: symbolId, name: symbolName });
     }
 
-    // Recursively find file nodes and add symbol children
     const visit = (node: ExplorerNode) => {
       if (node.type === 'file') {
         const symbols = fileSymbols.get(node.id);

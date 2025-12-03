@@ -1,22 +1,14 @@
-/**
- * Additional convention detection enhancements:
- * - Import path conventions
- * - File naming conventions
- * - Parameter order consistency
- * - Return type conventions
- */
-
 import * as path from 'path';
 import { getSupportedExtensions, isJSLanguage, isPHPLanguage } from '../utils/config';
 
 export type ImportPathStyle =
-  | 'absolute' // /src/components/Button
-  | 'relative' // ../components/Button
-  | 'alias' // @/components/Button
-  | 'package' // react, lodash
-  | 'index' // ./components/index
-  | 'extension' // ./Button.js
-  | 'no-extension'; // ./Button
+  | 'absolute'
+  | 'relative'
+  | 'alias'
+  | 'package'
+  | 'index'
+  | 'extension'
+  | 'no-extension';
 
 export interface ImportPathConvention {
   style: ImportPathStyle;
@@ -30,35 +22,26 @@ export interface FileNamingConvention {
   path: string;
 }
 
-/**
- * Detect import path style from import statement
- */
 export function detectImportPathStyle(importPath: string): ImportPathStyle {
   if (!importPath) return 'package';
 
-  // Package imports (no path separators, or starts with package name)
   if (!importPath.includes('/') && !importPath.includes('\\')) {
     return 'package';
   }
 
-  // Alias imports (@/something) - must be @/ specifically
   if (importPath.startsWith('@/')) {
     return 'alias';
   }
 
-  // Scoped npm packages (@scope/package) - @ followed by non-slash
   if (importPath.startsWith('@') && importPath[1] !== '/') {
     return 'package';
   }
 
-  // Absolute imports (starts with /)
   if (importPath.startsWith('/')) {
     return 'absolute';
   }
 
-  // Relative imports (starts with .)
   if (importPath.startsWith('./') || importPath.startsWith('../')) {
-    // Check for index file
     if (
       importPath.endsWith('/index') ||
       importPath.endsWith('/index.js') ||
@@ -67,11 +50,9 @@ export function detectImportPathStyle(importPath: string): ImportPathStyle {
       return 'index';
     }
 
-    // Check for extension
     const ext = path.extname(importPath);
     const supportedExts = getSupportedExtensions();
     if (ext && !supportedExts.includes(ext.slice(1))) {
-      // Remove leading dot
       return 'extension';
     }
     if (!ext || supportedExts.includes(ext.slice(1))) {
@@ -81,12 +62,9 @@ export function detectImportPathStyle(importPath: string): ImportPathStyle {
     return 'relative';
   }
 
-  return 'relative'; // Default
+  return 'relative';
 }
 
-/**
- * Extract import paths from code content
- */
 export function extractImportPaths(content: string, language: string): ImportPathConvention[] {
   const imports: ImportPathConvention[] = [];
   const lines = content.split('\n');
@@ -95,7 +73,6 @@ export function extractImportPaths(content: string, language: string): ImportPat
     const line = lines[i].trim();
 
     if (isJSLanguage(language)) {
-      // ES6 imports: import ... from 'path'
       const importMatch = line.match(/import\s+.*?\s+from\s+['"]([^'"]+)['"]/);
       if (importMatch) {
         imports.push({
@@ -105,7 +82,6 @@ export function extractImportPaths(content: string, language: string): ImportPat
         });
       }
 
-      // CommonJS: require('path')
       const requireMatch = line.match(/require\s*\(\s*['"]([^'"]+)['"]\s*\)/);
       if (requireMatch) {
         imports.push({
@@ -117,17 +93,15 @@ export function extractImportPaths(content: string, language: string): ImportPat
     }
 
     if (isPHPLanguage(language)) {
-      // PHP use statements: use Namespace\Class;
       const useMatch = line.match(/^use\s+([^;]+);/);
       if (useMatch) {
         imports.push({
-          style: 'package', // PHP namespaces are like packages
+          style: 'package',
           path: useMatch[1],
           line: i + 1,
         });
       }
 
-      // PHP require/include: require('path')
       const requireMatch = line.match(/(require|include)(_once)?\s*\(\s*['"]([^'"]+)['"]\s*\)/);
       if (requireMatch) {
         imports.push({
@@ -142,9 +116,6 @@ export function extractImportPaths(content: string, language: string): ImportPat
   return imports;
 }
 
-/**
- * Analyze import path convention drift
- */
 export function analyzeImportPathDrift(imports: ImportPathConvention[]): {
   dominantStyle: ImportPathStyle;
   styleCounts: Record<ImportPathStyle, number>;
@@ -180,21 +151,15 @@ export function analyzeImportPathDrift(imports: ImportPathConvention[]): {
   };
 }
 
-/**
- * Detect file naming convention
- */
 export function detectFileNamingConvention(filePath: string): FileNamingConvention {
   const filename = path.basename(filePath, path.extname(filePath));
 
-  // Analyze filename
   const hasUnderscore = filename.includes('_');
   const hasHyphen = filename.includes('-');
   const hasUppercase = /[A-Z]/.test(filename);
   const startsUpper = /^[A-Z]/.test(filename);
   const allUpper = filename === filename.toUpperCase() && hasUnderscore;
 
-  // Analyze directory structure for path-based conventions
-  // Check if parent directory follows a naming pattern that might influence file naming
   const dir = path.dirname(filePath);
   const dirParts = dir.split(path.sep).filter((part: string) => part.length > 0);
   const parentDir = dirParts.length > 0 ? dirParts[dirParts.length - 1] : '';
@@ -216,13 +181,12 @@ export function detectFileNamingConvention(filePath: string): FileNamingConventi
   } else if ((hasUnderscore && hasUppercase) || (hasHyphen && hasUppercase)) {
     style = 'mixed';
   } else {
-    // If filename doesn't have clear pattern, check if directory suggests a convention
     if (hasDirUnderscore && !hasDirHyphen) {
-      style = 'snake_case'; // Directory uses snake_case, likely convention
+      style = 'snake_case';
     } else if (hasDirHyphen && !hasDirUnderscore) {
-      style = 'kebab-case'; // Directory uses kebab-case, likely convention
+      style = 'kebab-case';
     } else {
-      style = 'camelCase'; // Default
+      style = 'camelCase';
     }
   }
 
@@ -233,30 +197,19 @@ export function detectFileNamingConvention(filePath: string): FileNamingConventi
   };
 }
 
-/**
- * Extract parameter order from function signature
- */
 export function extractParameterOrder(signature: string): string[] {
-  // Extract parameters from signature
-  // Handles: function name(param1: type, param2: type)
-  //          (param1, param2) =>
-  //          name(param1, param2)
   const paramMatch = signature.match(/\(([^)]*)\)/);
   if (!paramMatch) return [];
 
   return paramMatch[1]
     .split(',')
     .map(p => {
-      // Extract parameter name (before colon or equals)
       const name = p.trim().split(/[:=]/)[0].trim();
       return name;
     })
     .filter(p => p.length > 0);
 }
 
-/**
- * Compare parameter orders for consistency
- */
 export function compareParameterOrders(signatures: string[]): {
   consistent: boolean;
   commonOrder: string[];
@@ -272,7 +225,6 @@ export function compareParameterOrders(signatures: string[]): {
 
   const orders = signatures.map(sig => extractParameterOrder(sig));
 
-  // Find most common order (by parameter name frequency at each position)
   const positionCounts = new Map<number, Map<string, number>>();
 
   for (const order of orders) {
@@ -285,7 +237,6 @@ export function compareParameterOrders(signatures: string[]): {
     }
   }
 
-  // Build common order
   const commonOrder: string[] = [];
   for (let i = 0; i < Math.max(...orders.map(o => o.length)); i++) {
     const counts = positionCounts.get(i);
@@ -297,7 +248,6 @@ export function compareParameterOrders(signatures: string[]): {
     }
   }
 
-  // Find inconsistencies
   const inconsistencies: Array<{
     signature: string;
     order: string[];
@@ -330,9 +280,6 @@ export function compareParameterOrders(signatures: string[]): {
   };
 }
 
-/**
- * Detect return type convention from signature
- */
 export function detectReturnTypeConvention(
   signature: string,
   _language: string
@@ -340,17 +287,14 @@ export function detectReturnTypeConvention(
   type: 'promise' | 'callback' | 'async' | 'sync' | 'unknown';
   returnType?: string;
 } {
-  // Check for Promise<T>
   if (signature.includes('Promise<') || signature.includes(': Promise')) {
     return { type: 'promise', returnType: 'Promise' };
   }
 
-  // Check for async keyword
   if (signature.includes('async') || signature.startsWith('async')) {
     return { type: 'async', returnType: 'async' };
   }
 
-  // Check for callback pattern (function with callback parameter)
   if (
     signature.includes('callback') ||
     signature.includes('cb') ||
@@ -359,7 +303,6 @@ export function detectReturnTypeConvention(
     return { type: 'callback', returnType: 'callback' };
   }
 
-  // Check for explicit return type
   const returnTypeMatch = signature.match(/:\s*([A-Z][a-zA-Z0-9<>[\]]+)/);
   if (returnTypeMatch) {
     return { type: 'sync', returnType: returnTypeMatch[1] };

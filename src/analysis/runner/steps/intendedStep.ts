@@ -14,14 +14,12 @@ export function createIntendedStep(): PipelineStep {
       const intended = await buildIntendedMap(state.selectedCommitShas);
       state.intended = intended;
 
-      // Log validation for empty results
       if (intended.size === 0) {
         logWarn(
           `WARNING: Intended map is empty. No symbols found in ${state.selectedCommitShas.length} commits.`
         );
         logWarn(`Attempting fallback: seeding from hotspots...`);
 
-        // Fallback: seed from hotspots if empty
         try {
           const hotspotDetector = new HotspotDetectorV2();
           const hotspots = await hotspotDetector.getTopSymbolHotspots(50);

@@ -3,7 +3,7 @@ import * as React from 'react';
 interface CodeEditorProps {
   content: string;
   language: string;
-  driftLines?: number[]; // Lines that have drift warnings
+  driftLines?: number[];
 }
 
 const EditorContainer: React.CSSProperties = {
@@ -47,7 +47,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ content, language, drift
     <div style={EditorContainer}>
       {lines.map((line, i) => {
         const lineNumber = i + 1;
-        const hasDrift = driftLines.includes(lineNumber) || line.includes('TODO') || line.includes('FIXME'); // Mock drift detection
+        const hasDrift =
+          driftLines.includes(lineNumber) || line.includes('TODO') || line.includes('FIXME'); // Mock drift detection
 
         return (
           <div

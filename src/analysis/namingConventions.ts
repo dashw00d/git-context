@@ -1,22 +1,17 @@
-/**
- * Naming convention detection and analysis
- * Detects naming patterns and identifies drift/inconsistencies
- */
-
 export type NamingConvention =
-  | 'camelCase' // getUserData
-  | 'PascalCase' // GetUserData
-  | 'snake_case' // get_user_data
-  | 'SCREAMING_SNAKE' // GET_USER_DATA
-  | 'kebab-case' // get-user-data (rare for symbols)
-  | 'hungarian' // strUserData
-  | 'mixed' // get_userData
+  | 'camelCase'
+  | 'PascalCase'
+  | 'snake_case'
+  | 'SCREAMING_SNAKE'
+  | 'kebab-case'
+  | 'hungarian'
+  | 'mixed'
   | 'unknown';
 
 export interface ConventionProfile {
   convention: NamingConvention;
   confidence: number;
-  parts: string[]; // ['get', 'User', 'Data']
+  parts: string[];
 }
 
 export interface ConventionDriftResult {
@@ -31,9 +26,6 @@ export interface ConventionDriftResult {
   driftPercent: number;
 }
 
-/**
- * Detect naming convention from a symbol name
- */
 export function detectNamingConvention(name: string): ConventionProfile {
   if (!name || name.length === 0) {
     return { convention: 'unknown', confidence: 0, parts: [] };
@@ -46,8 +38,6 @@ export function detectNamingConvention(name: string): ConventionProfile {
   const startsUpper = /^[A-Z]/.test(name);
   const allUpper = name === name.toUpperCase() && hasUnderscore;
 
-  // Single-word lowercase names (e.g., form, table, handle)
-  // Default to camelCase since that's the standard for methods in most languages
   const isSingleLowerWord = startsLower && !/[_A-Z-]/.test(name.slice(1));
   if (isSingleLowerWord) {
     return { convention: 'camelCase', confidence: 0.7, parts: [name] };
@@ -57,28 +47,21 @@ export function detectNamingConvention(name: string): ConventionProfile {
   let convention: NamingConvention;
   let confidence = 0.9;
 
-  // SCREAMING_SNAKE_CASE: All uppercase with underscores
   if (allUpper) {
     convention = 'SCREAMING_SNAKE';
     parts = name.split('_').filter(Boolean);
-  }
-  // snake_case: lowercase with underscores, no uppercase
-  else if (hasUnderscore && !hasUppercase) {
+  } else if (hasUnderscore && !hasUppercase) {
     convention = 'snake_case';
     parts = name.split('_').filter(Boolean);
-  }
-  // kebab-case: lowercase with hyphens
-  else if (hasHyphen && !hasUppercase) {
+  } else if (hasHyphen && !hasUppercase) {
     convention = 'kebab-case';
     parts = name.split('-').filter(Boolean);
-  }
-  // mixed: combination (e.g., get_userData)
-  else if (hasUnderscore && hasUppercase) {
+  } else if (hasUnderscore && hasUppercase) {
     convention = 'mixed';
     confidence = 0.7;
-    // Split on both underscores and uppercase transitions
+
     parts = name.split(/[_A-Z]/).filter(Boolean);
-    // Reconstruct parts more intelligently
+
     const reconstructed: string[] = [];
     let current = '';
     for (let i = 0; i < name.length; i++) {
@@ -99,19 +82,13 @@ export function detectNamingConvention(name: string): ConventionProfile {
       reconstructed.push(current.toLowerCase());
     }
     parts = reconstructed.filter(Boolean);
-  }
-  // PascalCase: Starts with uppercase, has uppercase transitions
-  else if (startsUpper && hasUppercase) {
+  } else if (startsUpper && hasUppercase) {
     convention = 'PascalCase';
     parts = name.split(/(?=[A-Z])/).filter(Boolean);
-  }
-  // camelCase: Starts with lowercase, has uppercase transitions
-  else if (startsLower && hasUppercase) {
+  } else if (startsLower && hasUppercase) {
     convention = 'camelCase';
     parts = name.split(/(?=[A-Z])/).filter(Boolean);
-  }
-  // Hungarian notation: starts with lowercase type prefix (str, int, etc.)
-  else if (/^[a-z]{1,3}[A-Z]/.test(name)) {
+  } else if (/^[a-z]{1,3}[A-Z]/.test(name)) {
     convention = 'hungarian';
     confidence = 0.8;
     const match = name.match(/^([a-z]{1,3})(.+)$/);
@@ -120,9 +97,7 @@ export function detectNamingConvention(name: string): ConventionProfile {
     } else {
       parts = [name];
     }
-  }
-  // Unknown: single word or no clear pattern
-  else {
+  } else {
     convention = 'unknown';
     confidence = 0.5;
     parts = [name];
@@ -131,18 +106,14 @@ export function detectNamingConvention(name: string): ConventionProfile {
   return { convention, confidence, parts };
 }
 
-/**
- * Suggest a name following a target convention
- */
 export function suggestConventionName(name: string, targetConvention: NamingConvention): string {
   const profile = detectNamingConvention(name);
   const parts = profile.parts.length > 0 ? profile.parts : [name];
 
-  // Normalize parts (lowercase, remove empty)
   const normalizedParts = parts.map(p => p.toLowerCase().trim()).filter(p => p.length > 0);
 
   if (normalizedParts.length === 0) {
-    return name; // Can't convert
+    return name;
   }
 
   switch (targetConvention) {
@@ -168,7 +139,6 @@ export function suggestConventionName(name: string, targetConvention: NamingConv
       return normalizedParts.join('-');
 
     case 'hungarian':
-      // Keep first part as prefix, rest as PascalCase
       if (normalizedParts.length > 1) {
         return (
           normalizedParts[0] +
@@ -181,7 +151,6 @@ export function suggestConventionName(name: string, targetConvention: NamingConv
       return normalizedParts[0];
 
     case 'mixed':
-      // Use camelCase with underscores (uncommon, but handle it)
       return (
         normalizedParts[0] +
         '_' +
@@ -196,9 +165,6 @@ export function suggestConventionName(name: string, targetConvention: NamingConv
   }
 }
 
-/**
- * Analyze convention drift across a set of symbols
- */
 export function analyzeConventionDrift(
   symbols: Array<{
     name: string;
@@ -222,19 +188,16 @@ export function analyzeConventionDrift(
     profile: detectNamingConvention(s.name),
   }));
 
-  // Count conventions
   for (const s of symbolConventions) {
     counts[s.profile.convention]++;
   }
 
-  // Find dominant convention (excluding unknown)
   const conventionEntries = Object.entries(counts)
     .filter(([k]) => k !== 'unknown')
     .sort(([, a], [, b]) => b - a);
 
   const dominant = (conventionEntries[0]?.[0] as NamingConvention) || 'unknown';
 
-  // Find symbols that don't match dominant
   const driftSymbols = symbolConventions
     .filter(s => s.profile.convention !== dominant && s.profile.convention !== 'unknown')
     .map(s => ({

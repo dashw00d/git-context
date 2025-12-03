@@ -1,4 +1,3 @@
-/* eslint-disable no-restricted-syntax */
 import { BundleStoryEngine } from '../../bundleStoryEngine';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 

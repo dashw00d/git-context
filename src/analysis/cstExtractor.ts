@@ -3,14 +3,7 @@ import { SymbolInfo } from '../types';
 import { CstFact } from '../types/cstFacts';
 import { getExtensionConfig, isCstOnlyLanguage, LANGUAGES } from '../utils/config';
 
-/**
- * Extract CST facts from a tree-sitter tree
- * Supports both CST-only languages and hybrid augmentation
- */
 export class CstExtractor {
-  /**
-   * Extract CST facts from tree (CST-only or hybrid augmentation)
-   */
   extractCstFacts(
     tree: any,
     filePath: string,
@@ -21,32 +14,28 @@ export class CstExtractor {
     const isCstOnly = isCstOnlyLanguage(language);
     const enableAugment = config.enableCstAugmentation ?? false;
 
-    // Only extract if CST-only or augmentation enabled
     if (!isCstOnly && !enableAugment) {
       return [];
     }
 
     const facts: CstFact[] = [];
-    const depthLimit = 3; // Limit traversal depth for performance
+    const depthLimit = 3;
 
     const traverse = (node: any, depth: number): void => {
       if (depth > depthLimit) return;
 
-      // Extract based on language and mode
       if (isCstOnly) {
         const fact = this.extractCstOnlyFact(node, filePath, language);
         if (fact) {
           facts.push(fact);
         }
       } else if (enableAugment) {
-        // Hybrid augmentation: extract auxiliary nodes
         const fact = this.extractHybridAuxiliaryFact(node, filePath, language, existingSymbols);
         if (fact) {
           facts.push(fact);
         }
       }
 
-      // Recurse into children
       if (node.childCount > 0 && depth < depthLimit) {
         for (const child of node.children) {
           if (child.isNamed) {
@@ -56,14 +45,10 @@ export class CstExtractor {
       }
     };
 
-    // Start traversal from root node
     traverse(tree.rootNode, 0);
     return facts;
   }
 
-  /**
-   * Extract CST fact for CST-only languages (Markdown, JSON, YAML, CSS)
-   */
   private extractCstOnlyFact(node: any, filePath: string, language: string): CstFact | null {
     switch (language) {
       case LANGUAGES.MARKDOWN:
@@ -79,13 +64,8 @@ export class CstExtractor {
     }
   }
 
-  /**
-   * Extract Markdown heading fact
-   */
   private extractMarkdownFact(node: any, filePath: string): CstFact | null {
-    // Check for heading nodes (atx_heading or setext_heading)
     if (node.type === 'atx_heading') {
-      // Extract level from number of # characters
       const headingMarker = node.namedChildren.find(
         (c: any) =>
           c.type === 'atx_h1_marker' ||
@@ -98,10 +78,9 @@ export class CstExtractor {
       let level = 1;
       if (headingMarker) {
         const markerText = headingMarker.text;
-        level = markerText.length; // Number of # characters
+        level = markerText.length;
       }
 
-      // Extract heading content
       const contentNode = node.namedChildren.find((c: any) => c.type === 'heading_content');
       const name = contentNode?.text?.trim() || '';
 
@@ -124,23 +103,18 @@ export class CstExtractor {
         nodeType: 'atx_heading',
         level,
         bodyShape,
-        timeline: [], // Will be populated by timeline manager
+        timeline: [],
       };
     }
 
     return null;
   }
 
-  /**
-   * Extract JSON property fact
-   */
   private extractJsonFact(node: any, filePath: string): CstFact | null {
     if (node.type === 'pair') {
-      // Extract key from string child
       const keyNode = node.namedChildren.find((c: any) => c.type === 'string');
       if (!keyNode) return null;
 
-      // Remove quotes from key
       const key = keyNode.text?.replace(/^"|"$/g, '') || '';
       if (!key) return null;
 
@@ -167,12 +141,8 @@ export class CstExtractor {
     return null;
   }
 
-  /**
-   * Extract YAML property fact
-   */
   private extractYamlFact(node: any, filePath: string): CstFact | null {
     if (node.type === 'block_mapping_pair') {
-      // Extract key from block_mapping_key
       const keyNode = node.namedChildren.find((c: any) => c.type === 'block_mapping_key');
       if (!keyNode) return null;
 
@@ -202,12 +172,8 @@ export class CstExtractor {
     return null;
   }
 
-  /**
-   * Extract CSS rule fact
-   */
   private extractCssFact(node: any, filePath: string): CstFact | null {
     if (node.type === 'rule_set') {
-      // Extract selector
       const selectorNode = node.namedChildren.find((c: any) => c.type === 'selectors');
       if (!selectorNode) return null;
 
@@ -237,19 +203,15 @@ export class CstExtractor {
     return null;
   }
 
-  /**
-   * Extract hybrid auxiliary fact (comments, docstrings) for supported languages
-   */
   private extractHybridAuxiliaryFact(
     node: any,
     filePath: string,
     language: string,
     existingSymbols: SymbolInfo[]
   ): CstFact | null {
-    // Extract comments for JS/TS/PHP
     if (node.type === 'comment') {
       const text = node.text || '';
-      // Filter overlaps: don't extract if symbol with same location exists
+
       const overlaps = existingSymbols.some(s =>
         this.locationsOverlap(s.location, {
           start: { line: node.startPosition.row + 1, column: node.startPosition.column },
@@ -282,18 +244,11 @@ export class CstExtractor {
     return null;
   }
 
-  /**
-   * Hash CST subset (structural shape)
-   */
   private hashCstSubset(node: any, includeChildren: boolean = true): string {
-    // Serialize node structure (simplified - exclude trivia)
     const serialized = this.serializeNodeForHash(node, includeChildren);
     return crypto.createHash('sha256').update(serialized).digest('hex').substring(0, 16);
   }
 
-  /**
-   * Serialize node for hashing (exclude trivia)
-   */
   private serializeNodeForHash(node: any, includeChildren: boolean): string {
     const parts: string[] = [node.type];
 
@@ -308,9 +263,6 @@ export class CstExtractor {
     return parts.join('::');
   }
 
-  /**
-   * Compute DNA for CST fact
-   */
   private computeCstDna(
     kind: string,
     name: string,
@@ -322,14 +274,10 @@ export class CstExtractor {
     return crypto.createHash('sha256').update(parts.join('::')).digest('hex').substring(0, 16);
   }
 
-  /**
-   * Check if two locations overlap
-   */
   private locationsOverlap(
     loc1: { start: { line: number; column: number }; end: { line: number; column: number } },
     loc2: { start: { line: number; column: number }; end: { line: number; column: number } }
   ): boolean {
-    // Check if locations overlap (simplified check)
     return !(
       loc1.end.line < loc2.start.line ||
       loc1.start.line > loc2.end.line ||

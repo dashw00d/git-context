@@ -5,18 +5,16 @@
  * Enable in VSCode settings: git-context.debugMode (default: true)
  */
 
-let debugMode = true; // Default to enabled
+let debugMode = true;
 
 let vscode: any;
 try {
   vscode = require('vscode');
 } catch {
-  // Not in VS Code environment
   vscode = null;
 }
 
 export function getDebugMode(): boolean {
-  // Check VSCode configuration if available
   if (vscode && vscode.workspace) {
     const config = vscode.workspace.getConfiguration('git-context');
     const setting = config.get('debugMode');
@@ -29,6 +27,6 @@ export function getDebugMode(): boolean {
 
 export function setDebugMode(enabled: boolean): void {
   debugMode = enabled;
-  // eslint-disable-next-line no-console
+
   console.log(`[DebugConfig] Debug mode ${enabled ? 'ENABLED' : 'DISABLED'}`);
 }

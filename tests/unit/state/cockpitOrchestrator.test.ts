@@ -14,7 +14,6 @@ describe('CockpitStore', () => {
   let _subscribeCallback: (state: any, action: any) => void;
 
   beforeEach(() => {
-    // Reset singleton instance
     (CockpitStore as any).resetForTesting?.() || vi.clearAllMocks();
 
     store = new CockpitStore();
@@ -46,7 +45,7 @@ describe('CockpitStore', () => {
       actionHistory: [],
       isAnalyzing: false,
     });
-    // analysisStep and analysisProgress should not be present initially
+
     expect(state.analysisStep).toBeUndefined();
     expect(state.analysisProgress).toBeUndefined();
   });

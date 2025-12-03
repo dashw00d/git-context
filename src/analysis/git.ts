@@ -13,7 +13,6 @@ export class GitOperations {
   constructor() {
     const root = getGitRoot();
     if (!root) {
-      // eslint-disable-next-line no-restricted-syntax
       throw new Error('Not in a git repository');
     }
     this.gitRoot = root;
@@ -91,9 +90,7 @@ export class GitOperations {
       try {
         output = await this.git.raw(['diff-tree', '-r', '--no-commit-id', '--name-status', sha]);
       } catch (e) {
-        // Fallback for root commits - compare with empty tree
         try {
-          // 4b825dc642cb6eb9a060e54bf8d69288fbee4904 is the hash of an empty tree in git
           output = await this.git.raw([
             'diff-tree',
             '-r',
@@ -120,14 +117,13 @@ export class GitOperations {
           const filePath = parts[1];
           let oldPath: string | undefined;
 
-          // Handle renamed and copied files
           if (status.startsWith('R') || status.startsWith('C')) {
             oldPath = parts[2];
           }
 
           changes.push({
             path: filePath,
-            status: status.charAt(0) as FileChange['status'], // A/M/D/R/C
+            status: status.charAt(0) as FileChange['status'],
             oldPath,
           });
         }
@@ -171,7 +167,6 @@ export class GitOperations {
     try {
       return await this.git.diff([`${startSha}~1..${endSha}`, '--', filePath]);
     } catch (e) {
-      // Fallback if no parent (e.g. shallow clone or root)
       try {
         return await this.git.diff([`${startSha}..${endSha}`, '--', filePath]);
       } catch (error: any) {
@@ -216,7 +211,7 @@ export class GitOperations {
         return '';
       }
       logError(`Failed to get file content for ${sha}:${filePath}: ${error.message}`);
-      return ''; // Return empty string instead of throwing
+      return '';
     }
   }
 
@@ -243,7 +238,7 @@ export class GitOperations {
         return '';
       }
       logError(`Failed to get staged content for ${filePath}: ${error.message}`);
-      return ''; // Return empty string instead of throwing
+      return '';
     }
   }
 
@@ -262,7 +257,6 @@ export class GitOperations {
     try {
       return this.getWorkingContent(filePath);
     } catch (error: any) {
-      // File doesn't exist in working directory
       return '';
     }
   }
@@ -278,27 +272,14 @@ export class GitOperations {
       }
       return result.length > 0;
     } catch (error) {
-      // console.log(`[GitDebug] checkIgnore error for ${filePath}: ${error}`);
       return false;
     }
   }
 
-  /**
-   * Check if a file is ignored by git at a specific commit
-   * Note: For historical checking, we use the current workspace ignore rules
-   * as .gitignore rules rarely change dramatically between commits.
-   * This is a reasonable approximation for path filtering purposes.
-   */
   async isIgnoredAtCommit(sha: string, filePath: string): Promise<boolean> {
-    // Use current workspace ignore check as approximation
-    // Historical .gitignore checking would require complex git worktree manipulation
-    // and the current rules are usually sufficient for filtering
     return this.isIgnored(filePath);
   }
 
-  /**
-   * Get current HEAD SHA
-   */
   async getHeadSha(): Promise<string> {
     try {
       return await this.git.revparse(['HEAD']);
@@ -308,10 +289,6 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Get blob SHA for a file at a specific commit
-   * @throws Error if file doesn't exist at the given commit
-   */
   async getBlobSha(sha: string, filePath: string): Promise<string> {
     try {
       const output = await this.git.raw(['ls-tree', '-r', sha, '--', filePath]);
@@ -328,30 +305,22 @@ export class GitOperations {
       }
 
       logWarn(`No matching ls-tree entry for ${filePath} at ${sha}`);
-      return ''; // Return empty string instead of throwing
+      return '';
     } catch (error: any) {
       logError(`Failed to get blob SHA for ${filePath} at ${sha}: ${error.message}`);
       return '';
     }
   }
 
-  /**
-   * Get size of a blob in bytes
-   */
   async getBlobSize(sha: string, filePath: string): Promise<number> {
     try {
-      // git cat-file -s <sha>:<path>
       const output = await this.git.raw(['cat-file', '-s', `${sha}:${filePath}`]);
       return parseInt(output.trim(), 10) || 0;
     } catch (error) {
-      // If file doesn't exist or other error, return 0 (safe fallback)
       return 0;
     }
   }
 
-  /**
-   * Get current branch name (null when detached)
-   */
   async getCurrentBranch(): Promise<string | null> {
     try {
       const branch = await this.git.revparse(['--abbrev-ref', 'HEAD']);
@@ -364,9 +333,6 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Get commits reachable from a branch (newest first)
-   */
   async getBranchCommits(branch: string, limit: number = 100): Promise<string[]> {
     try {
       const log = await this.git.log({
@@ -382,9 +348,6 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Check if repository is clean (no uncommitted changes)
-   */
   async isClean(): Promise<boolean> {
     try {
       await this.git.diff(['--quiet']);
@@ -395,9 +358,6 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Get list of changed files in working directory
-   */
   async getWorkingDirectoryChanges(): Promise<FileChange[]> {
     try {
       const output = await this.git.raw(['status', '--porcelain']);
@@ -409,7 +369,6 @@ export class GitOperations {
         const status = line.substring(0, 2).trim();
         const filePath = this.parseGitPath(line.substring(3));
 
-        // Map git status codes to our status types
         let changeStatus: FileChange['status'];
         if (status.includes('A')) {
           changeStatus = 'A';
@@ -424,7 +383,7 @@ export class GitOperations {
         } else if (status.includes('U')) {
           changeStatus = 'U';
         } else {
-          changeStatus = 'M'; // Default to modified
+          changeStatus = 'M';
         }
 
         changes.push({
@@ -440,27 +399,17 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Parse file path from git status output, handling quoted paths and octal escapes.
-   * Call on all line.substring(3) from porcelain output.
-   */
   private parseGitPath(rawPath: string): string {
-    // Git quotes paths with special characters and uses octal escapes
     if (rawPath.startsWith('"') && rawPath.endsWith('"')) {
-      // Remove quotes and decode escape sequences
       const unquoted = rawPath.slice(1, -1);
-      // Replace octal escapes (e.g., \141 -> 'a')
+
       return unquoted
         .replace(/\\(\d{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
-        .replace(/\\\\/g, '\\'); // Replace \\\\ with \\
+        .replace(/\\\\/g, '\\');
     }
     return rawPath;
   }
 
-  /**
-   * Parse a single line from git ls-tree output (mode<TAB>type<TAB>sha<TAB>path)
-   * Handles paths with spaces correctly using TAB separation.
-   */
   private parseLsTreeLine(
     rawLine: string
   ): { mode: string; type: string; sha: string; path: string } | null {
@@ -469,17 +418,13 @@ export class GitOperations {
 
     const path = rawLine.slice(tabIdx + 1);
     const preSha = rawLine.slice(0, tabIdx).trim();
-    const preParts = preSha.split(/\s+/); // split on whitespace
+    const preParts = preSha.split(/\s+/);
 
     if (preParts.length < 3) return null;
 
     return { mode: preParts[0], type: preParts[1], sha: preParts[2], path };
   }
 
-  /**
-   * Check if a git error indicates a missing file path
-   * Handles various git error message formats for missing files.
-   */
   private isGitPathMissing(error: any): boolean {
     const msg = (error.message || String(error)).toLowerCase();
     return (
@@ -490,10 +435,6 @@ export class GitOperations {
     );
   }
 
-  /**
-   * Parse git file list output (one file per line)
-   * Normalizes whitespace and filters empty lines.
-   */
   private parseFileList(raw: string): string[] {
     return raw
       .trim()
@@ -502,9 +443,6 @@ export class GitOperations {
       .filter(Boolean);
   }
 
-  /**
-   * Get staged files only
-   */
   async getStagedFiles(): Promise<FileChange[]> {
     try {
       const output = await this.git.raw(['status', '--porcelain']);
@@ -516,7 +454,6 @@ export class GitOperations {
         const status = line.substring(0, 2);
         const filePath = this.parseGitPath(line.substring(3));
 
-        // First character indicates staged status (not space, not ?)
         if (status.charAt(0) !== ' ' && status.charAt(0) !== '?') {
           let changeStatus: FileChange['status'];
           if (status.charAt(0) === 'A') {
@@ -545,9 +482,6 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Get unstaged files only (including untracked files)
-   */
   async getUnstagedFiles(): Promise<FileChange[]> {
     try {
       const output = await this.git.raw(['status', '--porcelain']);
@@ -559,8 +493,6 @@ export class GitOperations {
         const status = line.substring(0, 2);
         const filePath = this.parseGitPath(line.substring(3));
 
-        // Second character indicates unstaged status (not space)
-        // Include untracked files (?) as unstaged
         if (status.charAt(1) !== ' ') {
           let changeStatus: FileChange['status'];
           if (status.charAt(1) === 'A') {
@@ -572,7 +504,6 @@ export class GitOperations {
           } else if (status.charAt(1) === 'R') {
             changeStatus = 'R';
           } else if (status.charAt(1) === '?') {
-            // Untracked files are considered unstaged
             changeStatus = 'U';
           } else {
             changeStatus = 'M';
@@ -585,22 +516,18 @@ export class GitOperations {
         }
       }
 
-      // Also include untracked files from ls-files
       try {
         const untrackedOutput = await this.git.raw(['ls-files', '--others', '--exclude-standard']);
         const untrackedFiles = this.parseFileList(untrackedOutput);
         for (const filePath of untrackedFiles) {
-          // Only add if not already in unstaged (avoid duplicates)
           if (!unstaged.some(f => f.path === filePath)) {
             unstaged.push({
               path: filePath,
-              status: 'U', // U = untracked
+              status: 'U',
             });
           }
         }
-      } catch (error) {
-        // Silently ignore if ls-files fails (e.g., no untracked files)
-      }
+      } catch (error) {}
 
       return unstaged;
     } catch (error) {
@@ -609,9 +536,6 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Get diff stats for a specific file (added/removed lines)
-   */
   async getFileDiffStats(
     filePath: string,
     staged: boolean = false
@@ -626,7 +550,6 @@ export class GitOperations {
         return { added: 0, removed: 0 };
       }
 
-      // --numstat output format: "added<TAB>removed<TAB>file"
       const parts = output.trim().split('\t');
       if (parts.length >= 2) {
         const added = parseInt(parts[0], 10) || 0;
@@ -636,14 +559,10 @@ export class GitOperations {
 
       return { added: 0, removed: 0 };
     } catch (error) {
-      // If git diff fails (e.g., file not tracked), return zero stats
       return { added: 0, removed: 0 };
     }
   }
 
-  /**
-   * Get all tracked files in the repository
-   */
   async getAllFiles(): Promise<string[]> {
     try {
       const output = await this.git.raw(['ls-files', '--cached', '--exclude-standard']);
@@ -654,12 +573,8 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Get commit history for a specific file
-   */
   async getFileHistory(filePath: string, limit: number = 10): Promise<any[]> {
     try {
-      // Format: hash|author|date|message
       const { stdout } = await this.spawnGit([
         'log',
         `-${limit}`,
@@ -682,12 +597,8 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Get recent commits for a file with added/removed stats.
-   */
   async getFileHistoryWithStats(filePath: string, limit: number = 10): Promise<any[]> {
     try {
-      // Format: hash|author|date|message\nnumstat lines
       const { stdout } = await this.spawnGit([
         'log',
         `-${limit}`,
@@ -730,12 +641,8 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Get top modified files (hotspots) based on commit history
-   */
   async getHotspots(limit: number = 20): Promise<HotspotStat[]> {
     try {
-      // Cache hotspots per HEAD for 5 minutes to avoid repeated heavy git log calls
       try {
         const head = await this.git.revparse(['HEAD']);
         const key = `${head}`;
@@ -749,13 +656,12 @@ export class GitOperations {
           '--pretty=format:%H',
           '--numstat',
           '--no-merges',
-          '--since="3 months ago"', // Configurable?
+          '--since="3 months ago"',
         ]);
 
         const fileCounts = new Map<string, { count: number; added: number; removed: number }>();
         const lines = stdout.split('\n');
         for (const line of lines) {
-          // numstat lines: added<TAB>removed<TAB>path OR commit hash line
           const parts = line.trim().split('\t');
           if (parts.length === 3) {
             const added = parseInt(parts[0], 10);
@@ -769,7 +675,6 @@ export class GitOperations {
           }
         }
 
-        // Load sizes once for weighting
         const sizes = await this.getFileSizes(Array.from(fileCounts.keys()));
 
         const data: HotspotStat[] = Array.from(fileCounts.entries())
@@ -791,13 +696,12 @@ export class GitOperations {
         logWarn(`Hotspot caching failed, falling back: ${cacheError}`);
       }
 
-      // Get all file names from log, count occurrences, plus added/removed
       const { stdout } = await this.spawnGit([
         'log',
         '--pretty=format:%H',
         '--numstat',
         '--no-merges',
-        '--since="3 months ago"', // Configurable?
+        '--since="3 months ago"',
       ]);
 
       const fileCounts = new Map<string, { count: number; added: number; removed: number }>();
@@ -833,9 +737,6 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Get diff stats for staged or unstaged changes (added/removed totals)
-   */
   async getDiffStats(mode: 'staged' | 'unstaged'): Promise<{ added: number; removed: number }> {
     try {
       const args = mode === 'staged' ? ['diff', '--cached', '--numstat'] : ['diff', '--numstat'];
@@ -858,22 +759,15 @@ export class GitOperations {
     }
   }
 
-  /**
-   * Spawn a git command asynchronously (using simple-git raw)
-   */
   async spawnGit(args: string[]): Promise<{ stdout: string; stderr: string }> {
     try {
       const stdout = await this.git.raw(args);
       return { stdout, stderr: '' };
     } catch (error: any) {
-      // simple-git throws errors, but we want to return stderr
       return { stdout: '', stderr: error.message || String(error) };
     }
   }
 
-  /**
-   * Get file sizes (in bytes) for a list of paths
-   */
   async getFileSizes(paths: string[]): Promise<Map<string, number>> {
     const sizes = new Map<string, number>();
     for (const p of paths) {
@@ -882,9 +776,7 @@ export class GitOperations {
         if (stat.isFile()) {
           sizes.set(p, stat.size);
         }
-      } catch {
-        // ignore missing files
-      }
+      } catch {}
     }
     return sizes;
   }

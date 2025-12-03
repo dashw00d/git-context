@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { DependencyExtractor } from '../../../src/analysis/dependencies';
-import { SymbolInfo, EdgeInfo } from '../../../src/types';
+import { EdgeInfo, SymbolInfo } from '../../../src/types';
 
 describe('DependencyExtractor', () => {
   const extractor = new DependencyExtractor();
@@ -17,16 +17,20 @@ describe('DependencyExtractor', () => {
       const edges = extractor.extractDependencies(content, filePath, symbols);
 
       expect(edges).toHaveLength(2);
-      expect(edges).toContainEqual(expect.objectContaining({
-        from: 'src/test.ts: file',
-        to: './utils: module',
-        type: 'imports'
-      }));
-      expect(edges).toContainEqual(expect.objectContaining({
-        from: 'src/test.ts: file',
-        to: './bar: module',
-        type: 'imports'
-      }));
+      expect(edges).toContainEqual(
+        expect.objectContaining({
+          from: 'src/test.ts: file',
+          to: './utils: module',
+          type: 'imports',
+        })
+      );
+      expect(edges).toContainEqual(
+        expect.objectContaining({
+          from: 'src/test.ts: file',
+          to: './bar: module',
+          type: 'imports',
+        })
+      );
     });
 
     it('should extract function calls', () => {
@@ -44,22 +48,26 @@ describe('DependencyExtractor', () => {
           name: 'main',
           kind: 'function',
           signature: '()',
-          location: { start: { line: 2, column: 0 }, end: { line: 5, column: 0 } }
-        }
+          location: { start: { line: 2, column: 0 }, end: { line: 5, column: 0 } },
+        },
       ];
 
       const edges = extractor.extractDependencies(content, filePath, symbols);
 
-      expect(edges).toContainEqual(expect.objectContaining({
-        from: 'src/test.ts: main',
-        to: 'function_helper ',
-        type: 'calls'
-      }));
-      expect(edges).toContainEqual(expect.objectContaining({
-        from: 'src/test.ts: main',
-        to: 'function_calculate ',
-        type: 'calls'
-      }));
+      expect(edges).toContainEqual(
+        expect.objectContaining({
+          from: 'src/test.ts: main',
+          to: 'function_helper ',
+          type: 'calls',
+        })
+      );
+      expect(edges).toContainEqual(
+        expect.objectContaining({
+          from: 'src/test.ts: main',
+          to: 'function_calculate ',
+          type: 'calls',
+        })
+      );
     });
   });
 
@@ -72,14 +80,14 @@ describe('DependencyExtractor', () => {
           name: 'A',
           kind: 'function',
           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-          signature: ''
-        }
+          signature: '',
+        },
       ];
 
       const allEdges: EdgeInfo[] = [
-        { from: 'func_B', to: 'func_A', type: 'calls' }, // B calls A
-        { from: 'func_C', to: 'func_A', type: 'calls' }, // C calls A
-        { from: 'func_A', to: 'func_D', type: 'calls' }, // A calls D
+        { from: 'func_B', to: 'func_A', type: 'calls' },
+        { from: 'func_C', to: 'func_A', type: 'calls' },
+        { from: 'func_A', to: 'func_D', type: 'calls' },
       ];
 
       const result = extractor.calculateBlastRadius(changedSymbols, allEdges);
@@ -97,13 +105,13 @@ describe('DependencyExtractor', () => {
           name: 'A',
           kind: 'function',
           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },
-          signature: ''
-        }
+          signature: '',
+        },
       ];
 
       const allEdges: EdgeInfo[] = [
-        { from: 'func_B', to: 'func_A', type: 'calls' }, // B calls A
-        { from: 'func_A', to: 'func_D', type: 'calls' }, // A calls D
+        { from: 'func_B', to: 'func_A', type: 'calls' },
+        { from: 'func_A', to: 'func_D', type: 'calls' },
       ];
 
       const result = extractor.calculateBlastRadius(changedSymbols, allEdges);

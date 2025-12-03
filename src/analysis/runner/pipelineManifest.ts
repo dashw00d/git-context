@@ -2,6 +2,7 @@ import { BundleStoryEngine } from '../bundleStoryEngine';
 import { CommitIndexer } from '../commitIndexer';
 import { EmbeddingIndexer } from '../embeddingIndexer';
 import { WorkspaceIndexer } from '../workspaceIndexer';
+import type { PipelineStep } from './pipelineTypes';
 import { createBundleFactsStep } from './steps/bundleFactsStep';
 import { createDriftStep } from './steps/driftStep';
 import { createEmbeddingStep } from './steps/embeddingStep';
@@ -15,7 +16,6 @@ import { createScopeStep } from './steps/scopeStep';
 import { createStoryStep } from './steps/storyStep';
 import { createWorkingStep } from './steps/workingStep';
 import { createWorkspaceOverlayStep } from './steps/workspaceStep';
-import type { PipelineStep } from './pipelineTypes';
 
 export interface PipelineFactoryContext {
   commitIndexer: CommitIndexer;
@@ -130,7 +130,7 @@ export function buildPipelineSteps(ctx: PipelineFactoryContext): PipelineStep[] 
     .filter(step => (step.when ? step.when(ctx) : true))
     .map(step => {
       const instance = step.factory(ctx);
-      // Ensure manifest deps win when provided
+
       return {
         ...instance,
         deps: step.deps ?? instance.deps,

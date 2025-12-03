@@ -1,9 +1,5 @@
 import { RefactorBundleFacts } from '../facts/types';
 
-/**
- * Extract standardized stats from RefactorBundleFacts
- * Used consistently across UI components
- */
 export function formatStats(facts: RefactorBundleFacts): {
   missing: number;
   zombies: number;

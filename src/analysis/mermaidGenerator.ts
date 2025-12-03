@@ -1,13 +1,7 @@
 import { EdgeInfo, SymbolInfo } from '../types';
 import { getDefaultThreshold } from '../utils/edgeThresholds';
 
-/**
- * Generate Mermaid graph visualizations for dependency graphs
- */
 export class MermaidGenerator {
-  /**
-   * Generate Mermaid graph from edges and symbols
-   */
   generateGraph(
     edges: EdgeInfo[],
     symbols: SymbolInfo[],
@@ -19,10 +13,8 @@ export class MermaidGenerator {
   ): string {
     const { maxNodes = 50, showConfidence = false, highlightChanged = [] } = options;
 
-    // Filter to most relevant edges
     const filteredEdges = this.filterRelevantEdges(edges, maxNodes);
 
-    // Build node and edge definitions
     const nodes = new Set<string>();
     const edgeDefinitions: string[] = [];
 
@@ -37,10 +29,8 @@ export class MermaidGenerator {
       );
     }
 
-    // Generate Mermaid code
     let mermaid = 'graph TD\n';
 
-    // Add node styling for changed symbols
     const changedNodeIds = highlightChanged.map(id => this.formatNodeId(id));
     for (const nodeId of changedNodeIds) {
       if (nodes.has(nodeId)) {
@@ -48,20 +38,15 @@ export class MermaidGenerator {
       }
     }
 
-    // Add edges
     for (const edgeDef of edgeDefinitions) {
       mermaid += `    ${edgeDef}\n`;
     }
 
-    // Add styling
     mermaid += '\n    classDef changed fill:#ff6b6b,stroke:#d63031,color:#fff\n';
 
     return mermaid;
   }
 
-  /**
-   * Generate blast radius visualization
-   */
   generateBlastRadiusGraph(
     changedSymbols: SymbolInfo[],
     blastRadius: {
@@ -72,24 +57,21 @@ export class MermaidGenerator {
   ): string {
     let mermaid = 'graph TD\n';
 
-    // Add changed symbols as central nodes
     for (const symbol of changedSymbols) {
       const nodeId = this.formatNodeId(symbol.id);
       const impact = blastRadius.impactScore.get(symbol.id) || 0;
       mermaid += `    ${nodeId}["${symbol.name}<br/>Impact: ${impact}"]:::changed\n`;
     }
 
-    // Add downstream callers
     for (const [symbolId, callers] of blastRadius.downstreamCallers) {
       const sourceId = this.formatNodeId(symbolId);
-      // Note: In a full implementation, we'd resolve caller names
+
       mermaid += `    Caller${callers.length} --> ${sourceId}\n`;
     }
 
-    // Add upstream dependencies
     for (const [symbolId, dependencies] of blastRadius.upstreamDependencies) {
       const targetId = this.formatNodeId(symbolId);
-      // Note: In a full implementation, we'd resolve dependency names
+
       mermaid += `    ${targetId} --> Dep${dependencies.length}\n`;
     }
 
@@ -98,35 +80,22 @@ export class MermaidGenerator {
     return mermaid;
   }
 
-  /**
-   * Filter edges to most relevant ones for visualization
-   */
   private filterRelevantEdges(edges: EdgeInfo[], maxNodes: number): EdgeInfo[] {
-    // Sort by confidence and keep only high-confidence edges
     const threshold = getDefaultThreshold();
     const sortedEdges = edges
       .filter(edge => (edge.confidence || 0) > threshold)
       .sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
 
-    // Limit to prevent overwhelming graphs
-    return sortedEdges.slice(0, maxNodes * 2); // Allow ~2 edges per node
+    return sortedEdges.slice(0, maxNodes * 2);
   }
 
-  /**
-   * Format symbol ID for Mermaid node ID
-   */
   private formatNodeId(symbolId: string): string {
-    // Mermaid node IDs must start with letters, no special chars
     return 'N' + symbolId.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
   }
 
-  /**
-   * Get edge styling based on type
-   */
   private getEdgeStyle(edge: EdgeInfo): string {
     let style = '';
 
-    // Different line styles for different edge types
     switch (edge.type) {
       case 'imports':
         style = 'stroke:#2ecc71,stroke-width:2px';
@@ -147,9 +116,6 @@ export class MermaidGenerator {
     return style;
   }
 
-  /**
-   * Get edge label
-   */
   private getEdgeLabel(edge: EdgeInfo, showConfidence: boolean): string {
     let label = edge.type;
 

@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { CockpitState } from '../../../../types/cockpit';
 import { postMessageWithTracing } from '../../utils/messageUtils';
-import { ConfigPanel, BundleConfig } from './templates/ConfigPanel';
 import { StatsSection } from '../StatsSection';
-import { TreemapView } from './templates/TreemapView';
+import { BundleConfig, ConfigPanel } from './templates/ConfigPanel';
 import { HotspotList } from './templates/HotspotList';
 import { RisksList } from './templates/RisksList';
+import { TreemapView } from './templates/TreemapView';
 
 export const BundleStage: React.FC<{
   frame: any;
@@ -57,7 +57,6 @@ export const BundleStage: React.FC<{
     });
   };
 
-  // Debug logging
   console.log('[BundleStage] frame.data:', frame.data);
   console.log('[BundleStage] frame.data.hotspots:', frame.data?.hotspots);
   console.log('[BundleStage] frame.data.treemap:', frame.data?.treemap);
@@ -99,9 +98,7 @@ export const BundleStage: React.FC<{
         />
       )}
 
-      {cockpitState && (
-        <StatsSection state={cockpitState} vscode={vscode} />
-      )}
+      {cockpitState && <StatsSection state={cockpitState} vscode={vscode} />}
 
       <TreemapView
         treemap={frame.data?.treemap}

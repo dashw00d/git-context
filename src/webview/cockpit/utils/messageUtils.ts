@@ -1,9 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { CockpitClientMessageSchema } from '../../../state/schemas';
 import { CockpitClientMessage } from '../../../types/cockpit';
 import { MessageTracer } from '../../../utils/messageTracer';
 
-// Singleton tracer for webview side
 let webviewTracer: MessageTracer | null = null;
 
 export function getMessageTracer(): MessageTracer {
