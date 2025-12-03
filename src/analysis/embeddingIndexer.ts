@@ -13,7 +13,9 @@ export class EmbeddingIndexer {
   constructor(
     private dbManager = getDatabaseManager(),
     private commitService: DatabaseService = getDatabaseService()
-  ) {}
+  ) {
+    //empty
+  }
 
   /**
    * Index both commit and symbol shards into Qdrant
@@ -404,7 +406,9 @@ export class EmbeddingIndexer {
     if (analysis?.hotspots_json) {
       try {
         hotspots = JSON.parse(analysis.hotspots_json);
-      } catch (e) {}
+      } catch (e) {
+        //empty
+      }
     }
 
     return {

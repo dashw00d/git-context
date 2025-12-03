@@ -1,6 +1,6 @@
 import * as fs from 'fs';
-import { debounce } from 'lodash';
 import * as path from 'path';
+import { debounce } from 'lodash';
 import * as vscode from 'vscode';
 import { GitOperations } from '../analysis/git';
 import { RefactorPipeline } from '../analysis/refactorPipeline';
@@ -15,7 +15,9 @@ export class GitCommitWatcher implements vscode.Disposable {
     private pipeline: RefactorPipeline,
     private orchestrator: CockpitOrchestrator,
     private onCommit?: (sha: string) => Promise<void>
-  ) {}
+  ) {
+    //empty
+  }
 
   async start(): Promise<void> {
     const gitRoot = getGitRoot();

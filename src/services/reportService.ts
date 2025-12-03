@@ -17,7 +17,9 @@ export class ReportService {
   private readonly mermaid = new MermaidGenerator();
   private readonly store = getStore();
 
-  private constructor() {}
+  private constructor() {
+    //empty
+  }
 
   static getInstance(): ReportService {
     if (!ReportService.instance) {
@@ -44,11 +46,18 @@ export class ReportService {
         tokens?: number,
         duration?: number
       ) => void;
-    } = {}
+    } = {
+      //empty
+    }
   ): Promise<string | null> {
+    console.error('🚀 [ReportService] generateReport called:', {
+      shas,
+      scope,
+      force: options.force,
+    });
     const pipeline = await getRefactorPipeline();
     const reportManager = getReportManager();
-    let serializedHistory: any = undefined;
+    let _serializedHistory: any = undefined;
 
     const fingerprint = makeBundleFingerprint(shas, scope as any, PIPELINE_VERSION, PROMPT_VERSION);
 
@@ -56,6 +65,7 @@ export class ReportService {
 
     if (!options.force && !options.existingReportId) {
       const cachedReport = reportManager.loadByFingerprint(fingerprint);
+      console.error('🔍 [ReportService] Cache lookup:', { fingerprint, found: !!cachedReport });
       if (cachedReport) {
         const facts = cachedReport.facts;
         const isEmpty = !facts || (facts.scope.files === 0 && facts.working.symbols === 0);
@@ -80,14 +90,6 @@ export class ReportService {
             debtScore: 0,
           };
 
-          this.store.dispatch({
-            type: 'ANALYSIS_COMPLETED',
-            payload: {
-              facts: facts as any,
-              summary,
-              reportId: cachedReport.id,
-            },
-          });
           getStore().dispatch({
             type: 'ANALYSIS_COMPLETED',
             payload: {
@@ -102,10 +104,6 @@ export class ReportService {
       }
     }
 
-    this.store.dispatch({
-      type: 'ANALYSIS_STARTED',
-      payload: { step: 'Analyzing commits...' },
-    });
     getStore().dispatch({
       type: 'ANALYSIS_STARTED',
       payload: { step: 'Analyzing commits...' },
@@ -125,11 +123,21 @@ export class ReportService {
         workspaceParts = new Set(['staged', 'unstaged']);
       }
 
+      console.error('🔧 [ReportService] About to call pipeline.analyzeBundle:', {
+        commitShas: commitShas.length,
+        includeWorkspace,
+        workspaceParts: workspaceParts ? Array.from(workspaceParts) : null,
+      });
+
       const result = await pipeline.analyzeBundle(
         commitShas,
         includeWorkspace,
         workspaceParts,
         event => {
+          console.error(
+            `📡 [Pipeline Event] ${event.type}`,
+            'step' in event ? event.step?.id : 'no-step'
+          );
           const timings: Record<string, number> = {};
           if (event.state?.stepTimings) {
             Object.entries(event.state.stepTimings).forEach(([stepId, timing]) => {
@@ -149,50 +157,34 @@ export class ReportService {
           };
           switch (event.type) {
             case 'start':
-              this.store.dispatch({
-                type: 'ANALYSIS_STEP_UPDATED',
-                payload: { step: event.step.label },
-              });
               getStore().dispatch({
                 type: 'ANALYSIS_STEP_UPDATED',
                 payload: { step: event.step.label },
               });
-              this.store.dispatch(pipelineActions.health(healthPayload));
               getStore().dispatch(pipelineActions.health(healthPayload));
               break;
 
             case 'complete':
-              this.store.dispatch({
-                type: 'ANALYSIS_STEP_UPDATED',
-                payload: { step: event.step.label, progress: 100 },
-              });
               getStore().dispatch({
                 type: 'ANALYSIS_STEP_UPDATED',
                 payload: { step: event.step.label, progress: 100 },
               });
-              this.store.dispatch(pipelineActions.health(healthPayload));
               getStore().dispatch(pipelineActions.health(healthPayload));
               break;
 
             case 'error':
-              this.store.dispatch({
-                type: 'ANALYSIS_FAILED',
-                payload: { error: String(event.error) },
-              });
               getStore().dispatch({
                 type: 'ANALYSIS_FAILED',
                 payload: { error: String(event.error) },
               });
-              this.store.dispatch(pipelineActions.health(healthPayload));
               getStore().dispatch(pipelineActions.health(healthPayload));
               break;
 
             case 'finished':
-              this.store.dispatch(pipelineActions.health(healthPayload));
               getStore().dispatch(pipelineActions.health(healthPayload));
               if (event.state.errors.length === 0) {
                 const history = event.state.history;
-                serializedHistory = history
+                _serializedHistory = history
                   ? {
                       ...history,
                       symbolEvolution: history.symbolEvolution
@@ -202,20 +194,62 @@ export class ReportService {
                   : undefined;
               }
               break;
+            case 'progress':
+              if (event.data && event.data.file) {
+                getStore().dispatch({
+                  type: 'EXPLORER_NODE_UPDATED',
+                  payload: {
+                    id: event.data.file,
+                    status: event.data.status,
+                  },
+                });
+              }
+              break;
           }
         }
       );
 
-      if (result.errors.length > 0) {
-        logError(`Pipeline failed: ${result.errors[0].error}`);
+      console.error('🟢 Pipeline finished, checking results...');
+      const optionalSteps = ['drift', 'legacy', 'hotspots', 'moved_blocks'];
+      const criticalErrors = result.errors.filter(err => !optionalSteps.includes(err.stepId));
+
+      if (criticalErrors.length > 0) {
+        console.error('🔴 Critical errors found:', criticalErrors);
+        logError(`Pipeline failed: ${criticalErrors[0].error}`);
         return null;
+      }
+
+      if (result.errors.length > 0) {
+        console.error(
+          '🟡 Optional step failures:',
+          result.errors.map(e => e.stepId)
+        );
+        logInfo(
+          `Pipeline completed with ${result.errors.length} optional step failures: ${result.errors.map(e => e.stepId).join(', ')}`
+        );
       }
 
       if (options.cancellationToken?.isCancellationRequested) {
-        this.store.dispatch({ type: 'ANALYSIS_CANCELLED' });
+        console.error('🔴 Analysis cancelled');
+        getStore().dispatch({ type: 'ANALYSIS_CANCELLED' });
         return null;
       }
 
+      if (!result.bundleFacts) {
+        const failedSteps = result.errors.map(err => err.stepId).join(', ');
+        const errorMessage = failedSteps
+          ? `Bundle facts unavailable; pipeline steps failed: ${failedSteps}`
+          : 'Bundle facts unavailable from pipeline result';
+        console.error('🔴 No bundleFacts:', errorMessage);
+        logError(`[ReportService] ${errorMessage}`);
+        getStore().dispatch({
+          type: 'ANALYSIS_FAILED',
+          payload: { error: errorMessage },
+        });
+        return null;
+      }
+
+      console.error('🟢 Got bundleFacts, processing report...');
       const facts = result.bundleFacts;
       const llmOutputs = result.llmOutputs;
       const llmAnalysis = llmOutputs?.llmAnalysis;
@@ -317,7 +351,12 @@ export class ReportService {
         hotspots: (facts as any).evidence?.hotspots || (facts as any).findings?.hotspots,
       });
 
-      this.store.dispatch({
+      console.error('🟢 Dispatching ANALYSIS_COMPLETED with facts:', {
+        files: facts.scope.files,
+        symbols: facts.working.symbols,
+        hotspots: (facts as any).evidence?.hotspots?.length || 0,
+      });
+      getStore().dispatch({
         type: 'ANALYSIS_COMPLETED',
         payload: {
           facts,
@@ -336,7 +375,7 @@ export class ReportService {
       return reportId;
     } catch (error) {
       logError('[ReportService] Failed to generate report', error);
-      this.store.dispatch({
+      getStore().dispatch({
         type: 'ANALYSIS_FAILED',
         payload: {
           error: error instanceof Error ? error.message : String(error),

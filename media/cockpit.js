@@ -28,15 +28,15 @@
     return to;
   };
   var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-
-
-
-
+    // If the importer is in node compatibility mode or this is not an ESM
+    // file that has been converted to a CommonJS file using a Babel-
+    // compatible transform (i.e. "__esModule" has not been set), then set
+    // "default" to the CommonJS "module.exports" for node compatibility.
     isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
     mod
   ));
 
-
+  // node_modules/react/cjs/react.development.js
   var require_react_development = __commonJS({
     "node_modules/react/cjs/react.development.js"(exports, module) {
       "use strict";
@@ -84,7 +84,7 @@
           };
           var ReactCurrentActQueue = {
             current: null,
-
+            // Used to reproduce behavior of `batchedUpdates` in legacy mode.
             isBatchingLegacy: false,
             didScheduleLegacyUpdate: false
           };
@@ -484,14 +484,14 @@
           }
           var ReactElement = function(type, key, ref, self, source, owner, props) {
             var element = {
-
+              // This tag allows us to uniquely identify this as a React Element
               $$typeof: REACT_ELEMENT_TYPE,
-
+              // Built-in properties that belong on the element
               type,
               key,
               ref,
               props,
-
+              // Record the component responsible for creating this element.
               _owner: owner
             };
             {
@@ -710,12 +710,12 @@
                   }
                   mappedChild = cloneAndReplaceKey(
                     mappedChild,
-
-
-                    escapedPrefix +
+                    // Keep both the (mapped) and old keys if they differ, just as
+                    // traverseAllChildren used to do for objects as children
+                    escapedPrefix + // $FlowFixMe Flow incorrectly thinks React.Portal doesn't have a key
                     (mappedChild.key && (!_child || _child.key !== mappedChild.key) ? (
-
-
+                      // $FlowFixMe Flow incorrectly thinks existing element's key can be a number
+                      // eslint-disable-next-line react-internal/safe-string-coercion
                       escapeUserProvidedKey("" + mappedChild.key) + "/"
                     ) : "") + childKey
                   );
@@ -798,20 +798,20 @@
           function createContext(defaultValue) {
             var context = {
               $$typeof: REACT_CONTEXT_TYPE,
-
-
-
-
-
+              // As a workaround to support multiple concurrent renderers, we categorize
+              // some renderers as primary and others as secondary. We only expect
+              // there to be two concurrent renderers at most: React Native (primary) and
+              // Fabric (secondary); React DOM (primary) and React ART (secondary).
+              // Secondary renderers store their context values on separate fields.
               _currentValue: defaultValue,
               _currentValue2: defaultValue,
-
-
+              // Used to track how many concurrent renderers this context currently
+              // supports within in a single renderer. Such as parallel server rendering.
               _threadCount: 0,
-
+              // These are circular
               Provider: null,
               Consumer: null,
-
+              // Add these to use same hidden class in VM as ServerContext
               _defaultValue: null,
               _globalName: null
             };
@@ -939,7 +939,7 @@
           }
           function lazy(ctor) {
             var payload = {
-
+              // We use these fields to store the result.
               _status: Uninitialized,
               _result: ctor
             };
@@ -1033,10 +1033,10 @@
               return true;
             }
             if (typeof type === "object" && type !== null) {
-              if (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE ||
-
-
-
+              if (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE || // This needs to include all possible module reference object
+              // types supported by any Flight configuration anywhere since
+              // we don't know which Flight build this will end up being used
+              // with.
               type.$$typeof === REACT_MODULE_REFERENCE || type.getModuleId !== void 0) {
                 return true;
               }
@@ -1103,11 +1103,11 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useReducer(reducer, initialArg, init);
           }
-          function useRef(initialValue) {
+          function useRef2(initialValue) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useRef(initialValue);
           }
-          function useEffect5(create, deps) {
+          function useEffect6(create, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useEffect(create, deps);
           }
@@ -1123,7 +1123,7 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useCallback(callback, deps);
           }
-          function useMemo2(create, deps) {
+          function useMemo4(create, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useMemo(create, deps);
           }
@@ -1553,8 +1553,8 @@
               var propTypes;
               if (typeof type === "function") {
                 propTypes = type.propTypes;
-              } else if (typeof type === "object" && (type.$$typeof === REACT_FORWARD_REF_TYPE ||
-
+              } else if (typeof type === "object" && (type.$$typeof === REACT_FORWARD_REF_TYPE || // Note: Memo only checks outer props here.
+              // Inner props are checked in the reconciler.
               type.$$typeof === REACT_MEMO_TYPE)) {
                 propTypes = type.propTypes;
               } else {
@@ -1890,14 +1890,14 @@
           exports.useContext = useContext;
           exports.useDebugValue = useDebugValue;
           exports.useDeferredValue = useDeferredValue;
-          exports.useEffect = useEffect5;
+          exports.useEffect = useEffect6;
           exports.useId = useId;
           exports.useImperativeHandle = useImperativeHandle;
           exports.useInsertionEffect = useInsertionEffect;
           exports.useLayoutEffect = useLayoutEffect;
-          exports.useMemo = useMemo2;
+          exports.useMemo = useMemo4;
           exports.useReducer = useReducer;
-          exports.useRef = useRef;
+          exports.useRef = useRef2;
           exports.useState = useState9;
           exports.useSyncExternalStore = useSyncExternalStore;
           exports.useTransition = useTransition;
@@ -1910,7 +1910,7 @@
     }
   });
 
-
+  // node_modules/react/index.js
   var require_react = __commonJS({
     "node_modules/react/index.js"(exports, module) {
       "use strict";
@@ -1922,7 +1922,7 @@
     }
   });
 
-
+  // node_modules/scheduler/cjs/scheduler.development.js
   var require_scheduler_development = __commonJS({
     "node_modules/scheduler/cjs/scheduler.development.js"(exports) {
       "use strict";
@@ -2372,7 +2372,7 @@
     }
   });
 
-
+  // node_modules/scheduler/index.js
   var require_scheduler = __commonJS({
     "node_modules/scheduler/index.js"(exports, module) {
       "use strict";
@@ -2384,7 +2384,7 @@
     }
   });
 
-
+  // node_modules/react-dom/cjs/react-dom.development.js
   var require_react_dom_development = __commonJS({
     "node_modules/react-dom/cjs/react-dom.development.js"(exports) {
       "use strict";
@@ -2616,7 +2616,7 @@
             }
             switch (typeof value) {
               case "function":
-
+              // $FlowIssue symbol is perfectly valid here
               case "symbol":
                 return true;
               case "boolean": {
@@ -2676,8 +2676,8 @@
             "children",
             "dangerouslySetInnerHTML",
             // TODO: This prevents the assignment of defaultValue to regular
-
-
+            // elements (not just inputs). Now that ReactDOMInput assigns to the
+            // defaultValue property -- do we need this?
             "defaultValue",
             "defaultChecked",
             "innerHTML",
@@ -2690,13 +2690,13 @@
               name,
               RESERVED,
               false,
-
+              // mustUseProperty
               name,
-
+              // attributeName
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
@@ -2706,13 +2706,13 @@
               name,
               STRING,
               false,
-
+              // mustUseProperty
               attributeName,
-
+              // attributeName
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
@@ -2721,13 +2721,13 @@
               name,
               BOOLEANISH_STRING,
               false,
-
+              // mustUseProperty
               name.toLowerCase(),
-
+              // attributeName
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
@@ -2736,21 +2736,21 @@
               name,
               BOOLEANISH_STRING,
               false,
-
+              // mustUseProperty
               name,
-
+              // attributeName
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
           [
             "allowFullScreen",
             "async",
-
-
+            // Note: there is a special case that prevents it from being written to the DOM
+            // on the client side because the browsers are inconsistent. Instead we call focus().
             "autoFocus",
             "autoPlay",
             "controls",
@@ -2771,66 +2771,66 @@
             "reversed",
             "scoped",
             "seamless",
-
+            // Microdata
             "itemScope"
           ].forEach(function(name) {
             properties[name] = new PropertyInfoRecord(
               name,
               BOOLEAN,
               false,
-
+              // mustUseProperty
               name.toLowerCase(),
-
+              // attributeName
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
           [
             "checked",
-
-
+            // Note: `option.selected` is not updated if `select.multiple` is
+            // disabled with `removeAttribute`. We have special logic for handling this.
             "multiple",
             "muted",
             "selected"
-
-
-
+            // NOTE: if you add a camelCased prop to this list,
+            // you'll need to set attributeName to name.toLowerCase()
+            // instead in the assignment below.
           ].forEach(function(name) {
             properties[name] = new PropertyInfoRecord(
               name,
               BOOLEAN,
               true,
-
+              // mustUseProperty
               name,
-
+              // attributeName
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
           [
             "capture",
             "download"
-
-
-
+            // NOTE: if you add a camelCased prop to this list,
+            // you'll need to set attributeName to name.toLowerCase()
+            // instead in the assignment below.
           ].forEach(function(name) {
             properties[name] = new PropertyInfoRecord(
               name,
               OVERLOADED_BOOLEAN,
               false,
-
+              // mustUseProperty
               name,
-
+              // attributeName
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
@@ -2839,21 +2839,21 @@
             "rows",
             "size",
             "span"
-
-
-
+            // NOTE: if you add a camelCased prop to this list,
+            // you'll need to set attributeName to name.toLowerCase()
+            // instead in the assignment below.
           ].forEach(function(name) {
             properties[name] = new PropertyInfoRecord(
               name,
               POSITIVE_NUMERIC,
               false,
-
+              // mustUseProperty
               name,
-
+              // attributeName
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
@@ -2862,13 +2862,13 @@
               name,
               NUMERIC,
               false,
-
+              // mustUseProperty
               name.toLowerCase(),
-
+              // attributeName
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
@@ -2950,21 +2950,21 @@
             "writing-mode",
             "xmlns:xlink",
             "x-height"
-
-
-
+            // NOTE: if you add a camelCased prop to this list,
+            // you'll need to set attributeName to name.toLowerCase()
+            // instead in the assignment below.
           ].forEach(function(attributeName) {
             var name = attributeName.replace(CAMELIZE, capitalize);
             properties[name] = new PropertyInfoRecord(
               name,
               STRING,
               false,
-
+              // mustUseProperty
               attributeName,
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
@@ -2975,20 +2975,20 @@
             "xlink:show",
             "xlink:title",
             "xlink:type"
-
-
-
+            // NOTE: if you add a camelCased prop to this list,
+            // you'll need to set attributeName to name.toLowerCase()
+            // instead in the assignment below.
           ].forEach(function(attributeName) {
             var name = attributeName.replace(CAMELIZE, capitalize);
             properties[name] = new PropertyInfoRecord(
               name,
               STRING,
               false,
-
+              // mustUseProperty
               attributeName,
               "http://www.w3.org/1999/xlink",
               false,
-
+              // sanitizeURL
               false
             );
           });
@@ -2996,20 +2996,20 @@
             "xml:base",
             "xml:lang",
             "xml:space"
-
-
-
+            // NOTE: if you add a camelCased prop to this list,
+            // you'll need to set attributeName to name.toLowerCase()
+            // instead in the assignment below.
           ].forEach(function(attributeName) {
             var name = attributeName.replace(CAMELIZE, capitalize);
             properties[name] = new PropertyInfoRecord(
               name,
               STRING,
               false,
-
+              // mustUseProperty
               attributeName,
               "http://www.w3.org/XML/1998/namespace",
               false,
-
+              // sanitizeURL
               false
             );
           });
@@ -3018,13 +3018,13 @@
               attributeName,
               STRING,
               false,
-
+              // mustUseProperty
               attributeName.toLowerCase(),
-
+              // attributeName
               null,
-
+              // attributeNamespace
               false,
-
+              // sanitizeURL
               false
             );
           });
@@ -3033,11 +3033,11 @@
             "xlinkHref",
             STRING,
             false,
-
+            // mustUseProperty
             "xlink:href",
             "http://www.w3.org/1999/xlink",
             true,
-
+            // sanitizeURL
             false
           );
           ["src", "href", "action", "formAction"].forEach(function(attributeName) {
@@ -3045,13 +3045,13 @@
               attributeName,
               STRING,
               false,
-
+              // mustUseProperty
               attributeName.toLowerCase(),
-
+              // attributeName
               null,
-
+              // attributeNamespace
               true,
-
+              // sanitizeURL
               true
             );
           });
@@ -3631,7 +3631,7 @@
                 return "SuspenseList";
               case TracingMarkerComponent:
                 return "TracingMarker";
-
+              // The display name for this tags come from the user-provided type:
               case ClassComponent:
               case FunctionComponent:
               case IncompleteClassComponent:
@@ -3897,8 +3897,8 @@
             var type = props.type;
             if (value != null) {
               if (type === "number") {
-                if (value === 0 && node.value === "" ||
-
+                if (value === 0 && node.value === "" || // We explicitly want to coerce to number here if possible.
+                // eslint-disable-next-line
                 node.value != value) {
                   node.value = toString(value);
                 }
@@ -3986,7 +3986,7 @@
           }
           function setDefaultValue(node, type, value) {
             if (
-
+              // Focused number inputs synchronize on blur. See ChangeEventPlugin.js
               type !== "number" || getActiveElement(node.ownerDocument) !== node
             ) {
               if (value == null) {
@@ -4386,7 +4386,7 @@
             widows: true,
             zIndex: true,
             zoom: true,
-
+            // SVG-related properties
             fillOpacity: true,
             floodOpacity: true,
             stopOpacity: true,
@@ -4447,9 +4447,9 @@
               error(
                 "Unsupported style property %s. Did you mean %s?",
                 name,
-
-
-
+                // As Andi Smith suggests
+                // (http://www.andismith.com/blog/2012/02/modernizr-prefixed/), an `-ms` prefix
+                // is converted to lowercase `ms`.
                 camelize(name.replace(msPattern$1, "ms-"))
               );
             };
@@ -4592,7 +4592,7 @@
             source: true,
             track: true,
             wbr: true
-
+            // NOTE: menuitem's close tag should be omitted, but that causes problems.
           };
           var voidElementTags = assign({
             menuitem: true
@@ -4629,10 +4629,10 @@
               return typeof props.is === "string";
             }
             switch (tagName) {
-
-
-
-
+              // These are reserved SVG and MathML elements.
+              // We don't mind this list too much because we expect it to never grow.
+              // The alternative is to track the namespace in a few places which is convoluted.
+              // https://w3c.github.io/webcomponents/spec/custom/#custom-elements-core-concepts
               case "annotation-xml":
               case "color-profile":
               case "font-face":
@@ -4647,7 +4647,7 @@
             }
           }
           var possibleStandardNames = {
-
+            // HTML
             accept: "accept",
             acceptcharset: "acceptCharset",
             "accept-charset": "acceptCharset",
@@ -4797,7 +4797,7 @@
             width: "width",
             wmode: "wmode",
             wrap: "wrap",
-
+            // SVG
             about: "about",
             accentheight: "accentHeight",
             "accent-height": "accentHeight",
@@ -5137,19 +5137,19 @@
           };
           var ariaProperties = {
             "aria-current": 0,
-
+            // state
             "aria-description": 0,
             "aria-details": 0,
             "aria-disabled": 0,
-
+            // state
             "aria-hidden": 0,
-
+            // state
             "aria-invalid": 0,
-
+            // state
             "aria-keyshortcuts": 0,
             "aria-label": 0,
             "aria-roledescription": 0,
-
+            // Widget Attributes
             "aria-autocomplete": 0,
             "aria-checked": 0,
             "aria-expanded": 0,
@@ -5169,15 +5169,15 @@
             "aria-valuemin": 0,
             "aria-valuenow": 0,
             "aria-valuetext": 0,
-
+            // Live Region Attributes
             "aria-atomic": 0,
             "aria-busy": 0,
             "aria-live": 0,
             "aria-relevant": 0,
-
+            // Drag-and-Drop Attributes
             "aria-dropeffect": 0,
             "aria-grabbed": 0,
-
+            // Relationship Attributes
             "aria-activedescendant": 0,
             "aria-colcount": 0,
             "aria-colindex": 0,
@@ -5798,7 +5798,7 @@
           );
           var BeforeMutationMask = (
             // TODO: Remove Update flag from before mutation phase by re-landing Visibility
-
+            // flag logic (see #20043)
             Update | Snapshot | 0
           );
           var MutationMask = Placement | Update | ChildDeletion | ContentReset | Ref | Hydrating | Visibility;
@@ -6645,17 +6645,17 @@
             if (nextLanes === NoLanes) {
               return NoLanes;
             }
-            if (wipLanes !== NoLanes && wipLanes !== nextLanes &&
-
+            if (wipLanes !== NoLanes && wipLanes !== nextLanes && // If we already suspended with a delay, then interrupting is fine. Don't
+            // bother waiting until the root is complete.
             (wipLanes & suspendedLanes) === NoLanes) {
               var nextLane = getHighestPriorityLane(nextLanes);
               var wipLane = getHighestPriorityLane(wipLanes);
               if (
-
-
-                nextLane >= wipLane ||
-
-
+                // Tests whether the next lane is equal or lower priority than the wip
+                // one. This works because the bits decrease in priority as you go left.
+                nextLane >= wipLane || // Default priority updates should not interrupt transition updates. The
+                // only difference between default updates and transition updates is that
+                // default updates do not support refresh transitions.
                 nextLane === DefaultLane && (wipLane & TransitionLanes) !== NoLanes
               ) {
                 return wipLanes;
@@ -6904,8 +6904,8 @@
               var index2 = pickArbitraryLaneIndex(lanes);
               var lane = 1 << index2;
               if (
-
-                lane & entangledLanes |
+                // Is this one of the newly entangled lanes?
+                lane & entangledLanes | // Is this lane transitively entangled with the newly entangled lanes?
                 entanglements[index2] & entangledLanes
               ) {
                 entanglements[index2] |= entangledLanes;
@@ -7096,7 +7096,7 @@
             "keyup",
             "input",
             "textInput",
-
+            // Intentionally camelCase
             "copy",
             "cut",
             "paste",
@@ -7462,7 +7462,7 @@
           }
           function getEventPriority(domEventName) {
             switch (domEventName) {
-
+              // Used by SimpleEventPlugin:
               case "cancel":
               case "click":
               case "close":
@@ -7498,20 +7498,20 @@
               case "touchend":
               case "touchstart":
               case "volumechange":
-
-
+              // Used by polyfills:
+              // eslint-disable-next-line no-fallthrough
               case "change":
               case "selectionchange":
               case "textInput":
               case "compositionstart":
               case "compositionend":
               case "compositionupdate":
-
-
+              // Only enableCreateEventHandleAPI:
+              // eslint-disable-next-line no-fallthrough
               case "beforeblur":
               case "afterblur":
-
-
+              // Not used by React but could be by user code:
+              // eslint-disable-next-line no-fallthrough
               case "beforeinput":
               case "blur":
               case "fullscreenchange":
@@ -7536,8 +7536,8 @@
               case "toggle":
               case "touchmove":
               case "wheel":
-
-
+              // Not used by React but could be by user code:
+              // eslint-disable-next-line no-fallthrough
               case "mouseenter":
               case "mouseleave":
               case "pointerenter":
@@ -7909,7 +7909,7 @@
             repeat: 0,
             locale: 0,
             getModifierState: getEventModifierState,
-
+            // Legacy Interface
             charCode: function(event) {
               if (event.type === "keypress") {
                 return getEventCharCode(event);
@@ -7966,24 +7966,24 @@
           var WheelEventInterface = assign({}, MouseEventInterface, {
             deltaX: function(event) {
               return "deltaX" in event ? event.deltaX : (
-
+                // Fallback to `wheelDeltaX` for Webkit and normalize (right is positive).
                 "wheelDeltaX" in event ? -event.wheelDeltaX : 0
               );
             },
             deltaY: function(event) {
               return "deltaY" in event ? event.deltaY : (
-
+                // Fallback to `wheelDeltaY` for Webkit and normalize (down is positive).
                 "wheelDeltaY" in event ? -event.wheelDeltaY : (
-
+                  // Fallback to `wheelDelta` for IE<9 and normalize (down is positive).
                   "wheelDelta" in event ? -event.wheelDelta : 0
                 )
               );
             },
             deltaZ: 0,
-
-
-
-
+            // Browsers without "deltaMode" is reporting in raw wheel delta where one
+            // notch on the scroll is always +/- 120, roughly equivalent to pixels.
+            // A good approximation of DOM_DELTA_LINE (1) is 5% of viewport size or
+            // ~40 pixels, for DOM_DELTA_SCREEN (2) it is 87.5% of viewport size.
             deltaMode: 0
           });
           var SyntheticWheelEvent = createSyntheticEvent(WheelEventInterface);
@@ -8006,7 +8006,7 @@
           }
           var hasSpaceKeypress = false;
           function isKeypressCommand(nativeEvent) {
-            return (nativeEvent.ctrlKey || nativeEvent.altKey || nativeEvent.metaKey) &&
+            return (nativeEvent.ctrlKey || nativeEvent.altKey || nativeEvent.metaKey) && // ctrlKey && altKey is equivalent to AltGr, and is not a command.
             !(nativeEvent.ctrlKey && nativeEvent.altKey);
           }
           function getCompositionEventType(domEventName) {
@@ -8723,7 +8723,7 @@
           function extractEvents$3(dispatchQueue, domEventName, targetInst, nativeEvent, nativeEventTarget, eventSystemFlags, targetContainer) {
             var targetNode = targetInst ? getNodeFromInstance(targetInst) : window;
             switch (domEventName) {
-
+              // Track the input node that has focus.
               case "focusin":
                 if (isTextInputElement(targetNode) || targetNode.contentEditable === "true") {
                   activeElement$1 = targetNode;
@@ -8736,8 +8736,8 @@
                 activeElementInst$1 = null;
                 lastSelection = null;
                 break;
-
-
+              // Don't fire the event while the user is dragging. This matches the
+              // semantics of the native select event.
               case "mousedown":
                 mouseDown = true;
                 break;
@@ -8747,20 +8747,20 @@
                 mouseDown = false;
                 constructSelectEvent(dispatchQueue, nativeEvent, nativeEventTarget);
                 break;
-
-
-
-
-
-
-
-
-
+              // Chrome and IE fire non-standard event when selection is changed (and
+              // sometimes when it hasn't). IE's event fires out of order with respect
+              // to key and input events on deletion, so we discard it.
+              //
+              // Firefox doesn't support selectionchange, so check selection status
+              // after each key entry. The selection changes after keydown and before
+              // keyup, but we check on keydown as well in the case of holding down a
+              // key, when multiple keydown events are fired but only one keyup is.
+              // This is also our approach for IE handling, for the reason above.
               case "selectionchange":
                 if (skipSelectionChangeEvent) {
                   break;
                 }
-
+              // falls through
               case "keydown":
               case "keyup":
                 constructSelectEvent(dispatchQueue, nativeEvent, nativeEventTarget);
@@ -8926,9 +8926,9 @@
             var inCapturePhase = (eventSystemFlags & IS_CAPTURE_PHASE) !== 0;
             {
               var accumulateTargetOnly = !inCapturePhase && // TODO: ideally, we'd eventually add all events from
-
-
-
+              // nonDelegatedEvents list in DOMPluginEventSystem.
+              // Then we can remove this special list.
+              // This is a breaking change that can wait until React 18.
               domEventName === "scroll";
               var _listeners = accumulateSinglePhaseListeners(targetInst, reactName, nativeEvent.type, inCapturePhase, accumulateTargetOnly);
               if (_listeners.length > 0) {
@@ -9280,13 +9280,13 @@
           var normalizeHTML;
           {
             warnedUnknownTags = {
-
+              // There are working polyfills for <dialog>. Let people use it.
               dialog: true,
-
-
-
-
-
+              // Electron ships a custom <webview> tag to display external web content in
+              // an isolated frame and process.
+              // This tag is not present in non Electron environments such as JSDom which
+              // is often used for testing purposes.
+              // @see https://electronjs.org/docs/api/webview-tag
               webview: true
             };
             validatePropertiesInDevelopment = function(type, props) {
@@ -9785,7 +9785,7 @@
               for (var _i = 0; _i < attributes.length; _i++) {
                 var name = attributes[_i].name.toLowerCase();
                 switch (name) {
-
+                  // Controlled attributes are not validated
                   // TODO: Only ignore them on controlled tags.
                   case "value":
                     break;
@@ -9829,12 +9829,12 @@
                     listenToNonDelegatedEvent("scroll", domElement);
                   }
                 }
-              } else if (shouldWarnDev && true &&
+              } else if (shouldWarnDev && true && // Convince Flow we've calculated it (it's DEV-only in this method.)
               typeof isCustomComponentTag === "boolean") {
                 var serverValue = void 0;
                 var propertyInfo = isCustomComponentTag && enableCustomElementPropertySupport ? null : getPropertyInfo(propKey);
                 if (rawProps[SUPPRESS_HYDRATION_WARNING] === true) ;
-                else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING ||
+                else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING || // Controlled attributes are not validated
                 // TODO: Only ignore them on controlled tags.
                 propKey === "value" || propKey === "checked" || propKey === "selected") ;
                 else if (propKey === DANGEROUSLY_SET_INNER_HTML) {
@@ -9893,7 +9893,7 @@
             {
               if (shouldWarnDev) {
                 if (
-
+                  // $FlowFixMe - Should be inferred as not undefined.
                   extraAttributeNames.size > 0 && rawProps[SUPPRESS_HYDRATION_WARNING] !== true
                 ) {
                   warnForExtraAttributes(extraAttributeNames);
@@ -9992,9 +9992,9 @@
               "marquee",
               "object",
               "template",
-
+              // https://html.spec.whatwg.org/multipage/syntax.html#html-integration-point
               // TODO: Distinguish by namespace here -- for <title>, including it here
-
+              // errs on the side of fewer warnings
               "foreignObject",
               "desc",
               "title"
@@ -10054,37 +10054,37 @@
             };
             var isTagValidWithParent = function(tag, parentTag) {
               switch (parentTag) {
-
+                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-inselect
                 case "select":
                   return tag === "option" || tag === "optgroup" || tag === "#text";
                 case "optgroup":
                   return tag === "option" || tag === "#text";
-
-
+                // Strictly speaking, seeing an <option> doesn't mean we're in a <select>
+                // but
                 case "option":
                   return tag === "#text";
-
-
-
-
-
+                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-intd
+                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-incaption
+                // No special behavior since these rules fall back to "in body" mode for
+                // all except special table nodes which cause bad parsing behavior anyway.
+                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-intr
                 case "tr":
                   return tag === "th" || tag === "td" || tag === "style" || tag === "script" || tag === "template";
-
+                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-intbody
                 case "tbody":
                 case "thead":
                 case "tfoot":
                   return tag === "tr" || tag === "style" || tag === "script" || tag === "template";
-
+                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-incolgroup
                 case "colgroup":
                   return tag === "col" || tag === "template";
-
+                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-intable
                 case "table":
                   return tag === "caption" || tag === "colgroup" || tag === "tbody" || tag === "tfoot" || tag === "thead" || tag === "style" || tag === "script" || tag === "template";
-
+                // https://html.spec.whatwg.org/multipage/syntax.html#parsing-main-inhead
                 case "head":
                   return tag === "base" || tag === "basefont" || tag === "bgsound" || tag === "link" || tag === "meta" || tag === "title" || tag === "noscript" || tag === "noframes" || tag === "style" || tag === "script" || tag === "template";
-
+                // https://html.spec.whatwg.org/multipage/semantics.html#the-html-element
                 case "html":
                   return tag === "head" || tag === "body" || tag === "frameset";
                 case "frameset":
@@ -11652,7 +11652,7 @@
               if (didWarnAboutUnsafeLifecycles.has(fiber.type)) {
                 return;
               }
-              if (typeof instance.componentWillMount === "function" &&
+              if (typeof instance.componentWillMount === "function" && // Don't warn about react-lifecycles-compat polyfilled components.
               instance.componentWillMount.__suppressDeprecationWarning !== true) {
                 pendingComponentWillMountWarnings.push(fiber);
               }
@@ -11835,12 +11835,12 @@
             var mixedRef = element.ref;
             if (mixedRef !== null && typeof mixedRef !== "function" && typeof mixedRef !== "object") {
               {
-                if ((returnFiber.mode & StrictLegacyMode || warnAboutStringRefs) &&
-
-
-                !(element._owner && element._self && element._owner.stateNode !== element._self) &&
-                !(element._owner && element._owner.tag !== ClassComponent) &&
-                !(typeof element.type === "function" && !isReactClass(element.type)) &&
+                if ((returnFiber.mode & StrictLegacyMode || warnAboutStringRefs) && // We warn in ReactElement.js if owner and self are equal for string refs
+                // because these cannot be automatically converted to an arrow function
+                // using a codemod. Therefore, we don't have to warn about string refs again.
+                !(element._owner && element._self && element._owner.stateNode !== element._self) && // Will already throw with "Function components cannot have string refs"
+                !(element._owner && element._owner.tag !== ClassComponent) && // Will already warn with "Function components cannot be given refs"
+                !(typeof element.type === "function" && !isReactClass(element.type)) && // Will already throw with "Element ref was specified as a string (someStringRef) but no owner was set"
                 element._owner) {
                   var componentName = getComponentNameFromFiber(returnFiber) || "Component";
                   if (!didWarnAboutStringRefs[componentName]) {
@@ -11998,11 +11998,11 @@
                 return updateFragment2(returnFiber, current2, element.props.children, lanes, element.key);
               }
               if (current2 !== null) {
-                if (current2.elementType === elementType ||
-                isCompatibleFamilyForHotReloading(current2, element) ||
-
-
-
+                if (current2.elementType === elementType || // Keep this check inline so it only runs on the false path:
+                isCompatibleFamilyForHotReloading(current2, element) || // Lazy types should reconcile their resolved type.
+                // We need to do this after the Hot Reloading check above,
+                // because hot reloading has different semantics than prod because
+                // it doesn't resuspend. So we can't let the call below suspend.
                 typeof elementType === "object" && elementType !== null && elementType.$$typeof === REACT_LAZY_TYPE && resolveLazy(elementType) === current2.type) {
                   var existing = useFiber(current2, element.props);
                   existing.ref = coerceRef(returnFiber, current2, element);
@@ -12296,7 +12296,7 @@
                 throw new Error("An object is not an iterable. This error is likely caused by a bug in React. Please file an issue.");
               }
               {
-                if (typeof Symbol === "function" &&
+                if (typeof Symbol === "function" && // $FlowFixMe Flow doesn't know about toStringTag
                 newChildrenIterable[Symbol.toStringTag] === "Generator") {
                   if (!didWarnAboutGenerators) {
                     error("Using Generators as children is unsupported and will likely yield unexpected results because enumerating a generator mutates it. You may convert it to an array with `Array.from()` or the `[...spread]` operator before rendering. Keep in mind you might need to polyfill these features for older browsers.");
@@ -12445,11 +12445,11 @@
                       return existing;
                     }
                   } else {
-                    if (child.elementType === elementType ||
-                    isCompatibleFamilyForHotReloading(child, element) ||
-
-
-
+                    if (child.elementType === elementType || // Keep this check inline so it only runs on the false path:
+                    isCompatibleFamilyForHotReloading(child, element) || // Lazy types should reconcile their resolved type.
+                    // We need to do this after the Hot Reloading check above,
+                    // because hot reloading has different semantics than prod because
+                    // it doesn't resuspend. So we can't let the call below suspend.
                     typeof elementType === "object" && elementType !== null && elementType.$$typeof === REACT_LAZY_TYPE && resolveLazy(elementType) === child.type) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var _existing = useFiber(child, element.props);
@@ -13043,7 +13043,7 @@
               case CaptureUpdate: {
                 workInProgress2.flags = workInProgress2.flags & ~ShouldCapture | DidCapture;
               }
-
+              // Intentional fallthrough
               case UpdateState: {
                 var _payload = update.payload;
                 var partialState;
@@ -13142,9 +13142,9 @@
                   if (newLastBaseUpdate !== null) {
                     var _clone = {
                       eventTime: updateEventTime,
-
-
-
+                      // This update is going to be committed so we never want uncommit
+                      // it. Using NoLane works because 0 is a subset of all bitmasks, so
+                      // this will never be skipped by the check above.
                       lane: NoLane,
                       tag: update.tag,
                       payload: update.payload,
@@ -13155,8 +13155,8 @@
                   }
                   newState = getStateFromUpdate(workInProgress2, queue, update, newState, props, instance);
                   var callback = update.callback;
-                  if (callback !== null &&
-
+                  if (callback !== null && // If the update was already committed, we should not queue its
+                  // callback again.
                   update.lane !== NoLane) {
                     workInProgress2.flags |= Callback;
                     var effects = queue.effects;
@@ -13327,8 +13327,8 @@
                     return node;
                   }
                 }
-              } else if (node.tag === SuspenseListComponent &&
-
+              } else if (node.tag === SuspenseListComponent && // revealOrder undefined can't be trusted because it don't
+              // keep track of whether it suspended or not.
               node.memoizedProps.revealOrder !== void 0) {
                 var didSuspend = (node.flags & DidCapture) !== NoFlags;
                 if (didSuspend) {
@@ -13546,11 +13546,11 @@
               currentHookNameInDev = null;
               hookTypesDev = null;
               hookTypesUpdateIndexDev = -1;
-              if (current2 !== null && (current2.flags & StaticMask) !== (workInProgress2.flags & StaticMask) &&
-
-
-
-
+              if (current2 !== null && (current2.flags & StaticMask) !== (workInProgress2.flags & StaticMask) && // Disable this warning in legacy mode, because legacy Suspense is weird
+              // and creates false positives. To make this work in legacy mode, we'd
+              // need to mark fibers that commit in an incomplete state, somehow. For
+              // now I'll disable the warning that most of the bugs that would trigger
+              // it are either exclusive to concurrent mode or exist in both.
               (current2.mode & ConcurrentMode) !== NoMode) {
                 error("Internal React error: Expected static flag was missing. Please notify the React team.");
               }
@@ -13741,9 +13741,9 @@
                 } else {
                   if (newBaseQueueLast !== null) {
                     var _clone = {
-
-
-
+                      // This update is going to be committed so we never want uncommit
+                      // it. Using NoLane works because 0 is a subset of all bitmasks, so
+                      // this will never be skipped by the check above.
                       lane: NoLane,
                       action: update.action,
                       hasEagerState: update.hasEagerState,
@@ -13898,8 +13898,8 @@
             }
             var inst = hook.queue;
             updateEffect(subscribeToStore.bind(null, fiber, inst, subscribe), [subscribe]);
-            if (inst.getSnapshot !== getSnapshot || snapshotChanged ||
-
+            if (inst.getSnapshot !== getSnapshot || snapshotChanged || // Check if the susbcribe function changed. We can save some memory by
+            // checking whether we scheduled a subscription effect above.
             workInProgressHook !== null && workInProgressHook.memoizedState.tag & HasEffect) {
               fiber.flags |= Passive;
               pushEffect(HasEffect | Passive$1, updateStoreInstance.bind(null, fiber, inst, nextSnapshot, getSnapshot), void 0, null);
@@ -13994,7 +13994,7 @@
               create,
               destroy,
               deps,
-
+              // Circular
               next: null
             };
             var componentUpdateQueue = currentlyRenderingFiber$1.updateQueue;
@@ -15529,14 +15529,14 @@
                 error("contextType was defined as an instance property on %s. Use a static property to define contextType instead.", name);
               }
               {
-                if (ctor.childContextTypes && !didWarnAboutLegacyContext$1.has(ctor) &&
-
+                if (ctor.childContextTypes && !didWarnAboutLegacyContext$1.has(ctor) && // Strict Mode has its own warning for legacy context, so we can skip
+                // this one.
                 (workInProgress2.mode & StrictLegacyMode) === NoMode) {
                   didWarnAboutLegacyContext$1.add(ctor);
                   error("%s uses the legacy childContextTypes API which is no longer supported and will be removed in the next major release. Use React.createContext() instead\n\n.Learn more about this warning here: https://reactjs.org/link/legacy-context", name);
                 }
-                if (ctor.contextTypes && !didWarnAboutLegacyContext$1.has(ctor) &&
-
+                if (ctor.contextTypes && !didWarnAboutLegacyContext$1.has(ctor) && // Strict Mode has its own warning for legacy context, so we can skip
+                // this one.
                 (workInProgress2.mode & StrictLegacyMode) === NoMode) {
                   didWarnAboutLegacyContext$1.add(ctor);
                   error("%s uses the legacy contextTypes API which is no longer supported and will be removed in the next major release. Use React.createContext() with static contextType instead.\n\nLearn more about this warning here: https://reactjs.org/link/legacy-context", name);
@@ -15612,7 +15612,7 @@
             {
               if ("contextType" in ctor) {
                 var isValid2 = (
-
+                  // Allow null for conditional declaration
                   contextType === null || contextType !== void 0 && contextType.$$typeof === REACT_CONTEXT_TYPE && contextType._context === void 0
                 );
                 if (!isValid2 && !didWarnAboutInvalidateContextType.has(ctor)) {
@@ -15910,9 +15910,9 @@
               newState = workInProgress2.memoizedState;
             }
             var shouldUpdate = checkHasForceUpdateAfterProcessing() || checkShouldComponentUpdate(workInProgress2, ctor, oldProps, newProps, oldState, newState, nextContext) || // TODO: In some cases, we'll end up checking if context has changed twice,
-
-
-
+            // both before and after `shouldComponentUpdate` has been called. Not ideal,
+            // but I'm loath to refactor this function. This only happens for memoized
+            // components so it's not that common.
             enableLazyContextPropagation;
             if (shouldUpdate) {
               if (!hasNewLifecycles && (typeof instance.UNSAFE_componentWillUpdate === "function" || typeof instance.componentWillUpdate === "function")) {
@@ -16269,7 +16269,7 @@
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
-
+                    // Resolved props
                     "prop",
                     getComponentNameFromType(Component2)
                   );
@@ -16317,7 +16317,7 @@
           function updateMemoComponent(current2, workInProgress2, Component2, nextProps, renderLanes2) {
             if (current2 === null) {
               var type = Component2.type;
-              if (isSimpleFunctionComponent(type) && Component2.compare === null &&
+              if (isSimpleFunctionComponent(type) && Component2.compare === null && // SimpleMemoComponent codepath doesn't resolve outer props either.
               Component2.defaultProps === void 0) {
                 var resolvedType = type;
                 {
@@ -16336,7 +16336,7 @@
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
-
+                    // Resolved props
                     "prop",
                     getComponentNameFromType(type)
                   );
@@ -16362,7 +16362,7 @@
                 checkPropTypes(
                   _innerPropTypes,
                   nextProps,
-
+                  // Resolved props
                   "prop",
                   getComponentNameFromType(_type)
                 );
@@ -16403,7 +16403,7 @@
                     checkPropTypes(
                       outerPropTypes,
                       nextProps,
-
+                      // Resolved (SimpleMemoComponent has no defaultProps)
                       "prop",
                       getComponentNameFromType(outerMemoType)
                     );
@@ -16413,7 +16413,7 @@
             }
             if (current2 !== null) {
               var prevProps = current2.memoizedProps;
-              if (shallowEqual(prevProps, nextProps) && current2.ref === workInProgress2.ref &&
+              if (shallowEqual(prevProps, nextProps) && current2.ref === workInProgress2.ref && // Prevent bailout if the implementation changed due to hot reload.
               workInProgress2.type === current2.type) {
                 didReceiveUpdate = false;
                 workInProgress2.pendingProps = nextProps = prevProps;
@@ -16523,7 +16523,7 @@
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
-
+                    // Resolved props
                     "prop",
                     getComponentNameFromType(Component2)
                   );
@@ -16599,7 +16599,7 @@
                   checkPropTypes(
                     innerPropTypes,
                     nextProps,
-
+                    // Resolved props
                     "prop",
                     getComponentNameFromType(Component2)
                   );
@@ -16820,7 +16820,7 @@
                       checkPropTypes(
                         outerPropTypes,
                         resolvedProps,
-
+                        // Resolved for outer only
                         "prop",
                         getComponentNameFromType(Component2)
                       );
@@ -16832,7 +16832,7 @@
                   workInProgress2,
                   Component2,
                   resolveDefaultProps(Component2.type, resolvedProps),
-
+                  // The inner type can have defaults too
                   renderLanes2
                 );
                 return child;
@@ -16906,8 +16906,8 @@
               }
             }
             if (
-
-
+              // Run these checks in production only if the flag is off.
+              // Eventually we'll delete this branch altogether.
               typeof value === "object" && value !== null && typeof value.render === "function" && value.$$typeof === void 0
             ) {
               {
@@ -17182,14 +17182,14 @@
             };
             var primaryChildFragment;
             if (
-
-
-              (mode & ConcurrentMode) === NoMode &&
-
-
-
-
-
+              // In legacy mode, we commit the primary tree as if it successfully
+              // completed, even though it's in an inconsistent state.
+              (mode & ConcurrentMode) === NoMode && // Make sure we're on the second pass, i.e. the primary child fragment was
+              // already cloned. In legacy mode, the only case where this isn't true is
+              // when DevTools forces us to display a fallback; we skip the first render
+              // pass entirely and go straight to rendering the fallback. (In Concurrent
+              // Mode, SuspenseList can also trigger this scenario, but this is a legacy-
+              // only codepath.)
               workInProgress2.child !== currentPrimaryChildFragment
             ) {
               var progressedPrimaryFragment = workInProgress2.child;
@@ -17272,8 +17272,8 @@
                   workInProgress2,
                   renderLanes2,
                   // TODO: When we delete legacy mode, we should make this error argument
-
-
+                  // required — every concurrent mode path that causes hydration to
+                  // de-opt to client rendering should have an error message.
                   null
                 );
               }
@@ -17531,7 +17531,7 @@
                   initSuspenseListRenderState(
                     workInProgress2,
                     false,
-
+                    // isBackwards
                     tail,
                     lastContentRow,
                     tailMode
@@ -17556,10 +17556,10 @@
                   initSuspenseListRenderState(
                     workInProgress2,
                     true,
-
+                    // isBackwards
                     _tail,
                     null,
-
+                    // last
                     tailMode
                   );
                   break;
@@ -17568,11 +17568,11 @@
                   initSuspenseListRenderState(
                     workInProgress2,
                     false,
-
+                    // isBackwards
                     null,
-
+                    // tail
                     null,
-
+                    // last
                     void 0
                   );
                   break;
@@ -17848,13 +17848,13 @@
             if (current2 !== null) {
               var oldProps = current2.memoizedProps;
               var newProps = workInProgress2.pendingProps;
-              if (oldProps !== newProps || hasContextChanged() ||
+              if (oldProps !== newProps || hasContextChanged() || // Force a re-render if the implementation changed due to hot reload:
               workInProgress2.type !== current2.type) {
                 didReceiveUpdate = true;
               } else {
                 var hasScheduledUpdateOrContext = checkScheduledUpdateOrContext(current2, renderLanes2);
-                if (!hasScheduledUpdateOrContext &&
-
+                if (!hasScheduledUpdateOrContext && // If this is the second pass of an error or suspense boundary, there
+                // may not be work scheduled on `current`, so we check for this flag.
                 (workInProgress2.flags & DidCapture) === NoFlags) {
                   didReceiveUpdate = false;
                   return attemptEarlyBailoutIfNoScheduledUpdate(current2, workInProgress2, renderLanes2);
@@ -17931,7 +17931,7 @@
                       checkPropTypes(
                         outerPropTypes,
                         _resolvedProps3,
-
+                        // Resolved for outer only
                         "prop",
                         getComponentNameFromType(_type2)
                       );
@@ -18214,8 +18214,8 @@
                     if (current2 !== null) {
                       var prevState = current2.memoizedState;
                       if (
-
-                        !prevState.isDehydrated ||
+                        // Check if this is a client root
+                        !prevState.isDehydrated || // Check if we reverted to client rendering (e.g. due to an error)
                         (workInProgress2.flags & ForceClientRender) !== NoFlags
                       ) {
                         workInProgress2.flags |= Snapshot;
@@ -18424,9 +18424,9 @@
                         return null;
                       }
                     } else if (
-
-
-
+                      // The time it took to render last row is greater than the remaining
+                      // time we have to render. So rendering one more row would likely
+                      // exceed it.
                       now() * 2 - renderState.renderingStartTime > getRenderTargetTime() && renderLanes2 !== OffscreenLane
                     ) {
                       workInProgress2.flags |= DidCapture;
@@ -18477,7 +18477,7 @@
                 if (current2 !== null) {
                   var _prevState = current2.memoizedState;
                   var prevIsHidden = _prevState !== null;
-                  if (prevIsHidden !== nextIsHidden &&
+                  if (prevIsHidden !== nextIsHidden && // LegacyHidden doesn't do any hiding — it only pre-renders.
                   !enableLegacyHidden) {
                     workInProgress2.flags |= Visibility;
                   }
@@ -18905,7 +18905,7 @@
                       if (destroy === null) {
                         addendum = " You returned null. If your effect does not require clean up, return undefined (or nothing).";
                       } else if (typeof destroy.then === "function") {
-                        addendum = "\n\nIt looks like you wrote " + hookName + "(async () => ...) or returned a Promise. Instead, write the async function inside your effect and call it immediately:\n\n" + hookName + "(() => {\n  async function fetchData() {\n
+                        addendum = "\n\nIt looks like you wrote " + hookName + "(async () => ...) or returned a Promise. Instead, write the async function inside your effect and call it immediately:\n\n" + hookName + "(() => {\n  async function fetchData() {\n    // You can await here\n    const response = await MyAPI.getData(someId);\n    // ...\n  }\n  fetchData();\n}, [someId]); // Or [] if effect doesn't need props or state\n\nLearn more about data fetching with Hooks: https://reactjs.org/link/hooks-data-fetching";
                       } else {
                         addendum = " You returned: " + destroy;
                       }
@@ -19361,7 +19361,7 @@
                 insertOrAppendPlacementNodeIntoContainer(finishedWork, _before, _parent);
                 break;
               }
-
+              // eslint-disable-next-line-no-fallthrough
               default:
                 throw new Error("Invalid host parent fiber. This error is likely caused by a bug in React. Please file an issue.");
             }
@@ -19461,7 +19461,7 @@
                   safelyDetachRef(deletedFiber, nearestMountedAncestor);
                 }
               }
-
+              // eslint-disable-next-line-no-fallthrough
               case HostText: {
                 {
                   var prevHostParent = hostParent;
@@ -19916,7 +19916,7 @@
                     nextEffect = child;
                     commitLayoutEffects_begin(
                       child,
-
+                      // New root; bubble back up to here and stop.
                       root2,
                       committedLanes
                     );
@@ -20360,7 +20360,7 @@
           function isLegacyActEnvironment(fiber) {
             {
               var isReactActEnvironmentGlobal = (
-
+                // $FlowExpectedError – Flow doesn't know about IS_REACT_ACT_ENVIRONMENT global
                 typeof IS_REACT_ACT_ENVIRONMENT !== "undefined" ? IS_REACT_ACT_ENVIRONMENT : void 0
               );
               var jestIsDefined = typeof jest !== "undefined";
@@ -20370,7 +20370,7 @@
           function isConcurrentActEnvironment() {
             {
               var isReactActEnvironmentGlobal = (
-
+                // $FlowExpectedError – Flow doesn't know about IS_REACT_ACT_ENVIRONMENT global
                 typeof IS_REACT_ACT_ENVIRONMENT !== "undefined" ? IS_REACT_ACT_ENVIRONMENT : void 0
               );
               if (!isReactActEnvironmentGlobal && ReactCurrentActQueue.current !== null) {
@@ -20527,7 +20527,7 @@
                 }
               }
               ensureRootIsScheduled(root2, eventTime);
-              if (lane === SyncLane && executionContext === NoContext && (fiber.mode & ConcurrentMode) === NoMode &&
+              if (lane === SyncLane && executionContext === NoContext && (fiber.mode & ConcurrentMode) === NoMode && // Treat `act` as if it's inside `batchedUpdates`, even in legacy mode.
               !ReactCurrentActQueue$1.isBatchingLegacy) {
                 resetRenderTimer();
                 flushSyncCallbacksOnlyInLegacyMode();
@@ -20543,7 +20543,7 @@
           function isUnsafeClassRenderPhaseUpdate(fiber) {
             return (
               // TODO: Remove outdated deferRenderPhaseUpdateToNextBatch experiment. We
-
+              // decided not to enable it.
               (executionContext & RenderContext) !== NoContext
             );
           }
@@ -20561,9 +20561,9 @@
             }
             var newCallbackPriority = getHighestPriorityLane(nextLanes);
             var existingCallbackPriority = root2.callbackPriority;
-            if (existingCallbackPriority === newCallbackPriority &&
-
-
+            if (existingCallbackPriority === newCallbackPriority && // Special case related to `act`. If the currently scheduled task is a
+            // Scheduler task, rather than an `act` task, cancel it and re-scheduled
+            // on the `act` queue.
             !(ReactCurrentActQueue$1.current !== null && existingCallbackNode !== fakeActCallbackNode)) {
               {
                 if (existingCallbackNode == null && existingCallbackPriority !== SyncLane) {
@@ -20723,16 +20723,16 @@
               case RootFatalErrored: {
                 throw new Error("Root did not complete. This is a bug in React.");
               }
-
-
-
+              // Flow knows about invariant, so it complains if I add a break
+              // statement, but eslint doesn't know about invariant, so it complains
+              // if I do. eslint-disable-next-line no-fallthrough
               case RootErrored: {
                 commitRoot(root2, workInProgressRootRecoverableErrors, workInProgressTransitions);
                 break;
               }
               case RootSuspended: {
                 markRootSuspended$1(root2, lanes);
-                if (includesOnlyRetries(lanes) &&
+                if (includesOnlyRetries(lanes) && // do not delay if we're inside an act() scope
                 !shouldForceFlushFallbacksInDEV()) {
                   var msUntilTimeout = globalMostRecentFallbackTime + FALLBACK_THROTTLE_MS - now();
                   if (msUntilTimeout > 10) {
@@ -20883,7 +20883,7 @@
               return fn(a);
             } finally {
               executionContext = prevExecutionContext;
-              if (executionContext === NoContext &&
+              if (executionContext === NoContext && // Treat `act` as if it's inside `batchedUpdates`, even in legacy mode.
               !ReactCurrentActQueue$1.isBatchingLegacy) {
                 resetRenderTimer();
                 flushSyncCallbacksOnlyInLegacyMode();
@@ -22371,15 +22371,15 @@
                 case REACT_OFFSCREEN_TYPE:
                   return createFiberFromOffscreen(pendingProps, mode, lanes, key);
                 case REACT_LEGACY_HIDDEN_TYPE:
-
+                // eslint-disable-next-line no-fallthrough
                 case REACT_SCOPE_TYPE:
-
+                // eslint-disable-next-line no-fallthrough
                 case REACT_CACHE_TYPE:
-
+                // eslint-disable-next-line no-fallthrough
                 case REACT_TRACING_MARKER_TYPE:
-
+                // eslint-disable-next-line no-fallthrough
                 case REACT_DEBUG_TRACING_MODE_TYPE:
-
+                // eslint-disable-next-line no-fallthrough
                 default: {
                   if (typeof type === "object" && type !== null) {
                     switch (type.$$typeof) {
@@ -22508,7 +22508,7 @@
             fiber.stateNode = {
               containerInfo: portal.containerInfo,
               pendingChildren: null,
-
+              // Used by persistent updates
               implementation: portal.implementation
             };
             return fiber;
@@ -22610,7 +22610,7 @@
                 element: initialChildren,
                 isDehydrated: hydrate2,
                 cache: null,
-
+                // not enabled yet
                 transitions: null,
                 pendingSuspenseBoundaries: null
               };
@@ -22626,7 +22626,7 @@
               checkKeyStringCoercion(key);
             }
             return {
-
+              // This tag allow us to uniquely identify this as a React Portal
               $$typeof: REACT_PORTAL_TYPE,
               key: key == null ? null : "" + key,
               children,
@@ -22885,7 +22885,7 @@
                 }
               } else {
                 updated[oldKey] = copyWithRenameImpl(
-
+                  // $FlowFixMe number or string is fine here
                   obj[oldKey],
                   oldPath,
                   newPath,
@@ -23043,21 +23043,21 @@
               currentDispatcherRef: ReactCurrentDispatcher2,
               findHostInstanceByFiber,
               findFiberByHostInstance: findFiberByHostInstance || emptyFindFiberByHostInstance,
-
+              // React Refresh
               findHostInstancesForRefresh,
               scheduleRefresh,
               scheduleRoot,
               setRefreshHandler,
-
+              // Enables DevTools to append owner stacks to error messages in DEV mode.
               getCurrentFiber: getCurrentFiberForDevTools,
-
-
+              // Enables DevTools to detect reconciler version rather than renderer version
+              // which may not match for third party renderers.
               reconcilerVersion: ReactVersion
             });
           }
           var defaultOnRecoverableError = typeof reportError === "function" ? (
-
-
+            // In modern browsers, reportError will dispatch an error event,
+            // emulating an uncaught JavaScript error.
             reportError
           ) : function(error2) {
             console["error"](error2);
@@ -23267,13 +23267,13 @@
                 container,
                 LegacyRoot,
                 null,
-
+                // hydrationCallbacks
                 false,
-
+                // isStrictMode
                 false,
-
+                // concurrentUpdatesByDefaultOverride,
                 "",
-
+                // identifierPrefix
                 noopOnRecoverableError
               );
               container._reactRootContainer = root2;
@@ -23298,13 +23298,13 @@
                 container,
                 LegacyRoot,
                 null,
-
+                // hydrationCallbacks
                 false,
-
+                // isStrictMode
                 false,
-
+                // concurrentUpdatesByDefaultOverride,
                 "",
-
+                // identifierPrefix
                 noopOnRecoverableError
               );
               container._reactRootContainer = _root;
@@ -23464,8 +23464,8 @@
           setGetCurrentUpdatePriority(getCurrentUpdatePriority);
           setAttemptHydrationAtPriority(runWithPriority);
           {
-            if (typeof Map !== "function" ||
-            Map.prototype == null || typeof Map.prototype.forEach !== "function" || typeof Set !== "function" ||
+            if (typeof Map !== "function" || // $FlowIssue Flow incorrectly thinks Map has no prototype
+            Map.prototype == null || typeof Map.prototype.forEach !== "function" || typeof Set !== "function" || // $FlowIssue Flow incorrectly thinks Set has no prototype
             Set.prototype == null || typeof Set.prototype.clear !== "function" || typeof Set.prototype.forEach !== "function") {
               error("React depends on Map and Set built-in types. Make sure that you load a polyfill in older browsers. https://reactjs.org/link/react-polyfills");
             }
@@ -23484,8 +23484,8 @@
           }
           var Internals = {
             usingClientEntryPoint: false,
-
-
+            // Keep in sync with ReactTestUtils.js.
+            // This is an array for better minification.
             Events: [getInstanceFromNode, getNodeFromInstance, getFiberCurrentPropsFromNode, enqueueStateRestore, restoreStateIfNeeded, batchedUpdates$1]
           };
           function createRoot$1(container, options2) {
@@ -23548,7 +23548,7 @@
     }
   });
 
-
+  // node_modules/react-dom/index.js
   var require_react_dom = __commonJS({
     "node_modules/react-dom/index.js"(exports, module) {
       "use strict";
@@ -23561,7 +23561,7 @@
     }
   });
 
-
+  // node_modules/react-dom/client.js
   var require_client = __commonJS({
     "node_modules/react-dom/client.js"(exports) {
       "use strict";
@@ -23592,11 +23592,11 @@
     }
   });
 
-
+  // src/webview/cockpit/index.tsx
   var React28 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
-
+  // node_modules/zod/v3/external.js
   var external_exports = {};
   __export(external_exports, {
     BRAND: () => BRAND,
@@ -23708,7 +23708,7 @@
     void: () => voidType
   });
 
-
+  // node_modules/zod/v3/helpers/util.js
   var util;
   (function(util2) {
     util2.assertEqual = (_) => {
@@ -23774,7 +23774,7 @@
       return {
         ...first,
         ...second
-
+        // second overwrites first
       };
     };
   })(objectUtil || (objectUtil = {}));
@@ -23842,7 +23842,7 @@
     }
   };
 
-
+  // node_modules/zod/v3/ZodError.js
   var ZodIssueCode = util.arrayToEnum([
     "invalid_type",
     "invalid_literal",
@@ -23960,7 +23960,7 @@
     return error;
   };
 
-
+  // node_modules/zod/v3/locales/en.js
   var errorMap = (issue, _ctx) => {
     let message;
     switch (issue.code) {
@@ -24063,7 +24063,7 @@
   };
   var en_default = errorMap;
 
-
+  // node_modules/zod/v3/errors.js
   var overrideErrorMap = en_default;
   function setErrorMap(map) {
     overrideErrorMap = map;
@@ -24072,7 +24072,7 @@
     return overrideErrorMap;
   }
 
-
+  // node_modules/zod/v3/helpers/parseUtil.js
   var makeIssue = (params) => {
     const { data, path, errorMaps, issueData } = params;
     const fullPath = [...path, ...issueData.path || []];
@@ -24107,13 +24107,13 @@
       path: ctx.path,
       errorMaps: [
         ctx.common.contextualErrorMap,
-
+        // contextual error map is first priority
         ctx.schemaErrorMap,
-
+        // then schema-bound map if available
         overrideMap,
-
+        // then global override map
         overrideMap === en_default ? void 0 : en_default
-
+        // then global default map
       ].filter((x) => !!x)
     });
     ctx.common.issues.push(issue);
@@ -24182,14 +24182,14 @@
   var isValid = (x) => x.status === "valid";
   var isAsync = (x) => typeof Promise !== "undefined" && x instanceof Promise;
 
-
+  // node_modules/zod/v3/helpers/errorUtil.js
   var errorUtil;
   (function(errorUtil2) {
     errorUtil2.errToObj = (message) => typeof message === "string" ? { message } : message || {};
     errorUtil2.toString = (message) => typeof message === "string" ? message : message?.message;
   })(errorUtil || (errorUtil = {}));
 
-
+  // node_modules/zod/v3/types.js
   var ParseInputLazyPath = class {
     constructor(parent, value, path, key) {
       this._cachedPath = [];
@@ -26039,7 +26039,7 @@
             key: { status: "valid", value: key },
             value: catchall._parse(
               new ParseInputLazyPath(ctx, value, ctx.path, key)
-
+              //, ctx.child(key), value, getParsedType(value)
             ),
             alwaysSet: key in ctx.data
           });
@@ -26099,23 +26099,23 @@
         unknownKeys: "passthrough"
       });
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    // const AugmentFactory =
+    //   <Def extends ZodObjectDef>(def: Def) =>
+    //   <Augmentation extends ZodRawShape>(
+    //     augmentation: Augmentation
+    //   ): ZodObject<
+    //     extendShape<ReturnType<Def["shape"]>, Augmentation>,
+    //     Def["unknownKeys"],
+    //     Def["catchall"]
+    //   > => {
+    //     return new ZodObject({
+    //       ...def,
+    //       shape: () => ({
+    //         ...def.shape(),
+    //         ...augmentation,
+    //       }),
+    //     }) as any;
+    //   };
     extend(augmentation) {
       return new _ZodObject({
         ...this._def,
@@ -26142,65 +26142,65 @@
       });
       return merged;
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    // merge<
+    //   Incoming extends AnyZodObject,
+    //   Augmentation extends Incoming["shape"],
+    //   NewOutput extends {
+    //     [k in keyof Augmentation | keyof Output]: k extends keyof Augmentation
+    //       ? Augmentation[k]["_output"]
+    //       : k extends keyof Output
+    //       ? Output[k]
+    //       : never;
+    //   },
+    //   NewInput extends {
+    //     [k in keyof Augmentation | keyof Input]: k extends keyof Augmentation
+    //       ? Augmentation[k]["_input"]
+    //       : k extends keyof Input
+    //       ? Input[k]
+    //       : never;
+    //   }
+    // >(
+    //   merging: Incoming
+    // ): ZodObject<
+    //   extendShape<T, ReturnType<Incoming["_def"]["shape"]>>,
+    //   Incoming["_def"]["unknownKeys"],
+    //   Incoming["_def"]["catchall"],
+    //   NewOutput,
+    //   NewInput
+    // > {
+    //   const merged: any = new ZodObject({
+    //     unknownKeys: merging._def.unknownKeys,
+    //     catchall: merging._def.catchall,
+    //     shape: () =>
+    //       objectUtil.mergeShapes(this._def.shape(), merging._def.shape()),
+    //     typeName: ZodFirstPartyTypeKind.ZodObject,
+    //   }) as any;
+    //   return merged;
+    // }
     setKey(key, schema) {
       return this.augment({ [key]: schema });
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    // merge<Incoming extends AnyZodObject>(
+    //   merging: Incoming
+    // ): //ZodObject<T & Incoming["_shape"], UnknownKeys, Catchall> = (merging) => {
+    // ZodObject<
+    //   extendShape<T, ReturnType<Incoming["_def"]["shape"]>>,
+    //   Incoming["_def"]["unknownKeys"],
+    //   Incoming["_def"]["catchall"]
+    // > {
+    //   // const mergedShape = objectUtil.mergeShapes(
+    //   //   this._def.shape(),
+    //   //   merging._def.shape()
+    //   // );
+    //   const merged: any = new ZodObject({
+    //     unknownKeys: merging._def.unknownKeys,
+    //     catchall: merging._def.catchall,
+    //     shape: () =>
+    //       objectUtil.mergeShapes(this._def.shape(), merging._def.shape()),
+    //     typeName: ZodFirstPartyTypeKind.ZodObject,
+    //   }) as any;
+    //   return merged;
+    // }
     catchall(index) {
       return new _ZodObject({
         ...this._def,
@@ -27637,7 +27637,7 @@
   };
   var NEVER = INVALID;
 
-
+  // src/state/schemas.ts
   var HotspotSchema = external_exports.object({
     path: external_exports.string(),
     score: external_exports.number(),
@@ -27689,19 +27689,19 @@
       "scope.files": external_exports.array(external_exports.string()).optional(),
       "working.symbols": external_exports.array(external_exports.any()).optional()
     }).passthrough(),
-
     findings: external_exports.object({
       hotspots: external_exports.array(HotspotSchema).optional(),
       incompleteness: external_exports.object({
         missing: external_exports.number(),
         zombies: external_exports.number(),
-        divergent: external_exports.number()
-      }).optional(),
+        divergent: external_exports.number(),
+        missing_edges: external_exports.number().optional(),
+        zombie_edges: external_exports.number().optional()
+      }).passthrough().optional(),
       patternDrift: external_exports.object({
         mixedTargets: external_exports.number(),
         oldNamespaces: external_exports.number(),
         conventionDrift: external_exports.any().optional(),
-
         mixedConventionFiles: external_exports.number().optional()
       }).optional(),
       legacyAudit: external_exports.object({
@@ -27742,7 +27742,6 @@
   var FileDTOSchema = external_exports.object({
     path: external_exports.string(),
     status: external_exports.string()
-
   });
   var SymbolDTOSchema = external_exports.object({
     id: external_exports.string(),
@@ -27779,7 +27778,7 @@
     exclusions: external_exports.array(external_exports.string())
   });
   var ContextFrameSchema = external_exports.object({
-    level: external_exports.enum(["bundle", "blast_radius", "file", "symbol"]),
+    level: external_exports.enum(["bundle", "blast_radius", "file", "symbol", "folder"]),
     id: external_exports.string(),
     name: external_exports.string(),
     description: external_exports.string().optional(),
@@ -27807,7 +27806,7 @@
     external_exports.object({ type: external_exports.literal("resetAll") }),
     external_exports.object({
       type: external_exports.literal("generateReport"),
-      mode: external_exports.enum(["selection", "lastN", "staged", "unstaged"]),
+      mode: external_exports.enum(["selection", "lastN", "staged", "unstaged", "changes"]),
       lastN: external_exports.number().optional(),
       force: external_exports.boolean().optional()
     }),
@@ -27835,7 +27834,6 @@
     external_exports.object({ type: external_exports.literal("bundleCancel") }),
     external_exports.object({ type: external_exports.literal("setSymbolFilterText"), text: external_exports.string() }),
     external_exports.object({ type: external_exports.literal("setSymbolKindFilter"), kind: external_exports.string() }),
-
     external_exports.object({
       type: external_exports.literal("setSymbolChangeFilter"),
       change: external_exports.enum(["all", "added", "modified", "removed"])
@@ -27871,12 +27869,11 @@
     external_exports.object({ type: external_exports.literal("deleteBundle"), id: external_exports.string() }),
     external_exports.object({ type: external_exports.literal("switchBundle"), id: external_exports.string() }),
     external_exports.object({ type: external_exports.literal("updateBundleConfig"), config: BundleConfigSchema.partial() }),
-
     external_exports.object({ type: external_exports.literal("ready") }),
     external_exports.object({ type: external_exports.literal("clearError") }),
     external_exports.object({ type: external_exports.literal("navigateToFrame"), frame: ContextFrameSchema }),
     external_exports.object({ type: external_exports.literal("navigateBack") }),
-    external_exports.object({ type: external_exports.literal("updateTimeFilter"), value: external_exports.number() })
+    external_exports.object({ type: external_exports.literal("updateCommitIndex"), value: external_exports.number() })
   ]);
   var CockpitStateSchema = external_exports.object({
     repoName: external_exports.string().nullable(),
@@ -27921,10 +27918,8 @@
     symbolFilterText: external_exports.string(),
     symbolKindFilter: external_exports.string(),
     symbolChangeFilter: external_exports.string(),
-
     activeSymbolId: external_exports.string().nullable(),
     activeSymbolHistory: external_exports.array(external_exports.any()),
-
     reports: external_exports.array(ReportDTOSchema),
     reportsFilterText: external_exports.string(),
     reportsBranchFilter: external_exports.string(),
@@ -28005,14 +28000,67 @@
     FRAME_DATA_UPDATED: external_exports.object({
       frameId: external_exports.string(),
       data: external_exports.union([BundleViewSchema, external_exports.any()])
-
     })
   };
 
+  // src/webview/cockpit/components/ErrorBoundary.tsx
+  var React = __toESM(require_react());
+  var ErrorBoundary = class extends React.Component {
+    constructor(props) {
+      super(props);
+      this.handleReset = () => {
+        this.setState({ hasError: false, error: null, errorInfo: null });
+      };
+      this.state = { hasError: false, error: null, errorInfo: null };
+    }
+    static getDerivedStateFromError(error) {
+      return { hasError: true };
+    }
+    componentDidCatch(error, errorInfo) {
+      console.error("[ErrorBoundary] Caught error:", error, errorInfo);
+      this.setState({ error, errorInfo });
+    }
+    render() {
+      if (this.state.hasError) {
+        return /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              padding: "20px",
+              backgroundColor: "var(--vscode-editorError-background)",
+              color: "var(--vscode-editorError-foreground)",
+              borderRadius: "4px",
+              margin: "10px"
+            }
+          },
+          /* @__PURE__ */ React.createElement("h2", null, "Something went wrong"),
+          /* @__PURE__ */ React.createElement("details", { style: { whiteSpace: "pre-wrap", marginTop: "10px" } }, /* @__PURE__ */ React.createElement("summary", { style: { cursor: "pointer", marginBottom: "10px" } }, "Error Details"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", fontFamily: "monospace" } }, /* @__PURE__ */ React.createElement("strong", null, "Error:"), " ", this.state.error?.toString(), /* @__PURE__ */ React.createElement("br", null), /* @__PURE__ */ React.createElement("br", null), /* @__PURE__ */ React.createElement("strong", null, "Component Stack:"), /* @__PURE__ */ React.createElement("br", null), this.state.errorInfo?.componentStack)),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: this.handleReset,
+              style: {
+                marginTop: "10px",
+                padding: "5px 10px",
+                backgroundColor: "var(--vscode-button-background)",
+                color: "var(--vscode-button-foreground)",
+                border: "none",
+                borderRadius: "2px",
+                cursor: "pointer"
+              }
+            },
+            "Try Again"
+          )
+        );
+      }
+      return this.props.children;
+    }
+  };
 
-  var React26 = __toESM(require_react());
+  // src/webview/cockpit/components/SuperWebview.tsx
+  var React27 = __toESM(require_react());
 
-
+  // src/utils/logger.ts
   var vscode;
   try {
     vscode = __require("vscode");
@@ -28051,7 +28099,7 @@
     console.warn(`[WARN] ${message}`);
   }
 
-
+  // src/utils/messageTracer.ts
   var MessageTracer = class {
     constructor() {
       this.traces = [];
@@ -28114,7 +28162,6 @@
         logWarn(`\u23F1\uFE0F  SLOW RESPONSE: ${type} took ${responseTime}ms`);
       }
     }
-
     findSequence(startType, endType) {
       const startIdx = this.traces.findIndex((t) => t.type === startType);
       if (startIdx === -1) return [];
@@ -28122,7 +28169,6 @@
       if (endIdx === -1) return [];
       return this.traces.slice(startIdx, endIdx + 1);
     }
-
     getPendingRequests() {
       const now = Date.now();
       return Array.from(this.pendingRequests.entries()).map(([key, timestamp]) => ({
@@ -28143,7 +28189,6 @@
       }
       return payload;
     }
-
     cleanup(olderThanMs = 3e5) {
       const cutoff = Date.now() - olderThanMs;
       const before = this.traces.length;
@@ -28162,7 +28207,7 @@
     }
   };
 
-
+  // src/webview/cockpit/utils/messageUtils.ts
   var webviewTracer = null;
   function getMessageTracer() {
     if (!webviewTracer) {
@@ -28176,8 +28221,8 @@
     vscode3.postMessage(parsed);
   }
 
-
-  var React = __toESM(require_react());
+  // src/webview/cockpit/components/Assistant.tsx
+  var React2 = __toESM(require_react());
   var AssistantContainer = {
     height: "200px",
     borderTop: "1px solid var(--vscode-panel-border)",
@@ -28224,28 +28269,28 @@
     display: "inline-block"
   };
   var Assistant = ({ frame, messages, onSend }) => {
-    const [input, setInput] = React.useState("");
+    const [input, setInput] = React2.useState("");
     const send = (text) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       onSend(trimmed);
       setInput("");
     };
-    return /* @__PURE__ */ React.createElement("div", { style: AssistantContainer }, /* @__PURE__ */ React.createElement("div", { style: HeaderStyle }, /* @__PURE__ */ React.createElement("span", null, "Assistant (Context: ", frame.name, ")"), /* @__PURE__ */ React.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "On-demand")), /* @__PURE__ */ React.createElement("div", { style: ChatAreaStyle }, messages.map((m, idx) => /* @__PURE__ */ React.createElement("div", { key: idx, style: { marginBottom: "10px" } }, /* @__PURE__ */ React.createElement("span", { style: { fontWeight: "bold" } }, m.role === "user" ? "You:" : "AI:", " "), /* @__PURE__ */ React.createElement("span", null, m.content))), !messages.length && /* @__PURE__ */ React.createElement("div", { style: { opacity: 0.7, fontSize: "0.9em" } }, "I can explain this ", frame.level, ", summarize drift/risks, or review staged/unstaged changes in scope. Ask me something."), /* @__PURE__ */ React.createElement("div", { style: { marginTop: "15px" } }, /* @__PURE__ */ React.createElement("div", { style: SuggestionChipStyle, onClick: () => send(`Explain this ${frame.level}`) }, "Explain this ", frame.level), frame.level === "file" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Find hotspots in this file") }, "Find Hotspots"), /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React2.createElement("div", { style: AssistantContainer }, /* @__PURE__ */ React2.createElement("div", { style: HeaderStyle }, /* @__PURE__ */ React2.createElement("span", null, "Assistant (Context: ", frame.name, ")"), /* @__PURE__ */ React2.createElement("span", { style: { fontSize: "0.8em", opacity: 0.7 } }, "On-demand")), /* @__PURE__ */ React2.createElement("div", { style: ChatAreaStyle }, messages.map((m, idx) => /* @__PURE__ */ React2.createElement("div", { key: idx, style: { marginBottom: "10px" } }, /* @__PURE__ */ React2.createElement("span", { style: { fontWeight: "bold" } }, m.role === "user" ? "You:" : "AI:", " "), /* @__PURE__ */ React2.createElement("span", null, m.content))), !messages.length && /* @__PURE__ */ React2.createElement("div", { style: { opacity: 0.7, fontSize: "0.9em" } }, "I can explain this ", frame.level, ", summarize drift/risks, or review staged/unstaged changes in scope. Ask me something."), /* @__PURE__ */ React2.createElement("div", { style: { marginTop: "15px" } }, /* @__PURE__ */ React2.createElement("div", { style: SuggestionChipStyle, onClick: () => send(`Explain this ${frame.level}`) }, "Explain this ", frame.level), frame.level === "file" && /* @__PURE__ */ React2.createElement(React2.Fragment, null, /* @__PURE__ */ React2.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Find hotspots in this file") }, "Find Hotspots"), /* @__PURE__ */ React2.createElement(
       "div",
       {
         style: SuggestionChipStyle,
         onClick: () => send("Generate unit tests for this file")
       },
       "Generate Unit Tests"
-    )), frame.data?.timeline?.some((t) => t.virtual) && /* @__PURE__ */ React.createElement(
+    )), frame.data?.timeline?.some((t) => t.virtual) && /* @__PURE__ */ React2.createElement(
       "div",
       {
         style: SuggestionChipStyle,
         onClick: () => send("Review staged changes for this scope")
       },
       "Review Staged Changes"
-    ), /* @__PURE__ */ React.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Identify risks here") }, "Identify Risks"))), /* @__PURE__ */ React.createElement("div", { style: InputAreaStyle }, /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React2.createElement("div", { style: SuggestionChipStyle, onClick: () => send("Identify risks here") }, "Identify Risks"))), /* @__PURE__ */ React2.createElement("div", { style: InputAreaStyle }, /* @__PURE__ */ React2.createElement(
       "input",
       {
         type: "text",
@@ -28257,17 +28302,16 @@
           if (e.key === "Enter") send(input);
         }
       }
-    ), /* @__PURE__ */ React.createElement("button", { style: { padding: "8px 15px", cursor: "pointer" }, onClick: () => send(input) }, "Send")));
+    ), /* @__PURE__ */ React2.createElement("button", { style: { padding: "8px 15px", cursor: "pointer" }, onClick: () => send(input) }, "Send")));
   };
 
-
+  // src/webview/cockpit/components/Sidebar.tsx
   var React4 = __toESM(require_react());
 
-
-  var React2 = __toESM(require_react());
+  // src/webview/cockpit/components/RichTreeItem.tsx
+  var React3 = __toESM(require_react());
   var NodeStyle = (isActive) => ({
     padding: "4px 8px 4px 0",
-
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
@@ -28281,14 +28325,24 @@
   });
   var SentinelStrip = ({ lastModified }) => {
     if (!lastModified) {
-      return /* @__PURE__ */ React2.createElement("div", { style: { width: "4px", height: "100%", marginRight: "6px", borderRight: "1px solid var(--vscode-tree-indentGuidesStroke)" } });
+      return /* @__PURE__ */ React3.createElement(
+        "div",
+        {
+          style: {
+            width: "4px",
+            height: "100%",
+            marginRight: "6px",
+            borderRight: "1px solid var(--vscode-tree-indentGuidesStroke)"
+          }
+        }
+      );
     }
     const now = Date.now();
     const diff = now - lastModified;
     const isToday = diff < 24 * 60 * 60 * 1e3;
     const isWeek = diff < 7 * 24 * 60 * 60 * 1e3;
     if (isToday) {
-      return /* @__PURE__ */ React2.createElement(
+      return /* @__PURE__ */ React3.createElement(
         "div",
         {
           title: "Edited Today",
@@ -28296,14 +28350,13 @@
             width: "4px",
             height: "100%",
             backgroundColor: "var(--vscode-charts-green)",
-
             marginRight: "6px"
           }
         }
       );
     }
     if (isWeek) {
-      return /* @__PURE__ */ React2.createElement(
+      return /* @__PURE__ */ React3.createElement(
         "div",
         {
           title: "Edited this week",
@@ -28311,14 +28364,13 @@
             width: "4px",
             height: "100%",
             borderLeft: "1px solid var(--vscode-charts-blue)",
-
             borderRight: "1px solid var(--vscode-charts-blue)",
             marginRight: "6px"
           }
         }
       );
     }
-    return /* @__PURE__ */ React2.createElement(
+    return /* @__PURE__ */ React3.createElement(
       "div",
       {
         title: "Stable (Older than 1 week)",
@@ -28336,7 +28388,7 @@
     let color = "var(--vscode-charts-green)";
     if (score > 70) color = "var(--vscode-charts-red)";
     else if (score > 40) color = "var(--vscode-charts-yellow)";
-    return /* @__PURE__ */ React2.createElement(
+    return /* @__PURE__ */ React3.createElement(
       "div",
       {
         title: `Risk Score: ${score}`,
@@ -28354,11 +28406,18 @@
   };
   var DriftIcon = ({ count }) => {
     if (count <= 0) return null;
-    return /* @__PURE__ */ React2.createElement("span", { title: `${count} Drift Warnings`, style: { fontSize: "12px", marginLeft: "6px", cursor: "help" } }, "\u{1F47B}");
+    return /* @__PURE__ */ React3.createElement(
+      "span",
+      {
+        title: `${count} Drift Warnings`,
+        style: { fontSize: "12px", marginLeft: "6px", cursor: "help" }
+      },
+      "\u{1F47B}"
+    );
   };
   var TrafficBadge = ({ count }) => {
     if (count <= 5) return null;
-    return /* @__PURE__ */ React2.createElement(
+    return /* @__PURE__ */ React3.createElement(
       "span",
       {
         title: `${count} Incoming References`,
@@ -28379,8 +28438,14 @@
       count
     );
   };
-  var RichTreeItem = ({ node, depth, activeId, allMetrics, onSelect }) => {
-    const [expanded, setExpanded] = React2.useState(true);
+  var RichTreeItem = ({
+    node,
+    depth,
+    activeId,
+    allMetrics,
+    onSelect
+  }) => {
+    const [expanded, setExpanded] = React3.useState(true);
     const hasChildren = node.children && node.children.length > 0;
     const isActive = node.id === activeId;
     const metrics = allMetrics ? allMetrics[node.id] : void 0;
@@ -28394,15 +28459,15 @@ Risk: ${metrics.riskScore}
 Churn: ${metrics.churnScore}
 Drift: ${metrics.driftCount}
 Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.name;
-    return /* @__PURE__ */ React2.createElement("div", null, /* @__PURE__ */ React2.createElement(
+    return /* @__PURE__ */ React3.createElement("div", null, /* @__PURE__ */ React3.createElement(
       "div",
       {
         style: { ...NodeStyle(isActive), paddingLeft: 0 },
         onClick: handleSelect,
         title: tooltip
       },
-      /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", height: "22px", alignItems: "center" } }, /* @__PURE__ */ React2.createElement("div", { style: { width: `${depth * 12}px`, height: "100%" } }), /* @__PURE__ */ React2.createElement(SentinelStrip, { lastModified: metrics?.lastModified })),
-      /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React3.createElement("div", { style: { display: "flex", height: "22px", alignItems: "center" } }, /* @__PURE__ */ React3.createElement("div", { style: { width: `${depth * 12}px`, height: "100%" } }), /* @__PURE__ */ React3.createElement(SentinelStrip, { lastModified: metrics?.lastModified })),
+      /* @__PURE__ */ React3.createElement(
         "div",
         {
           style: {
@@ -28417,7 +28482,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           }
         }
       ),
-      /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React3.createElement(
         "span",
         {
           style: {
@@ -28432,8 +28497,14 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         },
         node.name
       ),
-      /* @__PURE__ */ React2.createElement("div", { style: { display: "flex", alignItems: "center", marginLeft: "auto", paddingRight: "8px" } }, metrics && /* @__PURE__ */ React2.createElement(React2.Fragment, null, /* @__PURE__ */ React2.createElement(TrafficBadge, { count: metrics.incomingRefs }), /* @__PURE__ */ React2.createElement(DriftIcon, { count: metrics.driftCount }), /* @__PURE__ */ React2.createElement(RiskIndicator, { score: metrics.riskScore })))
-    ), hasChildren && expanded && /* @__PURE__ */ React2.createElement("div", null, node.children.map((child) => /* @__PURE__ */ React2.createElement(
+      /* @__PURE__ */ React3.createElement(
+        "div",
+        {
+          style: { display: "flex", alignItems: "center", marginLeft: "auto", paddingRight: "8px" }
+        },
+        metrics && /* @__PURE__ */ React3.createElement(React3.Fragment, null, /* @__PURE__ */ React3.createElement(TrafficBadge, { count: metrics.incomingRefs }), /* @__PURE__ */ React3.createElement(DriftIcon, { count: metrics.driftCount }), /* @__PURE__ */ React3.createElement(RiskIndicator, { score: metrics.riskScore }))
+      )
+    ), hasChildren && expanded && /* @__PURE__ */ React3.createElement("div", null, node.children.map((child) => /* @__PURE__ */ React3.createElement(
       RichTreeItem,
       {
         key: child.id,
@@ -28446,103 +28517,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
     ))));
   };
 
-
-  var React3 = __toESM(require_react());
-  var ContainerStyle = {
-    padding: "16px",
-    borderTop: "1px solid var(--vscode-panel-border)",
-    backgroundColor: "var(--vscode-sideBar-background)",
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px"
-  };
-  var LabelStyle = {
-    fontSize: "11px",
-    fontWeight: 600,
-    color: "var(--vscode-sideBarTitle-foreground)",
-    textTransform: "uppercase",
-    letterSpacing: "0.5px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center"
-  };
-  var SliderStyle = {
-    width: "100%",
-    cursor: "pointer",
-    accentColor: "var(--vscode-progressBar-background)",
-    height: "4px"
-  };
-  var TimeSlider = ({ value, onChange }) => {
-    const now = Date.now();
-    const oneWeek = 7 * 24 * 60 * 60 * 1e3;
-    const oneMonth = 30 * 24 * 60 * 60 * 1e3;
-    const threeMonths = 3 * 30 * 24 * 60 * 60 * 1e3;
-    const oneYear = 365 * 24 * 60 * 60 * 1e3;
-    const timestampToSlider = (ts) => {
-      const diff = now - ts;
-      if (diff <= 0) return 100;
-      if (diff <= oneWeek) return 75 + 25 * (1 - diff / oneWeek);
-      if (diff <= oneMonth) return 50 + 25 * (1 - (diff - oneWeek) / (oneMonth - oneWeek));
-      if (diff <= threeMonths) return 25 + 25 * (1 - (diff - oneMonth) / (threeMonths - oneMonth));
-      if (diff <= oneYear) return 25 * (1 - (diff - threeMonths) / (oneYear - threeMonths));
-      return 0;
-    };
-    const sliderToTimestamp = (val) => {
-      if (val >= 100) return now;
-      if (val >= 75) return now - oneWeek * (1 - (val - 75) / 25);
-      if (val >= 50) return now - (oneWeek + (oneMonth - oneWeek) * (1 - (val - 50) / 25));
-      if (val >= 25) return now - (oneMonth + (threeMonths - oneMonth) * (1 - (val - 25) / 25));
-      return now - (threeMonths + (oneYear - threeMonths) * (1 - val / 25));
-    };
-    const handleChange = (e) => {
-      const val = parseInt(e.target.value, 10);
-      onChange(sliderToTimestamp(val));
-    };
-    const getLabel = (ts) => {
-      const diff = now - ts;
-      if (diff < 60 * 1e3) return "Now";
-      if (diff < oneWeek) return "Last Week";
-      if (diff < oneMonth) return "Last Month";
-      if (diff < threeMonths) return "Last 3 Months";
-      return "Last Year";
-    };
-    const reset = () => onChange(now);
-    return /* @__PURE__ */ React3.createElement("div", { style: ContainerStyle }, /* @__PURE__ */ React3.createElement("div", { style: LabelStyle }, /* @__PURE__ */ React3.createElement("span", null, "Time Travel"), /* @__PURE__ */ React3.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React3.createElement("span", { style: { color: "var(--vscode-descriptionForeground)", fontWeight: "normal" } }, getLabel(value)), value < now - 6e4 && /* @__PURE__ */ React3.createElement(
-      "span",
-      {
-        onClick: reset,
-        style: {
-          cursor: "pointer",
-          fontSize: "14px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "16px",
-          height: "16px",
-          borderRadius: "50%",
-          backgroundColor: "var(--vscode-badge-background)",
-          color: "var(--vscode-badge-foreground)"
-        },
-        title: "Reset to Now"
-      },
-      "\u21BA"
-    ))), /* @__PURE__ */ React3.createElement(
-      "input",
-      {
-        type: "range",
-        min: "0",
-        max: "100",
-        step: "1",
-        value: timestampToSlider(value),
-        onChange: handleChange,
-        style: SliderStyle,
-        title: new Date(value).toLocaleDateString(),
-        list: "time-markers"
-      }
-    ), /* @__PURE__ */ React3.createElement("datalist", { id: "time-markers" }, /* @__PURE__ */ React3.createElement("option", { value: "0", label: "1y" }), /* @__PURE__ */ React3.createElement("option", { value: "25", label: "3m" }), /* @__PURE__ */ React3.createElement("option", { value: "50", label: "1m" }), /* @__PURE__ */ React3.createElement("option", { value: "75", label: "1w" }), /* @__PURE__ */ React3.createElement("option", { value: "100", label: "Now" })));
-  };
-
-
+  // src/webview/cockpit/components/Sidebar.tsx
   var SidebarContainer = {
     minWidth: "200px",
     width: "100%",
@@ -28579,9 +28554,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
     onSelect,
     repoName,
     branchName,
-    allMetrics,
-    currentTimeFilter,
-    onTimeFilterChange
+    allMetrics
   }) => {
     return /* @__PURE__ */ React4.createElement("div", { style: SidebarContainer }, /* @__PURE__ */ React4.createElement("div", { style: HeaderStyle2 }, /* @__PURE__ */ React4.createElement("div", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, repoName || "EXPLORER"), branchName && /* @__PURE__ */ React4.createElement(
       "div",
@@ -28608,7 +28581,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         onSelect,
         allMetrics
       }
-    ))), currentTimeFilter !== void 0 && onTimeFilterChange && /* @__PURE__ */ React4.createElement(TimeSlider, { value: currentTimeFilter, onChange: onTimeFilterChange }), /* @__PURE__ */ React4.createElement("style", null, `
+    ))), /* @__PURE__ */ React4.createElement("style", null, `
           @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.4; }
@@ -28617,195 +28590,259 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         `));
   };
 
+  // src/webview/cockpit/components/Stage.tsx
+  var React26 = __toESM(require_react());
 
+  // src/webview/cockpit/components/CodeMicroscope.tsx
   var React25 = __toESM(require_react());
 
-
-  var React24 = __toESM(require_react());
-
-
-  var React11 = __toESM(require_react());
-
-
+  // src/webview/cockpit/components/stages/BlastRadiusStage.tsx
   var React5 = __toESM(require_react());
-  var ConfigPanel = ({ config, depth, isAnalyzing, onConfigChange, onDepthChange, onApply, onClose }) => {
+  var BlastRadiusStage = ({
+    frame,
+    onZoomIn
+  }) => {
+    const [showIncoming, setShowIncoming] = React5.useState(true);
+    const [showOutgoing, setShowOutgoing] = React5.useState(true);
+    const incoming = frame.data?.blastRadius?.incoming || [];
+    const outgoing = frame.data?.blastRadius?.outgoing || [];
+    const center = frame.name;
+    const nodes = [
+      ...incoming.map((edge) => ({ id: edge.from.split(":")[0], direction: "in" })),
+      ...outgoing.map((edge) => ({ id: edge.to.split(":")[0], direction: "out" }))
+    ];
+    const uniqueNodes = Array.from(new Map(nodes.map((n) => [n.id, n])).values());
+    const edges = [
+      ...incoming.map((e) => ({
+        from: e.from.split(":")[0],
+        to: center,
+        direction: "in",
+        type: e.type
+      })),
+      ...outgoing.map((e) => ({
+        from: center,
+        to: e.to.split(":")[0],
+        direction: "out",
+        type: e.type
+      }))
+    ];
     return /* @__PURE__ */ React5.createElement(
       "div",
       {
         style: {
-          marginBottom: "15px",
+          width: "100%",
+          height: "100%",
           padding: "10px",
-          backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-          borderRadius: "4px",
-          border: "1px solid var(--vscode-panel-border)"
+          overflow: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px"
         }
       },
-      /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
-        "label",
+      /* @__PURE__ */ React5.createElement("h3", { style: { fontSize: "1.2em", marginBottom: "5px" } }, "Dependencies"),
+      /* @__PURE__ */ React5.createElement(
+        "p",
         {
           style: {
-            display: "block",
-            marginBottom: "5px",
-            fontWeight: "bold",
-            fontSize: "0.9em"
+            fontSize: "0.85em",
+            color: "var(--vscode-descriptionForeground)",
+            marginBottom: "10px"
           }
         },
-        "Mode"
-      ), /* @__PURE__ */ React5.createElement(
-        "select",
-        {
-          value: config.mode,
-          onChange: (e) => onConfigChange({ mode: e.target.value }),
-          style: {
-            width: "100%",
-            padding: "4px",
-            background: "var(--vscode-dropdown-background)",
-            color: "var(--vscode-dropdown-foreground)",
-            border: "1px solid var(--vscode-dropdown-border)"
-          }
-        },
-        /* @__PURE__ */ React5.createElement("option", { value: "repo" }, "Full Repo"),
-        /* @__PURE__ */ React5.createElement("option", { value: "module" }, "Current Module"),
-        /* @__PURE__ */ React5.createElement("option", { value: "changes" }, "My Changes (Staged + Unstaged)"),
-        /* @__PURE__ */ React5.createElement("option", { value: "custom" }, "Custom Roots")
-      )),
-      config.mode === "custom" && /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
-        "label",
-        {
-          style: {
-            display: "block",
-            marginBottom: "5px",
-            fontWeight: "bold",
-            fontSize: "0.9em"
-          }
-        },
-        "Roots (comma separated)"
-      ), /* @__PURE__ */ React5.createElement(
+        frame.name
+      ),
+      /* @__PURE__ */ React5.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } }, /* @__PURE__ */ React5.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React5.createElement(
         "input",
         {
-          type: "text",
-          value: config.roots.join(", "),
-          onChange: (e) => onConfigChange({
-            roots: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-          }),
-          placeholder: "src/auth, utils.ts",
-          style: {
-            width: "100%",
-            padding: "4px",
-            background: "var(--vscode-input-background)",
-            color: "var(--vscode-input-foreground)",
-            border: "1px solid var(--vscode-input-border)"
-          }
+          type: "checkbox",
+          checked: showIncoming,
+          onChange: (e) => setShowIncoming(e.target.checked)
         }
-      )),
-      /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
-        "label",
+      ), " ", "Incoming"), /* @__PURE__ */ React5.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React5.createElement(
+        "input",
+        {
+          type: "checkbox",
+          checked: showOutgoing,
+          onChange: (e) => setShowOutgoing(e.target.checked)
+        }
+      ), " ", "Outgoing")),
+      /* @__PURE__ */ React5.createElement(
+        "div",
         {
           style: {
-            display: "flex",
-            alignItems: "center",
-            fontSize: "0.9em",
-            cursor: "pointer"
+            border: "1px solid var(--vscode-panel-border)",
+            borderRadius: "4px",
+            padding: "8px",
+            minHeight: 180
           }
         },
-        /* @__PURE__ */ React5.createElement(
-          "input",
+        /* @__PURE__ */ React5.createElement("div", { style: { position: "relative", width: "100%", height: 200 } }, /* @__PURE__ */ React5.createElement(
+          "div",
           {
-            type: "checkbox",
-            checked: config.includeConnected,
-            onChange: (e) => onConfigChange({ includeConnected: e.target.checked }),
-            style: { marginRight: "8px" }
-          }
-        ),
-        "Include Connected Set (Callers/Callees)"
-      )),
-      /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
-        "label",
-        {
-          style: {
-            display: "block",
-            marginBottom: "5px",
-            fontWeight: "bold",
-            fontSize: "0.9em"
-          }
-        },
-        "Exclusions (glob)"
-      ), /* @__PURE__ */ React5.createElement(
-        "input",
-        {
-          type: "text",
-          value: config.exclusions.join(", "),
-          onChange: (e) => onConfigChange({
-            exclusions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-          }),
-          placeholder: "**/*.test.ts",
-          style: {
-            width: "100%",
-            padding: "4px",
-            background: "var(--vscode-input-background)",
-            color: "var(--vscode-input-foreground)",
-            border: "1px solid var(--vscode-input-border)"
-          }
-        }
-      )),
-      /* @__PURE__ */ React5.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React5.createElement(
-        "label",
-        {
-          style: {
-            display: "block",
-            marginBottom: "5px",
-            fontWeight: "bold",
-            fontSize: "0.9em"
-          }
-        },
-        "Analysis Depth (Commits)"
-      ), /* @__PURE__ */ React5.createElement(
-        "input",
-        {
-          type: "number",
-          min: "1",
-          max: "100",
-          value: depth,
-          onChange: (e) => {
-            const val = parseInt(e.target.value);
-            if (!isNaN(val)) {
-              onDepthChange(val);
+            style: {
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              padding: "6px 10px",
+              borderRadius: "8px",
+              background: "var(--vscode-editor-background)",
+              border: "1px solid var(--vscode-panel-border)",
+              fontWeight: "bold",
+              fontSize: "0.9em"
             }
           },
-          style: {
-            width: "100%",
-            padding: "4px",
-            background: "var(--vscode-input-background)",
-            color: "var(--vscode-input-foreground)",
-            border: "1px solid var(--vscode-input-border)"
-          }
-        }
-      )),
-      /* @__PURE__ */ React5.createElement("div", { style: { display: "flex", gap: "10px", marginTop: "10px" } }, /* @__PURE__ */ React5.createElement(
-        "button",
+          center
+        ), uniqueNodes.map((n, idx) => {
+          const angle = idx / uniqueNodes.length * Math.PI * 2;
+          const radius = 65;
+          const x = 50 + radius * Math.cos(angle);
+          const y = 50 + radius * Math.sin(angle);
+          return /* @__PURE__ */ React5.createElement(
+            "div",
+            {
+              key: n.id,
+              onClick: () => onZoomIn({
+                level: "file",
+                id: n.id,
+                name: n.id.split("/").pop(),
+                status: "scanning"
+              }),
+              style: {
+                position: "absolute",
+                top: `${y}%`,
+                left: `${x}%`,
+                transform: "translate(-50%, -50%)",
+                padding: "4px 6px",
+                borderRadius: "6px",
+                background: n.direction === "in" ? "var(--vscode-charts-blue)" : "var(--vscode-charts-orange)",
+                color: "var(--vscode-editor-foreground)",
+                fontSize: "0.75em",
+                cursor: "pointer",
+                whiteSpace: "nowrap"
+              }
+            },
+            n.id.split("/").pop()
+          );
+        }), edges.filter(
+          (e) => e.direction === "in" && showIncoming || e.direction === "out" && showOutgoing
+        ).map((e, idx) => {
+          const fromIdx = uniqueNodes.findIndex((n) => n.id === e.from);
+          const toIdx = uniqueNodes.findIndex((n) => n.id === e.to);
+          if (fromIdx === -1 || toIdx === -1) return null;
+          const angleFrom = fromIdx / uniqueNodes.length * Math.PI * 2;
+          const angleTo = toIdx / uniqueNodes.length * Math.PI * 2;
+          const radius = 65;
+          const x1 = 50 + radius * Math.cos(angleFrom);
+          const y1 = 50 + radius * Math.sin(angleFrom);
+          const x2 = 50 + radius * Math.cos(angleTo);
+          const y2 = 50 + radius * Math.sin(angleTo);
+          return /* @__PURE__ */ React5.createElement(
+            "svg",
+            {
+              key: idx,
+              style: {
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                pointerEvents: "none"
+              }
+            },
+            /* @__PURE__ */ React5.createElement(
+              "line",
+              {
+                x1: `${x1}%`,
+                y1: `${y1}%`,
+                x2: `${x2}%`,
+                y2: `${y2}%`,
+                stroke: e.direction === "in" ? "var(--vscode-charts-blue)" : "var(--vscode-charts-orange)",
+                strokeWidth: 1.5,
+                opacity: 0.6
+              }
+            )
+          );
+        }))
+      ),
+      /* @__PURE__ */ React5.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", flex: 1 } }, /* @__PURE__ */ React5.createElement(
+        "div",
         {
-          onClick: () => {
-            onApply();
-            onClose();
-          },
-          disabled: isAnalyzing,
           style: {
-            flex: 1,
-            padding: "6px",
-            background: isAnalyzing ? "var(--vscode-button-secondaryBackground)" : "var(--vscode-button-background)",
-            color: isAnalyzing ? "var(--vscode-button-secondaryForeground)" : "var(--vscode-button-foreground)",
-            border: "none",
-            borderRadius: "2px",
-            cursor: isAnalyzing ? "not-allowed" : "pointer",
-            opacity: isAnalyzing ? 0.7 : 1
+            border: "1px solid var(--vscode-panel-border)",
+            borderRadius: "4px",
+            padding: "8px",
+            overflow: "auto"
           }
         },
-        isAnalyzing ? "Analyzing..." : "Apply & Analyze"
+        /* @__PURE__ */ React5.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Incoming (", incoming.length, ")"),
+        incoming.length ? /* @__PURE__ */ React5.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, incoming.map((edge, idx) => /* @__PURE__ */ React5.createElement(
+          "li",
+          {
+            key: idx,
+            onClick: () => onZoomIn({
+              level: "file",
+              id: edge.from.split(":")[0],
+              name: edge.from.split(":")[0].split("/").pop(),
+              status: "scanning"
+            }),
+            style: {
+              padding: "6px",
+              borderBottom: "1px solid var(--vscode-panel-border)",
+              cursor: "pointer",
+              fontSize: "0.85em"
+            }
+          },
+          edge.from.split(":")[0],
+          " \u2192 ",
+          edge.to.split(":")[0],
+          " (",
+          edge.type,
+          ")"
+        ))) : /* @__PURE__ */ React5.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
+      ), /* @__PURE__ */ React5.createElement(
+        "div",
+        {
+          style: {
+            border: "1px solid var(--vscode-panel-border)",
+            borderRadius: "4px",
+            padding: "8px",
+            overflow: "auto"
+          }
+        },
+        /* @__PURE__ */ React5.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Outgoing (", outgoing.length, ")"),
+        outgoing.length ? /* @__PURE__ */ React5.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, outgoing.map((edge, idx) => /* @__PURE__ */ React5.createElement(
+          "li",
+          {
+            key: idx,
+            onClick: () => onZoomIn({
+              level: "file",
+              id: edge.to.split(":")[0],
+              name: edge.to.split(":")[0].split("/").pop(),
+              status: "scanning"
+            }),
+            style: {
+              padding: "6px",
+              borderBottom: "1px solid var(--vscode-panel-border)",
+              cursor: "pointer",
+              fontSize: "0.85em"
+            }
+          },
+          edge.from.split(":")[0],
+          " \u2192 ",
+          edge.to.split(":")[0],
+          " (",
+          edge.type,
+          ")"
+        ))) : /* @__PURE__ */ React5.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
       ))
     );
   };
 
+  // src/webview/cockpit/components/stages/BundleStage.tsx
+  var React12 = __toESM(require_react());
 
+  // src/webview/cockpit/components/StatsSection.tsx
   var React6 = __toESM(require_react());
   var StatsSection = ({ state, vscode: vscode3 }) => {
     const selectionCount = state.selectedCommitShas.length + (state.selectedStagedPaths.length > 0 ? 1 : 0) + (state.selectedUnstagedPaths.length > 0 ? 1 : 0);
@@ -28858,12 +28895,40 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       fontWeight: "bold",
       color: "var(--vscode-editor-foreground)"
     };
-    const LabelStyle2 = {
+    const LabelStyle = {
       fontSize: "0.85em",
       color: "var(--vscode-descriptionForeground)",
       marginTop: "2px"
     };
-    return /* @__PURE__ */ React6.createElement("div", { style: { padding: "10px" } }, /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Global Health"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: { ...ValueStyle, color: healthScore > 70 ? "var(--vscode-charts-green)" : healthScore > 40 ? "var(--vscode-charts-yellow)" : "var(--vscode-charts-red)" } }, healthScore.toFixed(0), "%"), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Health Score")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: { ...ValueStyle, color: criticalCount > 0 ? "var(--vscode-charts-red)" : "inherit" } }, criticalCount), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Critical Issues")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: { ...ValueStyle, color: warningCount > 0 ? "var(--vscode-charts-yellow)" : "inherit" } }, warningCount), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Warnings")))), /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Scope Analysis"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.commitCount || state.selectedCommitShas.length), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Commits")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.fileCount || 0), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Files")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.symbolCount || 0), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Symbols"))), state.bundleReportId && /* @__PURE__ */ React6.createElement(
+    return /* @__PURE__ */ React6.createElement("div", { style: { padding: "10px" } }, /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Global Health"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement(
+      "span",
+      {
+        style: {
+          ...ValueStyle,
+          color: healthScore > 70 ? "var(--vscode-charts-green)" : healthScore > 40 ? "var(--vscode-charts-yellow)" : "var(--vscode-charts-red)"
+        }
+      },
+      healthScore.toFixed(0),
+      "%"
+    ), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Health Score")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement(
+      "span",
+      {
+        style: {
+          ...ValueStyle,
+          color: criticalCount > 0 ? "var(--vscode-charts-red)" : "inherit"
+        }
+      },
+      criticalCount
+    ), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Critical Issues")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement(
+      "span",
+      {
+        style: {
+          ...ValueStyle,
+          color: warningCount > 0 ? "var(--vscode-charts-yellow)" : "inherit"
+        }
+      },
+      warningCount
+    ), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Warnings")))), /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Scope Analysis"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.commitCount || state.selectedCommitShas.length), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Commits")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.fileCount || 0), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Files")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.symbolCount || 0), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Symbols"))), state.bundleReportId && /* @__PURE__ */ React6.createElement(
       "button",
       {
         onClick: () => postMessageWithTracing(vscode3, {
@@ -28882,105 +28947,220 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       },
       "Open Full Report"
-    )), /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Pipeline Diagnostics"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, currentStep), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Current Step")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: { ...ValueStyle, color: pipelineErrors.length > 0 ? "var(--vscode-charts-red)" : "inherit" } }, pipelineErrors.length), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle2 }, "Errors"))), topSteps.length > 0 && /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold", marginBottom: "5px" } }, "Top Step Timings"), topSteps.map(([stepId, duration]) => /* @__PURE__ */ React6.createElement("div", { key: stepId, style: { display: "flex", justifyContent: "space-between", fontSize: "0.85em", marginBottom: "4px" } }, /* @__PURE__ */ React6.createElement("span", null, stepId), /* @__PURE__ */ React6.createElement("span", { style: { fontFamily: "monospace" } }, Math.round(duration), "ms"))))));
+    )), /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Pipeline Diagnostics"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, currentStep), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Current Step")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement(
+      "span",
+      {
+        style: {
+          ...ValueStyle,
+          color: pipelineErrors.length > 0 ? "var(--vscode-charts-red)" : "inherit"
+        }
+      },
+      pipelineErrors.length
+    ), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Errors"))), topSteps.length > 0 && /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold", marginBottom: "5px" } }, "Top Step Timings"), topSteps.map(([stepId, duration]) => /* @__PURE__ */ React6.createElement(
+      "div",
+      {
+        key: stepId,
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: "0.85em",
+          marginBottom: "4px"
+        }
+      },
+      /* @__PURE__ */ React6.createElement("span", null, stepId),
+      /* @__PURE__ */ React6.createElement("span", { style: { fontFamily: "monospace" } }, Math.round(duration), "ms")
+    )))));
   };
 
-
-  var React8 = __toESM(require_react());
-
-
+  // src/webview/cockpit/components/stages/templates/ConfigPanel.tsx
   var React7 = __toESM(require_react());
-  var TreemapNode = ({ node, depth = 0 }) => {
-    const children = node.children || [];
-    const hasChildren = children.length > 0;
-    const baseColor = node.score > 10 ? "var(--vscode-charts-red)" : node.score > 5 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)";
+  var ConfigPanel = ({ config, depth, isAnalyzing, onConfigChange, onDepthChange, onApply, onClose }) => {
     return /* @__PURE__ */ React7.createElement(
       "div",
       {
         style: {
-          flex: node.weight || 1,
-          minWidth: 80,
-          minHeight: 60,
-          border: "1px solid var(--vscode-panel-border)",
-          borderRadius: 4,
-          padding: 6,
-          margin: 4,
-          background: hasChildren ? "var(--vscode-editor-background)" : "var(--vscode-editor-inactiveSelectionBackground)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 4
-        },
-        title: `${node.name}
-Churn: ${node.score.toFixed(1)}
-+${node.added || 0} / -${node.removed || 0}`
+          marginBottom: "15px",
+          padding: "10px",
+          backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+          borderRadius: "4px",
+          border: "1px solid var(--vscode-panel-border)"
+        }
       },
-      /* @__PURE__ */ React7.createElement(
-        "div",
+      /* @__PURE__ */ React7.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React7.createElement(
+        "label",
+        {
+          style: {
+            display: "block",
+            marginBottom: "5px",
+            fontWeight: "bold",
+            fontSize: "0.9em"
+          }
+        },
+        "Mode"
+      ), /* @__PURE__ */ React7.createElement(
+        "select",
+        {
+          value: config.mode,
+          onChange: (e) => onConfigChange({ mode: e.target.value }),
+          style: {
+            width: "100%",
+            padding: "4px",
+            background: "var(--vscode-dropdown-background)",
+            color: "var(--vscode-dropdown-foreground)",
+            border: "1px solid var(--vscode-dropdown-border)"
+          }
+        },
+        /* @__PURE__ */ React7.createElement("option", { value: "repo" }, "Full Repo"),
+        /* @__PURE__ */ React7.createElement("option", { value: "module" }, "Current Module"),
+        /* @__PURE__ */ React7.createElement("option", { value: "changes" }, "My Changes (Staged + Unstaged)"),
+        /* @__PURE__ */ React7.createElement("option", { value: "custom" }, "Custom Roots")
+      )),
+      config.mode === "custom" && /* @__PURE__ */ React7.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React7.createElement(
+        "label",
+        {
+          style: {
+            display: "block",
+            marginBottom: "5px",
+            fontWeight: "bold",
+            fontSize: "0.9em"
+          }
+        },
+        "Roots (comma separated)"
+      ), /* @__PURE__ */ React7.createElement(
+        "input",
+        {
+          type: "text",
+          value: config.roots.join(", "),
+          onChange: (e) => onConfigChange({
+            roots: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+          }),
+          placeholder: "src/auth, utils.ts",
+          style: {
+            width: "100%",
+            padding: "4px",
+            background: "var(--vscode-input-background)",
+            color: "var(--vscode-input-foreground)",
+            border: "1px solid var(--vscode-input-border)"
+          }
+        }
+      )),
+      /* @__PURE__ */ React7.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React7.createElement(
+        "label",
         {
           style: {
             display: "flex",
-            justifyContent: "space-between",
-            fontSize: "0.8em",
-            fontWeight: "bold",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap"
-          }
-        },
-        /* @__PURE__ */ React7.createElement("span", null, node.name),
-        /* @__PURE__ */ React7.createElement("span", { style: { color: baseColor } }, node.score)
-      ),
-      /* @__PURE__ */ React7.createElement(
-        "div",
-        {
-          style: {
-            height: 4,
-            borderRadius: 2,
-            background: "var(--vscode-progressBar-background)",
-            overflow: "hidden"
+            alignItems: "center",
+            fontSize: "0.9em",
+            cursor: "pointer"
           }
         },
         /* @__PURE__ */ React7.createElement(
-          "div",
+          "input",
           {
-            style: {
-              height: "100%",
-              width: `${Math.min((node.score || 0) * 2, 100)}%`,
-              background: baseColor
-            }
+            type: "checkbox",
+            checked: config.includeConnected,
+            onChange: (e) => onConfigChange({ includeConnected: e.target.checked }),
+            style: { marginRight: "8px" }
           }
-        )
-      ),
-      /* @__PURE__ */ React7.createElement("div", { style: { fontSize: "0.7em", opacity: 0.7 } }, "+", node.added || 0, " / -", node.removed || 0),
-      hasChildren && /* @__PURE__ */ React7.createElement("div", { style: { display: "flex", flexWrap: "wrap", flex: 1, overflow: "hidden" } }, children.map((child, index) => /* @__PURE__ */ React7.createElement(
-        TreemapNode,
+        ),
+        "Include Connected Set (Callers/Callees)"
+      )),
+      /* @__PURE__ */ React7.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React7.createElement(
+        "label",
         {
-          key: child.id || child.path || `${child.name}-${index}`,
-          node: child,
-          depth: depth + 1
+          style: {
+            display: "block",
+            marginBottom: "5px",
+            fontWeight: "bold",
+            fontSize: "0.9em"
+          }
+        },
+        "Exclusions (glob)"
+      ), /* @__PURE__ */ React7.createElement(
+        "input",
+        {
+          type: "text",
+          value: config.exclusions.join(", "),
+          onChange: (e) => onConfigChange({
+            exclusions: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+          }),
+          placeholder: "**/*.test.ts",
+          style: {
+            width: "100%",
+            padding: "4px",
+            background: "var(--vscode-input-background)",
+            color: "var(--vscode-input-foreground)",
+            border: "1px solid var(--vscode-input-border)"
+          }
         }
-      )))
+      )),
+      /* @__PURE__ */ React7.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React7.createElement(
+        "label",
+        {
+          style: {
+            display: "block",
+            marginBottom: "5px",
+            fontWeight: "bold",
+            fontSize: "0.9em"
+          }
+        },
+        "Analysis Depth (Commits)"
+      ), /* @__PURE__ */ React7.createElement(
+        "input",
+        {
+          type: "number",
+          min: "1",
+          max: "100",
+          value: depth,
+          onChange: (e) => {
+            const val = parseInt(e.target.value);
+            if (!isNaN(val)) {
+              onDepthChange(val);
+            }
+          },
+          style: {
+            width: "100%",
+            padding: "4px",
+            background: "var(--vscode-input-background)",
+            color: "var(--vscode-input-foreground)",
+            border: "1px solid var(--vscode-input-border)"
+          }
+        }
+      )),
+      /* @__PURE__ */ React7.createElement("div", { style: { display: "flex", gap: "10px", marginTop: "10px" } }, /* @__PURE__ */ React7.createElement(
+        "button",
+        {
+          onClick: () => {
+            onApply();
+            onClose();
+          },
+          disabled: isAnalyzing,
+          style: {
+            flex: 1,
+            padding: "6px",
+            background: isAnalyzing ? "var(--vscode-button-secondaryBackground)" : "var(--vscode-button-background)",
+            color: isAnalyzing ? "var(--vscode-button-secondaryForeground)" : "var(--vscode-button-foreground)",
+            border: "none",
+            borderRadius: "2px",
+            cursor: isAnalyzing ? "not-allowed" : "pointer",
+            opacity: isAnalyzing ? 0.7 : 1
+          }
+        },
+        isAnalyzing ? "Analyzing..." : "Apply & Analyze"
+      ))
     );
   };
 
-
-  var TreemapView = ({ treemap, isAnalyzing, hasHotspots }) => {
-    if (treemap && treemap.length > 0) {
-      return /* @__PURE__ */ React8.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, treemap.map((node, index) => /* @__PURE__ */ React8.createElement(TreemapNode, { key: node.id || node.path || `${node.name}-${index}`, node })));
-    }
-    return /* @__PURE__ */ React8.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, isAnalyzing ? "Loading heatmap..." : hasHotspots ? "" : "No churn data yet. Run Analyze to populate the heatmap.");
-  };
-
-
-  var React9 = __toESM(require_react());
+  // src/webview/cockpit/components/stages/templates/HotspotList.tsx
+  var React8 = __toESM(require_react());
   var HotspotList = ({ hotspots, onFileClick, isAnalyzing }) => {
     if (hotspots.length === 0 && !isAnalyzing) {
-      return /* @__PURE__ */ React9.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots available for this scope.");
+      return /* @__PURE__ */ React8.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots available for this scope.");
     }
     if (hotspots.length === 0) {
       return null;
     }
-    return /* @__PURE__ */ React9.createElement(React9.Fragment, null, /* @__PURE__ */ React9.createElement(
+    return /* @__PURE__ */ React8.createElement(React8.Fragment, null, /* @__PURE__ */ React8.createElement(
       "p",
       {
         style: {
@@ -28990,7 +29170,7 @@ Churn: ${node.score.toFixed(1)}
         }
       },
       "Most modified files (3 months)"
-    ), /* @__PURE__ */ React9.createElement(
+    ), /* @__PURE__ */ React8.createElement(
       "div",
       {
         style: {
@@ -28999,7 +29179,7 @@ Churn: ${node.score.toFixed(1)}
           gap: "10px"
         }
       },
-      hotspots.map((file, index) => /* @__PURE__ */ React9.createElement(
+      hotspots.map((file, index) => /* @__PURE__ */ React8.createElement(
         "div",
         {
           key: `${file.path}-${index}`,
@@ -29019,7 +29199,7 @@ Churn: ${node.score.toFixed(1)}
 Churn: ${file.score || 0}
 +${file.added || 0} / -${file.removed || 0}`
         },
-        /* @__PURE__ */ React9.createElement(
+        /* @__PURE__ */ React8.createElement(
           "div",
           {
             style: {
@@ -29032,7 +29212,7 @@ Churn: ${file.score || 0}
           },
           file.name
         ),
-        /* @__PURE__ */ React9.createElement(
+        /* @__PURE__ */ React8.createElement(
           "div",
           {
             style: {
@@ -29045,8 +29225,8 @@ Churn: ${file.score || 0}
           },
           file.path
         ),
-        /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7 } }, "+", file.added || 0, " / -", file.removed || 0),
-        /* @__PURE__ */ React9.createElement(
+        /* @__PURE__ */ React8.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7 } }, "+", file.added || 0, " / -", file.removed || 0),
+        /* @__PURE__ */ React8.createElement(
           "div",
           {
             style: {
@@ -29057,7 +29237,7 @@ Churn: ${file.score || 0}
               marginTop: "auto"
             }
           },
-          /* @__PURE__ */ React9.createElement(
+          /* @__PURE__ */ React8.createElement(
             "div",
             {
               style: {
@@ -29072,13 +29252,13 @@ Churn: ${file.score || 0}
     ));
   };
 
-
-  var React10 = __toESM(require_react());
+  // src/webview/cockpit/components/stages/templates/RisksList.tsx
+  var React9 = __toESM(require_react());
   var RisksList = ({ risks }) => {
     if (risks.length === 0) {
       return null;
     }
-    return /* @__PURE__ */ React10.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React10.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Top Risks"), /* @__PURE__ */ React10.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, risks.map((risk, idx) => /* @__PURE__ */ React10.createElement(
+    return /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React9.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Top Risks"), /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, risks.map((risk, idx) => /* @__PURE__ */ React9.createElement(
       "li",
       {
         key: idx,
@@ -29090,26 +29270,112 @@ Churn: ${file.score || 0}
           marginBottom: "8px"
         }
       },
-      /* @__PURE__ */ React10.createElement("div", { style: { fontWeight: "bold" } }, risk.name || risk.path),
-      /* @__PURE__ */ React10.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.issue),
-      risk.detail && /* @__PURE__ */ React10.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.detail)
+      /* @__PURE__ */ React9.createElement("div", { style: { fontWeight: "bold" } }, risk.name || risk.path),
+      /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.issue),
+      risk.detail && /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.detail)
     ))));
   };
 
+  // src/webview/cockpit/components/stages/templates/TreemapView.tsx
+  var React11 = __toESM(require_react());
 
+  // src/webview/cockpit/components/stages/TreemapNode.tsx
+  var React10 = __toESM(require_react());
+  var TreemapNode = ({ node, depth = 0 }) => {
+    const children = node.children || [];
+    const hasChildren = children.length > 0;
+    const baseColor = node.score > 10 ? "var(--vscode-charts-red)" : node.score > 5 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)";
+    return /* @__PURE__ */ React10.createElement(
+      "div",
+      {
+        style: {
+          flex: node.weight || 1,
+          minWidth: 80,
+          minHeight: 60,
+          border: "1px solid var(--vscode-panel-border)",
+          borderRadius: 4,
+          padding: 6,
+          margin: 4,
+          background: hasChildren ? "var(--vscode-editor-background)" : "var(--vscode-editor-inactiveSelectionBackground)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4
+        },
+        title: `${node.name}
+Churn: ${node.score.toFixed(1)}
++${node.added || 0} / -${node.removed || 0}`
+      },
+      /* @__PURE__ */ React10.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: "0.8em",
+            fontWeight: "bold",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap"
+          }
+        },
+        /* @__PURE__ */ React10.createElement("span", null, node.name),
+        /* @__PURE__ */ React10.createElement("span", { style: { color: baseColor } }, node.score)
+      ),
+      /* @__PURE__ */ React10.createElement(
+        "div",
+        {
+          style: {
+            height: 4,
+            borderRadius: 2,
+            background: "var(--vscode-progressBar-background)",
+            overflow: "hidden"
+          }
+        },
+        /* @__PURE__ */ React10.createElement(
+          "div",
+          {
+            style: {
+              height: "100%",
+              width: `${Math.min((node.score || 0) * 2, 100)}%`,
+              background: baseColor
+            }
+          }
+        )
+      ),
+      /* @__PURE__ */ React10.createElement("div", { style: { fontSize: "0.7em", opacity: 0.7 } }, "+", node.added || 0, " / -", node.removed || 0),
+      hasChildren && /* @__PURE__ */ React10.createElement("div", { style: { display: "flex", flexWrap: "wrap", flex: 1, overflow: "hidden" } }, children.map((child, index) => /* @__PURE__ */ React10.createElement(
+        TreemapNode,
+        {
+          key: child.id || child.path || `${child.name}-${index}`,
+          node: child,
+          depth: depth + 1
+        }
+      )))
+    );
+  };
+
+  // src/webview/cockpit/components/stages/templates/TreemapView.tsx
+  var TreemapView = ({ treemap, isAnalyzing, hasHotspots }) => {
+    if (treemap && treemap.length > 0) {
+      return /* @__PURE__ */ React11.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, treemap.map((node, index) => /* @__PURE__ */ React11.createElement(TreemapNode, { key: node.id || node.path || `${node.name}-${index}`, node })));
+    }
+    return /* @__PURE__ */ React11.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, isAnalyzing ? "Loading heatmap..." : hasHotspots ? "" : "No churn data yet. Run Analyze to populate the heatmap.");
+  };
+
+  // src/webview/cockpit/components/stages/BundleStage.tsx
   var BundleStage = ({ frame, onZoomIn, cockpitState, vscode: vscode3 }) => {
-    const [isConfigOpen, setIsConfigOpen] = React11.useState(false);
+    const [isConfigOpen, setIsConfigOpen] = React12.useState(false);
     const defaultConfig = {
       mode: "repo",
       roots: [],
       includeConnected: false,
       exclusions: []
     };
-    const [formConfig, setFormConfig] = React11.useState(
+    const [formConfig, setFormConfig] = React12.useState(
       cockpitState?.bundleConfig || defaultConfig
     );
-    const [depth, setDepth] = React11.useState(cockpitState?.lastNCommits || 20);
-    React11.useEffect(() => {
+    const [depth, setDepth] = React12.useState(cockpitState?.lastNCommits || 20);
+    React12.useEffect(() => {
       setFormConfig(
         cockpitState?.bundleConfig || {
           mode: "repo",
@@ -29127,7 +29393,8 @@ Churn: ${file.score || 0}
       if (!vscode3) return;
       postMessageWithTracing(vscode3, { type: "updateBundleConfig", config: formConfig });
       postMessageWithTracing(vscode3, { type: "setLastNCommits", value: depth });
-      postMessageWithTracing(vscode3, { type: "generateReport", mode: "selection", force: true });
+      const mode = formConfig.mode === "changes" ? "changes" : "selection";
+      postMessageWithTracing(vscode3, { type: "generateReport", mode, force: true });
     };
     const handleFileClick = (file) => {
       onZoomIn({
@@ -29140,7 +29407,7 @@ Churn: ${file.score || 0}
     console.log("[BundleStage] frame.data:", frame.data);
     console.log("[BundleStage] frame.data.hotspots:", frame.data?.hotspots);
     console.log("[BundleStage] frame.data.treemap:", frame.data?.treemap);
-    return /* @__PURE__ */ React11.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React11.createElement(
+    return /* @__PURE__ */ React12.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React12.createElement(
       "div",
       {
         style: {
@@ -29150,8 +29417,8 @@ Churn: ${file.score || 0}
           marginBottom: "10px"
         }
       },
-      /* @__PURE__ */ React11.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, "Hotspots"),
-      /* @__PURE__ */ React11.createElement(
+      /* @__PURE__ */ React12.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, "Hotspots"),
+      /* @__PURE__ */ React12.createElement(
         "button",
         {
           onClick: () => setIsConfigOpen(!isConfigOpen),
@@ -29165,7 +29432,7 @@ Churn: ${file.score || 0}
         },
         isConfigOpen ? "Hide Scope" : "Configure Scope"
       )
-    ), isConfigOpen && /* @__PURE__ */ React11.createElement(
+    ), isConfigOpen && /* @__PURE__ */ React12.createElement(
       ConfigPanel,
       {
         config: formConfig,
@@ -29176,671 +29443,25 @@ Churn: ${file.score || 0}
         onApply: applyConfig,
         onClose: () => setIsConfigOpen(false)
       }
-    ), cockpitState && /* @__PURE__ */ React11.createElement(StatsSection, { state: cockpitState, vscode: vscode3 }), /* @__PURE__ */ React11.createElement(
+    ), cockpitState && /* @__PURE__ */ React12.createElement(StatsSection, { state: cockpitState, vscode: vscode3 }), /* @__PURE__ */ React12.createElement(
       TreemapView,
       {
         treemap: frame.data?.treemap,
         isAnalyzing: cockpitState?.isAnalyzing,
         hasHotspots: frame.data?.hotspots && frame.data.hotspots.length > 0
       }
-    ), frame.data?.hotspots && frame.data.hotspots.length > 0 && /* @__PURE__ */ React11.createElement(
+    ), frame.data?.hotspots && frame.data.hotspots.length > 0 && /* @__PURE__ */ React12.createElement(
       HotspotList,
       {
         hotspots: frame.data.hotspots,
         onFileClick: handleFileClick,
         isAnalyzing: cockpitState?.isAnalyzing
       }
-    ), frame.data?.risks && frame.data.risks.length > 0 && /* @__PURE__ */ React11.createElement(RisksList, { risks: frame.data.risks }));
+    ), frame.data?.risks && frame.data.risks.length > 0 && /* @__PURE__ */ React12.createElement(RisksList, { risks: frame.data.risks }));
   };
 
-
+  // src/webview/cockpit/components/stages/CodeEditor.tsx
   var React13 = __toESM(require_react());
-
-
-  var React12 = __toESM(require_react());
-  var SummaryStats = ({ commitCount, fileCount, symbolCount }) => {
-    return /* @__PURE__ */ React12.createElement(
-      "div",
-      {
-        style: {
-          display: "flex",
-          gap: "15px",
-          marginBottom: "15px",
-          fontSize: "0.85em",
-          color: "var(--vscode-descriptionForeground)",
-          borderBottom: "1px solid var(--vscode-panel-border)",
-          paddingBottom: "10px"
-        }
-      },
-      /* @__PURE__ */ React12.createElement("div", null, /* @__PURE__ */ React12.createElement("strong", null, commitCount), " commits"),
-      /* @__PURE__ */ React12.createElement("div", null, /* @__PURE__ */ React12.createElement("strong", null, fileCount), " files"),
-      symbolCount !== void 0 && /* @__PURE__ */ React12.createElement("div", null, /* @__PURE__ */ React12.createElement("strong", null, symbolCount), " symbols")
-    );
-  };
-
-
-  var FolderStage = ({ frame, onZoomIn, cockpitState }) => {
-    const handleFileClick = (file) => {
-      onZoomIn({
-        level: "file",
-        id: file.path,
-        name: file.name || file.path.split("/").pop(),
-        status: "scanning"
-      });
-    };
-    const folderPath = frame.id;
-    const bundleData = cockpitState?.bundleView;
-    const filteredHotspots = React13.useMemo(() => {
-      if (!bundleData?.hotspots) return [];
-      return bundleData.hotspots.filter((file) => file.path.startsWith(folderPath)).map((file) => ({
-        ...file,
-        name: file.name || file.path.split("/").pop() || "Unknown"
-      }));
-    }, [bundleData?.hotspots, folderPath]);
-    const filteredTreemap = React13.useMemo(() => {
-      if (!bundleData?.treemap) return [];
-      return bundleData.treemap.filter((node) => {
-        const nodePath = node.path || node.id;
-        return nodePath && nodePath.startsWith(folderPath);
-      });
-    }, [bundleData?.treemap, folderPath]);
-    const filteredRisks = React13.useMemo(() => {
-      if (!bundleData?.risks) return [];
-      return bundleData.risks.filter(
-        (risk) => risk.path && risk.path.startsWith(folderPath)
-      );
-    }, [bundleData?.risks, folderPath]);
-    const fileCount = filteredHotspots.length;
-    const symbolCount = filteredHotspots.reduce(
-      (sum, file) => sum + (file.symbols || 0),
-      0
-    );
-    console.log("[FolderStage] folderPath:", folderPath);
-    console.log("[FolderStage] filteredHotspots:", filteredHotspots);
-    console.log("[FolderStage] filteredTreemap:", filteredTreemap);
-    return /* @__PURE__ */ React13.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React13.createElement(
-      "div",
-      {
-        style: {
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "10px"
-        }
-      },
-      /* @__PURE__ */ React13.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, frame.name),
-      /* @__PURE__ */ React13.createElement("div", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, folderPath)
-    ), cockpitState?.bundleSummary && /* @__PURE__ */ React13.createElement(
-      SummaryStats,
-      {
-        commitCount: cockpitState.bundleSummary.commitCount,
-        fileCount,
-        symbolCount: symbolCount > 0 ? symbolCount : void 0
-      }
-    ), /* @__PURE__ */ React13.createElement(
-      TreemapView,
-      {
-        treemap: filteredTreemap,
-        isAnalyzing: cockpitState?.isAnalyzing,
-        hasHotspots: filteredHotspots.length > 0
-      }
-    ), filteredHotspots.length > 0 && /* @__PURE__ */ React13.createElement(
-      HotspotList,
-      {
-        hotspots: filteredHotspots,
-        onFileClick: handleFileClick,
-        isAnalyzing: cockpitState?.isAnalyzing
-      }
-    ), filteredRisks.length > 0 && /* @__PURE__ */ React13.createElement(RisksList, { risks: filteredRisks }), filteredHotspots.length === 0 && !cockpitState?.isAnalyzing && /* @__PURE__ */ React13.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots found in this folder. Files may not have been modified recently."));
-  };
-
-
-  var React14 = __toESM(require_react());
-  var BlastRadiusStage = ({
-    frame,
-    onZoomIn
-  }) => {
-    const [showIncoming, setShowIncoming] = React14.useState(true);
-    const [showOutgoing, setShowOutgoing] = React14.useState(true);
-    const incoming = frame.data?.blastRadius?.incoming || [];
-    const outgoing = frame.data?.blastRadius?.outgoing || [];
-    const center = frame.name;
-    const nodes = [
-      ...incoming.map((edge) => ({ id: edge.from.split(":")[0], direction: "in" })),
-      ...outgoing.map((edge) => ({ id: edge.to.split(":")[0], direction: "out" }))
-    ];
-    const uniqueNodes = Array.from(new Map(nodes.map((n) => [n.id, n])).values());
-    const edges = [
-      ...incoming.map((e) => ({
-        from: e.from.split(":")[0],
-        to: center,
-        direction: "in",
-        type: e.type
-      })),
-      ...outgoing.map((e) => ({
-        from: center,
-        to: e.to.split(":")[0],
-        direction: "out",
-        type: e.type
-      }))
-    ];
-    return /* @__PURE__ */ React14.createElement(
-      "div",
-      {
-        style: {
-          width: "100%",
-          height: "100%",
-          padding: "10px",
-          overflow: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px"
-        }
-      },
-      /* @__PURE__ */ React14.createElement("h3", { style: { fontSize: "1.2em", marginBottom: "5px" } }, "Dependencies"),
-      /* @__PURE__ */ React14.createElement(
-        "p",
-        {
-          style: {
-            fontSize: "0.85em",
-            color: "var(--vscode-descriptionForeground)",
-            marginBottom: "10px"
-          }
-        },
-        frame.name
-      ),
-      /* @__PURE__ */ React14.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } }, /* @__PURE__ */ React14.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React14.createElement(
-        "input",
-        {
-          type: "checkbox",
-          checked: showIncoming,
-          onChange: (e) => setShowIncoming(e.target.checked)
-        }
-      ), " ", "Incoming"), /* @__PURE__ */ React14.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React14.createElement(
-        "input",
-        {
-          type: "checkbox",
-          checked: showOutgoing,
-          onChange: (e) => setShowOutgoing(e.target.checked)
-        }
-      ), " ", "Outgoing")),
-      /* @__PURE__ */ React14.createElement(
-        "div",
-        {
-          style: {
-            border: "1px solid var(--vscode-panel-border)",
-            borderRadius: "4px",
-            padding: "8px",
-            minHeight: 180
-          }
-        },
-        /* @__PURE__ */ React14.createElement("div", { style: { position: "relative", width: "100%", height: 200 } }, /* @__PURE__ */ React14.createElement(
-          "div",
-          {
-            style: {
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              padding: "6px 10px",
-              borderRadius: "8px",
-              background: "var(--vscode-editor-background)",
-              border: "1px solid var(--vscode-panel-border)",
-              fontWeight: "bold",
-              fontSize: "0.9em"
-            }
-          },
-          center
-        ), uniqueNodes.map((n, idx) => {
-          const angle = idx / uniqueNodes.length * Math.PI * 2;
-          const radius = 65;
-          const x = 50 + radius * Math.cos(angle);
-          const y = 50 + radius * Math.sin(angle);
-          return /* @__PURE__ */ React14.createElement(
-            "div",
-            {
-              key: n.id,
-              onClick: () => onZoomIn({
-                level: "file",
-                id: n.id,
-                name: n.id.split("/").pop(),
-                status: "scanning"
-              }),
-              style: {
-                position: "absolute",
-                top: `${y}%`,
-                left: `${x}%`,
-                transform: "translate(-50%, -50%)",
-                padding: "4px 6px",
-                borderRadius: "6px",
-                background: n.direction === "in" ? "var(--vscode-charts-blue)" : "var(--vscode-charts-orange)",
-                color: "var(--vscode-editor-foreground)",
-                fontSize: "0.75em",
-                cursor: "pointer",
-                whiteSpace: "nowrap"
-              }
-            },
-            n.id.split("/").pop()
-          );
-        }), edges.filter(
-          (e) => e.direction === "in" && showIncoming || e.direction === "out" && showOutgoing
-        ).map((e, idx) => {
-          const fromIdx = uniqueNodes.findIndex((n) => n.id === e.from);
-          const toIdx = uniqueNodes.findIndex((n) => n.id === e.to);
-          if (fromIdx === -1 || toIdx === -1) return null;
-          const angleFrom = fromIdx / uniqueNodes.length * Math.PI * 2;
-          const angleTo = toIdx / uniqueNodes.length * Math.PI * 2;
-          const radius = 65;
-          const x1 = 50 + radius * Math.cos(angleFrom);
-          const y1 = 50 + radius * Math.sin(angleFrom);
-          const x2 = 50 + radius * Math.cos(angleTo);
-          const y2 = 50 + radius * Math.sin(angleTo);
-          return /* @__PURE__ */ React14.createElement(
-            "svg",
-            {
-              key: idx,
-              style: {
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                pointerEvents: "none"
-              }
-            },
-            /* @__PURE__ */ React14.createElement(
-              "line",
-              {
-                x1: `${x1}%`,
-                y1: `${y1}%`,
-                x2: `${x2}%`,
-                y2: `${y2}%`,
-                stroke: e.direction === "in" ? "var(--vscode-charts-blue)" : "var(--vscode-charts-orange)",
-                strokeWidth: 1.5,
-                opacity: 0.6
-              }
-            )
-          );
-        }))
-      ),
-      /* @__PURE__ */ React14.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", flex: 1 } }, /* @__PURE__ */ React14.createElement(
-        "div",
-        {
-          style: {
-            border: "1px solid var(--vscode-panel-border)",
-            borderRadius: "4px",
-            padding: "8px",
-            overflow: "auto"
-          }
-        },
-        /* @__PURE__ */ React14.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Incoming (", incoming.length, ")"),
-        incoming.length ? /* @__PURE__ */ React14.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, incoming.map((edge, idx) => /* @__PURE__ */ React14.createElement(
-          "li",
-          {
-            key: idx,
-            onClick: () => onZoomIn({
-              level: "file",
-              id: edge.from.split(":")[0],
-              name: edge.from.split(":")[0].split("/").pop(),
-              status: "scanning"
-            }),
-            style: {
-              padding: "6px",
-              borderBottom: "1px solid var(--vscode-panel-border)",
-              cursor: "pointer",
-              fontSize: "0.85em"
-            }
-          },
-          edge.from.split(":")[0],
-          " \u2192 ",
-          edge.to.split(":")[0],
-          " (",
-          edge.type,
-          ")"
-        ))) : /* @__PURE__ */ React14.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
-      ), /* @__PURE__ */ React14.createElement(
-        "div",
-        {
-          style: {
-            border: "1px solid var(--vscode-panel-border)",
-            borderRadius: "4px",
-            padding: "8px",
-            overflow: "auto"
-          }
-        },
-        /* @__PURE__ */ React14.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Outgoing (", outgoing.length, ")"),
-        outgoing.length ? /* @__PURE__ */ React14.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, outgoing.map((edge, idx) => /* @__PURE__ */ React14.createElement(
-          "li",
-          {
-            key: idx,
-            onClick: () => onZoomIn({
-              level: "file",
-              id: edge.to.split(":")[0],
-              name: edge.to.split(":")[0].split("/").pop(),
-              status: "scanning"
-            }),
-            style: {
-              padding: "6px",
-              borderBottom: "1px solid var(--vscode-panel-border)",
-              cursor: "pointer",
-              fontSize: "0.85em"
-            }
-          },
-          edge.from.split(":")[0],
-          " \u2192 ",
-          edge.to.split(":")[0],
-          " (",
-          edge.type,
-          ")"
-        ))) : /* @__PURE__ */ React14.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
-      ))
-    );
-  };
-
-
-  var React16 = __toESM(require_react());
-
-
-  var React15 = __toESM(require_react());
-
-
-  var formatDate = (value) => {
-    if (!value) return "";
-    try {
-      return new Date(value).toLocaleDateString();
-    } catch {
-      return value;
-    }
-  };
-
-
-  var ReportList = ({ state, vscode: vscode3 }) => {
-    const filter = state.reportsFilterText.toLowerCase();
-    const list = state.reports.filter(
-      (r) => (!filter || (r.title || "").toLowerCase().includes(filter) || (r.summary || "").toLowerCase().includes(filter)) && (!state.reportsShowPinnedOnly || r.pinned) && (state.reportsBranchFilter === "all" || r.branch === state.reportsBranchFilter)
-    );
-    if (!list.length) {
-      return /* @__PURE__ */ React15.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React15.createElement("div", null, "No reports yet"), /* @__PURE__ */ React15.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
-    }
-    return /* @__PURE__ */ React15.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React15.createElement(
-      "li",
-      {
-        key: r.id,
-        className: "cockpit__list-item cockpit__list-item--clickable",
-        onClick: () => postMessageWithTracing(vscode3, { type: "openReport", reportId: r.id })
-      },
-      /* @__PURE__ */ React15.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React15.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React15.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React15.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React15.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
-      r.summary ? /* @__PURE__ */ React15.createElement("div", { className: "cockpit__message" }, r.summary) : null,
-      /* @__PURE__ */ React15.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React15.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small",
-          onClick: (e) => {
-            e.stopPropagation();
-            postMessageWithTracing(vscode3, { type: "regenerateReport", reportId: r.id });
-          }
-        },
-        "Regenerate"
-      ), /* @__PURE__ */ React15.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small",
-          onClick: (e) => {
-            e.stopPropagation();
-            postMessageWithTracing(vscode3, { type: "togglePinReport", reportId: r.id });
-          }
-        },
-        r.pinned ? "Unpin" : "Pin"
-      ), /* @__PURE__ */ React15.createElement(
-        "button",
-        {
-          className: "cockpit__button ghost small danger",
-          onClick: (e) => {
-            e.stopPropagation();
-            if (confirm(
-              `Are you sure you want to delete the report "${r.title || "Untitled"}"? This cannot be undone.`
-            )) {
-              postMessageWithTracing(vscode3, { type: "deleteReport", reportId: r.id });
-            }
-          }
-        },
-        "Delete"
-      ))
-    )));
-  };
-
-
-  var ReportsStage = ({
-    cockpitState,
-    vscode: vscode3
-  }) => /* @__PURE__ */ React16.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React16.createElement(ReportList, { state: cockpitState, vscode: vscode3 }));
-
-
-  var React17 = __toESM(require_react());
-  var SymbolStage = ({ frame, vscode: vscode3 }) => /* @__PURE__ */ React17.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React17.createElement(
-    "div",
-    {
-      style: {
-        padding: "10px",
-        borderBottom: "1px solid var(--vscode-panel-border)",
-        flexShrink: 0
-      }
-    },
-    /* @__PURE__ */ React17.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
-    /* @__PURE__ */ React17.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.filePath),
-    frame.data?.drift?.length > 0 && /* @__PURE__ */ React17.createElement("div", { style: { marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React17.createElement(
-      "span",
-      {
-        key: idx,
-        style: {
-          padding: "2px 6px",
-          borderRadius: "4px",
-          background: "var(--vscode-inputValidation-warningBackground)",
-          color: "var(--vscode-inputValidation-warningForeground)",
-          fontSize: "0.75em"
-        }
-      },
-      "Drift: ",
-      d.suggestedName || d.issue || "Rename suggested"
-    ))),
-    /* @__PURE__ */ React17.createElement("div", { style: { marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" } }, frame.data?.symbolId && vscode3 && /* @__PURE__ */ React17.createElement(
-      "button",
-      {
-        onClick: () => {
-          postMessageWithTracing(vscode3, {
-            type: "openSymbolInEditor",
-            symbolId: frame.data.symbolId
-          });
-        },
-        style: {
-          padding: "4px 8px",
-          border: "1px solid var(--vscode-button-border)",
-          background: "var(--vscode-button-secondaryBackground)",
-          color: "var(--vscode-button-foreground)",
-          borderRadius: "4px",
-          cursor: "pointer",
-          fontSize: "0.8em"
-        }
-      },
-      "Open in Editor"
-    ), frame.data?.drift?.[0]?.suggestedName && vscode3 && /* @__PURE__ */ React17.createElement(
-      "button",
-      {
-        onClick: () => {
-          const suggestion = frame.data.drift[0].suggestedName;
-          postMessageWithTracing(vscode3, {
-            type: "applyRefactorSuggestion",
-            payload: {
-              symbolId: frame.data.symbolId,
-              suggestedName: suggestion,
-              filePath: frame.data.filePath
-            }
-          });
-        },
-        style: {
-          padding: "4px 8px",
-          border: "1px solid var(--vscode-button-border)",
-          background: "var(--vscode-button-background)",
-          color: "var(--vscode-button-foreground)",
-          borderRadius: "4px",
-          cursor: "pointer",
-          fontSize: "0.8em"
-        }
-      },
-      "Apply Suggestion (manual)"
-    ), vscode3 && /* @__PURE__ */ React17.createElement(
-      "button",
-      {
-        onClick: () => {
-          postMessageWithTracing(vscode3, {
-            type: "askAssistant",
-            payload: {
-              symbolId: frame.data?.symbolId,
-              filePath: frame.data?.filePath,
-              drift: frame.data?.drift
-            }
-          });
-        },
-        style: {
-          padding: "4px 8px",
-          border: "1px solid var(--vscode-button-border)",
-          background: "var(--vscode-button-secondaryBackground)",
-          color: "var(--vscode-button-foreground)",
-          borderRadius: "4px",
-          cursor: "pointer",
-          fontSize: "0.8em"
-        }
-      },
-      "Ask Assistant"
-    ))
-  ), /* @__PURE__ */ React17.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React17.createElement(
-    "div",
-    {
-      style: {
-        flex: 1,
-        overflow: "auto",
-        backgroundColor: "var(--vscode-editor-background)",
-        padding: "10px",
-        borderBottom: "1px solid var(--vscode-panel-border)"
-      }
-    },
-    /* @__PURE__ */ React17.createElement(
-      "pre",
-      {
-        style: {
-          margin: 0,
-          fontFamily: "var(--vscode-editor-font-family)",
-          fontSize: "0.85em",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          lineHeight: "1.5"
-        }
-      },
-      frame.data?.content || "Loading..."
-    )
-  ), /* @__PURE__ */ React17.createElement("div", { style: { maxHeight: "220px", overflow: "auto", padding: "10px", flexShrink: 0 } }, /* @__PURE__ */ React17.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Evolution"), /* @__PURE__ */ React17.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.history?.map((commit) => /* @__PURE__ */ React17.createElement(
-    "li",
-    {
-      key: commit.hash || commit.message || commit.date || commit.author,
-      style: {
-        marginBottom: "12px",
-        borderLeft: "2px solid var(--vscode-charts-blue)",
-        paddingLeft: "8px"
-      }
-    },
-    /* @__PURE__ */ React17.createElement("div", { style: { fontWeight: "bold", fontSize: "0.85em" } }, commit.message || commit.summary || commit.change),
-    /* @__PURE__ */ React17.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
-  )), !frame.data?.history?.length && /* @__PURE__ */ React17.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
-
-
-  var React18 = __toESM(require_react());
-  var HeaderContainer = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "8px 16px",
-    borderBottom: "1px solid var(--vscode-panel-border)",
-    backgroundColor: "var(--vscode-editor-background)",
-    height: "40px",
-    flexShrink: 0
-  };
-  var TitleStyle = {
-    fontWeight: 600,
-    fontSize: "13px",
-    display: "flex",
-    alignItems: "center",
-    gap: "8px"
-  };
-  var HealthBarStyle = (riskScore) => {
-    const color = riskScore > 70 ? "var(--vscode-charts-red)" : riskScore > 40 ? "var(--vscode-charts-yellow)" : "var(--vscode-charts-green)";
-    return {
-      height: "4px",
-      width: "100%",
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      backgroundColor: color,
-      opacity: 0.5
-    };
-  };
-  var StageHeader = ({ fileName, metrics, onNavigate }) => {
-    return /* @__PURE__ */ React18.createElement("div", { style: { position: "relative" } }, /* @__PURE__ */ React18.createElement("div", { style: HeaderContainer }, /* @__PURE__ */ React18.createElement("div", { style: TitleStyle }, /* @__PURE__ */ React18.createElement("span", null, fileName), metrics && metrics.riskScore > 0 && /* @__PURE__ */ React18.createElement("span", { style: {
-      fontSize: "10px",
-      opacity: 0.7,
-      backgroundColor: "var(--vscode-badge-background)",
-      color: "var(--vscode-badge-foreground)",
-      padding: "1px 4px",
-      borderRadius: "4px"
-    } }, "Risk: ", metrics.riskScore)), /* @__PURE__ */ React18.createElement("div", { style: { display: "flex", alignItems: "center", gap: "12px", fontSize: "11px" } }, metrics && /* @__PURE__ */ React18.createElement(React18.Fragment, null, /* @__PURE__ */ React18.createElement("div", { title: "Bus Factor (Top Authors)", style: { display: "flex", gap: "4px" } }, metrics.authors?.map((author) => /* @__PURE__ */ React18.createElement("div", { key: author, style: {
-      width: "16px",
-      height: "16px",
-      borderRadius: "50%",
-      backgroundColor: "var(--vscode-button-background)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: "9px",
-      color: "var(--vscode-button-foreground)",
-      cursor: "help"
-    }, title: author }, author.charAt(0).toUpperCase()))), /* @__PURE__ */ React18.createElement("div", { title: "Incoming References" }, "Refs: ", /* @__PURE__ */ React18.createElement("strong", null, metrics.incomingRefs))))), metrics && /* @__PURE__ */ React18.createElement("div", { style: HealthBarStyle(metrics.riskScore) }));
-  };
-
-
-  var React19 = __toESM(require_react());
-  var GutterContainer = {
-    width: "12px",
-    height: "100%",
-    display: "flex",
-    flexDirection: "column",
-    flexShrink: 0,
-    borderRight: "1px solid var(--vscode-editor-lineHighlightBorder)",
-    backgroundColor: "var(--vscode-editor-background)"
-  };
-  var SedimentGutter = ({ lineCount, timestamps, currentTimeFilter }) => {
-    const getAgeColor = (lineIndex) => {
-      const mockAge = lineIndex % 20 / 20;
-      if (mockAge < 0.2) return "var(--vscode-charts-green)";
-      if (mockAge < 0.5) return "var(--vscode-charts-blue)";
-      return "var(--vscode-editor-lineHighlightBorder)";
-    };
-    return /* @__PURE__ */ React19.createElement("div", { style: GutterContainer }, Array.from({ length: lineCount }).map((_, i) => /* @__PURE__ */ React19.createElement(
-      "div",
-      {
-        key: i,
-        style: {
-          height: "20px",
-
-          width: "100%",
-          backgroundColor: getAgeColor(i),
-          opacity: 0.6
-        },
-        title: `Line ${i + 1}: Modified recently`
-      }
-    )));
-  };
-
-
-  var React20 = __toESM(require_react());
   var EditorContainer = {
     flex: 1,
     overflow: "auto",
@@ -29872,28 +29493,298 @@ Churn: ${file.score || 0}
     alignItems: "center",
     gap: "4px"
   };
-  var CodeEditor = ({ content, language, driftLines = [] }) => {
+  var CodeEditor = ({
+    content,
+    driftLines = [],
+    driftIssues = [],
+    symbols = [],
+    focusedSymbolId,
+    onSymbolClick,
+    onClearFocus,
+    lineCommits = [],
+    orderedCommits = [],
+    currentCommitIndex
+  }) => {
     const lines = content.split("\n");
-    return /* @__PURE__ */ React20.createElement("div", { style: EditorContainer }, lines.map((line, i) => {
-      const lineNumber = i + 1;
-      const hasDrift = driftLines.includes(lineNumber) || line.includes("TODO") || line.includes("FIXME");
-      return /* @__PURE__ */ React20.createElement(
+    const focusedSymbol = focusedSymbolId ? symbols.find((s) => (s.id || s.name) === focusedSymbolId) : null;
+    const focusedStartLine = focusedSymbol?.location?.start?.line || 0;
+    const focusedEndLine = focusedSymbol?.location?.end?.line || 0;
+    const isLineFocused = (lineNumber) => {
+      if (!focusedSymbolId || !focusedSymbol) return false;
+      return lineNumber >= focusedStartLine && lineNumber <= focusedEndLine;
+    };
+    const lineToCommitIndex = /* @__PURE__ */ new Map();
+    if (lineCommits.length > 0 && orderedCommits.length > 0) {
+      lineCommits.forEach(({ line, commitSha }) => {
+        const commitIndex = orderedCommits.indexOf(commitSha);
+        if (commitIndex >= 0) {
+          lineToCommitIndex.set(line, commitIndex);
+        }
+      });
+    }
+    const isLineAfterTime = (lineNumber) => {
+      if (currentCommitIndex === void 0) return false;
+      const lineCommitIndex = lineToCommitIndex.get(lineNumber);
+      if (lineCommitIndex === void 0) return false;
+      return lineCommitIndex > currentCommitIndex;
+    };
+    const filteredDriftIssues = React13.useMemo(() => {
+      if (currentCommitIndex === void 0) return driftIssues;
+      return driftIssues.filter((issue) => {
+        if (issue.line) {
+          const lineCommitIndex = lineToCommitIndex.get(issue.line);
+          if (lineCommitIndex === void 0) return true;
+          return lineCommitIndex <= currentCommitIndex;
+        }
+        if (issue.symbol) {
+          const symbol = symbols.find((s) => s.name === issue.symbol);
+          if (symbol?.location?.start?.line) {
+            const lineNum = symbol.location.start.line;
+            const lineCommitIndex = lineToCommitIndex.get(lineNum);
+            if (lineCommitIndex === void 0) return true;
+            return lineCommitIndex <= currentCommitIndex;
+          }
+        }
+        return true;
+      });
+    }, [driftIssues, currentCommitIndex, lineToCommitIndex, symbols]);
+    const driftByLine = /* @__PURE__ */ new Map();
+    filteredDriftIssues.forEach((issue) => {
+      if (issue.line) {
+        if (!driftByLine.has(issue.line)) {
+          driftByLine.set(issue.line, []);
+        }
+        driftByLine.get(issue.line).push(issue);
+      } else if (issue.symbol) {
+        const symbol = symbols.find((s) => s.name === issue.symbol);
+        if (symbol?.location?.start?.line) {
+          const lineNum = symbol.location.start.line;
+          if (!driftByLine.has(lineNum)) {
+            driftByLine.set(lineNum, []);
+          }
+          driftByLine.get(lineNum).push(issue);
+        }
+      }
+    });
+    driftLines.forEach((lineNum) => {
+      if (!driftByLine.has(lineNum)) {
+        driftByLine.set(lineNum, [{ type: "drift", severity: "warning" }]);
+      }
+    });
+    const getDriftMessage = (issues) => {
+      if (issues.length === 0) return "";
+      const firstIssue = issues[0];
+      if (firstIssue.issue) return firstIssue.issue;
+      if (firstIssue.detail) return firstIssue.detail;
+      if (firstIssue.type === "missing_symbols" && firstIssue.count) {
+        return `${firstIssue.count} missing symbol${firstIssue.count !== 1 ? "s" : ""}`;
+      }
+      return "Drift detected";
+    };
+    const getDriftSeverity = (issues) => {
+      const hasError = issues.some((i) => i.severity === "error");
+      return hasError ? "error" : "warning";
+    };
+    const editorRef = React13.useRef(null);
+    React13.useEffect(() => {
+      if (focusedSymbolId && focusedStartLine > 0 && editorRef.current) {
+        const lineElement = editorRef.current.querySelector(`[data-line="${focusedStartLine}"]`);
+        if (lineElement) {
+          lineElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }
+    }, [focusedSymbolId, focusedStartLine]);
+    return /* @__PURE__ */ React13.createElement(
+      "div",
+      {
+        ref: editorRef,
+        style: EditorContainer,
+        onClick: (e) => {
+          if (e.target === e.currentTarget && onClearFocus) {
+            onClearFocus();
+          }
+        }
+      },
+      focusedSymbolId && /* @__PURE__ */ React13.createElement(
         "div",
         {
-          key: i,
           style: {
-            ...LineStyle,
-            backgroundColor: hasDrift ? "rgba(255, 165, 0, 0.05)" : "transparent"
+            padding: "4px 12px",
+            fontSize: "11px",
+            backgroundColor: "var(--vscode-editor-selectionBackground)",
+            borderBottom: "1px solid var(--vscode-panel-border)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
           }
         },
-        hasDrift && /* @__PURE__ */ React20.createElement("span", { style: DriftWarningStyle }, /* @__PURE__ */ React20.createElement("span", null, "\u26A0\uFE0F"), " DRIFT"),
-        line
-      );
-    }));
+        /* @__PURE__ */ React13.createElement("span", null, "Focused: ", /* @__PURE__ */ React13.createElement("strong", null, focusedSymbol?.name || focusedSymbolId)),
+        /* @__PURE__ */ React13.createElement(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              if (onClearFocus) onClearFocus();
+            },
+            style: {
+              fontSize: "10px",
+              padding: "2px 6px",
+              background: "var(--vscode-button-background)",
+              color: "var(--vscode-button-foreground)",
+              border: "none",
+              borderRadius: "3px",
+              cursor: "pointer"
+            }
+          },
+          "Clear Focus"
+        )
+      ),
+      lines.map((line, i) => {
+        const lineNumber = i + 1;
+        const lineDriftIssues = driftByLine.get(lineNumber) || [];
+        const hasDrift = lineDriftIssues.length > 0;
+        const severity = hasDrift ? getDriftSeverity(lineDriftIssues) : "warning";
+        const driftMessage = hasDrift ? getDriftMessage(lineDriftIssues) : "";
+        const isFocused = isLineFocused(lineNumber);
+        const warningStyle = {
+          ...DriftWarningStyle,
+          color: severity === "error" ? "var(--vscode-inputValidation-errorForeground)" : "var(--vscode-inputValidation-warningForeground)",
+          backgroundColor: severity === "error" ? "var(--vscode-inputValidation-errorBackground)" : "var(--vscode-inputValidation-warningBackground)"
+        };
+        const symbolAtLine = symbols.find((s) => s.location?.start?.line === lineNumber);
+        const isAfterTime = isLineAfterTime(lineNumber);
+        const shouldHide = isAfterTime && currentCommitIndex !== void 0;
+        return /* @__PURE__ */ React13.createElement(
+          "div",
+          {
+            key: i,
+            "data-line": lineNumber,
+            style: {
+              ...LineStyle,
+              fontSize: isFocused ? "120%" : "100%",
+              opacity: shouldHide ? 0.2 : focusedSymbolId ? isFocused ? 1 : 0.5 : 1,
+              display: shouldHide ? "none" : "flex",
+              backgroundColor: hasDrift ? severity === "error" ? "rgba(255, 0, 0, 0.05)" : "rgba(255, 165, 0, 0.05)" : "transparent",
+              cursor: symbolAtLine && onSymbolClick ? "pointer" : "default",
+              transition: "opacity 0.2s, font-size 0.2s",
+              pointerEvents: shouldHide ? "none" : "auto"
+            },
+            onClick: symbolAtLine && onSymbolClick && !shouldHide ? () => onSymbolClick(symbolAtLine.id || symbolAtLine.name) : void 0,
+            title: shouldHide ? `Line added after selected commit (hidden)` : symbolAtLine ? `Click to focus on ${symbolAtLine.name}` : isFocused ? "Focused symbol" : void 0
+          },
+          hasDrift && !shouldHide && /* @__PURE__ */ React13.createElement("span", { style: warningStyle, title: driftMessage }, /* @__PURE__ */ React13.createElement("span", null, severity === "error" ? "\u274C" : "\u26A0\uFE0F"), " ", driftMessage || "DRIFT"),
+          line
+        );
+      })
+    );
   };
 
+  // src/webview/cockpit/components/stages/FolderStage.tsx
+  var React15 = __toESM(require_react());
 
-  var React21 = __toESM(require_react());
+  // src/webview/cockpit/components/stages/templates/SummaryStats.tsx
+  var React14 = __toESM(require_react());
+  var SummaryStats = ({ commitCount, fileCount, symbolCount }) => {
+    return /* @__PURE__ */ React14.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          gap: "15px",
+          marginBottom: "15px",
+          fontSize: "0.85em",
+          color: "var(--vscode-descriptionForeground)",
+          borderBottom: "1px solid var(--vscode-panel-border)",
+          paddingBottom: "10px"
+        }
+      },
+      /* @__PURE__ */ React14.createElement("div", null, /* @__PURE__ */ React14.createElement("strong", null, commitCount), " commits"),
+      /* @__PURE__ */ React14.createElement("div", null, /* @__PURE__ */ React14.createElement("strong", null, fileCount), " files"),
+      symbolCount !== void 0 && /* @__PURE__ */ React14.createElement("div", null, /* @__PURE__ */ React14.createElement("strong", null, symbolCount), " symbols")
+    );
+  };
+
+  // src/webview/cockpit/components/stages/FolderStage.tsx
+  var FolderStage = ({ frame, onZoomIn, cockpitState }) => {
+    const handleFileClick = (file) => {
+      onZoomIn({
+        level: "file",
+        id: file.path,
+        name: file.name || file.path.split("/").pop(),
+        status: "scanning"
+      });
+    };
+    const folderPath = frame.id;
+    const bundleData = cockpitState?.bundleView;
+    const filteredHotspots = React15.useMemo(() => {
+      if (!bundleData?.hotspots) return [];
+      return bundleData.hotspots.filter((file) => file.path.startsWith(folderPath)).map((file) => ({
+        ...file,
+        name: file.name || file.path.split("/").pop() || "Unknown"
+      }));
+    }, [bundleData?.hotspots, folderPath]);
+    const filteredTreemap = React15.useMemo(() => {
+      if (!bundleData?.treemap) return [];
+      return bundleData.treemap.filter((node) => {
+        const nodePath = node.path || node.id;
+        return nodePath && nodePath.startsWith(folderPath);
+      });
+    }, [bundleData?.treemap, folderPath]);
+    const filteredRisks = React15.useMemo(() => {
+      if (!bundleData?.risks) return [];
+      return bundleData.risks.filter((risk) => risk.path && risk.path.startsWith(folderPath));
+    }, [bundleData?.risks, folderPath]);
+    const fileCount = filteredHotspots.length;
+    const symbolCount = filteredHotspots.reduce(
+      (sum, file) => sum + (file.symbols || 0),
+      0
+    );
+    console.log("[FolderStage] folderPath:", folderPath);
+    console.log("[FolderStage] filteredHotspots:", filteredHotspots);
+    console.log("[FolderStage] filteredTreemap:", filteredTreemap);
+    return /* @__PURE__ */ React15.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React15.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "10px"
+        }
+      },
+      /* @__PURE__ */ React15.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, frame.name),
+      /* @__PURE__ */ React15.createElement("div", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, folderPath)
+    ), cockpitState?.bundleSummary && /* @__PURE__ */ React15.createElement(
+      SummaryStats,
+      {
+        commitCount: cockpitState.bundleSummary.commitCount,
+        fileCount,
+        symbolCount: symbolCount > 0 ? symbolCount : void 0
+      }
+    ), /* @__PURE__ */ React15.createElement(
+      TreemapView,
+      {
+        treemap: filteredTreemap,
+        isAnalyzing: cockpitState?.isAnalyzing,
+        hasHotspots: filteredHotspots.length > 0
+      }
+    ), filteredHotspots.length > 0 && /* @__PURE__ */ React15.createElement(
+      HotspotList,
+      {
+        hotspots: filteredHotspots,
+        onFileClick: handleFileClick,
+        isAnalyzing: cockpitState?.isAnalyzing
+      }
+    ), filteredRisks.length > 0 && /* @__PURE__ */ React15.createElement(RisksList, { risks: filteredRisks }), filteredHotspots.length === 0 && !cockpitState?.isAnalyzing && /* @__PURE__ */ React15.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots found in this folder. Files may not have been modified recently."));
+  };
+
+  // src/webview/cockpit/components/stages/PortalsRail.tsx
+  var React16 = __toESM(require_react());
+  function dirname(filePath) {
+    const normalized = filePath.replace(/\\/g, "/");
+    const lastSlash = normalized.lastIndexOf("/");
+    return lastSlash === -1 ? "" : normalized.substring(0, lastSlash);
+  }
   var RailContainer = {
     width: "220px",
     borderLeft: "1px solid var(--vscode-panel-border)",
@@ -29913,7 +29804,11 @@ Churn: ${file.score || 0}
     borderBottom: "1px solid var(--vscode-panel-border)",
     marginTop: "10px"
   };
-  var PortalGroup = ({ name, count, type }) => /* @__PURE__ */ React21.createElement(
+  var PortalGroup = ({
+    name,
+    count,
+    type
+  }) => /* @__PURE__ */ React16.createElement(
     "div",
     {
       style: {
@@ -29925,7 +29820,20 @@ Churn: ${file.score || 0}
       onMouseEnter: (e) => e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)",
       onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent"
     },
- React21.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ React21.createElement("span", { style: { fontWeight: 600, fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React21.createElement("span", null, type === "incoming" ? "\u2199" : "\u2197"), name), /* @__PURE__ */ React21.createElement(
+    /* @__PURE__ */ React16.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ React16.createElement(
+      "span",
+      {
+        style: {
+          fontWeight: 600,
+          fontSize: "11px",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px"
+        }
+      },
+      /* @__PURE__ */ React16.createElement("span", null, type === "incoming" ? "\u2199" : "\u2197"),
+      name
+    ), /* @__PURE__ */ React16.createElement(
       "span",
       {
         style: {
@@ -29941,11 +29849,520 @@ Churn: ${file.score || 0}
       count
     ))
   );
-  var PortalsRail = ({ incomingRefs = 0, outgoingRefs = 0 }) => {
-    return /* @__PURE__ */ React21.createElement("div", { style: RailContainer }, /* @__PURE__ */ React21.createElement("div", { style: SectionHeader }, "Incoming (Referenced By)"), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "UTILS", count: Math.max(1, Math.floor(incomingRefs * 0.6)), type: "incoming" }), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "CONTROLLERS", count: Math.max(0, Math.floor(incomingRefs * 0.4)), type: "incoming" }), /* @__PURE__ */ React21.createElement("div", { style: SectionHeader }, "Outgoing (References)"), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "TYPES", count: Math.max(1, Math.floor(outgoingRefs * 0.5)), type: "outgoing" }), /* @__PURE__ */ React21.createElement(PortalGroup, { name: "SERVICES", count: Math.max(0, Math.floor(outgoingRefs * 0.5)), type: "outgoing" }));
+  function extractFolderName(filePath) {
+    const dir = dirname(filePath);
+    const parts = dir.split("/").filter((p) => p);
+    if (parts.length === 0) return "ROOT";
+    const folderName = parts[parts.length - 1].toUpperCase();
+    return folderName || "ROOT";
+  }
+  function groupByFolder(references) {
+    const groups = /* @__PURE__ */ new Map();
+    references.forEach((ref) => {
+      const refPath = ref.from || ref.to || "";
+      if (refPath) {
+        const filePath = refPath.split(":")[0];
+        const folder = extractFolderName(filePath);
+        groups.set(folder, (groups.get(folder) || 0) + 1);
+      }
+    });
+    return groups;
+  }
+  var PortalsRail = ({
+    incomingRefs = 0,
+    outgoingRefs = 0,
+    blastRadius,
+    focusedSymbolId,
+    currentFilePath,
+    currentCommitIndex,
+    orderedCommits = []
+  }) => {
+    const isTimeTravelActive = currentCommitIndex !== void 0 && orderedCommits.length > 0;
+    let filteredIncoming = blastRadius?.incoming || [];
+    let filteredOutgoing = blastRadius?.outgoing || [];
+    if (focusedSymbolId && currentFilePath) {
+      filteredIncoming = (blastRadius?.incoming || []).filter((ref) => {
+        const toMatch = ref.to?.match(/^(.+):(.+)$/);
+        if (toMatch) {
+          const [, toPath, toSymbol] = toMatch;
+          return toPath === currentFilePath && (toSymbol === focusedSymbolId || toSymbol.includes(focusedSymbolId));
+        }
+        return false;
+      });
+      filteredOutgoing = (blastRadius?.outgoing || []).filter((ref) => {
+        const fromMatch = ref.from?.match(/^(.+):(.+)$/);
+        if (fromMatch) {
+          const [, fromPath, fromSymbol] = fromMatch;
+          return fromPath === currentFilePath && (fromSymbol === focusedSymbolId || fromSymbol.includes(focusedSymbolId));
+        }
+        return false;
+      });
+    }
+    const incomingGroups = filteredIncoming.length > 0 ? groupByFolder(filteredIncoming) : /* @__PURE__ */ new Map();
+    const outgoingGroups = filteredOutgoing.length > 0 ? groupByFolder(filteredOutgoing) : /* @__PURE__ */ new Map();
+    const hasIncoming = incomingGroups.size > 0 || incomingRefs > 0;
+    const hasOutgoing = outgoingGroups.size > 0 || outgoingRefs > 0;
+    return /* @__PURE__ */ React16.createElement("div", { style: RailContainer }, focusedSymbolId && /* @__PURE__ */ React16.createElement(
+      "div",
+      {
+        style: {
+          ...SectionHeader,
+          backgroundColor: "var(--vscode-editor-selectionBackground)",
+          marginTop: "0"
+        }
+      },
+      "Filtered: ",
+      focusedSymbolId
+    ), isTimeTravelActive && /* @__PURE__ */ React16.createElement(
+      "div",
+      {
+        style: {
+          ...SectionHeader,
+          backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+          color: "var(--vscode-inputValidation-warningForeground)",
+          fontSize: "9px",
+          padding: "6px 10px",
+          marginTop: "0"
+        },
+        title: "References shown are current state. They may not have existed at the selected commit time."
+      },
+      "\u26A0\uFE0F Time travel active: References may differ"
+    ), /* @__PURE__ */ React16.createElement("div", { style: SectionHeader }, "Incoming (Referenced By)"), hasIncoming ? incomingGroups.size > 0 ? Array.from(incomingGroups.entries()).sort((a, b) => b[1] - a[1]).map(([folder, count]) => /* @__PURE__ */ React16.createElement(PortalGroup, { key: folder, name: folder, count, type: "incoming" })) : /* @__PURE__ */ React16.createElement(PortalGroup, { name: "UNKNOWN", count: incomingRefs, type: "incoming" }) : /* @__PURE__ */ React16.createElement("div", { style: { padding: "8px 12px", opacity: 0.5, fontSize: "11px" } }, focusedSymbolId ? `No incoming references for ${focusedSymbolId}` : "No incoming references"), /* @__PURE__ */ React16.createElement("div", { style: SectionHeader }, "Outgoing (References)"), hasOutgoing ? outgoingGroups.size > 0 ? Array.from(outgoingGroups.entries()).sort((a, b) => b[1] - a[1]).map(([folder, count]) => /* @__PURE__ */ React16.createElement(PortalGroup, { key: folder, name: folder, count, type: "outgoing" })) : /* @__PURE__ */ React16.createElement(PortalGroup, { name: "UNKNOWN", count: outgoingRefs, type: "outgoing" }) : /* @__PURE__ */ React16.createElement("div", { style: { padding: "8px 12px", opacity: 0.5, fontSize: "11px" } }, focusedSymbolId ? `No outgoing references for ${focusedSymbolId}` : "No outgoing references"));
   };
 
+  // src/webview/cockpit/components/stages/ReportsStage.tsx
+  var React18 = __toESM(require_react());
 
+  // src/webview/cockpit/components/ReportList.tsx
+  var React17 = __toESM(require_react());
+
+  // src/webview/cockpit/utils.ts
+  var formatDate = (value) => {
+    if (!value) return "";
+    try {
+      return new Date(value).toLocaleDateString();
+    } catch {
+      return value;
+    }
+  };
+
+  // src/webview/cockpit/components/ReportList.tsx
+  var ReportList = ({ state, vscode: vscode3 }) => {
+    const filter = state.reportsFilterText.toLowerCase();
+    const list = state.reports.filter(
+      (r) => (!filter || (r.title || "").toLowerCase().includes(filter) || (r.summary || "").toLowerCase().includes(filter)) && (!state.reportsShowPinnedOnly || r.pinned) && (state.reportsBranchFilter === "all" || r.branch === state.reportsBranchFilter)
+    );
+    if (!list.length) {
+      return /* @__PURE__ */ React17.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React17.createElement("div", null, "No reports yet"), /* @__PURE__ */ React17.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
+    }
+    return /* @__PURE__ */ React17.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React17.createElement(
+      "li",
+      {
+        key: r.id,
+        className: "cockpit__list-item cockpit__list-item--clickable",
+        onClick: () => postMessageWithTracing(vscode3, { type: "openReport", reportId: r.id })
+      },
+      /* @__PURE__ */ React17.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React17.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React17.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React17.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React17.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
+      r.summary ? /* @__PURE__ */ React17.createElement("div", { className: "cockpit__message" }, r.summary) : null,
+      /* @__PURE__ */ React17.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React17.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small",
+          onClick: (e) => {
+            e.stopPropagation();
+            postMessageWithTracing(vscode3, { type: "regenerateReport", reportId: r.id });
+          }
+        },
+        "Regenerate"
+      ), /* @__PURE__ */ React17.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small",
+          onClick: (e) => {
+            e.stopPropagation();
+            postMessageWithTracing(vscode3, { type: "togglePinReport", reportId: r.id });
+          }
+        },
+        r.pinned ? "Unpin" : "Pin"
+      ), /* @__PURE__ */ React17.createElement(
+        "button",
+        {
+          className: "cockpit__button ghost small danger",
+          onClick: (e) => {
+            e.stopPropagation();
+            if (confirm(
+              `Are you sure you want to delete the report "${r.title || "Untitled"}"? This cannot be undone.`
+            )) {
+              postMessageWithTracing(vscode3, { type: "deleteReport", reportId: r.id });
+            }
+          }
+        },
+        "Delete"
+      ))
+    )));
+  };
+
+  // src/webview/cockpit/components/stages/ReportsStage.tsx
+  var ReportsStage = ({
+    cockpitState,
+    vscode: vscode3
+  }) => /* @__PURE__ */ React18.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React18.createElement(ReportList, { state: cockpitState, vscode: vscode3 }));
+
+  // src/webview/cockpit/components/stages/SedimentGutter.tsx
+  var React19 = __toESM(require_react());
+  var GutterContainer = {
+    width: "12px",
+    height: "100%",
+    display: "flex",
+    flexDirection: "column",
+    flexShrink: 0,
+    borderRight: "1px solid var(--vscode-editor-lineHighlightBorder)",
+    backgroundColor: "var(--vscode-editor-background)"
+  };
+  var SedimentGutter = ({
+    lineCount,
+    lineCommits = [],
+    orderedCommits = [],
+    currentCommitIndex
+  }) => {
+    const lineToCommitIndex = /* @__PURE__ */ new Map();
+    if (lineCommits.length > 0 && orderedCommits.length > 0) {
+      lineCommits.forEach(({ line, commitSha }) => {
+        const commitIndex = orderedCommits.indexOf(commitSha);
+        if (commitIndex >= 0) {
+          lineToCommitIndex.set(line, commitIndex);
+        }
+      });
+    }
+    const getAgeColor = (lineNumber) => {
+      if (!lineCommits.length || !orderedCommits.length || currentCommitIndex === void 0) {
+        return "var(--vscode-editor-lineHighlightBorder)";
+      }
+      const lineCommitIndex = lineToCommitIndex.get(lineNumber);
+      if (lineCommitIndex === void 0) {
+        return "var(--vscode-editor-lineHighlightBorder)";
+      }
+      const commitsAgo = currentCommitIndex - lineCommitIndex;
+      const totalCommits = orderedCommits.length;
+      const ageRatio = totalCommits > 0 ? commitsAgo / totalCommits : 0;
+      if (ageRatio < 0.2 || commitsAgo <= 0) {
+        return "var(--vscode-charts-green)";
+      }
+      if (ageRatio < 0.5) {
+        return "var(--vscode-charts-blue)";
+      }
+      return "var(--vscode-editor-lineHighlightBorder)";
+    };
+    const getLineTitle = (lineNumber) => {
+      const lineCommit = lineCommits.find((lc) => lc.line === lineNumber);
+      if (!lineCommit) {
+        return `Line ${lineNumber}`;
+      }
+      const commitIndex = lineToCommitIndex.get(lineNumber);
+      const commitsAgo = commitIndex !== void 0 && currentCommitIndex !== void 0 ? currentCommitIndex - commitIndex : null;
+      const agoText = commitsAgo !== null && commitsAgo >= 0 ? `${commitsAgo} commit${commitsAgo !== 1 ? "s" : ""} ago` : "unknown";
+      return `Line ${lineNumber + 1}: Modified ${agoText} (${lineCommit.commitSha.substring(0, 8)})`;
+    };
+    const isLineAfterTime = (lineNumber) => {
+      if (currentCommitIndex === void 0) return false;
+      const lineCommitIndex = lineToCommitIndex.get(lineNumber);
+      if (lineCommitIndex === void 0) return false;
+      return lineCommitIndex > currentCommitIndex;
+    };
+    return /* @__PURE__ */ React19.createElement("div", { style: GutterContainer }, Array.from({ length: lineCount }).map((_, i) => {
+      const lineNumber = i + 1;
+      const isAfterTime = isLineAfterTime(lineNumber);
+      return /* @__PURE__ */ React19.createElement(
+        "div",
+        {
+          key: i,
+          style: {
+            height: "20px",
+            width: "100%",
+            backgroundColor: getAgeColor(lineNumber),
+            opacity: isAfterTime ? 0.2 : 0.6,
+            display: isAfterTime && currentCommitIndex !== void 0 ? "none" : "block"
+          },
+          title: getLineTitle(lineNumber)
+        }
+      );
+    }));
+  };
+
+  // src/webview/cockpit/components/stages/SignatureView.tsx
+  var React20 = __toESM(require_react());
+  var SignatureContainer = {
+    border: "1px solid var(--vscode-editor-lineHighlightBorder)",
+    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+    borderRadius: "4px",
+    padding: "6px 10px",
+    margin: "2px 0",
+    cursor: "pointer",
+    transition: "background-color 0.1s",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    fontSize: "12px",
+    lineHeight: "18px"
+  };
+  var SignatureText = {
+    fontFamily: "var(--vscode-editor-font-family)",
+    color: "var(--vscode-editor-foreground)",
+    flex: 1,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap"
+  };
+  var KindBadge = {
+    fontSize: "10px",
+    opacity: 0.7,
+    padding: "1px 4px",
+    borderRadius: "3px",
+    backgroundColor: "var(--vscode-badge-background)",
+    color: "var(--vscode-badge-foreground)"
+  };
+  var CollapseIcon = {
+    fontSize: "10px",
+    opacity: 0.5,
+    marginRight: "4px"
+  };
+  var SignatureView = ({
+    name,
+    kind,
+    signature,
+    startLine,
+    endLine,
+    hasDrift,
+    riskScore,
+    onClick
+  }) => {
+    const lineCount = endLine - startLine + 1;
+    const displaySignature = signature || `${kind} ${name}`;
+    const signatureText = displaySignature.length > 80 ? displaySignature.substring(0, 80) + "..." : displaySignature;
+    return /* @__PURE__ */ React20.createElement(
+      "div",
+      {
+        style: SignatureContainer,
+        onClick,
+        onMouseEnter: (e) => {
+          e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)";
+        },
+        onMouseLeave: (e) => {
+          e.currentTarget.style.backgroundColor = "var(--vscode-editor-inactiveSelectionBackground)";
+        },
+        title: `${name} (${kind}) - ${lineCount} lines - Click to focus`
+      },
+      /* @__PURE__ */ React20.createElement("span", { style: CollapseIcon }, "\u25B6"),
+      /* @__PURE__ */ React20.createElement("span", { style: SignatureText }, signatureText),
+      /* @__PURE__ */ React20.createElement("span", { style: KindBadge }, kind),
+      hasDrift && /* @__PURE__ */ React20.createElement(
+        "span",
+        {
+          style: {
+            fontSize: "10px",
+            color: "var(--vscode-inputValidation-warningForeground)"
+          },
+          title: "Has drift warnings"
+        },
+        "\u26A0\uFE0F"
+      ),
+      riskScore !== void 0 && riskScore > 40 && /* @__PURE__ */ React20.createElement(
+        "span",
+        {
+          style: {
+            fontSize: "8px",
+            width: "6px",
+            height: "6px",
+            borderRadius: "50%",
+            backgroundColor: riskScore > 70 ? "var(--vscode-charts-red)" : "var(--vscode-charts-yellow)"
+          },
+          title: `Risk: ${riskScore}`
+        }
+      ),
+      /* @__PURE__ */ React20.createElement(
+        "span",
+        {
+          style: {
+            fontSize: "10px",
+            opacity: 0.5,
+            minWidth: "40px",
+            textAlign: "right"
+          }
+        },
+        lineCount,
+        " lines"
+      )
+    );
+  };
+
+  // src/webview/cockpit/components/stages/StageHeader.tsx
+  var React21 = __toESM(require_react());
+  function dirname2(filePath) {
+    const normalized = filePath.replace(/\\/g, "/");
+    const lastSlash = normalized.lastIndexOf("/");
+    return lastSlash === -1 ? "" : normalized.substring(0, lastSlash);
+  }
+  function basename(filePath) {
+    const normalized = filePath.replace(/\\/g, "/");
+    const lastSlash = normalized.lastIndexOf("/");
+    return lastSlash === -1 ? normalized : normalized.substring(lastSlash + 1);
+  }
+  var HeaderContainer = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "8px 16px",
+    borderBottom: "1px solid var(--vscode-panel-border)",
+    backgroundColor: "var(--vscode-editor-background)",
+    height: "40px",
+    flexShrink: 0
+  };
+  var TitleStyle = {
+    fontWeight: 600,
+    fontSize: "13px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px"
+  };
+  var HealthBarStyle = (riskScore) => {
+    const color = riskScore > 70 ? "var(--vscode-charts-red)" : riskScore > 40 ? "var(--vscode-charts-yellow)" : "var(--vscode-charts-green)";
+    return {
+      height: "4px",
+      width: "100%",
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      backgroundColor: color,
+      opacity: 0.5
+    };
+  };
+  function findSiblingFiles(currentFilePath, explorerData, bundleFacts) {
+    if (!currentFilePath) return [];
+    const currentDir = dirname2(currentFilePath);
+    const siblings = [];
+    if (bundleFacts?.evidence?.["scope.files"]) {
+      const files = bundleFacts.evidence["scope.files"];
+      files.forEach((filePath) => {
+        if (filePath !== currentFilePath && dirname2(filePath) === currentDir) {
+          siblings.push(filePath);
+        }
+      });
+    }
+    if (explorerData && siblings.length < 5) {
+      const collectFiles = (nodes) => {
+        for (const node of nodes) {
+          if (node.type === "file" && node.id) {
+            const filePath = node.id;
+            if (filePath !== currentFilePath && dirname2(filePath) === currentDir && !siblings.includes(filePath)) {
+              siblings.push(filePath);
+            }
+          }
+          if (node.children) {
+            collectFiles(node.children);
+          }
+        }
+      };
+      collectFiles(explorerData);
+    }
+    return siblings.slice(0, 6);
+  }
+  var StageHeader = ({
+    fileName,
+    filePath,
+    metrics,
+    explorerData,
+    bundleFacts,
+    onNeighborClick
+  }) => {
+    const siblings = React21.useMemo(
+      () => filePath ? findSiblingFiles(filePath, explorerData, bundleFacts) : [],
+      [filePath, explorerData, bundleFacts]
+    );
+    return /* @__PURE__ */ React21.createElement("div", { style: { position: "relative" } }, /* @__PURE__ */ React21.createElement("div", { style: HeaderContainer }, /* @__PURE__ */ React21.createElement(
+      "div",
+      {
+        style: { ...TitleStyle, flexDirection: "column", alignItems: "flex-start", gap: "4px" }
+      },
+      /* @__PURE__ */ React21.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px" } }, /* @__PURE__ */ React21.createElement("span", null, fileName), metrics && metrics.riskScore > 0 && /* @__PURE__ */ React21.createElement(
+        "span",
+        {
+          style: {
+            fontSize: "10px",
+            opacity: 0.7,
+            backgroundColor: "var(--vscode-badge-background)",
+            color: "var(--vscode-badge-foreground)",
+            padding: "1px 4px",
+            borderRadius: "4px"
+          }
+        },
+        "Risk: ",
+        metrics.riskScore
+      )),
+      siblings.length > 0 && /* @__PURE__ */ React21.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "10px",
+            opacity: 0.7,
+            flexWrap: "wrap"
+          }
+        },
+        /* @__PURE__ */ React21.createElement("span", { style: { opacity: 0.5 } }, "Neighbors:"),
+        siblings.map((siblingPath) => {
+          const siblingName = basename(siblingPath);
+          return /* @__PURE__ */ React21.createElement(
+            "button",
+            {
+              key: siblingPath,
+              onClick: () => onNeighborClick?.(siblingPath),
+              style: {
+                fontSize: "10px",
+                padding: "2px 6px",
+                backgroundColor: "var(--vscode-button-secondaryBackground)",
+                color: "var(--vscode-button-secondaryForeground)",
+                border: "1px solid var(--vscode-button-border)",
+                borderRadius: "3px",
+                cursor: "pointer",
+                transition: "background-color 0.1s"
+              },
+              onMouseEnter: (e) => {
+                e.currentTarget.style.backgroundColor = "var(--vscode-button-secondaryHoverBackground)";
+              },
+              onMouseLeave: (e) => {
+                e.currentTarget.style.backgroundColor = "var(--vscode-button-secondaryBackground)";
+              },
+              title: `Navigate to ${siblingName}`
+            },
+            siblingName
+          );
+        })
+      )
+    ), /* @__PURE__ */ React21.createElement("div", { style: { display: "flex", alignItems: "center", gap: "12px", fontSize: "11px" } }, metrics && /* @__PURE__ */ React21.createElement(React21.Fragment, null, /* @__PURE__ */ React21.createElement("div", { title: "Bus Factor (Top Authors)", style: { display: "flex", gap: "4px" } }, metrics.authors?.map((author) => /* @__PURE__ */ React21.createElement(
+      "div",
+      {
+        key: author,
+        style: {
+          width: "16px",
+          height: "16px",
+          borderRadius: "50%",
+          backgroundColor: "var(--vscode-button-background)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "9px",
+          color: "var(--vscode-button-foreground)",
+          cursor: "help"
+        },
+        title: author
+      },
+      author.charAt(0).toUpperCase()
+    ))), /* @__PURE__ */ React21.createElement("div", { title: "Incoming References" }, "Refs: ", /* @__PURE__ */ React21.createElement("strong", null, metrics.incomingRefs))))), metrics && /* @__PURE__ */ React21.createElement("div", { style: HealthBarStyle(metrics.riskScore) }));
+  };
+
+  // src/webview/cockpit/components/stages/SymbolBlock.tsx
   var React22 = __toESM(require_react());
   var BlockContainer = {
     border: "1px solid var(--vscode-editor-lineHighlightBorder)",
@@ -29988,13 +30405,161 @@ Churn: ${file.score || 0}
         onClick,
         title: `Click to zoom into ${name}`
       },
- React22.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React22.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React22.createElement("span", { style: NameStyle }, name), /* @__PURE__ */ React22.createElement("span", { style: { fontSize: "10px", opacity: 0.7 } }, "(", kind, ")")), /* @__PURE__ */ React22.createElement("div", { style: MetaStyle }, lineCount, " lines \u2022 C", complexity)),
- React22.createElement("div", { style: { opacity: 0.3, fontSize: "8px", overflow: "hidden" } }, Array.from({ length: Math.min(5, lineCount) }).map((_, i) => /* @__PURE__ */ React22.createElement("div", { key: i, style: { height: "4px", backgroundColor: "currentColor", marginBottom: "2px", width: `${Math.random() * 60 + 40}%` } })))
+      /* @__PURE__ */ React22.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React22.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React22.createElement("span", { style: NameStyle }, name), /* @__PURE__ */ React22.createElement("span", { style: { fontSize: "10px", opacity: 0.7 } }, "(", kind, ")")), /* @__PURE__ */ React22.createElement("div", { style: MetaStyle }, lineCount, " lines \u2022 C", complexity)),
+      /* @__PURE__ */ React22.createElement("div", { style: { opacity: 0.3, fontSize: "8px", overflow: "hidden" } }, Array.from({ length: Math.min(5, lineCount) }).map((_, i) => /* @__PURE__ */ React22.createElement(
+        "div",
+        {
+          key: i,
+          style: {
+            height: "4px",
+            backgroundColor: "currentColor",
+            marginBottom: "2px",
+            width: `${Math.random() * 60 + 40}%`
+          }
+        }
+      )))
     );
   };
 
-
+  // src/webview/cockpit/components/stages/SymbolStage.tsx
   var React23 = __toESM(require_react());
+  var SymbolStage = ({ frame, vscode: vscode3 }) => /* @__PURE__ */ React23.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React23.createElement(
+    "div",
+    {
+      style: {
+        padding: "10px",
+        borderBottom: "1px solid var(--vscode-panel-border)",
+        flexShrink: 0
+      }
+    },
+    /* @__PURE__ */ React23.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
+    /* @__PURE__ */ React23.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.filePath),
+    frame.data?.drift?.length > 0 && /* @__PURE__ */ React23.createElement("div", { style: { marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React23.createElement(
+      "span",
+      {
+        key: idx,
+        style: {
+          padding: "2px 6px",
+          borderRadius: "4px",
+          background: "var(--vscode-inputValidation-warningBackground)",
+          color: "var(--vscode-inputValidation-warningForeground)",
+          fontSize: "0.75em"
+        }
+      },
+      "Drift: ",
+      d.suggestedName || d.issue || "Rename suggested"
+    ))),
+    /* @__PURE__ */ React23.createElement("div", { style: { marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" } }, frame.data?.symbolId && vscode3 && /* @__PURE__ */ React23.createElement(
+      "button",
+      {
+        onClick: () => {
+          postMessageWithTracing(vscode3, {
+            type: "openSymbolInEditor",
+            symbolId: frame.data.symbolId
+          });
+        },
+        style: {
+          padding: "4px 8px",
+          border: "1px solid var(--vscode-button-border)",
+          background: "var(--vscode-button-secondaryBackground)",
+          color: "var(--vscode-button-foreground)",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "0.8em"
+        }
+      },
+      "Open in Editor"
+    ), frame.data?.drift?.[0]?.suggestedName && vscode3 && /* @__PURE__ */ React23.createElement(
+      "button",
+      {
+        onClick: () => {
+          const suggestion = frame.data.drift[0].suggestedName;
+          postMessageWithTracing(vscode3, {
+            type: "applyRefactorSuggestion",
+            payload: {
+              symbolId: frame.data.symbolId,
+              suggestedName: suggestion,
+              filePath: frame.data.filePath
+            }
+          });
+        },
+        style: {
+          padding: "4px 8px",
+          border: "1px solid var(--vscode-button-border)",
+          background: "var(--vscode-button-background)",
+          color: "var(--vscode-button-foreground)",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "0.8em"
+        }
+      },
+      "Apply Suggestion (manual)"
+    ), vscode3 && /* @__PURE__ */ React23.createElement(
+      "button",
+      {
+        onClick: () => {
+          postMessageWithTracing(vscode3, {
+            type: "askAssistant",
+            payload: {
+              symbolId: frame.data?.symbolId,
+              filePath: frame.data?.filePath,
+              drift: frame.data?.drift
+            }
+          });
+        },
+        style: {
+          padding: "4px 8px",
+          border: "1px solid var(--vscode-button-border)",
+          background: "var(--vscode-button-secondaryBackground)",
+          color: "var(--vscode-button-foreground)",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "0.8em"
+        }
+      },
+      "Ask Assistant"
+    ))
+  ), /* @__PURE__ */ React23.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React23.createElement(
+    "div",
+    {
+      style: {
+        flex: 1,
+        overflow: "auto",
+        backgroundColor: "var(--vscode-editor-background)",
+        padding: "10px",
+        borderBottom: "1px solid var(--vscode-panel-border)"
+      }
+    },
+    /* @__PURE__ */ React23.createElement(
+      "pre",
+      {
+        style: {
+          margin: 0,
+          fontFamily: "var(--vscode-editor-font-family)",
+          fontSize: "0.85em",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          lineHeight: "1.5"
+        }
+      },
+      frame.data?.content || "Loading..."
+    )
+  ), /* @__PURE__ */ React23.createElement("div", { style: { maxHeight: "220px", overflow: "auto", padding: "10px", flexShrink: 0 } }, /* @__PURE__ */ React23.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Evolution"), /* @__PURE__ */ React23.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.history?.map((commit) => /* @__PURE__ */ React23.createElement(
+    "li",
+    {
+      key: commit.hash || commit.message || commit.date || commit.author,
+      style: {
+        marginBottom: "12px",
+        borderLeft: "2px solid var(--vscode-charts-blue)",
+        paddingLeft: "8px"
+      }
+    },
+    /* @__PURE__ */ React23.createElement("div", { style: { fontWeight: "bold", fontSize: "0.85em" } }, commit.message || commit.summary || commit.change),
+    /* @__PURE__ */ React23.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
+  )), !frame.data?.history?.length && /* @__PURE__ */ React23.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
+
+  // src/webview/cockpit/components/stages/TimeScrubber.tsx
+  var React24 = __toESM(require_react());
   var ScrubberContainer = {
     height: "40px",
     borderTop: "1px solid var(--vscode-panel-border)",
@@ -30005,52 +30570,66 @@ Churn: ${file.score || 0}
     gap: "12px",
     flexShrink: 0
   };
-  var SliderStyle2 = {
+  var SliderStyle = {
     flex: 1,
     cursor: "pointer"
   };
   var TimeScrubber = ({
-    currentTimeFilter,
-    onTimeFilterChange,
-    startTime = Date.now() - 30 * 24 * 60 * 60 * 1e3,
-
-    endTime = Date.now()
+    commits = [],
+    currentCommitIndex,
+    onCommitIndexChange
   }) => {
-    const [isPlaying, setIsPlaying] = React23.useState(false);
-    const [currentValue, setCurrentValue] = React23.useState(currentTimeFilter || endTime);
-    React23.useEffect(() => {
-      if (currentTimeFilter) {
-        setCurrentValue(currentTimeFilter);
+    const [isPlaying, setIsPlaying] = React24.useState(false);
+    const maxIndex = commits.length > 0 ? commits.length - 1 : 0;
+    const effectiveIndex = currentCommitIndex !== void 0 ? currentCommitIndex : maxIndex;
+    const [currentIndex, setCurrentIndex] = React24.useState(effectiveIndex);
+    React24.useEffect(() => {
+      if (currentCommitIndex !== void 0) {
+        setCurrentIndex(currentCommitIndex);
       }
-    }, [currentTimeFilter]);
-    React23.useEffect(() => {
+    }, [currentCommitIndex]);
+    React24.useEffect(() => {
       let interval;
-      if (isPlaying) {
+      if (isPlaying && commits.length > 0) {
         interval = setInterval(() => {
-          setCurrentValue((prev) => {
-            const next = prev + (endTime - startTime) / 100;
-            if (next >= endTime) {
+          setCurrentIndex((prev) => {
+            if (prev >= maxIndex) {
               setIsPlaying(false);
-              return endTime;
+              return maxIndex;
             }
+            const next = prev + 1;
+            onCommitIndexChange(next);
             return next;
           });
-        }, 100);
+        }, 500);
       }
       return () => clearInterval(interval);
-    }, [isPlaying, startTime, endTime]);
-    React23.useEffect(() => {
-      if (Math.abs(currentValue - (currentTimeFilter || endTime)) > 1e3) {
-        onTimeFilterChange(currentValue);
+    }, [isPlaying, maxIndex, commits.length, onCommitIndexChange]);
+    React24.useEffect(() => {
+      if (currentIndex !== effectiveIndex) {
+        onCommitIndexChange(currentIndex);
       }
-    }, [currentValue]);
+    }, [currentIndex]);
     const handleChange = (e) => {
       const val = parseInt(e.target.value, 10);
-      setCurrentValue(val);
-      onTimeFilterChange(val);
+      setCurrentIndex(val);
+      onCommitIndexChange(val);
     };
-    const formatTime = (ts) => new Date(ts).toLocaleDateString();
-    return /* @__PURE__ */ React23.createElement("div", { style: ScrubberContainer }, /* @__PURE__ */ React23.createElement(
+    const formatCommit = (index) => {
+      if (commits.length === 0 || index < 0 || index >= commits.length) {
+        return "No commits";
+      }
+      const commit = commits[index];
+      const shortSha = commit.sha.substring(0, 8);
+      const date = commit.date ? new Date(commit.date).toLocaleDateString() : "";
+      const message = commit.message || "No message";
+      const shortMessage = message.length > 40 ? message.substring(0, 40) + "..." : message;
+      return `${shortSha} - ${shortMessage}${date ? ` (${date})` : ""}`;
+    };
+    if (commits.length === 0) {
+      return /* @__PURE__ */ React24.createElement("div", { style: ScrubberContainer }, /* @__PURE__ */ React24.createElement("span", { style: { fontSize: "11px", opacity: 0.7 } }, "No commits available"));
+    }
+    return /* @__PURE__ */ React24.createElement("div", { style: ScrubberContainer }, /* @__PURE__ */ React24.createElement(
       "button",
       {
         onClick: () => setIsPlaying(!isPlaying),
@@ -30061,25 +30640,40 @@ Churn: ${file.score || 0}
           cursor: "pointer",
           fontSize: "16px"
         },
-        title: isPlaying ? "Pause" : "Play History"
+        title: isPlaying ? "Pause" : "Play History",
+        disabled: commits.length === 0
       },
       isPlaying ? "\u23F8" : "\u25B6"
-    ), /* @__PURE__ */ React23.createElement("span", { style: { fontSize: "11px", opacity: 0.7, minWidth: "70px" } }, formatTime(currentValue)), /* @__PURE__ */ React23.createElement(
+    ), /* @__PURE__ */ React24.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "11px",
+          opacity: 0.7,
+          minWidth: "200px",
+          maxWidth: "300px",
+          overflow: "hidden",
+          textOverflow: "ellipsis"
+        }
+      },
+      formatCommit(currentIndex)
+    ), /* @__PURE__ */ React24.createElement(
       "input",
       {
         type: "range",
-        min: startTime,
-        max: endTime,
-        value: currentValue,
+        min: 0,
+        max: maxIndex,
+        value: currentIndex,
         onChange: handleChange,
-        style: SliderStyle2
+        style: SliderStyle,
+        disabled: commits.length === 0
       }
-    ), /* @__PURE__ */ React23.createElement(
+    ), /* @__PURE__ */ React24.createElement("span", { style: { fontSize: "11px", opacity: 0.7, minWidth: "50px", textAlign: "right" } }, currentIndex + 1, " / ", commits.length), /* @__PURE__ */ React24.createElement(
       "button",
       {
         onClick: () => {
-          setCurrentValue(endTime);
-          onTimeFilterChange(endTime);
+          setCurrentIndex(maxIndex);
+          onCommitIndexChange(maxIndex);
         },
         style: {
           fontSize: "11px",
@@ -30089,13 +30683,14 @@ Churn: ${file.score || 0}
           padding: "2px 6px",
           color: "var(--vscode-foreground)",
           cursor: "pointer"
-        }
+        },
+        disabled: commits.length === 0
       },
       "Reset"
     ));
   };
 
-
+  // src/webview/cockpit/components/CodeMicroscope.tsx
   var MicroscopeContainer = {
     flex: 1,
     display: "flex",
@@ -30123,16 +30718,23 @@ Churn: ${file.score || 0}
         parentId: frame.id
       });
     };
-    const handleTimeFilterChange = (value) => {
-      vscode3.postMessage({ type: "updateTimeFilter", value });
+    const handleCommitIndexChange = (index) => {
+      vscode3.postMessage({ type: "updateCommitIndex", value: index });
     };
     const frameData = frame.level === "bundle" ? cockpitState?.bundleView || frame.data : frame.data;
     const renderFrame = frame.level === "bundle" ? { ...frame, data: frameData } : frame;
-    const [zoomLevel, setZoomLevel] = React24.useState("focus");
+    const [zoomLevel, setZoomLevel] = React25.useState("focus");
+    const [focusedSymbolId, setFocusedSymbolId] = React25.useState(null);
     const handleWheel = (e) => {
       if (e.ctrlKey) {
         if (e.deltaY > 0) {
-          setZoomLevel((prev) => prev === "focus" ? "normal" : "overview");
+          setZoomLevel((prev) => {
+            if (prev === "focus") {
+              setFocusedSymbolId(null);
+              return "normal";
+            }
+            return "overview";
+          });
         } else {
           setZoomLevel((prev) => prev === "overview" ? "normal" : "focus");
         }
@@ -30143,52 +30745,160 @@ Churn: ${file.score || 0}
       const content = renderFrame.data?.content || "";
       const lineCount = renderFrame.data?.lineCount || content.split("\n").length;
       const symbols = renderFrame.data?.symbols || [];
-      return /* @__PURE__ */ React24.createElement("div", { style: MicroscopeContainer, onWheel: handleWheel }, /* @__PURE__ */ React24.createElement(
+      const lineCommits = renderFrame.data?.lineCommits || [];
+      const blastRadius = renderFrame.data?.blastRadius;
+      const driftIssues = renderFrame.data?.drift || [];
+      const orderedCommits = cockpitState?.selectedCommitShas || [];
+      const currentCommitIndex = cockpitState?.currentCommitIndex;
+      const commits = (cockpitState?.commits || []).filter((c) => orderedCommits.includes(c.sha)).sort((a, b) => {
+        const aIndex = orderedCommits.indexOf(a.sha);
+        const bIndex = orderedCommits.indexOf(b.sha);
+        return aIndex - bIndex;
+      }).map((c) => ({
+        sha: c.sha,
+        date: c.authoredAt,
+        message: c.message,
+        author: c.author
+      }));
+      const handleNeighborClick = (filePath) => {
+        if (vscode3) {
+          const neighborFrame = {
+            level: "file",
+            id: filePath,
+            name: filePath.split("/").pop() || filePath,
+            status: "scanning",
+            parentId: frame.id
+          };
+          vscode3.postMessage({ type: "navigateToFrame", frame: neighborFrame });
+          vscode3.postMessage({ type: "analyzeFrame", frameId: filePath });
+        }
+      };
+      return /* @__PURE__ */ React25.createElement("div", { style: MicroscopeContainer, onWheel: handleWheel }, /* @__PURE__ */ React25.createElement(
         StageHeader,
         {
           fileName: renderFrame.name,
+          filePath: renderFrame.id,
           metrics,
-          onNavigate: () => {
-          }
+          onNavigate: () => onZoomOut(),
+          explorerData: cockpitState?.explorerData,
+          bundleFacts: cockpitState?.bundleFacts,
+          onNeighborClick: handleNeighborClick
         }
-      ), /* @__PURE__ */ React24.createElement("div", { style: { position: "absolute", top: "50px", right: "240px", zIndex: 10, display: "flex", gap: "4px" } }, /* @__PURE__ */ React24.createElement("button", { onClick: () => setZoomLevel("overview"), style: { opacity: zoomLevel === "overview" ? 1 : 0.5 } }, "-"), /* @__PURE__ */ React24.createElement("button", { onClick: () => setZoomLevel("normal"), style: { opacity: zoomLevel === "normal" ? 1 : 0.5 } }, "="), /* @__PURE__ */ React24.createElement("button", { onClick: () => setZoomLevel("focus"), style: { opacity: zoomLevel === "focus" ? 1 : 0.5 } }, "+")), /* @__PURE__ */ React24.createElement("div", { style: DeepEditorLayout }, /* @__PURE__ */ React24.createElement(
+      ), /* @__PURE__ */ React25.createElement(
+        "div",
+        {
+          style: {
+            position: "absolute",
+            top: "50px",
+            right: "240px",
+            zIndex: 10,
+            display: "flex",
+            gap: "4px"
+          }
+        },
+        /* @__PURE__ */ React25.createElement(
+          "button",
+          {
+            onClick: () => setZoomLevel("overview"),
+            style: { opacity: zoomLevel === "overview" ? 1 : 0.5 }
+          },
+          "-"
+        ),
+        /* @__PURE__ */ React25.createElement(
+          "button",
+          {
+            onClick: () => setZoomLevel("normal"),
+            style: { opacity: zoomLevel === "normal" ? 1 : 0.5 }
+          },
+          "="
+        ),
+        /* @__PURE__ */ React25.createElement(
+          "button",
+          {
+            onClick: () => setZoomLevel("focus"),
+            style: { opacity: zoomLevel === "focus" ? 1 : 0.5 }
+          },
+          "+"
+        )
+      ), /* @__PURE__ */ React25.createElement("div", { style: DeepEditorLayout }, /* @__PURE__ */ React25.createElement(
         SedimentGutter,
         {
           lineCount,
-          currentTimeFilter: cockpitState?.currentTimeFilter
+          lineCommits,
+          orderedCommits,
+          currentCommitIndex
         }
-      ), zoomLevel === "focus" ? /* @__PURE__ */ React24.createElement(
+      ), zoomLevel === "focus" ? /* @__PURE__ */ React25.createElement(
         CodeEditor,
         {
           content,
-          language: renderFrame.data?.language || "text"
+          language: renderFrame.data?.language || "text",
+          driftIssues,
+          symbols,
+          focusedSymbolId,
+          onSymbolClick: (symbolId) => setFocusedSymbolId(symbolId),
+          onClearFocus: () => setFocusedSymbolId(null),
+          lineCommits,
+          orderedCommits,
+          currentCommitIndex
         }
-      ) : /* @__PURE__ */ React24.createElement("div", { style: { flex: 1, overflow: "auto", padding: "20px" } }, symbols.length > 0 ? symbols.map((sym) => /* @__PURE__ */ React24.createElement(
+      ) : zoomLevel === "overview" ? /* @__PURE__ */ React25.createElement("div", { style: { flex: 1, overflow: "auto", padding: "12px" } }, symbols.length > 0 ? symbols.map((sym) => {
+        const symbolDriftIssues = driftIssues.filter(
+          (issue) => issue.symbol === sym.name
+        );
+        const hasDrift = symbolDriftIssues.length > 0;
+        return /* @__PURE__ */ React25.createElement(
+          SignatureView,
+          {
+            key: sym.id || sym.name,
+            name: sym.name,
+            kind: sym.kind,
+            signature: sym.signature,
+            startLine: sym.location?.start?.line || sym.startLine || 0,
+            endLine: sym.location?.end?.line || sym.endLine || 0,
+            hasDrift,
+            riskScore: metrics?.riskScore,
+            onClick: () => {
+              setZoomLevel("focus");
+              setFocusedSymbolId(sym.id || sym.name);
+            }
+          }
+        );
+      }) : /* @__PURE__ */ React25.createElement("div", { style: { opacity: 0.5, textAlign: "center", marginTop: "40px" } }, "No symbols found. Switch to Focus view.")) : /* @__PURE__ */ React25.createElement("div", { style: { flex: 1, overflow: "auto", padding: "20px" } }, symbols.length > 0 ? symbols.map((sym) => /* @__PURE__ */ React25.createElement(
         SymbolBlock,
         {
-          key: sym.id,
+          key: sym.id || sym.name,
           name: sym.name,
           kind: sym.kind,
-          startLine: sym.startLine,
-          endLine: sym.endLine,
+          startLine: sym.location?.start?.line || sym.startLine || 0,
+          endLine: sym.location?.end?.line || sym.endLine || 0,
           complexity: metrics?.complexity || 0,
-          onClick: () => setZoomLevel("focus")
+          onClick: () => {
+            setZoomLevel("focus");
+            setFocusedSymbolId(sym.id || sym.name);
+          }
         }
-      )) : /* @__PURE__ */ React24.createElement("div", { style: { opacity: 0.5, textAlign: "center", marginTop: "40px" } }, "No symbols found. Switch to Focus view.")), /* @__PURE__ */ React24.createElement(
+      )) : /* @__PURE__ */ React25.createElement("div", { style: { opacity: 0.5, textAlign: "center", marginTop: "40px" } }, "No symbols found. Switch to Focus view.")), /* @__PURE__ */ React25.createElement(
         PortalsRail,
         {
           incomingRefs: metrics?.incomingRefs,
-          outgoingRefs: metrics?.outgoingRefs
+          outgoingRefs: metrics?.outgoingRefs,
+          blastRadius,
+          focusedSymbolId,
+          currentFilePath: renderFrame.id,
+          currentCommitIndex,
+          orderedCommits
         }
-      )), /* @__PURE__ */ React24.createElement(
+      )), /* @__PURE__ */ React25.createElement(
         TimeScrubber,
         {
-          currentTimeFilter: cockpitState?.currentTimeFilter,
-          onTimeFilterChange: handleTimeFilterChange
+          commits,
+          currentCommitIndex,
+          onCommitIndexChange: handleCommitIndexChange
         }
       ));
     }
-    return /* @__PURE__ */ React24.createElement("div", { style: MicroscopeContainer }, renderFrame.level !== "bundle" && /* @__PURE__ */ React24.createElement("div", { style: { padding: "8px", borderBottom: "1px solid var(--vscode-panel-border)" } }, /* @__PURE__ */ React24.createElement("button", { onClick: onZoomOut, disabled: !frame.parentId }, "\u2190 Back")), /* @__PURE__ */ React24.createElement("div", { style: { flex: 1, overflow: "auto" } }, renderFrame.status === "scanning" ? /* @__PURE__ */ React24.createElement("div", { style: { padding: "20px", textAlign: "center" } }, "Scanning...") : /* @__PURE__ */ React24.createElement(React24.Fragment, null, renderFrame.id === "reports-root" ? cockpitState ? /* @__PURE__ */ React24.createElement(ReportsStage, { cockpitState, vscode: vscode3 }) : /* @__PURE__ */ React24.createElement("div", null, "Loading state...") : /* @__PURE__ */ React24.createElement(React24.Fragment, null, renderFrame.level === "bundle" && /* @__PURE__ */ React24.createElement(
+    return /* @__PURE__ */ React25.createElement("div", { style: MicroscopeContainer }, renderFrame.level !== "bundle" && /* @__PURE__ */ React25.createElement("div", { style: { padding: "8px", borderBottom: "1px solid var(--vscode-panel-border)" } }, /* @__PURE__ */ React25.createElement("button", { onClick: onZoomOut, disabled: !frame.parentId }, "\u2190 Back")), /* @__PURE__ */ React25.createElement("div", { style: { flex: 1, overflow: "auto" } }, renderFrame.status === "scanning" ? /* @__PURE__ */ React25.createElement("div", { style: { padding: "20px", textAlign: "center" } }, "Scanning...") : /* @__PURE__ */ React25.createElement(React25.Fragment, null, renderFrame.id === "reports-root" ? cockpitState ? /* @__PURE__ */ React25.createElement(ReportsStage, { cockpitState, vscode: vscode3 }) : /* @__PURE__ */ React25.createElement("div", null, "Loading state...") : /* @__PURE__ */ React25.createElement(React25.Fragment, null, renderFrame.level === "bundle" && /* @__PURE__ */ React25.createElement(
       BundleStage,
       {
         frame: renderFrame,
@@ -30196,17 +30906,17 @@ Churn: ${file.score || 0}
         cockpitState,
         vscode: vscode3
       }
-    ), renderFrame.level === "folder" && /* @__PURE__ */ React24.createElement(
+    ), renderFrame.level === "folder" && /* @__PURE__ */ React25.createElement(
       FolderStage,
       {
         frame: renderFrame,
         onZoomIn: handleZoomIn,
         cockpitState
       }
-    ), renderFrame.level === "blast_radius" && /* @__PURE__ */ React24.createElement(BlastRadiusStage, { frame: renderFrame, onZoomIn: handleZoomIn }), renderFrame.level === "symbol" && /* @__PURE__ */ React24.createElement(SymbolStage, { frame: renderFrame, vscode: vscode3 })))));
+    ), renderFrame.level === "blast_radius" && /* @__PURE__ */ React25.createElement(BlastRadiusStage, { frame: renderFrame, onZoomIn: handleZoomIn }), renderFrame.level === "symbol" && /* @__PURE__ */ React25.createElement(SymbolStage, { frame: renderFrame, vscode: vscode3 })))));
   };
 
-
+  // src/webview/cockpit/components/Stage.tsx
   var Stage = ({
     frame,
     onZoomIn,
@@ -30214,7 +30924,7 @@ Churn: ${file.score || 0}
     cockpitState,
     vscode: vscode3
   }) => {
-    return /* @__PURE__ */ React25.createElement(
+    return /* @__PURE__ */ React26.createElement(
       CodeMicroscope,
       {
         frame,
@@ -30226,7 +30936,7 @@ Churn: ${file.score || 0}
     );
   };
 
-
+  // src/webview/cockpit/components/SuperWebview.tsx
   var LayoutStyle = {
     display: "flex",
     height: "94vh",
@@ -30238,22 +30948,21 @@ Churn: ${file.score || 0}
     display: "flex",
     flex: 1,
     minHeight: 0,
-
     overflow: "hidden"
   };
   var SuperWebview = ({
     vscode: vscode3,
     cockpitState
   }) => {
-    const [assistantMessages, setAssistantMessages] = React26.useState([]);
-    const [width, setWidth] = React26.useState(window.innerWidth);
-    const [activeTab, setActiveTab] = React26.useState("stage");
-    const [isAssistantOpen, setIsAssistantOpen] = React26.useState(true);
+    const [assistantMessages, setAssistantMessages] = React27.useState([]);
+    const [width, setWidth] = React27.useState(window.innerWidth);
+    const [activeTab, setActiveTab] = React27.useState("stage");
+    const [isAssistantOpen, setIsAssistantOpen] = React27.useState(true);
     const activeFrame = cockpitState.activeFrame;
     const history = cockpitState.history;
     const explorerData = cockpitState.explorerData;
-    const [selection, setSelection] = React26.useState(null);
-    React26.useEffect(() => {
+    const [selection, setSelection] = React27.useState(null);
+    React27.useEffect(() => {
       postMessageWithTracing(vscode3, { type: "getExplorerTree" });
       postMessageWithTracing(vscode3, { type: "getBundleData" });
       const handler = (event) => {
@@ -30273,7 +30982,7 @@ Churn: ${file.score || 0}
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
     }, [vscode3]);
-    React26.useEffect(() => {
+    React27.useEffect(() => {
       const handleResize = () => setWidth(window.innerWidth);
       window.addEventListener("resize", handleResize);
       return () => window.removeEventListener("resize", handleResize);
@@ -30314,11 +31023,9 @@ Churn: ${file.score || 0}
         const newFrame = {
           level: "bundle",
           id: "root",
-
           name: node.name,
           status: "ready",
           parentId: void 0
-
         };
         postMessageWithTracing(vscode3, {
           type: "navigateToFrame",
@@ -30376,10 +31083,44 @@ Churn: ${file.score || 0}
         setActiveTab("stage");
       }
     };
-    const handleTimeFilterChange = (value) => {
-      postMessageWithTracing(vscode3, { type: "updateTimeFilter", value });
+    const ErrorBanner = ({ error, onDismiss }) => /* @__PURE__ */ React27.createElement(
+      "div",
+      {
+        style: {
+          padding: "12px 16px",
+          backgroundColor: "var(--vscode-inputValidation-errorBackground)",
+          color: "var(--vscode-inputValidation-errorForeground)",
+          borderBottom: "1px solid var(--vscode-inputValidation-errorBorder)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: "13px",
+          zIndex: 1e3
+        }
+      },
+      /* @__PURE__ */ React27.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", flex: 1 } }, /* @__PURE__ */ React27.createElement("span", null, "\u274C"), /* @__PURE__ */ React27.createElement("span", null, error)),
+      /* @__PURE__ */ React27.createElement(
+        "button",
+        {
+          onClick: onDismiss,
+          style: {
+            background: "transparent",
+            border: "none",
+            color: "var(--vscode-inputValidation-errorForeground)",
+            cursor: "pointer",
+            padding: "4px 8px",
+            fontSize: "16px",
+            lineHeight: 1
+          },
+          title: "Dismiss error"
+        },
+        "\xD7"
+      )
+    );
+    const handleDismissError = () => {
+      postMessageWithTracing(vscode3, { type: "clearError" });
     };
-    return /* @__PURE__ */ React26.createElement("div", { style: LayoutStyle }, /* @__PURE__ */ React26.createElement("div", { style: MainAreaStyle }, isWide && /* @__PURE__ */ React26.createElement(React26.Fragment, null, /* @__PURE__ */ React26.createElement(
+    return /* @__PURE__ */ React27.createElement("div", { style: LayoutStyle }, cockpitState.error && /* @__PURE__ */ React27.createElement(ErrorBanner, { error: cockpitState.error, onDismiss: handleDismissError }), /* @__PURE__ */ React27.createElement("div", { style: MainAreaStyle }, isWide && /* @__PURE__ */ React27.createElement(React27.Fragment, null, /* @__PURE__ */ React27.createElement(
       Sidebar,
       {
         data: explorerData,
@@ -30387,11 +31128,9 @@ Churn: ${file.score || 0}
         onSelect: handleSidebarSelect,
         repoName: cockpitState.repoName || void 0,
         branchName: cockpitState.branchName || void 0,
-        allMetrics: cockpitState.nodeMetrics,
-        currentTimeFilter: cockpitState.currentTimeFilter,
-        onTimeFilterChange: handleTimeFilterChange
+        allMetrics: cockpitState.nodeMetrics
       }
-    ), /* @__PURE__ */ React26.createElement(
+    ), /* @__PURE__ */ React27.createElement(
       Stage,
       {
         frame: activeFrame,
@@ -30401,7 +31140,7 @@ Churn: ${file.score || 0}
         cockpitState,
         vscode: vscode3
       }
-    ), cockpitState.bundleSummary && cockpitState.bundleSummary.cacheHits !== void 0 && /* @__PURE__ */ React26.createElement(
+    ), cockpitState.bundleSummary && cockpitState.bundleSummary.cacheHits !== void 0 && /* @__PURE__ */ React27.createElement(
       "div",
       {
         style: {
@@ -30421,7 +31160,7 @@ Churn: ${file.score || 0}
       " misses (",
       Math.round(cockpitState.bundleSummary.cacheHitRate * 100),
       "%)"
-    )), isMedium && /* @__PURE__ */ React26.createElement(
+    )), isMedium && /* @__PURE__ */ React27.createElement(
       "div",
       {
         style: {
@@ -30432,7 +31171,7 @@ Churn: ${file.score || 0}
           minHeight: 0
         }
       },
- React26.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "assistant" ? /* @__PURE__ */ React26.createElement(
+      /* @__PURE__ */ React27.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "assistant" ? /* @__PURE__ */ React27.createElement(
         Assistant,
         {
           frame: activeFrame,
@@ -30440,7 +31179,7 @@ Churn: ${file.score || 0}
           messages: assistantMessages,
           onSend: handleSendAssistant
         }
-      ) : /* @__PURE__ */ React26.createElement(React26.Fragment, null, /* @__PURE__ */ React26.createElement(
+      ) : /* @__PURE__ */ React27.createElement(React27.Fragment, null, /* @__PURE__ */ React27.createElement(
         Sidebar,
         {
           data: explorerData,
@@ -30448,11 +31187,9 @@ Churn: ${file.score || 0}
           onSelect: handleSidebarSelect,
           repoName: cockpitState.repoName || void 0,
           branchName: cockpitState.branchName || void 0,
-          allMetrics: cockpitState.nodeMetrics,
-          currentTimeFilter: cockpitState.currentTimeFilter,
-          onTimeFilterChange: handleTimeFilterChange
+          allMetrics: cockpitState.nodeMetrics
         }
-      ), /* @__PURE__ */ React26.createElement(
+      ), /* @__PURE__ */ React27.createElement(
         Stage,
         {
           frame: activeFrame,
@@ -30463,7 +31200,7 @@ Churn: ${file.score || 0}
           vscode: vscode3
         }
       ))),
- React26.createElement(
+      /* @__PURE__ */ React27.createElement(
         "div",
         {
           style: {
@@ -30474,7 +31211,7 @@ Churn: ${file.score || 0}
             height: "40px"
           }
         },
- React26.createElement(
+        /* @__PURE__ */ React27.createElement(
           "div",
           {
             onClick: () => setActiveTab("stage"),
@@ -30490,7 +31227,7 @@ Churn: ${file.score || 0}
           },
           "Explorer + Stage"
         ),
- React26.createElement(
+        /* @__PURE__ */ React27.createElement(
           "div",
           {
             onClick: () => setActiveTab("assistant"),
@@ -30507,7 +31244,7 @@ Churn: ${file.score || 0}
           "Assistant"
         )
       )
-    ), isNarrow && /* @__PURE__ */ React26.createElement(
+    ), isNarrow && /* @__PURE__ */ React27.createElement(
       "div",
       {
         style: {
@@ -30518,7 +31255,7 @@ Churn: ${file.score || 0}
           minHeight: 0
         }
       },
- React26.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "explorer" && /* @__PURE__ */ React26.createElement(
+      /* @__PURE__ */ React27.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "explorer" && /* @__PURE__ */ React27.createElement(
         Sidebar,
         {
           data: explorerData,
@@ -30526,11 +31263,9 @@ Churn: ${file.score || 0}
           onSelect: handleSidebarSelectWrapper,
           repoName: cockpitState.repoName || void 0,
           branchName: cockpitState.branchName || void 0,
-          allMetrics: cockpitState.nodeMetrics,
-          currentTimeFilter: cockpitState.currentTimeFilter,
-          onTimeFilterChange: handleTimeFilterChange
+          allMetrics: cockpitState.nodeMetrics
         }
-      ), activeTab === "stage" && /* @__PURE__ */ React26.createElement(
+      ), activeTab === "stage" && /* @__PURE__ */ React27.createElement(
         Stage,
         {
           frame: activeFrame,
@@ -30540,7 +31275,7 @@ Churn: ${file.score || 0}
           cockpitState,
           vscode: vscode3
         }
-      ), activeTab === "assistant" && /* @__PURE__ */ React26.createElement(
+      ), activeTab === "assistant" && /* @__PURE__ */ React27.createElement(
         Assistant,
         {
           frame: activeFrame,
@@ -30549,7 +31284,7 @@ Churn: ${file.score || 0}
           onSend: handleSendAssistant
         }
       )),
- React26.createElement(
+      /* @__PURE__ */ React27.createElement(
         "div",
         {
           style: {
@@ -30560,7 +31295,7 @@ Churn: ${file.score || 0}
             height: "40px"
           }
         },
-        ["explorer", "stage", "assistant"].map((tab) => /* @__PURE__ */ React26.createElement(
+        ["explorer", "stage", "assistant"].map((tab) => /* @__PURE__ */ React27.createElement(
           "div",
           {
             key: tab,
@@ -30579,7 +31314,7 @@ Churn: ${file.score || 0}
           tab === "explorer" ? "\u{1F4C1}" : tab === "stage" ? "\u{1F3AF}" : "\u{1F916}"
         ))
       )
-    )), isAssistantOpen && isWide && /* @__PURE__ */ React26.createElement(
+    )), isAssistantOpen && isWide && /* @__PURE__ */ React27.createElement(
       Assistant,
       {
         frame: activeFrame,
@@ -30590,61 +31325,7 @@ Churn: ${file.score || 0}
     ));
   };
 
-
-  var React27 = __toESM(require_react());
-  var ErrorBoundary = class extends React27.Component {
-    constructor(props) {
-      super(props);
-      this.handleReset = () => {
-        this.setState({ hasError: false, error: null, errorInfo: null });
-      };
-      this.state = { hasError: false, error: null, errorInfo: null };
-    }
-    static getDerivedStateFromError(error) {
-      return { hasError: true };
-    }
-    componentDidCatch(error, errorInfo) {
-      console.error("[ErrorBoundary] Caught error:", error, errorInfo);
-      this.setState({ error, errorInfo });
-    }
-    render() {
-      if (this.state.hasError) {
-        return /* @__PURE__ */ React27.createElement(
-          "div",
-          {
-            style: {
-              padding: "20px",
-              backgroundColor: "var(--vscode-editorError-background)",
-              color: "var(--vscode-editorError-foreground)",
-              borderRadius: "4px",
-              margin: "10px"
-            }
-          },
- React27.createElement("h2", null, "Something went wrong"),
- React27.createElement("details", { style: { whiteSpace: "pre-wrap", marginTop: "10px" } }, /* @__PURE__ */ React27.createElement("summary", { style: { cursor: "pointer", marginBottom: "10px" } }, "Error Details"), /* @__PURE__ */ React27.createElement("div", { style: { fontSize: "12px", fontFamily: "monospace" } }, /* @__PURE__ */ React27.createElement("strong", null, "Error:"), " ", this.state.error?.toString(), /* @__PURE__ */ React27.createElement("br", null), /* @__PURE__ */ React27.createElement("br", null), /* @__PURE__ */ React27.createElement("strong", null, "Component Stack:"), /* @__PURE__ */ React27.createElement("br", null), this.state.errorInfo?.componentStack)),
- React27.createElement(
-            "button",
-            {
-              onClick: this.handleReset,
-              style: {
-                marginTop: "10px",
-                padding: "5px 10px",
-                backgroundColor: "var(--vscode-button-background)",
-                color: "var(--vscode-button-foreground)",
-                border: "none",
-                borderRadius: "2px",
-                cursor: "pointer"
-              }
-            },
-            "Try Again"
-          )
-        );
-      }
-      return this.props.children;
-    }
-  };
-
-
+  // src/webview/cockpit/index.tsx
   var vscode2 = window.acquireVsCodeApi();
   var defaultState = {
     repoName: null,
@@ -30703,22 +31384,52 @@ Churn: ${file.score || 0}
     },
     history: [],
     explorerData: [],
-    nodeMetrics: {},
-    currentTimeFilter: Date.now()
+    nodeMetrics: {}
   };
   var App = () => {
     const [state, setState] = React28.useState(defaultState);
     React28.useEffect(() => {
       const handler = (event) => {
+        console.log("[Webview] Received message event:", event.data?.type || "unknown");
+        if (event.data?.type === "analysisError" && event.data?.payload) {
+          console.log("[Webview] Analysis error received (legacy)");
+          setState((prev) => ({
+            ...prev,
+            error: event.data.payload?.error || event.data.payload?.message || "Analysis failed",
+            isAnalyzing: false
+          }));
+          return;
+        }
         const parsed = CockpitHostMessageSchema.safeParse(event.data);
         if (!parsed.success) {
-          console.warn("[Cockpit] Ignoring unknown host message", event.data);
+          console.warn("[Webview] Ignoring invalid host message", event.data, parsed.error);
           return;
         }
         const message = parsed.data;
+        console.log(`[Webview] Processing message type: ${message.type}`);
         if (message.type === "updateState") {
-          setState((prev) => ({ ...prev, ...message.payload }));
+          console.log("[Webview] Received updateState keys:", Object.keys(message.payload));
+          console.log(
+            "[Webview] bundleFacts:",
+            message.payload.bundleFacts ? "EXISTS" : "NULL/UNDEFINED"
+          );
+          console.log("[Webview] bundleSummary:", message.payload.bundleSummary);
+          console.log("[Webview] isAnalyzing:", message.payload.isAnalyzing);
+          setState((prev) => {
+            const newState = { ...prev };
+            for (const key in message.payload) {
+              const value = message.payload[key];
+              if (value && typeof value === "object" && !Array.isArray(value) && value.constructor === Object) {
+                newState[key] = { ...prev[key], ...value };
+              } else {
+                newState[key] = value;
+              }
+            }
+            console.log("[Webview] State updated, new keys:", Object.keys(newState));
+            return newState;
+          });
         } else if (message.type === "analysisProgress") {
+          console.log("[Webview] Updating analysis progress");
           setState((prev) => ({
             ...prev,
             isAnalyzing: message.payload.isAnalyzing,
@@ -30726,10 +31437,13 @@ Churn: ${file.score || 0}
             analysisProgress: message.payload.progress
           }));
         } else if (message.type === "focusSection") {
+          console.log("[Webview] Focusing section:", message.payload.section);
           setState((prev) => ({ ...prev, activeSection: message.payload.section }));
         } else if (message.type === "updateExplorerTree") {
+          console.log("[Webview] Updating explorer tree");
           setState((prev) => ({ ...prev, explorerData: message.payload }));
         } else if (message.type === "updateBundle") {
+          console.log("[Webview] Updating bundle");
           setState((prev) => ({
             ...prev,
             bundleView: message.payload.view ?? prev.bundleView,
@@ -30738,9 +31452,13 @@ Churn: ${file.score || 0}
           }));
         }
       };
+      console.log("[Webview] Setting up message listener");
       window.addEventListener("message", handler);
       postMessageWithTracing(vscode2, { type: "ready" });
-      return () => window.removeEventListener("message", handler);
+      return () => {
+        console.log("[Webview] Cleaning up message listener");
+        window.removeEventListener("message", handler);
+      };
     }, []);
     return /* @__PURE__ */ React28.createElement(ErrorBoundary, null, /* @__PURE__ */ React28.createElement(
       "div",
@@ -30748,7 +31466,7 @@ Churn: ${file.score || 0}
         className: "cockpit",
         style: { padding: 0, margin: 0, height: "100vh", overflow: "hidden" }
       },
- React28.createElement(SuperWebview, { vscode: vscode2, cockpitState: state })
+      /* @__PURE__ */ React28.createElement(SuperWebview, { vscode: vscode2, cockpitState: state })
     ));
   };
   var rootEl = document.getElementById("root");
@@ -30757,5 +31475,52 @@ Churn: ${file.score || 0}
     root.render(/* @__PURE__ */ React28.createElement(App, null));
   }
 })();
+/*! Bundled license information:
 
+react/cjs/react.development.js:
+  (**
+   * @license React
+   * react.development.js
+   *
+   * Copyright (c) Facebook, Inc. and its affiliates.
+   *
+   * This source code is licensed under the MIT license found in the
+   * LICENSE file in the root directory of this source tree.
+   *)
 
+scheduler/cjs/scheduler.development.js:
+  (**
+   * @license React
+   * scheduler.development.js
+   *
+   * Copyright (c) Facebook, Inc. and its affiliates.
+   *
+   * This source code is licensed under the MIT license found in the
+   * LICENSE file in the root directory of this source tree.
+   *)
+
+react-dom/cjs/react-dom.development.js:
+  (**
+   * @license React
+   * react-dom.development.js
+   *
+   * Copyright (c) Facebook, Inc. and its affiliates.
+   *
+   * This source code is licensed under the MIT license found in the
+   * LICENSE file in the root directory of this source tree.
+   *)
+  (**
+   * Checks if an event is supported in the current execution environment.
+   *
+   * NOTE: This will not work correctly for non-generic events such as `change`,
+   * `reset`, `load`, `error`, and `select`.
+   *
+   * Borrows from Modernizr.
+   *
+   * @param {string} eventNameSuffix Event name, e.g. "click".
+   * @return {boolean} True if the event is supported.
+   * @internal
+   * @license Modernizr 3.0.0pre (Custom Build) | MIT
+   *)
+*/
+//# sourceMappingURL=cockpit.js.map

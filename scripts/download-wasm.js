@@ -78,7 +78,7 @@ async function downloadFile(url, dest) {
         let newUrl = response.headers.location;
         if (newUrl.startsWith('/')) {
           const parsedUrl = new URL(url);
-          newUrl = `${parsedUrl.protocol}
+          newUrl = `${parsedUrl.protocol}//${parsedUrl.host}${newUrl}`;
         }
         downloadFile(newUrl, dest).then(resolve).catch(reject);
         return;

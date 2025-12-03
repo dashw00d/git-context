@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import { FileChange, SymbolChangeType, SymbolDelta, SymbolInfo } from '../types';
+import { FileChange, SymbolDelta, SymbolDeltaChangeType, SymbolInfo } from '../types';
 import { detectLanguage, getTestFilePattern } from '../utils/config';
 import { logDebug, logInfo, logWarn } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
 import { GitOperations } from './git';
 import { SemanticChangeDetector } from './semanticChanges';
-import { assignDNAIds_v2 } from './symbolDna';
+import { assignDNAIds } from './symbolDna';
 import { getTreeSitterParser } from './tree-sitter';
 
 export class SymbolExtractor {
@@ -56,7 +56,9 @@ export class SymbolExtractor {
     try {
       const commitInfo = await this.git.getCommitInfo(sha);
       parentSha = commitInfo.parent;
-    } catch (error) {}
+    } catch (error) {
+      //empty
+    }
 
     const renames = parentSha ? this.semanticDetector.detectRenames(removed, added) : [];
 
@@ -69,7 +71,9 @@ export class SymbolExtractor {
           ...previousCommitSymbols.removed,
           ...previousCommitSymbols.modified.map(m => m.symbol),
         ];
-      } catch (error) {}
+      } catch (error) {
+        //empty
+      }
     }
 
     const currentSymbols = [...added, ...modified.map(m => m.symbol)];
@@ -114,7 +118,9 @@ export class SymbolExtractor {
           if (parentSha) {
             previousContent = await this.git.safeGetFileContent(parentSha, file.oldPath);
           }
-        } catch {}
+        } catch {
+          //empty
+        }
       } else if (file.status !== 'A') {
         try {
           const commitInfo = await this.git.getCommitInfo(sha);
@@ -122,12 +128,14 @@ export class SymbolExtractor {
           if (parentSha) {
             previousContent = await this.git.safeGetFileContent(parentSha, file.path);
           }
-        } catch {}
+        } catch {
+          //empty
+        }
       }
 
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
       const bodyTexts = new Map([[file.path, currentContent]]);
-      const currentSymbolsWithDNA = await assignDNAIds_v2(
+      const currentSymbolsWithDNA = await assignDNAIds(
         currentSymbols,
         bodyTexts,
         detectLanguage(file.path) || undefined
@@ -140,7 +148,7 @@ export class SymbolExtractor {
       let previousSymbolsWithDNA = previousSymbols;
       if (previousContent) {
         const bodyTexts = new Map([[file.oldPath || file.path, previousContent]]);
-        previousSymbolsWithDNA = await assignDNAIds_v2(
+        previousSymbolsWithDNA = await assignDNAIds(
           previousSymbols,
           bodyTexts,
           detectLanguage(file.oldPath || file.path) || undefined
@@ -182,7 +190,9 @@ export class SymbolExtractor {
    */
   async extractWorkingTreeSymbols(
     files: FileChange[],
-    options: { staged?: boolean } = {}
+    options: { staged?: boolean } = {
+      //empty
+    }
   ): Promise<{
     added: SymbolInfo[];
     removed: SymbolInfo[];
@@ -233,7 +243,7 @@ export class SymbolExtractor {
 
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
       const bodyTexts = new Map([[file.path, currentContent]]);
-      const currentSymbolsWithDNA = await assignDNAIds_v2(
+      const currentSymbolsWithDNA = await assignDNAIds(
         currentSymbols,
         bodyTexts,
         detectLanguage(file.path) || undefined
@@ -246,7 +256,7 @@ export class SymbolExtractor {
 
       if (headContent) {
         const headBodyTexts = new Map([[file.path, headContent]]);
-        headSymbolsWithDNA = await assignDNAIds_v2(
+        headSymbolsWithDNA = await assignDNAIds(
           headSymbols,
           headBodyTexts,
           detectLanguage(file.path) || undefined
@@ -419,7 +429,7 @@ export class SymbolExtractor {
   /**
    * Determine the type of change between two symbol versions
    */
-  private determineSymbolChange(previous: SymbolInfo, current: SymbolInfo): SymbolChangeType {
+  private determineSymbolChange(previous: SymbolInfo, current: SymbolInfo): SymbolDeltaChangeType {
     if (previous.signature !== current.signature) {
       if (this.isPublicSymbol(previous) && this.isPublicSymbol(current)) {
         return 'signature_changed';
@@ -485,7 +495,7 @@ export class SymbolExtractor {
 
           const stagedSymbols = await this.extractSymbolsFromContent(stagedContent, file.path);
           const bodyTexts = new Map([[file.path, stagedContent]]);
-          const stagedSymbolsWithDNA = await assignDNAIds_v2(
+          const stagedSymbolsWithDNA = await assignDNAIds(
             stagedSymbols,
             bodyTexts,
             detectLanguage(file.path) || undefined
@@ -498,7 +508,7 @@ export class SymbolExtractor {
 
           if (headContent) {
             const headBodyTexts = new Map([[file.path, headContent]]);
-            headSymbolsWithDNA = await assignDNAIds_v2(
+            headSymbolsWithDNA = await assignDNAIds(
               headSymbols,
               headBodyTexts,
               detectLanguage(file.path) || undefined

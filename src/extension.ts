@@ -5,10 +5,10 @@ import { registerCockpitFeatures } from './features/cockpitFeatures';
 import { registerCoreFeatures } from './features/coreFeatures';
 import { registerGitWatcherFeature, setGlobalProviders } from './features/gitWatcherFeature';
 import { LiveDiffTracker } from './liveTracker';
+import { logDebug, logError, logInfo } from './utils/logger';
 import type { ActiveBundleProvider } from './providers/activeBundleProvider';
 import type { CommitsProvider } from './providers/commitsProvider';
 import type { SymbolHistoryProvider } from './providers/symbolHistoryProvider';
-import { logDebug, logError, logInfo } from './utils/logger';
 import type { CockpitProvider } from './webview/cockpit/CockpitProvider';
 
 let activeBundleProvider: ActiveBundleProvider;
@@ -277,8 +277,10 @@ export async function activate(context: vscode.ExtensionContext) {
         try {
           const text = editor.document.getText();
           const state = JSON.parse(text);
-          cockpitProvider.injectState(state);
-          vscode.window.showInformationMessage('Debug state injected successfully');
+          // State injection removed - use explicit actions instead
+          vscode.window.showInformationMessage(
+            'State injection removed. Use explicit Redux actions instead.'
+          );
         } catch (error) {
           vscode.window.showErrorMessage(`Failed to parse state JSON: ${error}`);
         }

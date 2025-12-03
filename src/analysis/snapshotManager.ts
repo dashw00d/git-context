@@ -4,7 +4,7 @@ import { EdgeInfo, SymbolInfo } from '../types';
 import { detectLanguage, getExtensionConfig } from '../utils/config';
 import { logDebug } from '../utils/logger';
 import { DependencyExtractor } from './dependencies';
-import { assignDNAIds_v2 } from './symbolDna';
+import { assignDNAIds } from './symbolDna';
 import { SymbolExtractor } from './symbols';
 
 export interface FileSnapshot {
@@ -116,7 +116,7 @@ export class SnapshotManager {
       language
     );
 
-    const symbolsWithDNA = await assignDNAIds_v2(symbols, bodyTexts, language);
+    const symbolsWithDNA = await assignDNAIds(symbols, bodyTexts, language);
 
     const edges = this.dependencyExtractor.extractDependencies(content, filePath, symbolsWithDNA);
 

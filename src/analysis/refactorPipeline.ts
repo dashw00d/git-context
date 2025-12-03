@@ -7,6 +7,7 @@ import { RefactorBundleFacts } from '../facts/types';
 import { BundleStoryEngine } from './bundleStoryEngine';
 import { CommitIndexer } from './commitIndexer';
 import { EmbeddingIndexer } from './embeddingIndexer';
+import { GitOperations } from './git';
 import { buildPipelineSteps } from './runner/pipelineManifest';
 import { runPipeline } from './runner/pipelineRunner';
 import { PipelineConfig, PipelineEvent, PipelineState } from './runner/pipelineTypes';
@@ -50,6 +51,7 @@ export class RefactorPipeline {
     public readonly workspaceIndexer: WorkspaceIndexer,
     public readonly embeddingIndexer: EmbeddingIndexer,
     public readonly storyEngine: BundleStoryEngine,
+    private readonly git: GitOperations,
     config?: Partial<PipelineConfig>
   ) {
     if (config) {
@@ -63,11 +65,19 @@ export class RefactorPipeline {
     workspaceParts?: Set<'staged' | 'unstaged'>,
     onEvent?: (event: PipelineEvent) => void
   ): Promise<PipelineState> {
+    console.error('🎯 [RefactorPipeline] analyzeBundle called', {
+      commitShas: commitShas.length,
+      includeWorkspace,
+      workspaceParts: workspaceParts ? Array.from(workspaceParts) : undefined,
+    });
+
     const explicitTimeline = buildExplicitTimeline({
       includeUnstaged: includeWorkspace && (workspaceParts?.has('unstaged') ?? true),
       includeStaged: includeWorkspace && (workspaceParts?.has('staged') ?? true),
       selectedCommitShas: commitShas,
     });
+
+    console.error('🎯 [RefactorPipeline] Built timeline:', explicitTimeline);
 
     const steps = buildPipelineSteps({
       commitIndexer: this.commitIndexer,
@@ -75,9 +85,15 @@ export class RefactorPipeline {
       embeddingIndexer: this.embeddingIndexer,
       storyEngine: this.storyEngine,
       concurrency: this.config.concurrency,
+      git: this.git,
       skipEmbedding: this.config.skipEmbedding,
       skipLLM: this.config.skipLLM,
     });
+
+    console.error(
+      '🎯 [RefactorPipeline] Built steps:',
+      steps.map(s => s.id)
+    );
 
     const initialState: PipelineState = {
       selectedCommitShas: commitShas,
@@ -88,7 +104,9 @@ export class RefactorPipeline {
       errors: [],
     };
 
+    console.error('🎯 [RefactorPipeline] About to call runPipeline with', steps.length, 'steps');
     const finalState = await runPipeline(steps, initialState, onEvent);
+    console.error('🎯 [RefactorPipeline] runPipeline returned');
 
     const workspaceIndexerAny = this.workspaceIndexer as any;
     const commitIndexerAny = this.commitIndexer as any;
@@ -123,6 +141,7 @@ export class RefactorPipeline {
       embeddingIndexer: this.embeddingIndexer,
       storyEngine: this.storyEngine,
       concurrency: this.config.concurrency,
+      git: this.git,
       skipEmbedding: true,
       skipLLM: true,
     }).filter(

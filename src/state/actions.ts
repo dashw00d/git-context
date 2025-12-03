@@ -105,7 +105,7 @@ export type Action =
   | { type: 'LIVE_STATE_UPDATED'; payload: { status: 'idle' | 'analyzing' | 'error' } }
   | { type: 'RESET_ALL_STATE' }
   | { type: 'NODE_METRICS_UPDATED'; payload: { metrics: Record<string, any> } }
-  | { type: 'TIME_FILTER_UPDATED'; payload: { timestamp: number } }
+  | { type: 'COMMIT_INDEX_UPDATED'; payload: { index: number } }
   | {
       type: 'PIPELINE_HEALTH_UPDATED';
       payload: {
@@ -117,6 +117,10 @@ export type Action =
   | { type: 'NAVIGATE_TO'; payload: { frame: ContextFrame } }
   | { type: 'NAVIGATE_BACK' }
   | { type: 'EXPLORER_UPDATED'; payload: { nodes: ExplorerNode[] } }
+  | {
+      type: 'EXPLORER_NODE_UPDATED';
+      payload: { id: string; status: 'scanning' | 'analyzing' | 'ready' | 'error' };
+    }
   | { type: 'FRAME_DATA_UPDATED'; payload: { frameId: string; data: any } }
   | { type: 'FRAME_ANALYSIS_TIER_1_COMPLETE'; payload: { frameId: string; data: any } }
   | { type: 'FRAME_ANALYSIS_TIER_2_COMPLETE'; payload: { frameId: string; data: any } }
@@ -124,4 +128,5 @@ export type Action =
   | {
       type: 'FRAME_ANALYSIS_TIER_FAILED';
       payload: { frameId: string; tier: number; error: string };
-    };
+    }
+  | { type: 'WEBVIEW_MESSAGE'; payload: { message: any; target: string } };

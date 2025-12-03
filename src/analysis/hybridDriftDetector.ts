@@ -1,8 +1,8 @@
 import { IntendedState } from '../facts/intendedMap';
-import type { ScopeSet } from '../facts/scope';
 import { HybridFact, isCstFact } from '../types/cstFacts';
 import { logDebug } from '../utils/logger';
 import { getCstTimelineManager, getPriorVersionInChain } from './cstTimeline';
+import type { ScopeSet } from '../facts/scope';
 
 export interface HybridDrift {
   fact: HybridFact;

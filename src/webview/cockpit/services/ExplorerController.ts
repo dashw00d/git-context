@@ -11,7 +11,9 @@ export class ExplorerController {
   constructor(
     private readonly view: vscode.WebviewView,
     private readonly bundleManager: BundleManager
-  ) {}
+  ) {
+    //empty
+  }
 
   async updateExplorerTree() {
     try {

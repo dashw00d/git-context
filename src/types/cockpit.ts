@@ -141,7 +141,7 @@ export interface CockpitState {
 
   /* Phase 1: Data Foundation */
   nodeMetrics: Record<string, NodeMetrics>;
-  currentTimeFilter: number;
+  currentCommitIndex?: number; // Index in selectedCommitShas array
 
   /** Which accordion should be open by default / last */
   activeSection: CockpitSectionKey;
@@ -236,7 +236,7 @@ export interface CockpitState {
 }
 
 export type ZoomLevel = 'bundle' | 'folder' | 'blast_radius' | 'file' | 'symbol';
-export type AnalysisStatus = 'ready' | 'scanning' | 'unknown' | 'error';
+export type AnalysisStatus = 'ready' | 'scanning' | 'analyzing' | 'unknown' | 'error';
 
 export interface ContextFrame {
   level: ZoomLevel;
@@ -277,7 +277,7 @@ export type CockpitClientMessage =
     }
   | {
       type: 'generateReport';
-      mode: 'selection' | 'lastN' | 'staged' | 'unstaged';
+      mode: 'selection' | 'lastN' | 'staged' | 'unstaged' | 'changes';
       lastN?: number;
       force?: boolean;
     }
@@ -445,7 +445,7 @@ export type CockpitClientMessage =
   | { type: 'clearError' }
   | { type: 'navigateToFrame'; frame: ContextFrame }
   | { type: 'navigateBack' }
-  | { type: 'updateTimeFilter'; value: number };
+  | { type: 'updateCommitIndex'; value: number };
 
 export type CockpitHostMessage =
   | { type: 'updateState'; payload: CockpitState }

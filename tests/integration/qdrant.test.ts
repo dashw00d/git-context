@@ -364,7 +364,9 @@ async function testProjectCollections(): Promise<boolean> {
           field_name: 'date',
           field_schema: { type: 'keyword' },
         });
-      } catch (e: any) {}
+      } catch (e: any) {
+        //empty
+      }
     }
 
     console.log(`\n📝 Testing commit indexing to project-specific collection...`);
@@ -484,7 +486,9 @@ async function testBundleStoryEngine(): Promise<boolean> {
           field_name: 'date',
           field_schema: { type: 'keyword' },
         });
-      } catch (e: any) {}
+      } catch (e: any) {
+        //empty
+      }
     }
 
     console.log(`\n📝 Indexing commits to Qdrant...`);
@@ -634,7 +638,9 @@ async function testProjectIsolation(): Promise<boolean> {
           field_name: 'date',
           field_schema: { type: 'keyword' },
         });
-      } catch (e: any) {}
+      } catch (e: any) {
+        //empty
+      }
     }
 
     console.log(`\n📝 Indexing commits for project 1...`);

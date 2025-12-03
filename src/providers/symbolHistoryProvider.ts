@@ -5,9 +5,13 @@ import { logError } from '../utils/logger';
 export class SymbolHistoryProvider {
   private searchQuery: string = '';
 
-  constructor(private context: vscode.ExtensionContext) {}
+  constructor(private context: vscode.ExtensionContext) {
+    //empty
+  }
 
-  refresh(): void {}
+  refresh(): void {
+    //empty
+  }
 
   async exportRecentSymbols(
     limit = 20,

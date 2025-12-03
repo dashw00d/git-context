@@ -1,4 +1,5 @@
 import { AnalysisResult, LLMResponse } from '../types';
+import { withTimeout } from '../utils/async';
 import { logError } from '../utils/logger';
 import { getLLMClient } from './openrouter';
 import {
@@ -95,18 +96,22 @@ export class LLMSummarizer {
       .replace('{morph_highlights}', JSON.stringify(analysis.difftasticHighlights.slice(0, 5)))
       .replace('{snippets_json}', snippetsJson);
 
-    const response = await this.client.complete(
-      [
+    const response = await withTimeout(
+      this.client.complete(
+        [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
         {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      {
-        temperature: 0.1,
-        jsonMode: true,
-        maxTokens: 1000,
-      }
+          temperature: 0.1,
+          jsonMode: true,
+          maxTokens: 1000,
+        }
+      ),
+      120000,
+      'Stage 1 compression'
     );
 
     try {
@@ -135,18 +140,22 @@ export class LLMSummarizer {
       .replace('{diff_sample}', diffSample)
       .replace('{commit_message}', analysis.commit.message);
 
-    const response = await this.client.complete(
-      [
+    const response = await withTimeout(
+      this.client.complete(
+        [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
         {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      {
-        temperature: 0.2,
-        jsonMode: true,
-        maxTokens: 2000,
-      }
+          temperature: 0.2,
+          jsonMode: true,
+          maxTokens: 2000,
+        }
+      ),
+      120000,
+      'Stage 2 summary'
     );
 
     try {
@@ -254,17 +263,21 @@ export class LLMSummarizer {
       .replace('{commit_sha}', commitSha)
       .replace('{commit_message}', commitMessage);
 
-    return await this.client.complete(
-      [
+    return await withTimeout(
+      this.client.complete(
+        [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
         {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      {
-        temperature: 0.3,
-        maxTokens: 1000,
-      }
+          temperature: 0.3,
+          maxTokens: 1000,
+        }
+      ),
+      120000,
+      'Explain symbol change'
     );
   }
 
@@ -288,17 +301,21 @@ export class LLMSummarizer {
       .replace('{diff_summary}', diffSummary)
       .replace('{symbol_changes}', symbolChanges.join('\n'));
 
-    return await this.client.complete(
-      [
+    return await withTimeout(
+      this.client.complete(
+        [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
         {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      {
-        temperature: 0.2,
-        maxTokens: 1500,
-      }
+          temperature: 0.2,
+          maxTokens: 1500,
+        }
+      ),
+      120000,
+      'Compare files'
     );
   }
 }

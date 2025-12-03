@@ -15,11 +15,11 @@ import {
 } from '../analysis/namingConventions';
 import { EdgeContext, SymbolContext } from '../contracts/llmContext';
 import { prepare } from '../storage/statement-wrapper';
-import type { HybridFact } from '../types/cstFacts';
 import { detectLanguage, getGitRoot } from '../utils/config';
 import { logWarn } from '../utils/logger';
 import { IntendedState } from './intendedMap';
 import { WorkingSnapshot } from './workingSnapshot';
+import type { HybridFact } from '../types/cstFacts';
 
 /**
  * Safely extract line number from symbol location

@@ -9,7 +9,9 @@ export class MermaidGenerator {
       maxNodes?: number;
       showConfidence?: boolean;
       highlightChanged?: string[];
-    } = {}
+    } = {
+      //empty
+    }
   ): string {
     const { maxNodes = 50, showConfidence = false, highlightChanged = [] } = options;
 

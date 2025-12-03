@@ -1,5 +1,14 @@
+import { logError } from '../../../utils/logger';
 import { BundleStoryEngine } from '../../bundleStoryEngine';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
+
+function updateState<K extends keyof PipelineState>(
+  state: PipelineState,
+  key: K,
+  value: PipelineState[K]
+) {
+  (state as any)[key] = value;
+}
 
 export function createStoryStep(storyEngine: BundleStoryEngine): PipelineStep {
   return {
@@ -9,7 +18,8 @@ export function createStoryStep(storyEngine: BundleStoryEngine): PipelineStep {
 
     async run(state: PipelineState) {
       if (!state.bundleFacts) {
-        throw new Error('Bundle facts required');
+        logError('[StoryStep] Bundle facts required for story generation');
+        return;
       }
 
       const llmOutputs = await storyEngine.generateStory(
@@ -18,18 +28,18 @@ export function createStoryStep(storyEngine: BundleStoryEngine): PipelineStep {
         state.history
       );
 
-      state.llmOutputs = llmOutputs;
+      updateState(state, 'llmOutputs', llmOutputs);
 
       const metadata = llmOutputs?.llmAnalysis?.metadata;
       if (metadata) {
-        state.llmMetrics = {
+        updateState(state, 'llmMetrics', {
           durationMs: metadata.durationMs ?? 0,
           totalTokens: metadata.totalTokens ?? 0,
           totalCalls: metadata.totalCalls ?? 0,
           healthScore: metadata.healthScore,
           validatedEvidenceCount: metadata.validatedEvidenceCount,
           skipped: false,
-        };
+        });
       }
     },
   };

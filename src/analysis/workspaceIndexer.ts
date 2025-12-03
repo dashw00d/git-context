@@ -1,9 +1,9 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import pLimit = require('p-limit');
 import { Database } from 'sql.js';
 import { prepare } from '../storage/statement-wrapper';
-import type { HybridFact } from '../types/cstFacts';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
@@ -12,7 +12,7 @@ import { GitOperations } from './git';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
 import { getTreeSitterParser } from './tree-sitter';
-import pLimit = require('p-limit');
+import type { HybridFact } from '../types/cstFacts';
 
 export interface WorkspaceFacts {
   workspaceHash: string;
@@ -39,7 +39,9 @@ export class WorkspaceIndexer {
     private git: GitOperations,
     private snapshotManager: SnapshotManager,
     private structuralDiffManager: StructuralDiffManager
-  ) {}
+  ) {
+    //empty
+  }
 
   /**
    * Analyze workspace overlay (staged or unstaged changes)
@@ -617,7 +619,9 @@ export class WorkspaceIndexer {
           stats: { additions: stats.added, deletions: stats.removed },
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      //empty
+    }
 
     let symbols: any[] = [];
     const language = detectLanguage(filePath);
@@ -767,7 +771,9 @@ export class WorkspaceIndexer {
           const _resolved = path.resolve(basedir, importPath);
 
           imports.add(importPath);
-        } catch (e) {}
+        } catch (e) {
+          //empty
+        }
       }
     }
 
@@ -804,7 +810,9 @@ export class WorkspaceIndexer {
             .slice(symbol.range.start.line - 1, symbol.range.end.line)
             .join('\n');
         }
-      } catch (e) {}
+      } catch (e) {
+        //empty
+      }
     }
 
     if (!symbolContent) {
@@ -829,7 +837,9 @@ export class WorkspaceIndexer {
             const [hash, author, date, message] = line.split('|');
             return { hash, author, date, message };
           });
-      } catch (e) {}
+      } catch (e) {
+        //empty
+      }
     }
 
     return {

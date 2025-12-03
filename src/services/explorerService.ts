@@ -4,7 +4,9 @@ import { logInfo } from '../utils/logger';
 export class ExplorerService {
   private static instance: ExplorerService;
 
-  private constructor() {}
+  private constructor() {
+    //empty
+  }
 
   static getInstance(): ExplorerService {
     if (!ExplorerService.instance) {

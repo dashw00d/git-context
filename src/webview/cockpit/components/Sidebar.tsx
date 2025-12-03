@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { SidebarProps } from '../types/superWebviewTypes';
 import { RichTreeItem } from './RichTreeItem';
-import { TimeSlider } from './TimeSlider';
 
 const SidebarContainer: React.CSSProperties = {
   minWidth: '200px',
@@ -36,15 +35,13 @@ const ListStyle: React.CSSProperties = {
   padding: '8px 0',
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ 
-  data, 
-  activeId, 
-  onSelect, 
-  repoName, 
-  branchName, 
+export const Sidebar: React.FC<SidebarProps> = ({
+  data,
+  activeId,
+  onSelect,
+  repoName,
+  branchName,
   allMetrics,
-  currentTimeFilter,
-  onTimeFilterChange
 }) => {
   return (
     <div style={SidebarContainer}>
@@ -70,19 +67,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
       <div style={ListStyle}>
         {data.map(node => (
-          <RichTreeItem 
-            key={node.id} 
-            node={node} 
-            depth={0} 
-            activeId={activeId} 
-            onSelect={onSelect} 
+          <RichTreeItem
+            key={node.id}
+            node={node}
+            depth={0}
+            activeId={activeId}
+            onSelect={onSelect}
             allMetrics={allMetrics}
           />
         ))}
       </div>
-      {currentTimeFilter !== undefined && onTimeFilterChange && (
-        <TimeSlider value={currentTimeFilter} onChange={onTimeFilterChange} />
-      )}
       <style>
         {`
           @keyframes pulse {

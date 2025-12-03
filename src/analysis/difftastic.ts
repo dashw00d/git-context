@@ -129,7 +129,9 @@ export class DifftasticIntegration {
           try {
             fs.unlinkSync(oldFile);
             fs.unlinkSync(newFile);
-          } catch {}
+          } catch {
+            //empty
+          }
 
           if (code !== null && code > 1) {
             reject(new Error(`Difftastic failed: ${stderr}`));
@@ -144,14 +146,18 @@ export class DifftasticIntegration {
           try {
             fs.unlinkSync(oldFile);
             fs.unlinkSync(newFile);
-          } catch {}
+          } catch {
+            //empty
+          }
           reject(error);
         });
       } catch (error) {
         try {
           fs.unlinkSync(oldFile);
           fs.unlinkSync(newFile);
-        } catch {}
+        } catch {
+          //empty
+        }
         reject(error);
       }
     });

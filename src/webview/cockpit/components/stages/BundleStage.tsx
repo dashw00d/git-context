@@ -45,7 +45,8 @@ export const BundleStage: React.FC<{
     if (!vscode) return;
     postMessageWithTracing(vscode, { type: 'updateBundleConfig', config: formConfig });
     postMessageWithTracing(vscode, { type: 'setLastNCommits', value: depth });
-    postMessageWithTracing(vscode, { type: 'generateReport', mode: 'selection', force: true });
+    const mode = formConfig.mode === 'changes' ? ('changes' as const) : ('selection' as const);
+    postMessageWithTracing(vscode, { type: 'generateReport', mode, force: true });
   };
 
   const handleFileClick = (file: any) => {

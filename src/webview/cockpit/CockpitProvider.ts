@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { ZodError } from 'zod';
 import {
   analysisActions,
   bundleActions,
@@ -8,6 +9,7 @@ import {
   symbolActions,
   uiActions,
 } from '../../state/actionCreators';
+import { normalizeBundleConfig } from '../../state/bundleConfig';
 import { CockpitHostMessageSchema, CockpitStateSchema } from '../../state/schemas';
 import { getStore } from '../../state/store';
 import {
@@ -21,6 +23,21 @@ import { AnalysisController } from './services/AnalysisController';
 import { BundleManager } from './services/BundleManager';
 import { ExplorerController } from './services/ExplorerController';
 import { MessageController } from './services/MessageController';
+
+function formatZodIssues(error: ZodError): string {
+  return error.issues
+    .map(issue => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+    .join('; ');
+}
+
+let stateValidationNotified = false;
+const notifyValidationError = (message: string) => {
+  logError(message);
+  if (!stateValidationNotified) {
+    stateValidationNotified = true;
+    void vscode.window.showErrorMessage(`Git Context Cockpit failed to render: ${message}`);
+  }
+};
 
 export class CockpitProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -45,7 +62,19 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     this.unsubscribe?.();
 
     let previousCockpitState = getStore().getState();
-    this.unsubscribe = getStore().subscribe(() => {
+    this.unsubscribe = getStore().subscribe((_state, action) => {
+      if (action.type === 'WEBVIEW_MESSAGE' && this.view) {
+        logInfo(`[CockpitProvider] Posting WEBVIEW_MESSAGE: ${action.payload.message.type}`);
+        try {
+          // eslint-disable-next-line no-restricted-syntax
+          this.view.webview.postMessage(action.payload.message);
+          logInfo(`[CockpitProvider] Successfully posted message to webview`);
+        } catch (error) {
+          logError('[CockpitProvider] Failed to post message to webview', error);
+        }
+        return;
+      }
+
       const currentCockpitState = getStore().getState();
 
       if (currentCockpitState !== previousCockpitState) {
@@ -59,6 +88,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           reason: 'store_update',
         };
 
+        let hasRelevantChanges = false;
         for (const key in currentCockpitState) {
           if (
             Object.prototype.hasOwnProperty.call(currentCockpitState, key) &&
@@ -66,9 +96,26 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
             (currentCockpitState as any)[key] !== (oldState as any)[key]
           ) {
             (change.partial as any)[key] = (currentCockpitState as any)[key];
+            if (key !== 'actionHistory') {
+              hasRelevantChanges = true;
+            }
           }
         }
-        this.handleStateChange(change);
+
+        if (hasRelevantChanges) {
+          logInfo(
+            `[CockpitProvider] State changed, keys: ${Object.keys(change.partial).join(', ')}`
+          );
+          try {
+            this.handleStateChange(change);
+          } catch (error) {
+            logError('[CockpitProvider] Error in handleStateChange', error);
+          }
+        } else {
+          logDebug('[CockpitProvider] State changed but no relevant changes detected');
+        }
+      } else {
+        logDebug(`[CockpitProvider] State reference unchanged (action: ${action.type})`);
       }
     });
 
@@ -104,9 +151,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
 
     const savedConfig = vscode.workspace.getConfiguration('git-context').get('bundleConfig');
     if (savedConfig) {
+      const normalizedConfig = normalizeBundleConfig(savedConfig);
+      if (JSON.stringify(normalizedConfig) !== JSON.stringify(savedConfig)) {
+        logInfo('[Cockpit] Normalized bundle config loaded from workspace settings');
+      }
       getStore().dispatch({
         type: 'BUNDLE_CONFIG_UPDATED',
-        payload: { config: savedConfig },
+        payload: { config: normalizedConfig },
       });
     }
 
@@ -118,17 +169,20 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
   }
 
   private handleStateChange(change: any) {
-    logDebug(`[Cockpit] Applying state change (${change.reason ?? 'unspecified'})`);
+    logInfo(
+      `[CockpitProvider] handleStateChange: Applying state change (${change.reason ?? 'unspecified'})`
+    );
     this.state = change.full;
-    this.sendState();
 
     const partialKeys = Object.keys(change.partial);
     const factsChanged = partialKeys.includes('bundleFacts');
     const configChanged = partialKeys.includes('bundleConfig');
 
     logInfo(
-      `[Cockpit] handleStateChange: reason=${change.reason ?? 'unspecified'}, factsChanged=${factsChanged}, hasBundleFacts=${!!this.state.bundleFacts}`
+      `[CockpitProvider] handleStateChange: keys=${partialKeys.join(', ')}, factsChanged=${factsChanged}, hasBundleFacts=${!!this.state.bundleFacts}`
     );
+
+    this.sendState();
     if (factsChanged) {
       const hotspotCount = (this.state.bundleFacts?.evidence as any)?.hotspots?.length || 0;
       const scopeFiles = (this.state.bundleFacts?.evidence as any)?.['scope.files']?.length || 0;
@@ -151,7 +205,9 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       if (factsChanged) {
         if (this.analysisController) {
           this.analysisController.skeletonCache = null;
-          this.analysisController.updateBundleData();
+          this.analysisController
+            .updateBundleData()
+            .catch(err => logError('[Cockpit] Failed to push bundle data to webview', err));
         }
       }
 
@@ -185,10 +241,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       traverse(this.state.explorerData || []);
 
       if (paths.length > 0) {
-        const metrics = await MetricsService.getInstance().getNodeMetrics(
-          paths,
-          this.state.currentTimeFilter
-        );
+        const metrics = await MetricsService.getInstance().getNodeMetrics(paths);
         getStore().dispatch(metricsActions.update(metrics));
       }
     } catch (error) {
@@ -242,21 +295,6 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     getStore().dispatch(reportActions.update(reports));
   }
 
-  /**
-   * @deprecated Use specific action dispatchers instead (updateBundleFacts, updateSymbols, etc.)
-   * Only kept for backward compatibility and debug scenarios
-   */
-  updateState(): void {
-    logInfo('[Cockpit] updateState is removed. Ignoring call; use explicit actions.');
-  }
-
-  /**
-   * DEBUG ONLY: Inject a full state object to test UI rendering
-   */
-  injectState(_state: CockpitState) {
-    logInfo('[Cockpit] DEBUG injectState removed. Use explicit actions instead.');
-  }
-
   updateAnalysisProgress(isAnalyzing: boolean, step?: string, progress?: number) {
     getStore().dispatch(analysisActions.progress(isAnalyzing, step, progress));
   }
@@ -281,35 +319,60 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
 
   private sendState() {
     if (!this.view) {
+      logDebug('[CockpitProvider] sendState: No view available');
       return;
     }
+
     try {
+      logInfo(
+        `[CockpitProvider] sendState: Preparing state update (bundleFacts: ${this.state.bundleFacts ? 'EXISTS' : 'NULL'})`
+      );
+
       const sanitizedState = {
         ...this.state,
-
+        bundleConfig: normalizeBundleConfig(this.state.bundleConfig),
         commits: this.state.commits.map(c => ({
           ...c,
           scope: c.scope || ('history' as const),
         })),
       };
 
-      try {
-        CockpitStateSchema.parse(sanitizedState);
-      } catch (validationError) {
-        logError('[Cockpit] State validation failed!', validationError);
+      logInfo(
+        `[CockpitProvider] sendState: Sanitized state keys: ${Object.keys(sanitizedState).join(', ')}`
+      );
+
+      const stateResult = CockpitStateSchema.safeParse(sanitizedState);
+      if (!stateResult.success) {
+        const detail = formatZodIssues(stateResult.error);
+        const message = `[Cockpit] State validation failed: ${detail}`;
+        logError(message);
+        notifyValidationError(message);
+        // Don't throw - log and return to allow other updates to continue
+        return;
       }
 
-      const message: CockpitHostMessage = { type: 'updateState', payload: sanitizedState };
-      try {
-        CockpitHostMessageSchema.parse(message);
-      } catch (validationError) {
-        logError('[Cockpit] Host message validation failed!', validationError);
+      const hostMessage: CockpitHostMessage = { type: 'updateState', payload: sanitizedState };
+      const hostResult = CockpitHostMessageSchema.safeParse(hostMessage);
+      if (!hostResult.success) {
+        const detail = formatZodIssues(hostResult.error);
+        const message = `[Cockpit] Host message validation failed: ${detail}`;
+        logError(message);
+        notifyValidationError(message);
+        // Don't throw - log and return to allow other updates to continue
+        return;
       }
 
-      this.view.webview.postMessage(message);
-      logInfo('[Cockpit] Sent state update to webview');
+      logInfo(
+        `[CockpitProvider] sendState: Dispatching WEBVIEW_MESSAGE with ${Object.keys(sanitizedState).length} state keys`
+      );
+      getStore().dispatch({
+        type: 'WEBVIEW_MESSAGE',
+        payload: { message: hostMessage, target: 'cockpit' },
+      });
+      logInfo('[CockpitProvider] sendState: Successfully dispatched state update');
     } catch (error) {
-      logError('[Cockpit] Failed to send state', error);
+      logError('[CockpitProvider] sendState: Unexpected error', error);
+      // Don't throw - allow other updates to continue
     }
   }
 

@@ -43,7 +43,9 @@ vi.mock('../../../src/analysis/git', () => ({
 
 vi.mock('../../../src/analysis/symbols', () => ({
   SymbolExtractor: class {
-    constructor() {}
+    constructor(){
+//empty
+ }
   }
 }));
 

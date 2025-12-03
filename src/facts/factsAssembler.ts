@@ -39,7 +39,6 @@ export async function buildRefactorBundleFacts(
     }>;
   }
 ): Promise<RefactorBundleFacts> {
-
   const intendedSize = options.intended.size;
   const hybridFactsCount = await getHybridFactsCount(
     options.scope,
@@ -50,7 +49,6 @@ export async function buildRefactorBundleFacts(
       options.working.symbolsById.size || 0
     }`
   );
-
 
   if (intendedSize === 0) {
     logWarn(
@@ -75,7 +73,6 @@ export async function buildRefactorBundleFacts(
     facts.bundle.movedLineage = options.movedLineage;
   }
 
-
   try {
     return BundleFactsSchema.parse(facts) as RefactorBundleFacts;
   } catch (error) {
@@ -94,13 +91,11 @@ export async function assembleFacts(
   legacy: LegacyAuditResult,
   hotspots?: any[]
 ): Promise<RefactorBundleFacts> {
-
   const intendedCounts = calculateIntendedCounts(intended);
   const intendedLists = getIntendedLists(intended);
   const workingLists = getWorkingLists(working);
   const newestSha = commitShas.length > 0 ? commitShas[0] : 'unknown';
   const oldestSha = commitShas.length > 0 ? commitShas[commitShas.length - 1] : 'unknown';
-
 
   const hybridFactsMap: Record<string, HybridFact[]> = {};
   const config = getExtensionConfig();
@@ -109,7 +104,6 @@ export async function assembleFacts(
 
   if (enableCst || enableAugment) {
     const timelineManager = getCstTimelineManager();
-
 
     const versionMap = new Map<string, string>();
     for (const filePath of scope.allPaths) {
@@ -132,7 +126,6 @@ export async function assembleFacts(
       }
       versionMap.set(filePath, version);
     }
-
 
     const allFacts = await timelineManager.getPriorFactsBatchWithVersions(versionMap);
     for (const [filePath, facts] of allFacts) {
@@ -211,11 +204,9 @@ export async function assembleFacts(
         : undefined,
     },
     evidence: {
-
       'bundle.shas': commitShas,
       'scope.files': Array.from(scope.commitFiles),
       'scope.blastRadius': Array.from(scope.blastRadius),
-
 
       'timeline.chain': {
         unstaged: scope.unstagedFiles?.size || 0,
@@ -223,7 +214,6 @@ export async function assembleFacts(
         head: scope.commitFiles.size > 0 ? 'HEAD' : null,
         commits: commitShas.length,
       },
-
 
       'hybrid.unstaged': {
         total: Object.entries(hybridFactsMap)
@@ -238,15 +228,12 @@ export async function assembleFacts(
         files: Object.keys(hybridFactsMap).filter(path => scope.stagedFiles?.has(path)),
       },
 
-
       'intended.present': intendedLists.present,
       'intended.absent': intendedLists.absent,
       'intended.renamed': intendedLists.renamed,
 
-
       'working.symbols': workingLists.symbols,
       'working.edges': workingLists.edges,
-
 
       'findings.incompleteness': {
         missing: drift.missing_symbols.map(m => ({
@@ -320,9 +307,7 @@ export async function assembleFacts(
 
       'findings.unresolvedCallers': drift.unresolved_callers || undefined,
 
-
       hotspots: hotspots,
-
 
       missing: drift.missing_symbols.map(m => ({
         symbol_id: m.symbol_id,
@@ -365,11 +350,9 @@ export async function saveFacts(facts: RefactorBundleFacts): Promise<string> {
   const factsDir = path.join(gitRoot, '.git', 'commit-tracker');
   const factsPath = path.join(factsDir, 'last-bundle-facts.json');
 
-
   if (!fs.existsSync(factsDir)) {
     fs.mkdirSync(factsDir, { recursive: true });
   }
-
 
   fs.writeFileSync(factsPath, JSON.stringify(facts, null, 2), 'utf8');
 
@@ -399,7 +382,6 @@ export function calculateIntendedCounts(intended: Map<string, IntendedState>): {
   return { present, absent, renamed };
 }
 
-
 function getIntendedLists(intended: Map<string, IntendedState>): {
   present: string[];
   absent: string[];
@@ -423,7 +405,6 @@ function getIntendedLists(intended: Map<string, IntendedState>): {
   return { present, absent, renamed };
 }
 
-
 function getWorkingLists(working: WorkingSnapshot): {
   symbols: string[];
   edges: string[];
@@ -435,11 +416,9 @@ function getWorkingLists(working: WorkingSnapshot): {
 }
 
 export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapshot): number {
-
   if (drift.mixedConventionFiles && drift.mixedConventionFiles.length > 0) {
     return drift.mixedConventionFiles.length;
   }
-
 
   const fileConventions = new Map<string, Set<string>>();
 
@@ -448,7 +427,6 @@ export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapsho
     if (!fileConventions.has(filePath)) {
       fileConventions.set(filePath, new Set());
     }
-
 
     const name = symbol.name;
     if (/^[a-z]/.test(name)) {
@@ -459,7 +437,6 @@ export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapsho
       fileConventions.get(filePath)!.add('snake_case');
     }
   }
-
 
   let mixedCount = 0;
   for (const conventions of fileConventions.values()) {
@@ -481,32 +458,27 @@ export function detectOldNamespaces(
     /\\Old\\/,
     /\\Legacy\\/,
     /\\Deprecated\\/,
-    /\/old\
-    /\/legacy\
-    /\/deprecated\
+    /\/old\//,
+    /\/legacy\//,
+    /\/deprecated\//,
   ];
 
   let oldNamespaceCount = 0;
 
-
   for (const [symbolId, symbol] of working.symbolsById) {
     const filePath = symbolId.split(':')[0];
     const symbolName = symbol.name;
-
 
     const matchesOldPattern = oldNamespacePatterns.some(
       pattern => pattern.test(filePath) || pattern.test(symbolName)
     );
 
     if (matchesOldPattern) {
-
       const intendedState = intended.get(symbolId);
       if (intendedState || !intended.has(symbolId)) {
-
         if (intendedState?.expect === 'absent') {
           oldNamespaceCount++;
         } else if (!intended.has(symbolId)) {
-
           oldNamespaceCount++;
         }
       }
@@ -515,7 +487,6 @@ export function detectOldNamespaces(
 
   return oldNamespaceCount;
 }
-
 
 async function getHybridFactsCount(scope: ScopeSet, sha: string): Promise<number> {
   const config = getExtensionConfig();

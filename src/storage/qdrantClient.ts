@@ -1,4 +1,5 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
+import { withTimeout } from '../utils/async';
 import { getExtensionConfig } from '../utils/config';
 import { logError, logInfo, logWarn } from '../utils/logger';
 import { getEmbeddingDimension } from './embeddings';
@@ -48,7 +49,7 @@ export class QdrantClientWrapper {
       });
 
       // Test connection
-      await this.client.getCollections();
+      await withTimeout(this.client.getCollections(), 30000, 'Qdrant connection test');
       this.isAvailable = true;
       logInfo(`Connected to ${url} (embedding dim: ${this.embeddingDimension}, model: ${model})`);
     } catch (error: any) {
@@ -107,16 +108,20 @@ export class QdrantClientWrapper {
     let _collectionCreated = false;
 
     try {
-      await this.client!.getCollection(collectionName);
+      await withTimeout(this.client!.getCollection(collectionName), 30000, 'Qdrant get collection');
       // Collection exists, ensure indexes are added (idempotent - will skip if exists)
     } catch {
       // Collection doesn't exist, create it
-      await this.client!.createCollection(collectionName, {
-        vectors: {
-          size: this.embeddingDimension,
-          distance: 'Cosine',
-        },
-      });
+      await withTimeout(
+        this.client!.createCollection(collectionName, {
+          vectors: {
+            size: this.embeddingDimension,
+            distance: 'Cosine',
+          },
+        }),
+        30000,
+        'Qdrant create collection'
+      );
       logInfo(`[Qdrant] Created collection: ${collectionName} (dim: ${this.embeddingDimension})`);
       _collectionCreated = true;
     }
@@ -134,10 +139,14 @@ export class QdrantClientWrapper {
 
     try {
       // Add keyword index on project_id for fast filtering (idempotent - will skip if exists)
-      await this.client.createPayloadIndex(collectionName, {
-        field_name: 'project_id',
-        field_schema: { type: 'keyword' },
-      });
+      await withTimeout(
+        this.client.createPayloadIndex(collectionName, {
+          field_name: 'project_id',
+          field_schema: { type: 'keyword' },
+        }),
+        30000,
+        'Qdrant create index project_id'
+      );
 
       // Add indexes for new semantic memory features
       if (collectionName.includes('commits') || collectionName.includes('symbols')) {

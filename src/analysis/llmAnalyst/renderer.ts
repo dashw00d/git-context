@@ -594,7 +594,9 @@ export class AnalysisRenderer {
       } else if (typeof current === 'number') {
         return current;
       }
-    } catch (error) {}
+    } catch (error) {
+      //empty
+    }
 
     return null;
   }

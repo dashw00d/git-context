@@ -6,7 +6,9 @@ import { logError } from '../utils/logger';
 export class MetricsService {
   private static instance: MetricsService;
 
-  private constructor() {}
+  private constructor() {
+    //empty
+  }
 
   public static getInstance(): MetricsService {
     if (!MetricsService.instance) {
@@ -206,7 +208,7 @@ export class MetricsService {
 
     for (const path of paths) {
       const r = results[path];
-      let risk = r.churnScore * 0.4 + r.driftCount * 10 + r.incomingRefs * 0.5;
+      const risk = r.churnScore * 0.4 + r.driftCount * 10 + r.incomingRefs * 0.5;
       r.riskScore = Math.min(100, Math.round(risk));
     }
 

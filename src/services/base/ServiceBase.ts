@@ -1,7 +1,7 @@
 import { LRUCache } from 'lru-cache';
-import { getDatabaseManager } from '../../storage/database';
-import { logDebug, logInfo, logWarn } from '../../utils/logger';
 import pLimit = require('p-limit');
+import { getDatabaseManager } from '../../storage/database';
+import { logDebug, logError, logInfo, logWarn } from '../../utils/logger';
 
 export interface ServiceConfig {
   enableCache?: boolean;
@@ -62,7 +62,7 @@ export abstract class ServiceBase {
       return;
     }
 
-    throw error;
+    logError(`[${context}] Unhandled database error`, error);
   }
 
   protected async executeInTransaction<T>(fn: () => Promise<T> | T): Promise<T> {

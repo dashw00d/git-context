@@ -7,7 +7,6 @@ import { SymbolExtractor } from './analysis/symbols';
 import { getTreeSitterParser } from './analysis/tree-sitter';
 import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
 import { getStore } from './state/store';
-import type { SymbolInfo } from './types';
 import {
   detectLanguage,
   getExtensionConfig,
@@ -15,6 +14,7 @@ import {
   isCstOnlyLanguage,
 } from './utils/config';
 import { logDebug, logError, logInfo } from './utils/logger';
+import type { SymbolInfo } from './types';
 
 interface ThresholdConfig {
   lines: number;

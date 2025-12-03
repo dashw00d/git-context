@@ -44,7 +44,9 @@ export interface RetrievedHistory {
 }
 
 export class BundleStoryEngine {
-  constructor(private llmAnalyst: LlmAnalyst) {}
+  constructor(private llmAnalyst: LlmAnalyst) {
+    //empty
+  }
 
   async generateStory(
     bundleFacts: RefactorBundleFacts,

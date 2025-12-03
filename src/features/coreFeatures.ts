@@ -230,9 +230,9 @@ export async function registerCoreFeatures(
               `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
             ).get(table);
             if (exists) {
-              db.exec(`DELETE FROM ${table}`);
+              prepare(`DELETE FROM ${table}`).run();
 
-              db.exec(`DELETE FROM sqlite_sequence WHERE name='${table}'`);
+              prepare(`DELETE FROM sqlite_sequence WHERE name=?`).run(table);
             }
           } catch (err) {
             logError(`[Reset] Failed to truncate table ${table}`, err);

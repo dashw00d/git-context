@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { getStore } from '../../../state/store';
 import { BundleView } from '../../../types/cockpit';
+import { withTimeout } from '../../../utils/async';
 import { logDebug, logError, logInfo } from '../../../utils/logger';
 import { PipelineDebugger } from '../../../utils/pipelineDebugger';
 
@@ -10,7 +11,9 @@ export class AnalysisController {
   private pipelineDebugger = new PipelineDebugger();
   private bundleViewVersion = 0;
 
-  constructor(private readonly view?: vscode.WebviewView) {}
+  constructor(private readonly view?: vscode.WebviewView) {
+    //empty
+  }
 
   public setSkeletonCache(skeleton: any) {
     this.skeletonCache = skeleton;
@@ -50,7 +53,11 @@ export class AnalysisController {
     let tier1Data: any;
     this.pipelineDebugger.startTier(frameId, 1, activeFrame);
     try {
-      tier1Data = await analyzer.analyzeTier1(frameId, targetPath, gitRoot);
+      tier1Data = await withTimeout(
+        analyzer.analyzeTier1(frameId, targetPath, gitRoot),
+        120000,
+        'Tier 1 analysis'
+      );
       const currentState = getStore().getState();
       this.pipelineDebugger.completeTier(frameId, 1, tier1Data, currentState.activeFrame.id);
       getStore().dispatch({
@@ -69,7 +76,11 @@ export class AnalysisController {
 
     this.pipelineDebugger.startTier(frameId, 2, getStore().getState().activeFrame.id);
     try {
-      const tier2Data = await analyzer.analyzeTier2(frameId, targetPath, facts);
+      const tier2Data = await withTimeout(
+        analyzer.analyzeTier2(frameId, targetPath, facts),
+        120000,
+        'Tier 2 analysis'
+      );
       const currentState = getStore().getState();
       this.pipelineDebugger.completeTier(frameId, 2, tier2Data, currentState.activeFrame.id);
       getStore().dispatch({
@@ -88,7 +99,11 @@ export class AnalysisController {
     this.pipelineDebugger.startTier(frameId, 3, getStore().getState().activeFrame.id);
     try {
       const content = tier1Data?.content || '';
-      const tier3Data = await analyzer.analyzeTier3(frameId, targetPath, content, facts);
+      const tier3Data = await withTimeout(
+        analyzer.analyzeTier3(frameId, targetPath, content, facts),
+        120000,
+        'Tier 3 analysis'
+      );
       const currentState = getStore().getState();
       this.pipelineDebugger.completeTier(frameId, 3, tier3Data, currentState.activeFrame.id);
       getStore().dispatch({
@@ -111,20 +126,19 @@ export class AnalysisController {
       const { getRefactorPipeline } = await import('../../../services/pipelineFactory');
       const pipeline = await getRefactorPipeline();
 
-      const skeleton = await pipeline.workspaceIndexer.getSkeleton(config);
+      const skeleton = await withTimeout(
+        pipeline.workspaceIndexer.getSkeleton(config),
+        60000,
+        'Skeleton resolution'
+      );
       this.skeletonCache = skeleton;
 
       if (skeleton) {
-        const nodes = skeleton.files.map((f: string) => ({
-          id: f,
-          name: f.split('/').slice(-1)[0] || f,
-          type: 'file',
-          status: 'scanning',
-          children: [],
-        }));
+        const { ExplorerService } = await import('../../../services/explorerService');
+        const nodes = ExplorerService.getInstance().getExplorerTree(null, skeleton, [], null);
 
         getStore().dispatch({ type: 'EXPLORER_UPDATED', payload: { nodes } });
-        logInfo(`[Cockpit] Sent skeleton update (${nodes.length} files scanning)`);
+        logInfo(`[Cockpit] Sent skeleton update (${skeleton.files.length} files scanning)`);
 
         const pendingHotspots = skeleton.files.map((f: string) => ({
           path: f,
@@ -160,6 +174,7 @@ export class AnalysisController {
       const facts = state.bundleFacts;
 
       if (!facts && this.skeletonCache) {
+        // Handle skeleton cache when no facts available - placeholder for future implementation
       }
 
       const cacheKey = facts?.bundle?.shas ? facts.bundle.shas.join(',') : 'workspace';
@@ -188,7 +203,7 @@ export class AnalysisController {
             try {
               const { GitOperations } = await import('../../../analysis/git');
               const gitOps = new GitOperations();
-              const churn = await gitOps.getHotspots(100);
+              const churn = await withTimeout(gitOps.getHotspots(100), 30000, 'Git hotspots');
               hotspots = churn.map((h: any) => ({
                 path: h.path,
                 name: h.path.split('/').pop(),
@@ -214,7 +229,7 @@ export class AnalysisController {
           try {
             const { GitOperations } = await import('../../../analysis/git');
             const gitOps = new GitOperations();
-            const churn = await gitOps.getHotspots(100);
+            const churn = await withTimeout(gitOps.getHotspots(100), 30000, 'Git hotspots');
 
             const currentState = getStore().getState();
             if (currentState.bundleFacts) {
@@ -469,13 +484,8 @@ export class AnalysisController {
       const skeleton = await skeletonService.resolveSkeleton(config as any);
       this.skeletonCache = skeleton;
 
-      const nodes = skeleton.files.map((f: string) => ({
-        id: f,
-        name: f.split('/').slice(-1)[0] || f,
-        type: 'file' as const,
-        status: 'scanning' as const,
-        children: [],
-      }));
+      const { ExplorerService } = await import('../../../services/explorerService');
+      const nodes = ExplorerService.getInstance().getExplorerTree(null, skeleton, [], null);
       getStore().dispatch({ type: 'EXPLORER_UPDATED', payload: { nodes } });
 
       this.pushBundleView({
@@ -535,9 +545,13 @@ export class AnalysisController {
         }));
       }
 
+      const hotspotsBefore = hotspots.length;
       if (this.skeletonCache) {
         const skeletonSet = new Set(this.skeletonCache.files);
         hotspots = hotspots.filter((h: any) => skeletonSet.has(h.path));
+        logInfo(
+          `[Cockpit] Filtered hotspots by skeleton: ${hotspotsBefore} → ${hotspots.length} (skeleton has ${this.skeletonCache.files.length} files)`
+        );
       }
       const treemap = this.buildTreemap(hotspots);
 
@@ -562,7 +576,7 @@ export class AnalysisController {
         hotspots,
       });
       logInfo(
-        `[Cockpit] Sent hybrid progress (staged=${staged.length}, unstaged=${unstaged.length})`
+        `[Cockpit] Sent hybrid progress (staged=${staged.length}, unstaged=${unstaged.length}, hotspots=${hotspots.length})`
       );
     } catch (error) {
       logDebug(`[Cockpit] Failed to send hybrid progress: ${error}`);

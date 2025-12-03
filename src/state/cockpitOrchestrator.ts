@@ -110,18 +110,6 @@ export class CockpitOrchestrator extends EventEmitter {
     return this.store;
   }
 
-  updateState(_partial?: Partial<CockpitState>, _reason = 'updateState'): void {
-    logDebug('[CockpitOrchestrator] updateState is removed; ignoring call');
-  }
-
-  updatePartial<K extends keyof CockpitState>(
-    _key?: K,
-    _value?: CockpitState[K],
-    _reason?: string
-  ): void {
-    logDebug('[CockpitOrchestrator] updatePartial is removed; ignoring call');
-  }
-
   updateLiveState(partial: Partial<CockpitState['liveAnalysis']>, _reason = 'live:update'): void {
     this.store.dispatch({
       type: 'LIVE_ANALYSIS_UPDATED',

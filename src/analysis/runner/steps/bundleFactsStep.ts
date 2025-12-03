@@ -1,31 +1,74 @@
 import { buildRefactorBundleFacts } from '../../../facts/factsAssembler';
 import { logError } from '../../../utils/logger';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
+import type { DriftFindings } from '../../../facts/driftDetector';
+import type { LegacyAuditResult } from '../../../facts/legacyAudit';
+
+function updateState<K extends keyof PipelineState>(
+  state: PipelineState,
+  key: K,
+  value: PipelineState[K]
+) {
+  (state as any)[key] = value;
+}
+
+function buildEmptyDrift(): DriftFindings {
+  return {
+    missing_symbols: [],
+    zombie_symbols: [],
+    divergent_symbols: [],
+    missing_edges: [],
+    zombie_edges: [],
+    hotspots: [],
+  };
+}
+
+function buildEmptyLegacy(): LegacyAuditResult {
+  return {
+    dead: [],
+    legacyUsed: [],
+    replacedLeftovers: [],
+  };
+}
 
 export function createBundleFactsStep(): PipelineStep {
   return {
     id: 'bundle_facts',
     label: 'Aggregate bundle facts',
-    deps: [
-      'scope',
-      'intended',
-      'working',
-      'drift',
-      'legacy',
-      'hotspots',
-      'index_commits',
-      'moved_blocks',
-    ],
+    deps: ['scope', 'intended', 'working', 'drift', 'legacy', 'hotspots', 'index_commits'],
 
     async run(state: PipelineState) {
       if (!state.commitFacts || state.commitFacts.length === 0) {
-        logError('No commit facts available');
-        return;
+        const message = 'No commit facts available';
+        logError(message);
+        throw new Error(message);
       }
 
-      if (!state.scope || !state.intended || !state.working || !state.drift || !state.legacy) {
-        logError('Missing required pipeline data for bundle facts');
-        return;
+      if (!state.scope || !state.intended || !state.working) {
+        const message = 'Missing required pipeline data for bundle facts';
+        logError(message);
+        throw new Error(message);
+      }
+
+      state.partialReasons = state.partialReasons ?? [];
+      const fallbackReasons: string[] = [];
+
+      const drift =
+        state.drift ??
+        (() => {
+          fallbackReasons.push('Drift analysis unavailable; using empty findings');
+          return buildEmptyDrift();
+        })();
+      const legacy =
+        state.legacy ??
+        (() => {
+          fallbackReasons.push('Legacy audit unavailable; using empty results');
+          return buildEmptyLegacy();
+        })();
+      const hotspots = state.hotspots ?? [];
+
+      if (fallbackReasons.length > 0) {
+        state.partialReasons.push(...fallbackReasons);
       }
 
       const bundleFacts = await buildRefactorBundleFacts(
@@ -36,11 +79,11 @@ export function createBundleFactsStep(): PipelineStep {
           scope: state.scope,
           intended: state.intended,
           working: state.working,
-          drift: state.drift,
-          legacy: state.legacy,
-          hotspots: state.hotspots,
+          drift,
+          legacy,
+          hotspots,
           timeline: state.explicitTimeline,
-          movedLineage: state.movedLineage,
+          movedLineage: state.movedLineage || [],
         }
       );
 
@@ -49,7 +92,7 @@ export function createBundleFactsStep(): PipelineStep {
         (bundleFacts as any).partialReasons = state.partialReasons;
       }
 
-      state.bundleFacts = bundleFacts;
+      updateState(state, 'bundleFacts', bundleFacts);
     },
   };
 }

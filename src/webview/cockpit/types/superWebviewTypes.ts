@@ -7,8 +7,6 @@ export interface SidebarProps {
   repoName?: string;
   branchName?: string;
   allMetrics?: Record<string, NodeMetrics>;
-  currentTimeFilter?: number;
-  onTimeFilterChange?: (value: number) => void;
 }
 
 export interface StageProps {

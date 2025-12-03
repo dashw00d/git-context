@@ -24,6 +24,45 @@ export async function registerCockpitFeatures(
 
   new CockpitEffects(store, providers);
 
+  // Keep the Refactor Report view in sync with the latest analysis/facts (including skeleton data)
+  if (providers.refactorReportProvider) {
+    let lastFactsKey: string | null = null;
+    let lastAnalysisKey: string | null = null;
+
+    const pushReportUpdate = () => {
+      const state = orchestrator.getState();
+      const facts = state.bundleFacts as any;
+      const analysis = (state.llmOutputs as any)?.llmAnalysis || (state.llmOutputs as any);
+
+      if (!facts || !analysis) return;
+
+      const factsKey = `${facts.generated_at || ''}|${facts.bundle?.newestSha || ''}|${facts.bundle?.shas?.join(',') || ''}`;
+      const analysisKey = `${analysis.summary || analysis.title || ''}|${(analysis.markdown || '').length}`;
+
+      if (factsKey === lastFactsKey && analysisKey === lastAnalysisKey) {
+        return;
+      }
+
+      lastFactsKey = factsKey;
+      lastAnalysisKey = analysisKey;
+
+      providers.refactorReportProvider!.showReport(analysis, facts);
+    };
+
+    // Initial sync in case facts already exist
+    pushReportUpdate();
+
+    shell.registerFeature({
+      effects: [
+        {
+          key: ['bundleFacts', 'llmOutputs'],
+          priority: 50,
+          handler: pushReportUpdate,
+        },
+      ],
+    });
+  }
+
   shell.registerCommand('git-context.startLiveAnalysis', async () => {
     const liveEngine = (orchestrator as any).liveEngine;
     if (liveEngine) {

@@ -226,8 +226,8 @@ export const metricsActions = {
     type: 'NODE_METRICS_UPDATED',
     payload: { metrics },
   }),
-  setTimeFilter: (timestamp: number): Action => ({
-    type: 'TIME_FILTER_UPDATED',
-    payload: { timestamp },
+  setCommitIndex: (index: number): Action => ({
+    type: 'COMMIT_INDEX_UPDATED',
+    payload: { index },
   }),
 };

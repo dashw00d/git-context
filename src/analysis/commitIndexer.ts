@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
+import pLimit = require('p-limit');
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { prepare } from '../storage/statement-wrapper';
-import type { SymbolInfo } from '../types';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { shouldProcessPathWithLog } from '../utils/pathFilter';
@@ -14,7 +14,7 @@ import { MovedBlockDetectorV2 } from './movedBlockDetector';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
 import { getTreeSitterParser } from './tree-sitter';
-import pLimit = require('p-limit');
+import type { SymbolInfo } from '../types';
 
 export interface CommitFacts {
   sha: string;
@@ -75,7 +75,9 @@ export class CommitIndexer {
     private dependencyExtractor: DependencyExtractor,
     private hotspotDetector: HotspotDetectorV2,
     private movedBlockDetector: MovedBlockDetectorV2
-  ) {}
+  ) {
+    //empty
+  }
 
   /**
    * Get cache statistics for observability
@@ -136,7 +138,15 @@ export class CommitIndexer {
    */
   async ensureCommitIndexed(
     sha: string,
-    opts?: { force?: boolean; modules?: string[] }
+    opts?: {
+      force?: boolean;
+      modules?: string[];
+      onProgress?: (event: {
+        type: 'file_start' | 'file_complete';
+        file: string;
+        sha: string;
+      }) => void;
+    }
   ): Promise<CommitFacts> {
     if (!opts?.force && this.isIndexed(sha)) {
       logDebug(`[CommitIndexer] ${sha} already indexed`);
@@ -180,13 +190,18 @@ export class CommitIndexer {
   async ensureCommitsIndexed(
     shas: string[],
     concurrency: number = 8,
-    opts?: { force?: boolean; modules?: string[] }
+    opts?: { force?: boolean; modules?: string[] },
+    onProgress?: (event: {
+      type: 'file_start' | 'file_complete';
+      file: string;
+      sha: string;
+    }) => void
   ): Promise<CommitFacts[]> {
     const limit = pLimit(concurrency);
     const promises = shas.map(sha =>
       limit(async () => {
         return this.retryWithBackoff(async () => {
-          const facts = await this.ensureCommitIndexed(sha, opts);
+          const facts = await this.ensureCommitIndexed(sha, { ...opts, onProgress });
           return facts;
         });
       })
@@ -209,7 +224,15 @@ export class CommitIndexer {
 
   private async indexCommit(
     sha: string,
-    opts?: { force?: boolean; modules?: string[] }
+    opts?: {
+      force?: boolean;
+      modules?: string[];
+      onProgress?: (event: {
+        type: 'file_start' | 'file_complete';
+        file: string;
+        sha: string;
+      }) => void;
+    }
   ): Promise<CommitFacts> {
     logInfo(`[CommitIndexer] Indexing commit ${sha}`);
 
@@ -224,7 +247,14 @@ export class CommitIndexer {
       `[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY})`
     );
 
-    const promises = files.map(file => limit(() => this.processFile(file, sha, parentSha)));
+    const promises = files.map(file =>
+      limit(async () => {
+        opts?.onProgress?.({ type: 'file_start', file: file.path, sha });
+        const result = await this.processFile(file, sha, parentSha);
+        opts?.onProgress?.({ type: 'file_complete', file: file.path, sha });
+        return result;
+      })
+    );
     const results = await Promise.all(promises);
 
     let totalSymbolsAdded = 0;

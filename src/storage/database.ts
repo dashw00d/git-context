@@ -152,8 +152,11 @@ export class DatabaseManager {
               }
               stmt.free();
               return undefined;
-            } catch (error) {
-              console.error('Statement.get() error:', error);
+            } catch (error: any) {
+              // Only log unexpected errors, not "no such column" which is handled by fallbacks
+              if (!error.message?.includes('no such column')) {
+                console.error('Statement.get() error:', error);
+              }
               return undefined; // Return undefined instead of throwing
             }
           },

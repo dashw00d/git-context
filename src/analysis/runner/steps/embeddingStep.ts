@@ -1,5 +1,14 @@
+import { logError } from '../../../utils/logger';
 import { EmbeddingIndexer } from '../../embeddingIndexer';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
+
+function updateState<K extends keyof PipelineState>(
+  state: PipelineState,
+  key: K,
+  value: PipelineState[K]
+) {
+  (state as any)[key] = value;
+}
 
 export function createEmbeddingStep(embeddingIndexer: EmbeddingIndexer): PipelineStep {
   return {
@@ -12,9 +21,9 @@ export function createEmbeddingStep(embeddingIndexer: EmbeddingIndexer): Pipelin
 
       try {
         const metrics = await embeddingIndexer.indexCommits(state.commitFacts);
-        state.embeddingMetrics = metrics;
+        updateState(state, 'embeddingMetrics', metrics);
       } catch (error) {
-        state.embeddingMetrics = {
+        updateState(state, 'embeddingMetrics', {
           commitCount: state.commitFacts.length,
           commitShardCount: 0,
           symbolShardCount: 0,
@@ -22,8 +31,8 @@ export function createEmbeddingStep(embeddingIndexer: EmbeddingIndexer): Pipelin
           durationMs: 0,
           skipped: true,
           reason: error instanceof Error ? error.message : String(error),
-        };
-        throw error;
+        });
+        logError('[EmbeddingStep] Failed to index embeddings', error);
       }
     },
   };

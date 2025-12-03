@@ -17,8 +17,7 @@ export interface FileChange {
 export interface SymbolInfo {
   id: string;
   dnaId: string;
-  dnaIdV2?: string;
-  dnaVersion?: 1 | 2;
+  dnaVersion?: 2; // Always 2 when assigned via assignDNAIds
   semanticId?: string;
   name: string;
   kind: 'function' | 'class' | 'method' | 'const' | 'interface' | 'type' | 'variable';
@@ -31,7 +30,7 @@ export interface SymbolInfo {
   docstring?: string;
 }
 
-export type SymbolChangeType =
+export type SymbolDeltaChangeType =
   | 'added'
   | 'removed'
   | 'modified'
@@ -40,7 +39,7 @@ export type SymbolChangeType =
 
 export interface SymbolDelta {
   symbol: SymbolInfo;
-  changeType: SymbolChangeType;
+  changeType: SymbolDeltaChangeType;
   previousSymbol?: SymbolInfo;
   modReason?: ModReason;
   diffSnippetPre?: string;

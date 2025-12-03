@@ -5,6 +5,7 @@ import { SymbolHistoryProvider } from '../providers/symbolHistoryProvider';
 import { getReportService } from '../services/reportService';
 import { prepare } from '../storage/statement-wrapper';
 import { logError, logInfo } from '../utils/logger';
+import { deriveAnalysisScope, shouldForceWorkspaceOnly } from '../utils/scopeUtils';
 import { Action } from './actions';
 import { CockpitStore } from './store';
 
@@ -17,10 +18,12 @@ export class CockpitEffects {
       symbolHistoryProvider: SymbolHistoryProvider;
     }
   ) {
+    logInfo('[CockpitEffects] Constructed and subscribing to store');
     store.subscribe(this.onAction.bind(this));
   }
 
   private async onAction(state: any, action: Action) {
+    logInfo(`[CockpitEffects] onAction received: ${action.type}`);
     switch (action.type) {
       case 'ANALYSIS_REQUESTED':
         await this.handleAnalysis(action.payload);
@@ -67,6 +70,7 @@ export class CockpitEffects {
     if (scope === 'all' || scope === 'reports') promises.push(this.refreshReports());
 
     if (scope === 'all' || scope === 'commits') promises.push(this.refreshWorkspace());
+    if (scope === 'all' || scope === 'commits') promises.push(this.refreshRepoContext());
 
     await Promise.all(promises);
   }
@@ -89,14 +93,13 @@ export class CockpitEffects {
 
     const { ANALYSIS_VERSION } = await import('../storage/schema');
 
-    const analyzedStatuses = await Promise.all(
-      commits.map(async (commit: any) => {
-        const result = prepare(
-          'SELECT COUNT(*) as count FROM commits_analysis WHERE sha = ? AND analysis_version = ? AND status = ?'
-        ).get(commit.sha, ANALYSIS_VERSION, 'complete');
-        return { sha: commit.sha, analyzed: (result as any)?.count > 0 };
-      })
-    );
+    const analyzedStatuses = commits.map((commit: any) => {
+      const stmt = prepare(
+        'SELECT COUNT(*) as count FROM commits_analysis WHERE sha = ? AND analysis_version = ? AND status = ?'
+      );
+      const result = stmt.get(commit.sha, ANALYSIS_VERSION, 'complete');
+      return { sha: commit.sha, analyzed: (result as any)?.count > 0 };
+    });
     const analyzedMap = new Map(analyzedStatuses.map(s => [s.sha, s.analyzed]));
     const bundleShaSet = new Set(state.bundleFacts?.bundle?.shas ?? []);
 
@@ -205,6 +208,24 @@ export class CockpitEffects {
     this.store.dispatch({ type: 'REPORTS_UPDATED', payload: { reports } });
   }
 
+  private async refreshRepoContext() {
+    try {
+      const { GitOperations } = await import('../analysis/git');
+      const { getGitRoot } = await import('../utils/config');
+      const git = new GitOperations();
+      const gitRoot = getGitRoot();
+      const branch = await git.getCurrentBranch();
+      const repoName = gitRoot ? gitRoot.split('/').pop() || null : null;
+
+      this.store.dispatch({
+        type: 'REPO_CONTEXT_UPDATED',
+        payload: { repoName, branchName: branch },
+      });
+    } catch (error) {
+      logError('[Effects] Failed to refresh repo context', error);
+    }
+  }
+
   private mapStatus(status: string): any {
     switch (status) {
       case 'A':
@@ -227,7 +248,9 @@ export class CockpitEffects {
       if (parsed) {
         return parsed.scope;
       }
-    } catch {}
+    } catch {
+      //empty
+    }
 
     if (sha.includes('staged')) return 'staged';
     if (sha.includes('unstaged')) return 'unstaged';
@@ -235,6 +258,9 @@ export class CockpitEffects {
   }
 
   private async handleAnalysis(payload: { selection: string[]; force?: boolean }) {
+    logInfo(
+      `[Effects] handleAnalysis triggered with selection=${payload.selection?.length}, force=${payload.force}`
+    );
     const reportService = await getReportService();
     this.store.dispatch({
       type: 'ANALYSIS_STARTED',
@@ -250,24 +276,42 @@ export class CockpitEffects {
       const { getExtensionConfig } = await import('../utils/config');
 
       const git = new GitOperations();
+      const workspaceScope = state.workspaceScope || 'workspace';
+      const bundleConfigMode = state.bundleConfig?.mode;
+
+      // Use centralized scope derivation logic
+      const scope = deriveAnalysisScope(workspaceScope, bundleConfigMode);
+      const forceWorkspaceOnly = shouldForceWorkspaceOnly(bundleConfigMode);
       let branch = 'HEAD';
       try {
         const current = await git.getCurrentBranch();
         branch = current ?? 'HEAD';
-      } catch {}
+      } catch {
+        //empty
+      }
 
       const stagedFiles = await git.getStagedFiles().catch(() => []);
       const unstagedFiles = await git.getUnstagedFiles().catch(() => []);
-      const includeStaged = stagedFiles.length > 0 || state.selectedStagedPaths.length > 0;
-      const includeUnstaged = unstagedFiles.length > 0 || state.selectedUnstagedPaths.length > 0;
+      // Determine which workspace parts to include based on scope
+      const effectiveWorkspaceScope = bundleConfigMode === 'changes' ? 'workspace' : workspaceScope;
+      const includeStaged =
+        effectiveWorkspaceScope !== 'unstaged' &&
+        (stagedFiles.length > 0 || state.selectedStagedPaths.length > 0);
+      const includeUnstaged =
+        effectiveWorkspaceScope !== 'staged' &&
+        (unstagedFiles.length > 0 || state.selectedUnstagedPaths.length > 0);
+
+      // Force workspace inclusion if in changes mode
+      const includeStagedFinal = forceWorkspaceOnly ? true : includeStaged;
+      const includeUnstagedFinal = forceWorkspaceOnly ? true : includeUnstaged;
 
       const ordered: string[] = [];
       const pushUnique = (sha?: string) => {
         if (sha && !ordered.includes(sha)) ordered.push(sha);
       };
 
-      if (includeUnstaged) pushUnique(makeWorkspaceSha('unstaged', branch));
-      if (includeStaged) pushUnique(makeWorkspaceSha('staged', branch));
+      if (includeUnstagedFinal) pushUnique(makeWorkspaceSha('unstaged', branch));
+      if (includeStagedFinal) pushUnique(makeWorkspaceSha('staged', branch));
 
       const explicitSelection =
         payload.selection && payload.selection.length > 0
@@ -280,18 +324,32 @@ export class CockpitEffects {
 
       const hasCommitCount = (): number => ordered.filter(sha => !isWorkspaceSha(sha)).length;
 
-      if (hasCommitCount() === 0) {
+      const shouldBackfillHistory =
+        hasCommitCount() === 0 &&
+        !includeStagedFinal &&
+        !includeUnstagedFinal &&
+        !forceWorkspaceOnly;
+
+      if (shouldBackfillHistory) {
         try {
           const headSha = await git.getHeadSha();
           pushUnique(headSha);
-        } catch {}
+        } catch {
+          //empty
+        }
 
         const recent = await git.getRecentCommits(depth * 2);
         for (const commit of recent) {
           if (hasCommitCount() >= depth) break;
           pushUnique(commit.sha);
         }
-      } else if (hasCommitCount() < depth) {
+      } else if (
+        hasCommitCount() < depth &&
+        scope !== 'full' &&
+        !includeStagedFinal &&
+        !includeUnstagedFinal &&
+        !forceWorkspaceOnly
+      ) {
         const recent = await git.getRecentCommits(depth * 2);
         for (const commit of recent) {
           if (hasCommitCount() >= depth) break;
@@ -309,9 +367,13 @@ export class CockpitEffects {
         payload: { shas: ordered },
       });
 
-      await reportService.generateReport(ordered, 'full', {
+      logInfo(
+        `[Effects] Calling reportService.generateReport with scope=${scope}, force=${payload.force}`
+      );
+      await reportService.generateReport(ordered, scope, {
         force: payload.force,
       });
+      logInfo('[Effects] reportService.generateReport completed successfully');
     } catch (error) {
       logError('[Effects] Analysis failed to start', error);
       this.store.dispatch({

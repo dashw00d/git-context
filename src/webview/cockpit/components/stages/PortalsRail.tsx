@@ -1,8 +1,20 @@
 import * as React from 'react';
 
+// Browser-compatible path utilities
+function dirname(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/');
+  const lastSlash = normalized.lastIndexOf('/');
+  return lastSlash === -1 ? '' : normalized.substring(0, lastSlash);
+}
+
 interface PortalsRailProps {
   incomingRefs?: number;
   outgoingRefs?: number;
+  blastRadius?: { incoming: any[]; outgoing: any[] };
+  focusedSymbolId?: string | null;
+  currentFilePath?: string;
+  currentCommitIndex?: number;
+  orderedCommits?: string[];
 }
 
 const RailContainer: React.CSSProperties = {
@@ -73,34 +85,158 @@ const PortalGroup: React.FC<{ name: string; count: number; type: 'incoming' | 'o
   </div>
 );
 
-export const PortalsRail: React.FC<PortalsRailProps> = ({ incomingRefs = 0, outgoingRefs = 0 }) => {
+/**
+ * Extract folder name from file path for grouping
+ * Examples:
+ * - src/utils/foo.ts -> UTILS
+ * - src/controllers/api.ts -> CONTROLLERS
+ * - src/types/index.ts -> TYPES
+ */
+function extractFolderName(filePath: string): string {
+  const dir = dirname(filePath);
+  const parts = dir.split('/').filter((p: string) => p);
+  if (parts.length === 0) return 'ROOT';
+  // Use the last directory name, uppercase
+  const folderName = parts[parts.length - 1].toUpperCase();
+  return folderName || 'ROOT';
+}
+
+/**
+ * Group references by folder
+ */
+function groupByFolder(references: any[]): Map<string, number> {
+  const groups = new Map<string, number>();
+  references.forEach(ref => {
+    // Extract path from reference (could be "from" or "to" depending on direction)
+    const refPath = ref.from || ref.to || '';
+    if (refPath) {
+      const filePath = refPath.split(':')[0]; // Remove symbol part if present
+      const folder = extractFolderName(filePath);
+      groups.set(folder, (groups.get(folder) || 0) + 1);
+    }
+  });
+  return groups;
+}
+
+export const PortalsRail: React.FC<PortalsRailProps> = ({
+  incomingRefs = 0,
+  outgoingRefs = 0,
+  blastRadius,
+  focusedSymbolId,
+  currentFilePath,
+  currentCommitIndex,
+  orderedCommits = [],
+}) => {
+  const isTimeTravelActive = currentCommitIndex !== undefined && orderedCommits.length > 0;
+  // Filter references if a symbol is focused
+  let filteredIncoming = blastRadius?.incoming || [];
+  let filteredOutgoing = blastRadius?.outgoing || [];
+
+  if (focusedSymbolId && currentFilePath) {
+    // Filter to only references involving the focused symbol
+    filteredIncoming = (blastRadius?.incoming || []).filter(ref => {
+      // Parse "to" path and symbol from reference
+      // Format: "filePath:symbolId -> otherPath:otherSymbol (type)"
+      const toMatch = ref.to?.match(/^(.+):(.+)$/);
+      if (toMatch) {
+        const [, toPath, toSymbol] = toMatch;
+        return (
+          toPath === currentFilePath &&
+          (toSymbol === focusedSymbolId || toSymbol.includes(focusedSymbolId))
+        );
+      }
+      return false;
+    });
+
+    filteredOutgoing = (blastRadius?.outgoing || []).filter(ref => {
+      // Parse "from" path and symbol from reference
+      const fromMatch = ref.from?.match(/^(.+):(.+)$/);
+      if (fromMatch) {
+        const [, fromPath, fromSymbol] = fromMatch;
+        return (
+          fromPath === currentFilePath &&
+          (fromSymbol === focusedSymbolId || fromSymbol.includes(focusedSymbolId))
+        );
+      }
+      return false;
+    });
+  }
+
+  // Use real data if available, otherwise fall back to counts
+  const incomingGroups =
+    filteredIncoming.length > 0 ? groupByFolder(filteredIncoming) : new Map<string, number>();
+  const outgoingGroups =
+    filteredOutgoing.length > 0 ? groupByFolder(filteredOutgoing) : new Map<string, number>();
+
+  // If no real data, show empty state or use fallback counts
+  const hasIncoming = incomingGroups.size > 0 || incomingRefs > 0;
+  const hasOutgoing = outgoingGroups.size > 0 || outgoingRefs > 0;
+
   return (
     <div style={RailContainer}>
+      {focusedSymbolId && (
+        <div
+          style={{
+            ...SectionHeader,
+            backgroundColor: 'var(--vscode-editor-selectionBackground)',
+            marginTop: '0',
+          }}
+        >
+          Filtered: {focusedSymbolId}
+        </div>
+      )}
+      {isTimeTravelActive && (
+        <div
+          style={{
+            ...SectionHeader,
+            backgroundColor: 'var(--vscode-inputValidation-warningBackground)',
+            color: 'var(--vscode-inputValidation-warningForeground)',
+            fontSize: '9px',
+            padding: '6px 10px',
+            marginTop: '0',
+          }}
+          title="References shown are current state. They may not have existed at the selected commit time."
+        >
+          ⚠️ Time travel active: References may differ
+        </div>
+      )}
       <div style={SectionHeader}>Incoming (Referenced By)</div>
-      {/* Mock Data - In real app, group by folder */}
-      <PortalGroup
-        name="UTILS"
-        count={Math.max(1, Math.floor(incomingRefs * 0.6))}
-        type="incoming"
-      />
-      <PortalGroup
-        name="CONTROLLERS"
-        count={Math.max(0, Math.floor(incomingRefs * 0.4))}
-        type="incoming"
-      />
+      {hasIncoming ? (
+        incomingGroups.size > 0 ? (
+          Array.from(incomingGroups.entries())
+            .sort((a, b) => b[1] - a[1]) // Sort by count descending
+            .map(([folder, count]) => (
+              <PortalGroup key={folder} name={folder} count={count} type="incoming" />
+            ))
+        ) : (
+          <PortalGroup name="UNKNOWN" count={incomingRefs} type="incoming" />
+        )
+      ) : (
+        <div style={{ padding: '8px 12px', opacity: 0.5, fontSize: '11px' }}>
+          {focusedSymbolId
+            ? `No incoming references for ${focusedSymbolId}`
+            : 'No incoming references'}
+        </div>
+      )}
 
       <div style={SectionHeader}>Outgoing (References)</div>
-      {/* Mock Data */}
-      <PortalGroup
-        name="TYPES"
-        count={Math.max(1, Math.floor(outgoingRefs * 0.5))}
-        type="outgoing"
-      />
-      <PortalGroup
-        name="SERVICES"
-        count={Math.max(0, Math.floor(outgoingRefs * 0.5))}
-        type="outgoing"
-      />
+      {hasOutgoing ? (
+        outgoingGroups.size > 0 ? (
+          Array.from(outgoingGroups.entries())
+            .sort((a, b) => b[1] - a[1]) // Sort by count descending
+            .map(([folder, count]) => (
+              <PortalGroup key={folder} name={folder} count={count} type="outgoing" />
+            ))
+        ) : (
+          <PortalGroup name="UNKNOWN" count={outgoingRefs} type="outgoing" />
+        )
+      ) : (
+        <div style={{ padding: '8px 12px', opacity: 0.5, fontSize: '11px' }}>
+          {focusedSymbolId
+            ? `No outgoing references for ${focusedSymbolId}`
+            : 'No outgoing references'}
+        </div>
+      )}
     </div>
   );
 };
