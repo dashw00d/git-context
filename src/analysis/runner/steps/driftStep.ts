@@ -94,7 +94,7 @@ export function createDriftStep(): PipelineStep {
             `[DriftStep] Retrieved ${totalFacts} hybrid facts across ${factsByFile.size} files`
           );
 
-          const limit = pLimit(8);
+          const limit = pLimit(24);
           const startTime = Date.now();
 
           const driftPromises = eligibleFiles.map(filePath =>

@@ -6,11 +6,8 @@ import {
   extractImportPaths,
 } from '../analysis/conventionEnhancements';
 import { BaseDetector, DetectorConfig } from '../analysis/detectors/BaseDetector';
-import {
-  analyzeConventionDrift,
-  detectNamingConvention,
-} from '../analysis/namingConventions';
-import { EdgeContext, SymbolContext } from '../contracts/llmContext';
+import { analyzeConventionDrift, detectNamingConvention } from '../analysis/namingConventions';
+import { SymbolContext } from '../contracts/llmContext';
 import { prepare } from '../storage/statement-wrapper';
 import { FileNamingConvention, ImportPathConvention } from '../types/convention';
 import { DriftFindings, IntendedState, UnresolvedCallerFact } from '../types/drift';
@@ -18,7 +15,6 @@ import { NamingConvention } from '../types/naming';
 import { detectLanguage, getGitRoot } from '../utils/config';
 import { logWarn } from '../utils/logger';
 import { WorkingSnapshot } from './workingSnapshot';
-import type { HybridFact } from '../types/cstFacts';
 
 export { DriftFindings, UnresolvedCallerFact };
 
@@ -48,8 +44,6 @@ function extractPathFromSymbol(symbol: SymbolContext, working?: WorkingSnapshot)
   }
   return 'unknown';
 }
-
-
 
 /**
  * Detect divergent symbol clusters using AST shape similarity and reachability analysis

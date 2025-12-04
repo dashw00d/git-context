@@ -1,6 +1,5 @@
-/* eslint-disable no-restricted-syntax */
-
-import { logDebug, logError } from '../../../utils/logger';
+import * as vscode from 'vscode';
+import { logDebug } from '../../../utils/logger';
 import { CommitIndexer } from '../../commitIndexer';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 
@@ -13,7 +12,7 @@ export function createIndexCommitsStep(
     label: 'Index commits (snapshots + diffs)',
     deps: [],
 
-    async run(state: PipelineState) {
+    async run(state: PipelineState, token: vscode.CancellationToken) {
       logDebug('🟧 [IndexCommitsStep] Starting run');
       const shas = state.selectedCommitShas;
 
@@ -34,23 +33,38 @@ export function createIndexCommitsStep(
         `[IndexCommits] Starting with concurrency=${concurrency} for ${shas.length} commits`
       );
 
+      // Throttling state
+      let lastReportTime = 0;
+      const THROTTLE_MS = 100; // Max 10 updates/sec
+
       const facts = await commitIndexer.ensureCommitsIndexed(
         shas,
         concurrency,
-        undefined,
+        {}, 
         event => {
-          if (state.onEvent) {
-            state.onEvent({
-              type: 'progress',
-              step: { id: 'index_commits', label: 'Index commits' } as any,
-              state,
-              data: {
-                type: event.type,
-                file: event.file,
-                sha: event.sha,
-              },
-              timestamp: new Date().toISOString(),
-            });
+          // 1. Check cancellation during progress
+          if (token.isCancellationRequested) {
+              // The indexer might not support aborting mid-flight immediately,
+              // but we can stop sending events.
+              return; 
+          }
+
+          // 2. Throttle Events
+          const now = Date.now();
+          if (now - lastReportTime > THROTTLE_MS || event.type === 'file_complete') {
+             if (state.onEvent) {
+                state.onEvent({
+                  type: 'progress',
+                  step: { id: 'index_commits', label: 'Index commits' } as any,
+                  state,
+                  data: {
+                    file: event.file,
+                    status: event.type === 'file_start' ? 'analyzing' : 'ready',
+                  },
+                  timestamp: new Date().toISOString(),
+                });
+             }
+             lastReportTime = now;
           }
         }
       );

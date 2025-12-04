@@ -175,7 +175,12 @@ export class ReportService {
               ? [{ stepId: event.step.id, error: String(event.error) }]
               : undefined;
           const healthPayload = {
-            currentStepId: event.type === 'finished' ? null : event.step?.id,
+            currentStepId:
+              event.type === 'finished' || event.type === 'aborted'
+                ? null
+                : 'step' in event
+                  ? event.step?.id
+                  : undefined,
             stepTimings: Object.keys(timings).length ? timings : undefined,
             pipelineErrors: pipelineError,
           };
@@ -220,7 +225,7 @@ export class ReportService {
 
             case 'finished':
               getStore().dispatch(pipelineActions.health(healthPayload));
-              if (event.state.errors.length === 0) {
+              if (event.state.status === 'completed') {
                 const history = event.state.history;
                 _serializedHistory = history
                   ? {
@@ -233,6 +238,15 @@ export class ReportService {
               }
               // Don't set progress to false here - wait for ANALYSIS_COMPLETED
               break;
+
+            case 'aborted':
+              getStore().dispatch(pipelineActions.health(healthPayload));
+              if (cockpitProvider) {
+                cockpitProvider.setProgress(false, undefined, undefined);
+                cockpitProvider.setError(event.state.abortReason || 'Pipeline aborted');
+              }
+              break;
+
             case 'progress':
               if (event.data && event.data.file) {
                 getStore().dispatch({
@@ -253,12 +267,10 @@ export class ReportService {
       );
 
       logDebug('🟢 Pipeline finished, checking results...');
-      const optionalSteps = ['drift', 'legacy', 'hotspots', 'moved_blocks'];
-      const criticalErrors = result.errors.filter(err => !optionalSteps.includes(err.stepId));
 
-      if (criticalErrors.length > 0) {
-        logDebug(`🔴 Critical errors found: ${criticalErrors.length}`);
-        logError(`Pipeline failed: ${criticalErrors[0].error}`);
+      if (result.status === 'aborted') {
+        logDebug(`🔴 Pipeline aborted: ${result.abortReason || 'Unknown reason'}`);
+        logError(`Pipeline failed: ${result.abortReason || 'Critical step failure'}`);
         return null;
       }
 

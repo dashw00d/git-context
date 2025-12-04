@@ -274,7 +274,9 @@ export async function registerCommands(
         try {
           const state = orchestrator.getState();
           logDebug(`🔍 [AnalyzeCmd] State selectedCommitShas: ${state.selectedCommitShas.length}`);
-          logDebug(`🔍 [AnalyzeCmd] State SHAs: ${state.selectedCommitShas.slice(0, 10).join(', ')}${state.selectedCommitShas.length > 10 ? '...' : ''}`);
+          logDebug(
+            `🔍 [AnalyzeCmd] State SHAs: ${state.selectedCommitShas.slice(0, 10).join(', ')}${state.selectedCommitShas.length > 10 ? '...' : ''}`
+          );
           const selected = new Set(state.selectedCommitShas);
 
           let branchLoaded = false;
@@ -348,7 +350,9 @@ export async function registerCommands(
 
           const shas = Array.from(selected);
           logDebug(`🔍 [AnalyzeCmd] Selected SHAs from state: ${shas.length}`);
-          logDebug(`🔍 [AnalyzeCmd] SHAs: ${shas.slice(0, 10).join(', ')}${shas.length > 10 ? '...' : ''}`);
+          logDebug(
+            `🔍 [AnalyzeCmd] SHAs: ${shas.slice(0, 10).join(', ')}${shas.length > 10 ? '...' : ''}`
+          );
 
           if (shas.length === 0) {
             vscode.window.showWarningMessage(

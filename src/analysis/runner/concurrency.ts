@@ -13,7 +13,6 @@ export async function runWithConcurrency<T>(
     while (queue.length > 0) {
       const next = queue.shift();
       if (!next) break;
-      if (!next) break;
 
       // Default to 60s if no timeout specified
       const effectiveTimeout = timeoutMs || 60000;
@@ -26,7 +25,7 @@ export async function runWithConcurrency<T>(
     }
   }
 
-  const workerCount = Math.min(limit, queue.length);
+  const workerCount = Math.min(limit, items.length);
 
   for (let i = 0; i < workerCount; i++) {
     workers.push(runWorker());

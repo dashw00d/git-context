@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import * as vscode from 'vscode';
 import pLimit = require('p-limit');
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { prepare } from '../storage/statement-wrapper';
@@ -99,8 +100,8 @@ export class CommitIndexer {
     fn: () => Promise<T>,
     maxRetries: number = 3,
     baseDelay: number = 1000
-  ): Promise<T> {
-    let lastError: Error;
+  ): Promise<T | null> {
+    let lastError: Error = new Error('Unknown error');
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -110,10 +111,10 @@ export class CommitIndexer {
 
         if (attempt === maxRetries) {
           logError(
-            `[CommitIndexer] All ${maxRetries} retry attempts exhausted for operation`,
+            `[CommitIndexer] All ${maxRetries} retry attempts exhausted for operation: ${lastError.message}`,
             lastError
           );
-          throw lastError;
+          return null;
         }
 
         const exponentialDelay = baseDelay * Math.pow(2, attempt);
@@ -127,7 +128,8 @@ export class CommitIndexer {
       }
     }
 
-    throw new Error(`Unexpected: retryWithBackoff loop completed without return or throw`);
+    logError(`[CommitIndexer] Unexpected: retryWithBackoff loop completed without return`);
+    return null;
   }
 
   /**
@@ -138,13 +140,18 @@ export class CommitIndexer {
     opts?: {
       force?: boolean;
       modules?: string[];
+      token?: vscode.CancellationToken;
       onProgress?: (event: {
         type: 'file_start' | 'file_complete';
         file: string;
         sha: string;
       }) => void;
     }
-  ): Promise<CommitFacts> {
+  ): Promise<CommitFacts | null> {
+    if (opts?.token?.isCancellationRequested) {
+      throw new vscode.CancellationError();
+    }
+
     if (!opts?.force && this.isIndexed(sha)) {
       logDebug(`[CommitIndexer] ${sha} already indexed`);
       this.cacheHits++;
@@ -160,9 +167,12 @@ export class CommitIndexer {
       this.markComplete(sha, facts);
       return facts;
     } catch (error) {
+      if (error instanceof vscode.CancellationError) {
+         throw error;
+      }
       this.markFailed(sha, error);
       logError(`[CommitIndexer] Failed to index commit ${sha}`, error);
-      throw new Error(`Failed to index commit ${sha}: ${(error as Error).message}`);
+      return Promise.reject(error);
     }
   }
 
@@ -172,7 +182,7 @@ export class CommitIndexer {
   async ensureCommitsIndexed(
     shas: string[],
     concurrency: number = 8,
-    opts?: { force?: boolean; modules?: string[] },
+    opts?: { force?: boolean; modules?: string[]; token?: vscode.CancellationToken },
     onProgress?: (event: {
       type: 'file_start' | 'file_complete';
       file: string;
@@ -182,14 +192,22 @@ export class CommitIndexer {
     const limit = pLimit(concurrency);
     const promises = shas.map(sha =>
       limit(async () => {
+        if (opts?.token?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
         return this.retryWithBackoff(async () => {
+          if (opts?.token?.isCancellationRequested) {
+             throw new vscode.CancellationError();
+          }
           const facts = await this.ensureCommitIndexed(sha, { ...opts, onProgress });
+          if (!facts) return Promise.reject(new Error(`Failed to index ${sha}`));
           return facts;
         });
       })
     );
 
     const results = await Promise.all(promises);
+    const validResults = results.filter((f): f is CommitFacts => f !== null && f !== undefined);
 
     this.snapshotManager.flushSnapshotQueue();
     this.structuralDiffManager.flushDiffQueue();
@@ -201,7 +219,7 @@ export class CommitIndexer {
       } misses (${(stats.hitRate * 100).toFixed(1)}% hit rate)`
     );
 
-    return results;
+    return validResults;
   }
 
   private async indexCommit(
@@ -209,6 +227,7 @@ export class CommitIndexer {
     opts?: {
       force?: boolean;
       modules?: string[];
+      token?: vscode.CancellationToken;
       onProgress?: (event: {
         type: 'file_start' | 'file_complete';
         file: string;
@@ -231,6 +250,9 @@ export class CommitIndexer {
 
     const promises = files.map(file =>
       limit(async () => {
+        if (opts?.token?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
         opts?.onProgress?.({ type: 'file_start', file: file.path, sha });
         const result = await this.processFile(file, sha, parentSha);
         opts?.onProgress?.({ type: 'file_complete', file: file.path, sha });

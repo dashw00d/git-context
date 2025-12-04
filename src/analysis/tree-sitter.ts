@@ -44,7 +44,9 @@ export class TreeSitterParser {
     const languages = getSupportedLanguages();
 
     const backgroundWorkerCount = this.totalWorkers - this.reservedForOnDemand;
-    logInfo(`Initializing ${this.totalWorkers} workers (${this.reservedForOnDemand} reserved for on-demand, ${backgroundWorkerCount} for background)...`);
+    logInfo(
+      `Initializing ${this.totalWorkers} workers (${this.reservedForOnDemand} reserved for on-demand, ${backgroundWorkerCount} for background)...`
+    );
 
     let workerPath = path.join(__dirname, 'parserWorker.js');
     if (!fs.existsSync(workerPath)) {
@@ -189,7 +191,8 @@ export class TreeSitterParser {
     }
     // Dispatch low priority to background workers
     if (this.lowPriorityQueue.length > 0 && this.backgroundWorkers.length > 0) {
-      const worker = this.backgroundWorkers[Math.floor(Math.random() * this.backgroundWorkers.length)];
+      const worker =
+        this.backgroundWorkers[Math.floor(Math.random() * this.backgroundWorkers.length)];
       this.processQueue(worker, false);
     }
   }

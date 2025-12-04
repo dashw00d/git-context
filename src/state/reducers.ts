@@ -1,9 +1,9 @@
+import { mergeFacts } from '../facts/factsMerger';
 import { CockpitState, ContextFrame, ExplorerNode } from '../types/cockpit';
 import { logDebug, logWarn } from '../utils/logger';
 import { Action } from './actions';
 import { normalizeBundleConfig } from './bundleConfig';
 import { getCachedFrame, updateTierCache } from './cacheUtils';
-import { mergeFacts } from '../facts/factsMerger';
 
 function updateNodeStatus(
   nodes: ExplorerNode[],

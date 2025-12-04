@@ -2,14 +2,7 @@
 import { getWorkingSnapshot } from '../../../facts/workingSnapshot';
 import { logDebug, logError } from '../../../utils/logger';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
-
-function updateState<K extends keyof PipelineState>(
-  state: PipelineState,
-  key: K,
-  value: PipelineState[K]
-) {
-  (state as any)[key] = value;
-}
+import { updateState } from './utils';
 
 export function createWorkingStep(): PipelineStep {
   return {

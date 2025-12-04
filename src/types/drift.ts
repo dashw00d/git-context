@@ -1,6 +1,6 @@
 import { EdgeContext, SymbolContext } from '../contracts/llmContext';
+import { FileNamingConvention } from './convention';
 import { HybridFact } from './cstFacts';
-import { FileNamingConvention, ImportPathConvention } from './convention';
 import { NamingConvention } from './naming';
 
 export interface IntendedState {

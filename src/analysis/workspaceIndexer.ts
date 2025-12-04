@@ -1,9 +1,9 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import pLimit = require('p-limit');
 import { Database } from 'sql.js';
 import { prepare } from '../storage/statement-wrapper';
-import type { HybridFact } from '../types/cstFacts';
 import { WorkspaceFacts } from '../types/workspace';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
 import { logDebug, logError, logInfo } from '../utils/logger';
@@ -13,7 +13,7 @@ import { GitOperations } from './git';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
 import { getTreeSitterParser } from './tree-sitter';
-import pLimit = require('p-limit');
+import type { HybridFact } from '../types/cstFacts';
 
 export { WorkspaceFacts };
 
@@ -860,7 +860,9 @@ export class WorkspaceIndexer {
       try {
         const symbols = await this.parser.extractHybridFacts(content, filePath, language);
         // Try matching by ID (hash) first, then name
-        const symbol = symbols.find((s: any) => s.id === identifier || s.name === identifier) as any;
+        const symbol = symbols.find(
+          (s: any) => s.id === identifier || s.name === identifier
+        ) as any;
 
         if (symbol) {
           symbolName = symbol.name;

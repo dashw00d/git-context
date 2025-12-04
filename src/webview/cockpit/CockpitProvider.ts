@@ -65,8 +65,9 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
 
   constructor(private readonly extensionUri: vscode.Uri) {
     this.bundleManager = new BundleManager();
-    this._debugMode =
-      vscode.workspace.getConfiguration('git-context').get<boolean>('debugMode', false);
+    this._debugMode = vscode.workspace
+      .getConfiguration('git-context')
+      .get<boolean>('debugMode', false);
   }
 
   /**
@@ -251,11 +252,9 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
 
     // Initial update if we have data
     const initSequence = async () => {
-      let hydrated = false;
       if (!this._bundleFacts) {
-        hydrated = await this._hydrateFromPersistedFacts();
+        await this._hydrateFromPersistedFacts();
       } else {
-        hydrated = true;
         this._update();
       }
 
@@ -265,9 +264,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       await this._updateSkeleton(config);
     };
 
-    initSequence().catch(err =>
-      logError(`[CockpitProvider] Init sequence failed: ${err}`)
-    );
+    initSequence().catch(err => logError(`[CockpitProvider] Init sequence failed: ${err}`));
   }
 
   private async _handleMessage(rawMsg: any): Promise<void> {
@@ -750,17 +747,12 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     if (shas.length > 0) {
       // Run pipeline in background
       // We don't await this in the UI thread (caller catches errors but doesn't block)
-      const result = await pipeline.analyzeBundle(
-        shas,
-        true,
-        undefined,
-        event => {
-          if (event.type === 'progress' && event.data?.type === 'file_complete') {
-            // Update explorer node status when a file is done
-            this.updateExplorerNodeStatus(event.data.file, 'ready');
-          }
+      const result = await pipeline.analyzeBundle(shas, true, undefined, event => {
+        if (event.type === 'progress' && event.data?.type === 'file_complete') {
+          // Update explorer node status when a file is done
+          this.updateExplorerNodeStatus(event.data.file, 'ready');
         }
-      );
+      });
 
       if (result.bundleFacts) {
         // Dispatch update to Redux (which will merge with partial/on-demand facts)

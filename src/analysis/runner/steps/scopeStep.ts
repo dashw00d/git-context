@@ -2,14 +2,7 @@ import { computeScope } from '../../../facts/scope';
 import { logDebug } from '../../../utils/logger';
 import { GitOperations } from '../../git';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
-
-function updateState<K extends keyof PipelineState>(
-  state: PipelineState,
-  key: K,
-  value: PipelineState[K]
-) {
-  (state as any)[key] = value;
-}
+import { updateState } from './utils';
 
 export function createScopeStep(git?: GitOperations): PipelineStep {
   return {

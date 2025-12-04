@@ -1,7 +1,9 @@
 /* eslint-disable no-restricted-syntax */
+import * as vscode from 'vscode';
 import { withTimeout } from '../../utils/async';
-import { logDebug, logError, logInfo } from '../../utils/logger';
+import { logDebug, logInfo, logError } from '../../utils/logger';
 import { PipelineEventHandler, PipelineState, PipelineStep } from './pipelineTypes';
+import { OPTIONAL_STEPS } from './pipelineConfigs';
 
 /**
  * Build dependency graph from pipeline steps
@@ -74,6 +76,7 @@ function topologicalSort(graph: Record<string, string[]>): string[][] {
 export async function runPipeline(
   steps: PipelineStep[],
   initialState: Omit<PipelineState, 'completedSteps' | 'errors'>,
+  token?: vscode.CancellationToken,
   onEvent?: PipelineEventHandler
 ): Promise<PipelineState> {
   const state: PipelineState = {
@@ -83,6 +86,7 @@ export async function runPipeline(
     stepTimings: {},
     partialReasons: [],
     onEvent,
+    status: 'pending',
   };
 
   const pipelineStartTime = Date.now();
@@ -92,119 +96,136 @@ export async function runPipeline(
   const levels = topologicalSort(depGraph);
 
   logDebug(`🚀 [Pipeline] runPipeline called with ${steps.length} steps`);
-  logDebug(`🚀 [Pipeline] Step IDs: ${steps.map(s => s.id).join(', ')}`);
   logDebug(`🚀 [Pipeline] Levels: ${levels.length}`);
 
-  logInfo(
-    `[Pipeline] Starting pipeline execution with ${levels.length} levels and ${steps.length} steps`
-  );
-
   for (const level of levels) {
-    logDebug(`🔵 [Pipeline] Processing level with ${level.length} steps: ${level.join(', ')}`);
-    const promises = level.map(stepId => {
+    // 1. Fail Fast: Check cancellation before starting a level
+    if (token?.isCancellationRequested) {
+        logInfo('[Pipeline] Cancellation requested. Aborting pipeline.');
+        state.status = 'aborted';
+        state.abortReason = 'Cancellation requested';
+        onEvent?.({ type: 'aborted', state, timestamp: new Date().toISOString() });
+        throw new vscode.CancellationError();
+    }
+
+    logInfo(`[Pipeline] Processing level: ${level.join(', ')}`);
+
+    const stepPromises = level.map(async (stepId) => {
       const step = steps.find(s => s.id === stepId)!;
+      const isOptional = OPTIONAL_STEPS.has(stepId);
+
       const startTime = Date.now();
       stepTimings[stepId] = { start: startTime };
       state.stepTimings![stepId] = { start: startTime };
 
-      return Promise.resolve()
-        .then(() => {
-          logDebug(`⏩ [Pipeline] About to run step: ${step.id}`);
-          state.currentStepId = step.id;
-          const timestamp = new Date().toISOString();
-          onEvent?.({ type: 'start', step, state, timestamp });
-          logDebug(`[Pipeline] Started step: ${step.label}`);
-          logDebug(`▶️  [Pipeline] Calling step.run() for: ${step.id}`);
-          const runPromise = step.run(state);
-          logDebug(`⏱️  [Pipeline] step.run() returned promise for: ${step.id}`);
-          return withTimeout(
-            Promise.resolve(runPromise),
-            300000, // 5 minutes default timeout for pipeline steps
+      try {
+        // 2. Fail Fast: Check cancellation before specific step
+        if (token?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
+
+        onEvent?.({ type: 'start', step, state, timestamp: new Date().toISOString() });
+        
+        // 3. Execution: Pass token to step
+        // Wrap in Promise.resolve to handle both async and sync returns
+        const runPromise = Promise.resolve(step.run(state, token!));
+        
+        await withTimeout(
+            runPromise, 
+            300000, 
             `Pipeline step '${step.id}'`
-          );
-        })
-        .then(() => {
-          const endTime = Date.now();
-          const duration = endTime - startTime;
-          stepTimings[stepId].end = endTime;
-          stepTimings[stepId].duration = duration;
-          state.stepTimings![stepId].end = endTime;
-          state.stepTimings![stepId].duration = duration;
-          state.completedSteps.add(step.id);
+        );
 
-          let cacheHits: number | undefined;
-          let cacheMisses: number | undefined;
+        // Success handling
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        stepTimings[stepId].end = endTime;
+        stepTimings[stepId].duration = duration;
+        state.stepTimings![stepId].end = endTime;
+        state.stepTimings![stepId].duration = duration;
+        state.completedSteps.add(step.id);
 
-          if (step.id === 'bundle_facts' && state.commitFacts) {
-            // empty
-          }
+        // Log cache hits if applicable (preserving original logic)
+        let cacheHits: number | undefined;
+        let cacheMisses: number | undefined;
+        if (step.id === 'bundle_facts' && state.commitFacts) {
+            cacheHits = state.commitFacts.length;
+            cacheMisses = 0;
+        }
 
-          const timestamp = new Date().toISOString();
-          onEvent?.({
+        onEvent?.({
             type: 'complete',
             step,
             state,
             duration,
             cacheHits,
             cacheMisses,
-            timestamp,
-          });
-          logDebug(`[Pipeline] Completed step: ${step.label} (${duration}ms)`);
-        })
-        .catch(error => {
-          const endTime = Date.now();
-          const duration = endTime - startTime;
-          stepTimings[stepId].end = endTime;
-          stepTimings[stepId].duration = duration;
-          state.stepTimings![stepId].end = endTime;
-          state.stepTimings![stepId].duration = duration;
+            timestamp: new Date().toISOString()
+        });
 
-          state.errors.push({ stepId: step.id, error });
+      } catch (error) {
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        stepTimings[stepId].end = endTime;
+        stepTimings[stepId].duration = duration;
+        state.stepTimings![stepId].end = endTime;
+        state.stepTimings![stepId].duration = duration;
 
-          const optionalSteps = ['drift', 'legacy', 'hotspots', 'moved_blocks'];
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
+        // Handle Cancellation explicitly
+        if (error instanceof vscode.CancellationError) {
+            throw error; // Re-throw to stop the entire pipeline
+        }
 
-          if (optionalSteps.includes(step.id)) {
-            state.partialReasons!.push(`${step.label} failed: ${errorMessage}`);
-          } else {
-            state.partialReasons!.push(`CRITICAL: ${step.label} failed: ${errorMessage}`);
-            logError(`[Pipeline] CRITICAL step failed: ${step.label}`, error);
-          }
+        // Handle Standard Errors
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        state.errors.push({ stepId: step.id, error });
+        
+        logError(`[Pipeline] Step ${step.id} failed: ${errorMsg}`);
 
-          const stepError = {
-            message: errorMessage,
-            stack: error instanceof Error ? error.stack : undefined,
-          };
-
-          const timestamp = new Date().toISOString();
-          onEvent?.({
+        onEvent?.({
             type: 'error',
             step,
             error,
             state,
-            stepError,
-            timestamp,
-          });
-          logDebug(`[Pipeline] Failed step: ${step.label} (${duration}ms): ${stepError.message}`);
+            stepError: { message: errorMsg, stack: error instanceof Error ? error.stack : undefined },
+            timestamp: new Date().toISOString()
         });
+
+        // 4. Circuit Breaker / Wrapper Pattern
+        if (isOptional) {
+            // OPTIONAL: Swallow error, mark partial, continue pipeline
+            state.partialReasons!.push(`${step.label} failed: ${errorMsg}`);
+            logInfo(`[Pipeline] Optional step ${step.id} failed. Continuing.`);
+        } else {
+            // CRITICAL: Re-throw to trigger Promise.all failure
+            state.partialReasons!.push(`CRITICAL: ${step.label} failed: ${errorMsg}`);
+            throw error;
+        }
+      }
     });
 
-    await Promise.allSettled(promises);
-
-    // Check if any critical steps failed in this level
-    const optionalSteps = ['drift', 'legacy', 'hotspots', 'moved_blocks'];
-    const criticalFailuresInLevel = state.errors.filter(
-      err => level.includes(err.stepId) && !optionalSteps.includes(err.stepId)
-    );
-
-    if (criticalFailuresInLevel.length > 0) {
-      const failedStepIds = criticalFailuresInLevel.map(e => e.stepId).join(', ');
-      logError(
-        `[Pipeline] Critical step(s) failed in this level: ${failedStepIds}. Aborting remaining pipeline.`
-      );
-      break; // Stop processing further levels
+    // 5. Execution Strategy: Wait for all steps in level
+    // Promise.all will reject immediately if any CRITICAL step fails.
+    // It will wait for optional steps even if they fail (caught above).
+    try {
+        await Promise.all(stepPromises);
+    } catch (error) {
+         if (error instanceof vscode.CancellationError) {
+             state.status = 'aborted';
+             state.abortReason = 'Cancellation requested';
+             onEvent?.({ type: 'aborted', state, timestamp: new Date().toISOString() });
+             throw error;
+         }
+         // Critical error
+         state.status = 'aborted';
+         state.abortReason = 'Critical step failed';
+         onEvent?.({ type: 'aborted', state, timestamp: new Date().toISOString() });
+         throw error;
     }
+  }
+
+  if (state.status === 'pending') {
+    state.status = 'completed';
   }
 
   const pipelineEndTime = Date.now();
@@ -212,24 +233,7 @@ export async function runPipeline(
   state.pipelineDuration = totalDuration;
 
   logInfo(`[Pipeline] Pipeline completed in ${totalDuration}ms`);
-  logInfo(`[Pipeline] Steps completed: ${state.completedSteps.size}/${steps.length}`);
-  if (state.errors.length > 0) {
-    logInfo(`[Pipeline] Steps failed: ${state.errors.length}`);
-  }
+  onEvent?.({ type: 'finished', state, timestamp: new Date().toISOString() });
 
-  const completedTimings = Object.entries(stepTimings)
-    .filter(([, timing]) => timing.duration !== undefined)
-    .sort(([, a], [, b]) => (b.duration || 0) - (a.duration || 0));
-
-  if (completedTimings.length > 0) {
-    logDebug('[Pipeline] Step timing summary:');
-    completedTimings.slice(0, 5).forEach(([stepId, timing]) => {
-      logDebug(`  ${stepId}: ${timing.duration}ms`);
-    });
-  }
-
-  state.currentStepId = null;
-  const timestamp = new Date().toISOString();
-  onEvent?.({ type: 'finished', state, timestamp });
   return state;
 }

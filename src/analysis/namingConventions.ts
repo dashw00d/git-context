@@ -1,8 +1,4 @@
-import {
-  ConventionDriftResult,
-  ConventionProfile,
-  NamingConvention,
-} from '../types/naming';
+import { ConventionDriftResult, ConventionProfile, NamingConvention } from '../types/naming';
 
 export { ConventionDriftResult, ConventionProfile, NamingConvention };
 

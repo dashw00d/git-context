@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import {
   buildIntendedMap,
   IntendedState,
@@ -64,7 +65,8 @@ export class RefactorPipeline {
     commitShas: string[],
     includeWorkspace: boolean = false,
     workspaceParts?: Set<'staged' | 'unstaged'>,
-    onEvent?: (event: PipelineEvent) => void
+    onEvent?: (event: PipelineEvent) => void,
+    token?: vscode.CancellationToken
   ): Promise<PipelineState> {
     logDebug(
       `🎯 [RefactorPipeline] analyzeBundle called with ${commitShas.length} commits, workspace: ${includeWorkspace}`
@@ -101,7 +103,7 @@ export class RefactorPipeline {
     };
 
     logDebug(`🎯 [RefactorPipeline] About to call runPipeline with ${steps.length} steps`);
-    const finalState = await runPipeline(steps, initialState, onEvent);
+    const finalState = await runPipeline(steps, initialState, token, onEvent);
     logDebug('🎯 [RefactorPipeline] runPipeline returned');
 
     const workspaceIndexerAny = this.workspaceIndexer as any;

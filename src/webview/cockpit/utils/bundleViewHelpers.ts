@@ -1,5 +1,4 @@
 import { BundleFactsDTO, BundleView } from '../../../types/cockpit';
-import { withTimeout } from '../../../utils/async';
 import { logDebug, logError } from '../../../utils/logger';
 
 export type HotspotCache = Map<string, any[]>;

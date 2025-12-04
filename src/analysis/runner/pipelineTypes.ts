@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import type { DriftFindings } from '../../facts/driftDetector';
 import type { IntendedState } from '../../facts/intendedMap';
 import type { LegacyAuditResult } from '../../facts/legacyAudit';
@@ -55,13 +56,16 @@ export interface PipelineState {
 
   partialReasons?: string[];
   onEvent?: PipelineEventHandler;
+
+  status?: 'pending' | 'completed' | 'aborted';
+  abortReason?: string;
 }
 
 export interface PipelineStep {
   id: string;
   label: string;
   deps?: string[];
-  run: (state: PipelineState) => Promise<void> | void;
+  run: (state: PipelineState, token: vscode.CancellationToken) => Promise<void> | void;
 }
 
 export type PipelineEvent =
@@ -84,6 +88,7 @@ export type PipelineEvent =
       timestamp: string;
     }
   | { type: 'finished'; state: PipelineState; timestamp: string }
+  | { type: 'aborted'; state: PipelineState; timestamp: string }
   | {
       type: 'progress';
       step: PipelineStep;

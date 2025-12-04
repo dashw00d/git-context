@@ -1,5 +1,5 @@
 import { ContextFrame } from '../types/cockpit';
-import { logDebug, logWarn } from '../utils/logger';
+import { logDebug } from '../utils/logger';
 
 const DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
 

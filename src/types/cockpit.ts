@@ -1,5 +1,5 @@
-import { WorkspaceFacts } from './workspace';
 import { RefactorBundleFacts } from '../facts/types';
+import { WorkspaceFacts } from './workspace';
 
 /** Which section (accordion) is active/open in the cockpit sidebar */
 export type CockpitSectionKey = 'commits' | 'bundle' | 'symbols' | 'reports' | 'live';
