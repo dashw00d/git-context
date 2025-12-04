@@ -32,6 +32,8 @@ function startStatsLogger() {
 
     logInfo(`\n📊 [AsyncStats] Summary:\n${summary}\n`);
   }, 30000); // Log every 30s
+  // Unref the interval so it doesn't keep the Node process alive (important for CLI commands)
+  statsInterval.unref();
 }
 
 /**
