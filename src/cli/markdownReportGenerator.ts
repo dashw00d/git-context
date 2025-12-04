@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getGitRoot } from '../utils/config';
 import type { CommitFacts } from '../analysis/commitIndexer';
 import type { PipelineState } from '../analysis/runner/pipelineTypes';
+import { getGitRoot } from '../utils/config';
 
 interface CodeSnippet {
   file: string;
@@ -393,6 +393,15 @@ function generateLegacySection(state: PipelineState): string {
       lines.push(`   - New: [${r.new.filePath}](${r.new.filePath || ''})`);
       lines.push(``);
     });
+  }
+
+  // If no legacy issues found, add a message
+  if (
+    (!state.legacy.dead || state.legacy.dead.length === 0) &&
+    (!state.legacy.legacyUsed || state.legacy.legacyUsed.length === 0) &&
+    (!state.legacy.replacedLeftovers || state.legacy.replacedLeftovers.length === 0)
+  ) {
+    lines.push(`*No legacy code issues detected.*\n`);
   }
 
   return lines.join('\n');

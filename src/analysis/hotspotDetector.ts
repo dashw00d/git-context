@@ -1,11 +1,11 @@
 import * as crypto from 'crypto';
+import type { CommitFacts } from '../analysis/commitIndexer';
 import { DatabaseService, getDatabaseService } from '../services/databaseService';
 import { getDatabaseManager } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
 import { BaseDetector, DetectorConfig } from './detectors/BaseDetector';
-import type { CommitFacts } from '../analysis/commitIndexer';
 
 export interface HotspotMetrics {
   commitFrequency: number;
@@ -62,6 +62,10 @@ export class HotspotDetector {
 
   /**
    * Calculate hotspot score from metrics (0-100)
+   *
+   * Note: When analyzing a small number of commits (e.g., 2-3), files that changed
+   * in all commits will have identical metrics, leading to identical scores. This is
+   * expected behavior and scores will differentiate as more commit history is analyzed.
    */
   calculateHotspotScore(metrics: HotspotMetrics): number {
     const weights = {

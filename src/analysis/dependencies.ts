@@ -66,10 +66,10 @@ export class DependencyExtractor {
           const imported = useMatch[1].split('\\').pop() || useMatch[1];
           edges.push({
             from: `${filePath}: file`,
-            to: `class_${imported} `,
+            to: `class_${imported}`,
             type: 'imports',
-            confidence: this.isSymbolKnown(`class_${imported} `, knownSymbols) ? 0.9 : 0.6,
-            isResolved: this.isSymbolKnown(`class_${imported} `, knownSymbols),
+            confidence: this.isSymbolKnown(`class_${imported}`, knownSymbols) ? 0.9 : 0.6,
+            isResolved: this.isSymbolKnown(`class_${imported}`, knownSymbols),
           });
         }
 
@@ -144,7 +144,7 @@ export class DependencyExtractor {
             calledFunction
           )
         ) {
-          const targetId = `function_${calledFunction} `;
+          const targetId = `function_${calledFunction}`;
           edges.push({
             from: symbol.id,
             to: targetId,
@@ -162,7 +162,7 @@ export class DependencyExtractor {
 
         edges.push({
           from: symbol.id,
-          to: `method_${method} `,
+          to: `method_${method}`,
           type: 'calls',
         });
 
@@ -177,27 +177,162 @@ export class DependencyExtractor {
     }
 
     if (isJSLanguage(language)) {
+      // Comprehensive list of built-in JavaScript/TypeScript methods to exclude
+      const builtInFunctions = new Set([
+        'if',
+        'while',
+        'for',
+        'console',
+        'setTimeout',
+        'setInterval',
+        'Promise',
+        'Array',
+        'Object',
+        'String',
+        'Number',
+        'Boolean',
+        'Date',
+        'Math',
+        'JSON',
+        'parseInt',
+        'parseFloat',
+        'isNaN',
+        'isFinite',
+        'encodeURI',
+        'decodeURI',
+        'encodeURIComponent',
+        'decodeURIComponent',
+        'eval',
+        'typeof',
+        'instanceof',
+      ]);
+
+      const builtInArrayMethods = new Set([
+        'join',
+        'filter',
+        'map',
+        'reduce',
+        'forEach',
+        'slice',
+        'push',
+        'pop',
+        'shift',
+        'unshift',
+        'splice',
+        'sort',
+        'reverse',
+        'find',
+        'findIndex',
+        'some',
+        'every',
+        'includes',
+        'indexOf',
+        'lastIndexOf',
+        'concat',
+        'flat',
+        'flatMap',
+        'keys',
+        'values',
+        'entries',
+      ]);
+
+      const builtInStringMethods = new Set([
+        'split',
+        'substring',
+        'substr',
+        'replace',
+        'match',
+        'search',
+        'toLowerCase',
+        'toUpperCase',
+        'trim',
+        'concat',
+        'charAt',
+        'charCodeAt',
+        'indexOf',
+        'lastIndexOf',
+        'startsWith',
+        'endsWith',
+        'includes',
+      ]);
+
+      const builtInObjectMethods = new Set([
+        'keys',
+        'values',
+        'entries',
+        'assign',
+        'create',
+        'freeze',
+        'seal',
+        'isFrozen',
+        'isSealed',
+        'hasOwnProperty',
+        'toString',
+        'valueOf',
+      ]);
+
+      const builtInConsoleMethods = new Set([
+        'log',
+        'warn',
+        'error',
+        'info',
+        'debug',
+        'trace',
+        'assert',
+      ]);
+
+      const builtInFileSystemMethods = new Set([
+        'existsSync',
+        'readFile',
+        'writeFile',
+        'readFileSync',
+        'writeFileSync',
+        'stat',
+        'statSync',
+        'mkdir',
+        'mkdirSync',
+        'readdir',
+        'readdirSync',
+      ]);
+
+      const builtInMathMethods = new Set([
+        'min',
+        'max',
+        'abs',
+        'floor',
+        'ceil',
+        'round',
+        'random',
+        'sqrt',
+        'pow',
+        'exp',
+        'log',
+        'log10',
+        'sin',
+        'cos',
+        'tan',
+        'PI',
+        'E',
+      ]);
+
+      const allBuiltIns = new Set([
+        ...builtInFunctions,
+        ...builtInArrayMethods,
+        ...builtInStringMethods,
+        ...builtInObjectMethods,
+        ...builtInConsoleMethods,
+        ...builtInFileSystemMethods,
+        ...builtInMathMethods,
+      ]);
+
       const callMatches = symbolContent.matchAll(/(\w+)\s*\(/g);
       for (const match of callMatches) {
         const calledFunction = match[1];
 
-        if (
-          ![
-            'if',
-            'while',
-            'for',
-            'console',
-            'setTimeout',
-            'setInterval',
-            'Promise',
-            'Array',
-            'Object',
-            'String',
-          ].includes(calledFunction)
-        ) {
+        if (!allBuiltIns.has(calledFunction)) {
           edges.push({
             from: symbol.id,
-            to: `function_${calledFunction} `,
+            to: `function_${calledFunction}`,
             type: 'calls',
           });
         }
@@ -208,11 +343,25 @@ export class DependencyExtractor {
         const object = match[1];
         const method = match[2];
 
-        edges.push({
-          from: symbol.id,
-          to: `method_${method} `,
-          type: 'calls',
-        });
+        // Check if this is a built-in method call
+        const isBuiltInMethod =
+          (object === 'Array' && builtInArrayMethods.has(method)) ||
+          (object === 'String' && builtInStringMethods.has(method)) ||
+          (object === 'Object' && builtInObjectMethods.has(method)) ||
+          (object === 'console' && builtInConsoleMethods.has(method)) ||
+          (object === 'Math' && builtInMathMethods.has(method)) ||
+          (object === 'fs' && builtInFileSystemMethods.has(method)) ||
+          builtInArrayMethods.has(method) ||
+          builtInStringMethods.has(method) ||
+          builtInObjectMethods.has(method);
+
+        if (!isBuiltInMethod) {
+          edges.push({
+            from: symbol.id,
+            to: `method_${method}`,
+            type: 'calls',
+          });
+        }
 
         if (
           object &&

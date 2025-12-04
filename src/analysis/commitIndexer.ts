@@ -1,3 +1,5 @@
+/* eslint-disable no-restricted-syntax */
+// CancellationError must be thrown to halt the pipeline immediately (see code review P1)
 import * as crypto from 'crypto';
 import pLimit = require('p-limit');
 import * as vscode from 'vscode';
@@ -295,6 +297,13 @@ export class CommitIndexer {
       allRisks.push(...res.risks);
       changedSymbols.push(...res.changedSymbols);
 
+      // Log if file had structural change
+      if (res.maxStructuralChange > 0) {
+        logDebug(
+          `[CommitIndexer] File contributed structural change: ${res.maxStructuralChange.toFixed(3)}`
+        );
+      }
+
       for (const change of res.symbolChanges) {
         symbolChanges.set(change.id, change);
       }
@@ -352,6 +361,11 @@ export class CommitIndexer {
       blastRadius: totalImpact,
       hotspots,
     };
+
+    // Log final structural change score for debugging
+    logInfo(
+      `[CommitIndexer] Commit ${sha.substring(0, 8)}: ${files.length} files, structural change: ${(maxStructuralChange * 100).toFixed(1)}%`
+    );
 
     this.storeCommitMetadata(commitInfo, facts.filesChanged);
 
@@ -589,6 +603,13 @@ export class CommitIndexer {
       );
 
       result.maxStructuralChange = structDiff.structuralChangeScore;
+
+      // Log structural change for debugging
+      if (structDiff.structuralChangeScore > 0) {
+        logDebug(
+          `[CommitIndexer] Structural change detected in ${path}: ${(structDiff.structuralChangeScore * 100).toFixed(1)}%`
+        );
+      }
 
       if (structDiff.interfaceChanged) result.risks.push('breaking-api');
       if (structDiff.controlFlowChanged) result.risks.push('refactor');

@@ -72,4 +72,5 @@ Please try to adhere to these architecture standards: /docs/src/architecture-pat
 
 ### Useful Commands
 
+Use `npm run fix` to fix linting errors, dont fix by hand!!
 ./out/cli/index.js compare HEAD~1 HEAD // run pipline branch vs main

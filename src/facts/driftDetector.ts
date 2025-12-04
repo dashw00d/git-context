@@ -279,7 +279,17 @@ export function detectDrift(
   };
 
   for (const [symbolKey, expected] of intended) {
-    const found = working.symbolsById.get(symbolKey);
+    let found = working.symbolsById.get(symbolKey);
+
+    // Fallback: if DNA hash lookup fails, try matching by name and path
+    if (!found && expected.lastName && expected.lastPath) {
+      for (const [_, symbol] of working.symbolsById) {
+        if (symbol.name === expected.lastName && symbol.filePath === expected.lastPath) {
+          found = symbol;
+          break;
+        }
+      }
+    }
 
     if (expected.expect === 'present') {
       if (!found) {
@@ -464,8 +474,72 @@ function detectUnresolvedCallers(
     facts.set(key, current);
   }
 
+  // Known built-in methods to filter out
+  const builtInMethods = new Set([
+    'log',
+    'warn',
+    'error',
+    'info',
+    'debug',
+    'join',
+    'filter',
+    'map',
+    'reduce',
+    'forEach',
+    'slice',
+    'push',
+    'pop',
+    'shift',
+    'unshift',
+    'splice',
+    'sort',
+    'reverse',
+    'find',
+    'findIndex',
+    'some',
+    'every',
+    'includes',
+    'indexOf',
+    'lastIndexOf',
+    'split',
+    'substring',
+    'substr',
+    'replace',
+    'match',
+    'search',
+    'toLowerCase',
+    'toUpperCase',
+    'trim',
+    'concat',
+    'keys',
+    'values',
+    'entries',
+    'assign',
+    'create',
+    'freeze',
+    'seal',
+    'existsSync',
+    'readFile',
+    'writeFile',
+    'stat',
+    'mkdir',
+    'min',
+    'max',
+    'abs',
+    'floor',
+    'ceil',
+    'round',
+    'random',
+  ]);
+
   const results: UnresolvedCallerFact[] = [];
   for (const fact of facts.values()) {
+    // Filter out known built-in methods
+    const calleeNameLower = fact.callee_name.toLowerCase();
+    if (builtInMethods.has(calleeNameLower)) {
+      continue;
+    }
+
     const OCCURRENCE_SCALE_FACTOR = 5;
     const baseSeverity = Math.min(1, Math.log1p(fact.count) / Math.log1p(OCCURRENCE_SCALE_FACTOR));
 
@@ -484,8 +558,15 @@ function detectUnresolvedCallers(
 function extractCalleeName(raw: string): string {
   if (!raw) return '';
 
-  const tokens = raw.split(/[:.\s]/).filter(Boolean);
-  const last = tokens[tokens.length - 1] || raw;
+  // Strip function_ and method_ prefixes
+  let cleaned = raw.replace(/^(function_|method_)/, '');
+
+  // Remove trailing spaces and split by common delimiters
+  cleaned = cleaned.trim();
+  const tokens = cleaned.split(/[:.\s]/).filter(Boolean);
+  const last = tokens[tokens.length - 1] || cleaned;
+
+  // Return clean name without special characters
   return last.replace(/[^A-Za-z0-9_]/g, '');
 }
 

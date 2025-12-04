@@ -25,6 +25,10 @@ export function createLegacyStep(): PipelineStep {
         scope: state.scope,
       });
 
+      logDebug(
+        `[LegacyStep] Legacy detection complete: ${legacy.dead.length} dead, ${legacy.legacyUsed.length} legacy used, ${legacy.replacedLeftovers.length} replaced leftovers`
+      );
+
       if (state.drift && state.explicitTimeline && legacy.dead.length > 0) {
         for (const deadSym of legacy.dead) {
           const driftEntry = state.drift.missing_symbols.find(
