@@ -27892,7 +27892,7 @@
     external_exports.object({ type: external_exports.literal("getBundleData") }),
     external_exports.object({ type: external_exports.literal("updateBundleConfig"), config: BundleConfigSchema.partial() }),
     external_exports.object({ type: external_exports.literal("setLastNCommits"), value: external_exports.number() }),
-    external_exports.object({ type: external_exports.literal("updateCommitIndex"), value: external_exports.number() }),
+    external_exports.object({ type: external_exports.literal("updateCommitIndex"), payload: external_exports.object({ commitIndex: external_exports.number() }) }),
     external_exports.object({ type: external_exports.literal("clearError") }),
     external_exports.object({ type: external_exports.literal("getHeadInfo") })
   ]);

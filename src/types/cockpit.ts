@@ -322,6 +322,7 @@ export interface CockpitPayload {
   // Bundle config (used by BundleStage)
   bundleConfig?: BundleConfig;
   lastNCommits?: number;
+  currentCommitIndex?: number; // Add this line
 
   // Optional extras
   commits?: CommitDTO[];

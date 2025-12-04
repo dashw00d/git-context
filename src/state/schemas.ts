@@ -306,7 +306,7 @@ export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('getBundleData') }),
   z.object({ type: z.literal('updateBundleConfig'), config: BundleConfigSchema.partial() }),
   z.object({ type: z.literal('setLastNCommits'), value: z.number() }),
-  z.object({ type: z.literal('updateCommitIndex'), value: z.number() }),
+  z.object({ type: z.literal('updateCommitIndex'), payload: z.object({ commitIndex: z.number() }) }),
   z.object({ type: z.literal('clearError') }),
   z.object({ type: z.literal('getHeadInfo') }),
 ]);

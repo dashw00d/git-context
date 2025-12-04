@@ -58,6 +58,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
   private _retrievedHistory?: any;
   private _lastNCommits?: number;
   private _debugMode = false;
+  private _currentCommitIndex?: number;
 
   private bundleManager: BundleManager;
   private hotspotCache: Map<string, any[]> = new Map();
@@ -238,6 +239,12 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         // Sync error if changed
         if (state.error !== this._error) {
           this._error = state.error ?? null;
+          this._update();
+        }
+
+        // Sync current commit index
+        if (state.currentCommitIndex !== this._currentCommitIndex) {
+          this._currentCommitIndex = state.currentCommitIndex;
           this._update();
         }
       });
@@ -582,9 +589,27 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           this._update(); // Update UI with new value
           break;
 
-        case 'updateCommitIndex':
-          // This is handled by metrics service
+        case 'updateCommitIndex': {
+          const { getStore } = await import('../../state/store');
+          const store = getStore();
+          const commitIndex = msg.payload?.commitIndex;
+
+          if (typeof commitIndex === 'number') {
+            store.dispatch({
+              type: 'COMMIT_INDEX_UPDATED',
+              payload: { index: commitIndex },
+            });
+            logInfo(`[CockpitProvider] Dispatched COMMIT_INDEX_UPDATED for index: ${commitIndex}`);
+            await this._update(); // This will trigger the updated state to be sent to webview
+          } else {
+            logWarn(
+              `[CockpitProvider] Received updateCommitIndex message without a valid commitIndex in payload: ${JSON.stringify(
+                msg
+              )}`
+            );
+          }
           break;
+        }
 
         case 'clearError':
           this._error = null;
@@ -902,11 +927,15 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     };
   }
 
-  private _update(): void {
+  private async _update(): Promise<void> {
     if (!this.view) {
       logDebug('[CockpitProvider] _update: No view available');
       return;
     }
+
+    const { getStore } = await import('../../state/store');
+    const store = getStore();
+    const state = store.getState();
 
     const bundleConfig = this._getBundleConfig();
     const lastNCommits =
@@ -930,6 +959,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       branchName: this._branchName,
       bundleConfig,
       lastNCommits,
+      currentCommitIndex: state.currentCommitIndex, // Get from Redux state
       llmOutputs: this._llmOutputs,
       retrievedHistory: this._retrievedHistory,
     };
