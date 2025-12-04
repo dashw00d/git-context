@@ -109,12 +109,13 @@ export function createBundleFactsStep(): PipelineStep {
           hotspots,
           timeline: state.explicitTimeline,
           movedLineage: state.movedLineage || [],
+          totalCommits: state.commitFacts?.length || 0,
         }
       );
 
       if (state.partialReasons && state.partialReasons.length > 0) {
-        (bundleFacts as any).partial = true;
-        (bundleFacts as any).partialReasons = state.partialReasons;
+        bundleFacts.partial = true;
+        bundleFacts.partialReasons = state.partialReasons;
       }
 
       updateState(state, 'bundleFacts', bundleFacts);

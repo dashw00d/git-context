@@ -151,56 +151,7 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
   const [activeTab, setActiveTab] = React.useState<'connections' | 'lineage'>('connections');
   const isTimeTravelActive = currentCommitIndex !== undefined && orderedCommits.length > 0;
 
-  // Get edge history for time-aware filtering
-  const edgeHistory = React.useMemo(() => {
-    if (!bundleFacts?.evidence?.['edge.history']) {
-      return new Map<string, string>(); // Map edge key to commit SHA
-    }
-    const history = bundleFacts.evidence['edge.history'];
-    const map = new Map<string, string>();
-    Object.entries(history).forEach(([key, value]: [string, any]) => {
-      if (value?.createdAt) {
-        map.set(key, value.createdAt);
-      }
-    });
-    return map;
-  }, [bundleFacts]);
-
-  // Filter references based on time travel (only show edges that existed at selected commit)
-  const filterByTime = React.useCallback(
-    (refs: any[]): any[] => {
-      if (!isTimeTravelActive || currentCommitIndex === undefined || orderedCommits.length === 0) {
-        return refs;
-      }
-
-      const selectedCommitSha = orderedCommits[currentCommitIndex];
-      if (!selectedCommitSha) return refs;
-
-      return refs.map(ref => {
-        const from = ref.from || '';
-        const to = ref.to || '';
-        const edgeKey = `${from}->${to}`;
-        const createdAt = edgeHistory.get(edgeKey);
-
-        if (!createdAt) {
-          // Unknown creation time - show but fade
-          return { ...ref, isFuture: false, opacity: 0.7 };
-        }
-
-        // Check if edge existed at selected commit
-        const createdAtIndex = orderedCommits.indexOf(createdAt);
-        const existsAtSelected = createdAtIndex >= 0 && createdAtIndex <= currentCommitIndex;
-
-        return {
-          ...ref,
-          isFuture: !existsAtSelected,
-          opacity: existsAtSelected ? 1 : 0.3,
-        };
-      });
-    },
-    [isTimeTravelActive, currentCommitIndex, orderedCommits, edgeHistory]
-  );
-
+  // Use blastRadius.incoming/outgoing directly - edge.history is not produced by the pipeline
   // Filter references if a symbol is focused
   let filteredIncoming = blastRadius?.incoming || [];
   let filteredOutgoing = blastRadius?.outgoing || [];
@@ -234,10 +185,6 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
       return false;
     });
   }
-
-  // Apply time-aware filtering
-  filteredIncoming = filterByTime(filteredIncoming);
-  filteredOutgoing = filterByTime(filteredOutgoing);
 
   // Use real data if available, otherwise fall back to counts
   const incomingGroups =

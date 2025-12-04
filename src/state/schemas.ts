@@ -40,12 +40,15 @@ export const BundleFactsSchema = z
     version: z.string(),
     generated_at: z.string(),
     confidence: z.number(),
+    partial: z.boolean().optional(),
+    partialReasons: z.array(z.string()).optional(),
     bundle: z.object({
       oldestSha: z.string(),
       newestSha: z.string(),
       shas: z.array(z.string()),
       timeline: z.array(z.string()).optional(),
       movedLineage: z.array(z.any()).optional(),
+      totalCommits: z.number().optional(),
     }),
     scope: z.object({
       files: z.number(),

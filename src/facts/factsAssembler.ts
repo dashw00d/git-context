@@ -37,6 +37,7 @@ export async function buildRefactorBundleFacts(
       destVersion: string;
       moveType: 'rename' | 'relocate' | 'refactor';
     }>;
+    totalCommits?: number;
   }
 ): Promise<RefactorBundleFacts> {
   const intendedSize = options.intended.size;
@@ -63,7 +64,8 @@ export async function buildRefactorBundleFacts(
     options.working,
     options.drift,
     options.legacy,
-    options.hotspots
+    options.hotspots,
+    options.totalCommits
   );
 
   if (options.timeline) {
@@ -71,6 +73,9 @@ export async function buildRefactorBundleFacts(
   }
   if (options.movedLineage) {
     facts.bundle.movedLineage = options.movedLineage;
+  }
+  if (options.totalCommits !== undefined) {
+    facts.bundle.totalCommits = options.totalCommits;
   }
 
   try {
@@ -89,7 +94,8 @@ export async function assembleFacts(
   working: WorkingSnapshot,
   drift: DriftFindings,
   legacy: LegacyAuditResult,
-  hotspots?: any[]
+  hotspots?: any[],
+  totalCommits?: number
 ): Promise<RefactorBundleFacts> {
   const intendedCounts = calculateIntendedCounts(intended);
   const intendedLists = getIntendedLists(intended);
@@ -143,6 +149,7 @@ export async function assembleFacts(
       oldestSha,
       newestSha,
       shas: commitShas,
+      totalCommits,
     },
     scope: {
       files: scope.commitFiles.size,

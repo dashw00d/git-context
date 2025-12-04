@@ -1,5 +1,8 @@
 import * as React from 'react';
 import { useFileAnalysisData } from '../../hooks/useFileAnalysisData';
+import { useSymbolRefCounts } from '../../hooks/useSymbolRefCounts';
+import { HoverInfoCard } from './HoverInfoCard';
+import { SymbolHeaderBar } from './SymbolHeaderBar';
 
 interface DriftIssue {
   type?: string;
@@ -11,6 +14,20 @@ interface DriftIssue {
   count?: number;
 }
 
+interface MovedBlock {
+  symbolId: string;
+  previousSymbolId: string;
+  sourceVersion: string;
+  destVersion: string;
+  moveType: 'rename' | 'relocate' | 'refactor';
+  sourceFile?: string;
+  destFile?: string;
+  sourceStartLine?: number;
+  sourceEndLine?: number;
+  destStartLine?: number;
+  destEndLine?: number;
+}
+
 interface CodeEditorProps {
   content: string;
   language: string;
@@ -19,6 +36,7 @@ interface CodeEditorProps {
   symbols?: Array<{
     id?: string;
     name: string;
+    kind?: string;
     location?: { start: { line: number }; end: { line: number } };
   }>;
   focusedSymbolId?: string | null;
@@ -29,6 +47,17 @@ interface CodeEditorProps {
   currentCommitIndex?: number;
   filePath?: string;
   bundleFacts?: any;
+  movedBlocks?: MovedBlock[];
+  showLineNumbers?: boolean;
+  showAgeGutter?: boolean;
+  showMovedGutter?: boolean;
+  metrics?: {
+    riskScore?: number;
+    incomingRefs?: number;
+    outgoingRefs?: number;
+    lastModified?: number;
+    authors?: string[];
+  };
 }
 
 const EditorContainer: React.CSSProperties = {
@@ -42,13 +71,47 @@ const EditorContainer: React.CSSProperties = {
   color: 'var(--vscode-editor-foreground)',
 };
 
-const LineStyle: React.CSSProperties = {
+const LineRowStyle: React.CSSProperties = {
   height: '20px',
-  paddingLeft: '12px',
-  whiteSpace: 'pre',
   display: 'flex',
   alignItems: 'center',
+  whiteSpace: 'pre',
   position: 'relative',
+};
+
+const LineNumberStyle: React.CSSProperties = {
+  width: '40px',
+  textAlign: 'right',
+  paddingRight: '8px',
+  fontSize: '11px',
+  opacity: 0.5,
+  flexShrink: 0,
+  userSelect: 'none',
+};
+
+const AgeGutterStyle: React.CSSProperties = {
+  width: '8px',
+  flexShrink: 0,
+};
+
+const MovedGutterStyle: React.CSSProperties = {
+  width: '8px',
+  flexShrink: 0,
+};
+
+const ContentColumnStyle: React.CSSProperties = {
+  flex: 1,
+  paddingLeft: '8px',
+  paddingRight: '8px',
+  overflow: 'hidden',
+};
+
+const RefIndicatorStyle: React.CSSProperties = {
+  width: '20px',
+  textAlign: 'center',
+  fontSize: '10px',
+  opacity: 0.6,
+  flexShrink: 0,
 };
 
 const DriftWarningStyle: React.CSSProperties = {
@@ -78,11 +141,113 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   currentCommitIndex,
   filePath,
   bundleFacts,
+  movedBlocks = [],
+  showLineNumbers = true,
+  showAgeGutter = true,
+  showMovedGutter = true,
+  metrics,
 }) => {
   const lines = content.split('\n');
 
   // Get analysis data for this file
   const analysisData = useFileAnalysisData(filePath || '', bundleFacts, currentCommitIndex);
+  const refCounts = useSymbolRefCounts(bundleFacts, filePath || '');
+
+  // Symbol collapse state
+  const [collapsedSymbols, setCollapsedSymbols] = React.useState<Set<string>>(new Set());
+
+  const toggleSymbolCollapse = (symbolId: string) => {
+    setCollapsedSymbols(prev => {
+      const next = new Set(prev);
+      if (next.has(symbolId)) {
+        next.delete(symbolId);
+      } else {
+        next.add(symbolId);
+      }
+      return next;
+    });
+  };
+
+  // Hover card state
+  const [hoverCard, setHoverCard] = React.useState<{
+    symbol: {
+      id?: string;
+      name: string;
+      kind?: string;
+      location?: { start: { line: number }; end: { line: number } };
+    };
+    position: { x: number; y: number };
+  } | null>(null);
+
+  const hoverTimeoutRef = React.useRef<number>();
+
+  const handleSymbolHover = (
+    symbol: {
+      id?: string;
+      name: string;
+      kind?: string;
+      location?: { start: { line: number }; end: { line: number } };
+    },
+    event: React.MouseEvent
+  ) => {
+    // Debounce hover
+    if (hoverTimeoutRef.current) {
+      window.clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = window.setTimeout(() => {
+      setHoverCard({
+        symbol,
+        position: { x: event.clientX + 10, y: event.clientY + 10 },
+      });
+    }, 500); // 500ms delay
+  };
+
+  const handleSymbolLeave = () => {
+    if (hoverTimeoutRef.current) {
+      window.clearTimeout(hoverTimeoutRef.current);
+    }
+    setHoverCard(null);
+  };
+
+  // Generate recent changes for a symbol from lineCommits
+  const getRecentChangesForSymbol = (symbol: {
+    id?: string;
+    name: string;
+    location?: { start: { line: number }; end: { line: number } };
+  }): Array<{
+    date: string;
+    type: 'added' | 'modified' | 'removed';
+    impact?: number;
+    commitSha?: string;
+    author?: string;
+    message?: string;
+  }> => {
+    if (!symbol.location) return [];
+    const startLine = symbol.location.start.line;
+    const endLine = symbol.location.end.line;
+
+    // Get commits that touched this symbol's lines
+    const relevantCommits = lineCommits.filter(lc => lc.line >= startLine && lc.line <= endLine);
+
+    // Group by commit and create change info
+    const commitMap = new Map<string, (typeof relevantCommits)[0]>();
+    relevantCommits.forEach(lc => {
+      if (!commitMap.has(lc.commitSha)) {
+        commitMap.set(lc.commitSha, lc);
+      }
+    });
+
+    return Array.from(commitMap.values())
+      .slice(0, 10) // Last 10 changes
+      .map(lc => ({
+        date: lc.date,
+        type: 'modified' as const,
+        impact: 1,
+        commitSha: lc.commitSha,
+        author: lc.author,
+      }))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
 
   // Find focused symbol's line range
   const focusedSymbol = focusedSymbolId
@@ -108,12 +273,62 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
     });
   }
 
+  // Get age color for a line (from SedimentGutter logic)
+  const getAgeColor = (lineNumber: number): string => {
+    if (!lineCommits.length || !orderedCommits.length || currentCommitIndex === undefined) {
+      return 'var(--vscode-editor-lineHighlightBorder)';
+    }
+
+    const lineCommitIndex = lineToCommitIndex.get(lineNumber);
+    if (lineCommitIndex === undefined) {
+      return 'var(--vscode-editor-lineHighlightBorder)';
+    }
+
+    const commitsAgo = currentCommitIndex - lineCommitIndex;
+    const totalCommits = orderedCommits.length;
+    const ageRatio = totalCommits > 0 ? commitsAgo / totalCommits : 0;
+
+    if (ageRatio < 0.2 || commitsAgo <= 0) {
+      return 'var(--vscode-charts-green)'; // Recent
+    }
+    if (ageRatio < 0.5) {
+      return 'var(--vscode-charts-blue)'; // Medium age
+    }
+    return 'var(--vscode-editor-lineHighlightBorder)'; // Old
+  };
+
+  // Check if line has a moved block
+  const getMovedBlockOnLine = (lineNumber: number): MovedBlock | null => {
+    return (
+      movedBlocks.find(
+        block =>
+          block.destFile === filePath &&
+          block.destStartLine !== undefined &&
+          block.destEndLine !== undefined &&
+          lineNumber >= block.destStartLine &&
+          lineNumber <= block.destEndLine
+      ) || null
+    );
+  };
+
   // Check if line should be hidden/faded based on time travel
   const isLineAfterTime = (lineNumber: number): boolean => {
     if (currentCommitIndex === undefined) return false;
     const lineCommitIndex = lineToCommitIndex.get(lineNumber);
     if (lineCommitIndex === undefined) return false; // Unknown lines are shown
     return lineCommitIndex > currentCommitIndex;
+  };
+
+  // Check if line is inside a collapsed symbol
+  const isLineCollapsed = (lineNumber: number): boolean => {
+    return symbols.some(s => {
+      const symbolId = s.id || s.name;
+      if (!collapsedSymbols.has(symbolId)) return false;
+      const start = s.location?.start?.line || 0;
+      const end = s.location?.end?.line || 0;
+      // Line is inside collapsed symbol (but not the first line which shows the header)
+      return lineNumber > start && lineNumber <= end;
+    });
   };
 
   // Filter drift issues based on time travel (only show issues that existed at selected commit)
@@ -296,8 +511,14 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           ? analysisData.hotspots.find(h => h.symbolId === symbolAtLine.id || h.path === filePath)
           : analysisData.hotspots.find(h => h.path === filePath);
 
-        const isAfterTime = isLineAfterTime(lineNumber);
-        const shouldHide = isAfterTime && currentCommitIndex !== undefined;
+        // Find import drift on this line
+        const importDriftOnLine = analysisData.importDriftIssues.find(i => i.line === lineNumber);
+
+        // Check divergent
+        const isDivergent =
+          symbolAtLine &&
+          (analysisData.divergentSymbols.has(symbolAtLine.id || '') ||
+            analysisData.divergentSymbols.has(symbolAtLine.name));
 
         // Build tooltip for dead/legacy symbols and drift
         let symbolTooltip = '';
@@ -320,108 +541,352 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           symbolTooltip = symbolTooltip ? `${symbolTooltip}\n${hotspotText}` : hotspotText;
         }
 
+        // Skip rendering if line is collapsed
+        if (isLineCollapsed(lineNumber)) {
+          return null;
+        }
+
+        const movedBlockOnLine = getMovedBlockOnLine(lineNumber);
+        const ageColor = getAgeColor(lineNumber);
+        const lineIsAfterTime = isLineAfterTime(lineNumber);
+        const lineShouldHide = lineIsAfterTime && currentCommitIndex !== undefined;
+
+        // Get symbol ref counts
+        const symbolId = symbolAtLine?.id || symbolAtLine?.name || '';
+        const incomingRefs = symbolId ? refCounts.incoming.get(symbolId) || 0 : 0;
+        const outgoingRefs = symbolId ? refCounts.outgoing.get(symbolId) || 0 : 0;
+
+        // Get line commit info for age display
+        const lineCommit = lineCommits.find(lc => lc.line === lineNumber);
+        const lineCommitIndex = lineToCommitIndex.get(lineNumber);
+        const commitsAgo =
+          lineCommitIndex !== undefined && currentCommitIndex !== undefined
+            ? currentCommitIndex - lineCommitIndex
+            : null;
+        const ageText =
+          commitsAgo !== null && commitsAgo >= 0
+            ? commitsAgo === 0
+              ? 'now'
+              : commitsAgo === 1
+                ? '1c'
+                : `${commitsAgo}c`
+            : '';
+
+        // Check if this is the first line of a symbol (show header)
+        const isSymbolStart = symbolAtLine && symbolAtLine.location?.start?.line === lineNumber;
+        const isCollapsed = symbolAtLine && collapsedSymbols.has(symbolId);
+
         return (
-          <div
-            key={i}
-            data-line={lineNumber}
-            style={{
-              ...LineStyle,
-              fontSize: isFocused ? '120%' : '100%',
-              opacity: shouldHide
-                ? 0.2
-                : isDeadSymbol
-                  ? 0.4
-                  : focusedSymbolId
-                    ? isFocused
-                      ? 1
-                      : 0.5
-                    : 1,
-              display: shouldHide ? 'none' : 'flex',
-              backgroundColor:
-                hotspot && !shouldHide
-                  ? `rgba(255, 165, 0, ${Math.min(0.15, hotspot.score / 100)})`
-                  : hasDrift
-                    ? severity === 'error'
-                      ? 'rgba(255, 0, 0, 0.05)'
-                      : 'rgba(255, 165, 0, 0.05)'
-                    : 'transparent',
-              cursor: symbolAtLine && onSymbolClick ? 'pointer' : 'default',
-              transition: 'opacity 0.2s, font-size 0.2s',
-              pointerEvents: shouldHide ? 'none' : 'auto',
-              textDecoration: isDeadSymbol ? 'line-through' : 'none',
-              borderLeft:
-                isLegacySymbol && !shouldHide
-                  ? '3px solid var(--vscode-inputValidation-warningBorder)'
-                  : 'none',
-              paddingLeft: isLegacySymbol && !shouldHide ? '9px' : '12px',
-              textDecorationLine: driftIssue && !shouldHide ? 'underline' : undefined,
-              textDecorationStyle: driftIssue && !shouldHide ? 'wavy' : undefined,
-              textDecorationColor:
-                driftIssue && !shouldHide
-                  ? 'var(--vscode-inputValidation-warningBorder)'
-                  : undefined,
-            }}
-            onClick={
-              symbolAtLine && onSymbolClick && !shouldHide
-                ? () => onSymbolClick(symbolAtLine.id || symbolAtLine.name)
-                : undefined
-            }
-            title={
-              shouldHide
-                ? `Line added after selected commit (hidden)`
-                : symbolTooltip ||
-                  (symbolAtLine
-                    ? `Click to focus on ${symbolAtLine.name}`
-                    : isFocused
-                      ? 'Focused symbol'
-                      : undefined)
-            }
-          >
-            {hasDrift && !shouldHide && (
-              <span style={warningStyle} title={driftMessage}>
-                <span>{severity === 'error' ? '❌' : '⚠️'}</span> {driftMessage || 'DRIFT'}
-              </span>
-            )}
-            {isDeadSymbol && !shouldHide && (
-              <span
+          <React.Fragment key={i}>
+            {/* Symbol Header Bar (shown on first line of symbol) */}
+            {isSymbolStart && symbolAtLine && (
+              <div
+                data-line={`${lineNumber}-header`}
                 style={{
-                  fontSize: '12px',
-                  marginRight: '4px',
-                  opacity: 0.7,
+                  ...LineRowStyle,
+                  height: 'auto',
+                  minHeight: '24px',
+                  padding: '2px 0',
                 }}
-                title={symbolTooltip}
               >
-                👻
-              </span>
+                {showLineNumbers && <div style={LineNumberStyle} />}
+                {showAgeGutter && <div style={AgeGutterStyle} />}
+                {showMovedGutter && <div style={MovedGutterStyle} />}
+                <div
+                  style={ContentColumnStyle}
+                  onMouseEnter={symbolAtLine ? e => handleSymbolHover(symbolAtLine, e) : undefined}
+                  onMouseLeave={symbolAtLine ? handleSymbolLeave : undefined}
+                >
+                  <SymbolHeaderBar
+                    symbol={{
+                      id: symbolAtLine.id,
+                      name: symbolAtLine.name,
+                      kind: symbolAtLine.kind || 'unknown',
+                      location: symbolAtLine.location,
+                    }}
+                    incomingRefs={incomingRefs}
+                    outgoingRefs={outgoingRefs}
+                    riskScore={metrics?.riskScore}
+                    lastModified={ageText}
+                    author={lineCommit?.author}
+                    isCollapsed={isCollapsed || false}
+                    isDead={isDeadSymbol || false}
+                    isLegacy={isLegacySymbol || false}
+                    hasDrift={!!driftIssue}
+                    onToggle={() => toggleSymbolCollapse(symbolId)}
+                    onRefsClick={onSymbolClick ? () => onSymbolClick(symbolId) : undefined}
+                    onFocus={onSymbolClick ? () => onSymbolClick(symbolId) : undefined}
+                  />
+                </div>
+                <div style={RefIndicatorStyle}>
+                  {incomingRefs + outgoingRefs > 0 && (
+                    <span title={`${incomingRefs} incoming, ${outgoingRefs} outgoing refs`}>
+                      {incomingRefs + outgoingRefs > 9 ? '9+' : incomingRefs + outgoingRefs}
+                    </span>
+                  )}
+                </div>
+              </div>
             )}
-            {isLegacySymbol && !shouldHide && (
-              <span
+
+            {/* Collapsed symbol placeholder */}
+            {isCollapsed && isSymbolStart && symbolAtLine && (
+              <div
+                data-line={`${lineNumber}-collapsed`}
                 style={{
-                  fontSize: '12px',
-                  marginRight: '4px',
-                  opacity: 0.7,
+                  ...LineRowStyle,
+                  paddingLeft: '40px',
+                  opacity: 0.5,
+                  fontStyle: 'italic',
+                  fontSize: '11px',
+                  color: 'var(--vscode-descriptionForeground)',
                 }}
-                title={symbolTooltip}
               >
-                ⚠️
-              </span>
+                {showLineNumbers && <div style={LineNumberStyle} />}
+                {showAgeGutter && <div style={AgeGutterStyle} />}
+                {showMovedGutter && <div style={MovedGutterStyle} />}
+                <div style={ContentColumnStyle}>
+                  [
+                  {(symbolAtLine.location?.end?.line || lineNumber) -
+                    (symbolAtLine.location?.start?.line || lineNumber)}{' '}
+                  lines hidden] – click ▼ to expand
+                </div>
+                <div style={RefIndicatorStyle} />
+              </div>
             )}
-            {unresolvedCaller && !shouldHide && (
-              <span
+
+            {/* Regular code line */}
+            {!isCollapsed && (
+              <div
+                key={i}
+                data-line={lineNumber}
                 style={{
-                  fontSize: '12px',
-                  marginRight: '4px',
-                  opacity: 0.7,
+                  ...LineRowStyle,
+                  fontSize: isFocused ? '120%' : '100%',
+                  opacity: lineShouldHide
+                    ? 0.2
+                    : isDeadSymbol
+                      ? 0.4
+                      : focusedSymbolId
+                        ? isFocused
+                          ? 1
+                          : 0.5
+                        : 1,
+                  display: lineShouldHide ? 'none' : 'flex',
+                  backgroundColor:
+                    hotspot && !lineShouldHide
+                      ? `rgba(255, 165, 0, ${Math.min(0.15, hotspot.score / 100)})`
+                      : hasDrift
+                        ? severity === 'error'
+                          ? 'rgba(255, 0, 0, 0.05)'
+                          : 'rgba(255, 165, 0, 0.05)'
+                        : 'transparent',
+                  cursor: symbolAtLine && onSymbolClick ? 'pointer' : 'default',
+                  transition: 'opacity 0.2s, font-size 0.2s',
+                  pointerEvents: lineShouldHide ? 'none' : 'auto',
+                  textDecoration: isDeadSymbol ? 'line-through' : 'none',
+                  fontStyle: isDivergent && !lineShouldHide ? 'italic' : 'normal',
+                  textDecorationLine: driftIssue && !lineShouldHide ? 'underline' : undefined,
+                  textDecorationStyle: driftIssue && !lineShouldHide ? 'wavy' : undefined,
+                  textDecorationColor:
+                    driftIssue && !lineShouldHide
+                      ? 'var(--vscode-inputValidation-warningBorder)'
+                      : undefined,
                 }}
-                title={symbolTooltip}
+                onClick={
+                  symbolAtLine && onSymbolClick && !lineShouldHide
+                    ? () => onSymbolClick(symbolAtLine.id || symbolAtLine.name)
+                    : undefined
+                }
+                title={
+                  lineShouldHide
+                    ? `Line added after selected commit (hidden)`
+                    : importDriftOnLine
+                      ? `Import style: ${importDriftOnLine.style} (expected: ${analysisData.conventionInfo?.dominantImportStyle || 'unknown'})`
+                      : isDivergent
+                        ? 'Symbol diverged from expected state'
+                        : symbolTooltip ||
+                          (symbolAtLine
+                            ? `Click to focus on ${symbolAtLine.name}`
+                            : isFocused
+                              ? 'Focused symbol'
+                              : undefined)
+                }
               >
-                ❓
-              </span>
+                {/* Line Number Column */}
+                {showLineNumbers && (
+                  <div style={LineNumberStyle} title={`Line ${lineNumber}`}>
+                    {lineNumber}
+                  </div>
+                )}
+
+                {/* Age/Sediment Column */}
+                {showAgeGutter && (
+                  <div
+                    style={{
+                      ...AgeGutterStyle,
+                      backgroundColor: ageColor,
+                      opacity: lineIsAfterTime ? 0.2 : 0.6,
+                    }}
+                    title={
+                      lineCommit
+                        ? `Modified ${ageText || 'unknown'} (${lineCommit.commitSha.substring(0, 8)})`
+                        : `Line ${lineNumber}`
+                    }
+                  />
+                )}
+
+                {/* Moved Block Column */}
+                {showMovedGutter && (
+                  <div style={MovedGutterStyle}>
+                    {movedBlockOnLine && (
+                      <div
+                        style={{
+                          width: '3px',
+                          height: '100%',
+                          backgroundColor: 'var(--vscode-charts-purple)',
+                          cursor: 'pointer',
+                        }}
+                        title={`Moved from ${movedBlockOnLine.sourceFile || movedBlockOnLine.sourceVersion} (${movedBlockOnLine.moveType})`}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* Content Column */}
+                <div
+                  style={ContentColumnStyle}
+                  onMouseEnter={symbolAtLine ? e => handleSymbolHover(symbolAtLine, e) : undefined}
+                  onMouseLeave={symbolAtLine ? handleSymbolLeave : undefined}
+                >
+                  {hasDrift && !lineShouldHide && (
+                    <span style={warningStyle} title={driftMessage}>
+                      <span>{severity === 'error' ? '❌' : '⚠️'}</span> {driftMessage || 'DRIFT'}
+                    </span>
+                  )}
+                  {isDeadSymbol && !lineShouldHide && (
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        marginRight: '4px',
+                        opacity: 0.7,
+                      }}
+                      title={symbolTooltip}
+                    >
+                      👻
+                    </span>
+                  )}
+                  {isLegacySymbol && !lineShouldHide && (
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        marginRight: '4px',
+                        opacity: 0.7,
+                      }}
+                      title={symbolTooltip}
+                    >
+                      ⚠️
+                    </span>
+                  )}
+                  {unresolvedCaller && !lineShouldHide && (
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        marginRight: '4px',
+                        opacity: 0.7,
+                      }}
+                      title={symbolTooltip}
+                    >
+                      ❓
+                    </span>
+                  )}
+                  {importDriftOnLine && !lineShouldHide && (
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        marginRight: '4px',
+                        opacity: 0.7,
+                        color: 'var(--vscode-charts-blue)',
+                      }}
+                      title={`Import style: ${importDriftOnLine.style}`}
+                    >
+                      ↳
+                    </span>
+                  )}
+                  {isDivergent && !lineShouldHide && (
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        marginRight: '4px',
+                        opacity: 0.7,
+                      }}
+                      title="Symbol diverged from expected state"
+                    >
+                      🔀
+                    </span>
+                  )}
+                  {line}
+                </div>
+
+                {/* Reference Indicator Column */}
+                <div style={RefIndicatorStyle}>
+                  {symbolAtLine && incomingRefs + outgoingRefs > 0 && (
+                    <span title={`${incomingRefs} incoming, ${outgoingRefs} outgoing refs`}>
+                      {incomingRefs + outgoingRefs > 9 ? '9+' : incomingRefs + outgoingRefs}
+                    </span>
+                  )}
+                </div>
+              </div>
             )}
-            {line}
-          </div>
+          </React.Fragment>
         );
       })}
+
+      {/* Hover Info Card */}
+      {hoverCard && (
+        <HoverInfoCard
+          symbol={{
+            id: hoverCard.symbol.id,
+            name: hoverCard.symbol.name,
+            kind: hoverCard.symbol.kind || 'unknown',
+            location: hoverCard.symbol.location,
+          }}
+          metrics={{
+            riskScore: metrics?.riskScore || 0,
+            lastModified: metrics?.lastModified,
+            driftCount: analysisData.driftIssues.length,
+            incomingRefs: refCounts.incoming.get(hoverCard.symbol.id || hoverCard.symbol.name) || 0,
+            outgoingRefs: refCounts.outgoing.get(hoverCard.symbol.id || hoverCard.symbol.name) || 0,
+            authors: metrics?.authors,
+            lineCount: hoverCard.symbol.location
+              ? hoverCard.symbol.location.end.line - hoverCard.symbol.location.start.line + 1
+              : undefined,
+            lastCommitMessage: lineCommits.find(
+              lc =>
+                lc.line >= (hoverCard.symbol.location?.start.line || 0) &&
+                lc.line <= (hoverCard.symbol.location?.end.line || 0)
+            )?.commitSha,
+          }}
+          recentChanges={getRecentChangesForSymbol(hoverCard.symbol)}
+          position={hoverCard.position}
+          onClose={() => setHoverCard(null)}
+          onGoToDefinition={
+            onSymbolClick
+              ? () => {
+                  onSymbolClick(hoverCard.symbol.id || hoverCard.symbol.name);
+                  setHoverCard(null);
+                }
+              : undefined
+          }
+          onFindReferences={
+            onSymbolClick
+              ? () => {
+                  onSymbolClick(hoverCard.symbol.id || hoverCard.symbol.name);
+                  setHoverCard(null);
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 };

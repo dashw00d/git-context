@@ -99,7 +99,12 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         analysisStep: action.payload.step,
         analysisProgress: action.payload.progress,
       };
-    case 'ANALYSIS_COMPLETED':
+    case 'ANALYSIS_COMPLETED': {
+      const newShas = state.selectedCommitShas;
+      const newIndex =
+        state.currentCommitIndex === undefined && newShas.length > 0
+          ? newShas.length - 1
+          : state.currentCommitIndex;
       return {
         ...state,
         isAnalyzing: false,
@@ -109,7 +114,9 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         bundleReportId: action.payload.reportId,
         retrievedHistory: action.payload.history,
         pipelineErrors: [],
+        currentCommitIndex: newIndex,
       };
+    }
     case 'ANALYSIS_FAILED':
       return { ...state, isAnalyzing: false, error: action.payload.error };
     case 'ANALYSIS_CANCELLED':
@@ -140,21 +147,38 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         selectedStagedPaths: [],
         selectedUnstagedPaths: [],
       };
-    case 'SELECTION_SET':
-      return { ...state, selectedCommitShas: action.payload.shas };
+    case 'SELECTION_SET': {
+      const newShas = action.payload.shas;
+      const newIndex =
+        state.currentCommitIndex === undefined && newShas.length > 0
+          ? newShas.length - 1
+          : state.currentCommitIndex;
+      return {
+        ...state,
+        selectedCommitShas: newShas,
+        currentCommitIndex: newIndex,
+      };
+    }
     case 'STAGED_SELECTION_UPDATED':
       return { ...state, selectedStagedPaths: action.payload.paths };
     case 'UNSTAGED_SELECTION_UPDATED':
       return { ...state, selectedUnstagedPaths: action.payload.paths };
-    case 'SELECTION_UPDATED':
+    case 'SELECTION_UPDATED': {
+      const newShas = action.payload.selectedCommitShas;
+      const newIndex =
+        state.currentCommitIndex === undefined && newShas.length > 0
+          ? newShas.length - 1
+          : state.currentCommitIndex;
       return {
         ...state,
-        selectedCommitShas: action.payload.selectedCommitShas,
+        selectedCommitShas: newShas,
         selectedStagedPaths: action.payload.selectedStagedPaths,
         selectedUnstagedPaths: action.payload.selectedUnstagedPaths,
         selectedFiles: action.payload.selectedFiles,
         workspaceScope: action.payload.workspaceScope,
+        currentCommitIndex: newIndex,
       };
+    }
 
     case 'COMMITS_UPDATED':
       return { ...state, commits: action.payload.commits, hasMoreCommits: action.payload.hasMore };

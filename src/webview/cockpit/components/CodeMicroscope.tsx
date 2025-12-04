@@ -4,11 +4,10 @@ import { useFileAnalysisData } from '../hooks/useFileAnalysisData';
 import { BlastRadiusStage } from './stages/BlastRadiusStage';
 import { BundleStage } from './stages/BundleStage';
 import { CodeEditor } from './stages/CodeEditor';
+import { DriftBrowserPanel } from './stages/DriftBrowserPanel';
 import { FolderStage } from './stages/FolderStage';
-import { MovedBlockGutter } from './stages/MovedBlockGutter';
 import { PortalsRail } from './stages/PortalsRail';
 import { ReportsStage } from './stages/ReportsStage';
-import { SedimentGutter } from './stages/SedimentGutter';
 import { SignatureView } from './stages/SignatureView';
 import { StageHeader } from './stages/StageHeader';
 import { SymbolBlock } from './stages/SymbolBlock';
@@ -96,40 +95,8 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     }
   };
 
-  if (renderFrame.level === 'file') {
-    const metrics = cockpitState?.nodeMetrics?.[renderFrame.id] || renderFrame.data?.metrics;
-    const content = renderFrame.data?.content || '';
-    const lineCount = renderFrame.data?.lineCount || content.split('\n').length;
-    const symbols = renderFrame.data?.symbols || [];
-    const lineCommits = renderFrame.data?.lineCommits || [];
-    const blastRadius = renderFrame.data?.blastRadius;
-    const driftIssues = renderFrame.data?.drift || [];
-
-    // Get ordered commits from state (for commit index calculation)
-    // Get ordered commits from state or fallback to file history
-    let orderedCommits = cockpitState?.selectedCommitShas || [];
-    let commits: any[] = [];
-
-    // Get total commit count from bundleFacts for optimistic time travel
-    // Access via any to handle the dynamic totalCommits property
-    const totalCommits = (cockpitState?.bundleFacts as any)?.bundle?.totalCommits || 0;
-
-    // State for optimistic HEAD commit
-
-    // Load HEAD commit for optimistic time travel if needed
-    // Fix: Move useEffect to top level (outside conditional) or ensure it's unconditional
-    // Since we are inside 'if (renderFrame.level === 'file')', this entire block is conditional.
-    // BUT CodeMicroscope returns early if level !== 'file' (wait, no it doesn't, it returns differently)
-    // Actually, the 'if (renderFrame.level === 'file')' block returns JSX and DOES NOT fall through.
-    // So the hooks inside are conditional on the prop. This is the issue.
-    
-    // To fix: Move all hooks to the top of the component, before any conditional returns.
-    // We already moved useFileAnalysisData. Now let's move this useEffect.
-  }
-
-  // Moved useEffect to top level
-  // We need to calculate these values at top level or use defaults
-  const totalCommits = (cockpitState?.bundleFacts as any)?.bundle?.totalCommits || 0;
+  // Calculate values at top level for useEffect
+  const totalCommits = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
   const headInfo = cockpitState?.headInfo;
   const fileDataHistory = renderFrame.data?.history;
   const selectedCommitShas = cockpitState?.selectedCommitShas || [];
@@ -151,13 +118,12 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     fileDataHistory,
     totalCommits,
     headInfo,
-    vscode
+    vscode,
   ]);
 
   if (renderFrame.level === 'file') {
     const metrics = cockpitState?.nodeMetrics?.[renderFrame.id] || renderFrame.data?.metrics;
     const content = renderFrame.data?.content || '';
-    const lineCount = renderFrame.data?.lineCount || content.split('\n').length;
     const symbols = renderFrame.data?.symbols || [];
     const lineCommits = renderFrame.data?.lineCommits || [];
     const blastRadius = renderFrame.data?.blastRadius;
@@ -267,19 +233,6 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
         </div>
 
         <div style={DeepEditorLayout}>
-          <SedimentGutter
-            lineCount={lineCount}
-            lineCommits={lineCommits}
-            orderedCommits={orderedCommits}
-            currentCommitIndex={currentCommitIndex}
-          />
-          <MovedBlockGutter
-            lineCount={lineCount}
-            movedBlocks={analysisData.movedBlocks}
-            currentFilePath={renderFrame.id}
-            vscode={vscode}
-          />
-
           {zoomLevel === 'focus' ? (
             <CodeEditor
               content={content}
@@ -294,6 +247,11 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
               currentCommitIndex={currentCommitIndex}
               filePath={renderFrame.id}
               bundleFacts={cockpitState?.bundleFacts}
+              movedBlocks={analysisData.movedBlocks}
+              showLineNumbers={true}
+              showAgeGutter={true}
+              showMovedGutter={true}
+              metrics={metrics}
             />
           ) : zoomLevel === 'overview' ? (
             <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
@@ -372,6 +330,26 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
           bundleFacts={cockpitState?.bundleFacts}
           lineCommits={lineCommits}
         />
+
+        <DriftBrowserPanel
+          bundleFacts={cockpitState?.bundleFacts || null}
+          onNavigate={(fileId: string, line?: number) => {
+            if (vscode) {
+              const targetFrame: ContextFrame = {
+                level: 'file',
+                id: fileId,
+                name: fileId.split('/').pop() || fileId,
+                status: 'ready',
+                parentId: renderFrame.id,
+              };
+              vscode.postMessage({ type: 'navigateToFrame', frame: targetFrame });
+              vscode.postMessage({ type: 'analyzeFrame', frameId: fileId });
+              if (line !== undefined) {
+                // Could add line navigation here if supported
+              }
+            }
+          }}
+        />
       </div>
     );
   }
@@ -391,9 +369,7 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
         {renderFrame.status === 'scanning' ? (
           <div style={{ padding: '20px', textAlign: 'center' }}>
             <div>Scanning {renderFrame.name}...</div>
-            <div style={{ fontSize: '10px', opacity: 0.7 }}>
-              Tier {renderFrame.tier || 1}/3
-            </div>
+            <div style={{ fontSize: '10px', opacity: 0.7 }}>Tier {renderFrame.tier || 1}/3</div>
           </div>
         ) : (
           <>

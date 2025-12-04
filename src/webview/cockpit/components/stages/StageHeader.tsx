@@ -202,6 +202,22 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px' }}>
           {/* Findings Badges */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {/* Partial Analysis Warning - HIGHEST PRIORITY */}
+            {analysisData.analysisStatus.partial && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-inputValidation-warningBackground)',
+                  color: 'var(--vscode-inputValidation-warningForeground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                  fontWeight: 600,
+                }}
+                title={analysisData.analysisStatus.partialReasons.join('; ')}
+              >
+                ⚠️ Incomplete
+              </span>
+            )}
             {analysisData.findings.missing > 0 && (
               <span
                 style={{
@@ -284,6 +300,81 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
                 title={`Hotspot score: ${analysisData.hotspots[0].score.toFixed(1)}`}
               >
                 🔥 Hotspot ({analysisData.hotspots[0].score.toFixed(0)})
+              </span>
+            )}
+            {/* Import Drift */}
+            {analysisData.findings.importDrift > 0 && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-badge-background)',
+                  color: 'var(--vscode-badge-foreground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title={`${analysisData.findings.importDrift} import style issues`}
+              >
+                ↳ {analysisData.findings.importDrift}
+              </span>
+            )}
+            {/* File Naming Drift */}
+            {analysisData.fileNamingDrift?.hasDrift && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-badge-background)',
+                  color: 'var(--vscode-badge-foreground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title={`File: ${analysisData.fileNamingDrift.currentStyle}, Expected: ${analysisData.fileNamingDrift.dominantStyle}`}
+              >
+                📄 naming
+              </span>
+            )}
+            {/* Divergent Symbols */}
+            {analysisData.findings.divergent > 0 && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-inputValidation-warningBackground)',
+                  color: 'var(--vscode-inputValidation-warningForeground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title="Symbols diverged from expected state"
+              >
+                🔀 {analysisData.findings.divergent}
+              </span>
+            )}
+            {/* Edge Issues */}
+            {analysisData.edgeIssues.missingEdges + analysisData.edgeIssues.zombieEdges > 0 && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-inputValidation-errorBackground)',
+                  color: 'var(--vscode-inputValidation-errorForeground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title={`${analysisData.edgeIssues.missingEdges} missing, ${analysisData.edgeIssues.zombieEdges} zombie edges`}
+              >
+                🔗 {analysisData.edgeIssues.missingEdges + analysisData.edgeIssues.zombieEdges}
+              </span>
+            )}
+            {/* Mixed Conventions */}
+            {analysisData.mixedConventions && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-badge-background)',
+                  color: 'var(--vscode-badge-foreground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title={`Mixed: ${analysisData.mixedConventions.conventions.join(', ')}`}
+              >
+                🎨 mixed
               </span>
             )}
           </div>
