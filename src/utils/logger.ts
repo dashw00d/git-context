@@ -99,5 +99,5 @@ export function logError(message: string, error?: any): void {
     }
   }
 
-  console.error(errorMsg, error);
+  logDebug(errorMsg);
 }

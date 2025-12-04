@@ -1,9 +1,11 @@
+import * as vscode from 'vscode';
 import {
   buildIntendedMap,
   IntendedState,
   reconstructIntendedFromEvidence,
 } from '../facts/intendedMap';
 import { RefactorBundleFacts } from '../facts/types';
+import { logDebug } from '../utils/logger';
 import { BundleStoryEngine } from './bundleStoryEngine';
 import { CommitIndexer } from './commitIndexer';
 import { EmbeddingIndexer } from './embeddingIndexer';
@@ -63,13 +65,12 @@ export class RefactorPipeline {
     commitShas: string[],
     includeWorkspace: boolean = false,
     workspaceParts?: Set<'staged' | 'unstaged'>,
-    onEvent?: (event: PipelineEvent) => void
+    onEvent?: (event: PipelineEvent) => void,
+    token?: vscode.CancellationToken
   ): Promise<PipelineState> {
-    console.error('🎯 [RefactorPipeline] analyzeBundle called', {
-      commitShas: commitShas.length,
-      includeWorkspace,
-      workspaceParts: workspaceParts ? Array.from(workspaceParts) : undefined,
-    });
+    logDebug(
+      `🎯 [RefactorPipeline] analyzeBundle called with ${commitShas.length} commits, workspace: ${includeWorkspace}`
+    );
 
     const explicitTimeline = buildExplicitTimeline({
       includeUnstaged: includeWorkspace && (workspaceParts?.has('unstaged') ?? true),
@@ -77,7 +78,7 @@ export class RefactorPipeline {
       selectedCommitShas: commitShas,
     });
 
-    console.error('🎯 [RefactorPipeline] Built timeline:', explicitTimeline);
+    logDebug(`🎯 [RefactorPipeline] Built timeline with ${explicitTimeline.length} entries`);
 
     const steps = buildPipelineSteps({
       commitIndexer: this.commitIndexer,
@@ -90,10 +91,7 @@ export class RefactorPipeline {
       skipLLM: this.config.skipLLM,
     });
 
-    console.error(
-      '🎯 [RefactorPipeline] Built steps:',
-      steps.map(s => s.id)
-    );
+    logDebug(`🎯 [RefactorPipeline] Built steps: ${steps.map(s => s.id).join(', ')}`);
 
     const initialState: PipelineState = {
       selectedCommitShas: commitShas,
@@ -104,9 +102,9 @@ export class RefactorPipeline {
       errors: [],
     };
 
-    console.error('🎯 [RefactorPipeline] About to call runPipeline with', steps.length, 'steps');
-    const finalState = await runPipeline(steps, initialState, onEvent);
-    console.error('🎯 [RefactorPipeline] runPipeline returned');
+    logDebug(`🎯 [RefactorPipeline] About to call runPipeline with ${steps.length} steps`);
+    const finalState = await runPipeline(steps, initialState, token, onEvent);
+    logDebug('🎯 [RefactorPipeline] runPipeline returned');
 
     const workspaceIndexerAny = this.workspaceIndexer as any;
     const commitIndexerAny = this.commitIndexer as any;

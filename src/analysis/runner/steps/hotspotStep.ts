@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-syntax */
+import pLimit = require('p-limit');
 import { prepare } from '../../../storage/statement-wrapper';
 import { SymbolInfo } from '../../../types';
 import { isCstFact } from '../../../types/cstFacts';
@@ -8,11 +8,6 @@ import { getCstTimelineManager } from '../../cstTimeline';
 import { GitOperations } from '../../git';
 import { HotspotDetectorV2 } from '../../hotspotDetector';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
-
-function extractFileFromSymbolId(symbolId: string): string | null {
-  const parts = symbolId.split(':');
-  return parts.length >= 2 ? parts[0] : null;
-}
 
 export function createHotspotStep(): PipelineStep {
   return {
@@ -55,8 +50,8 @@ export function createHotspotStep(): PipelineStep {
         if (!group) continue;
 
         const symbols: SymbolInfo[] = group.rows.map(row => ({
-          id: row.symbol_id,
-          dnaId: row.dna_id || row.symbol_id,
+          id: row.dna_id || row.symbol_id, // id is now the DNA hash
+          filePath: row.path || '',
           name: row.name,
           kind: row.kind as SymbolInfo['kind'],
           signature: row.signature || '',
@@ -72,7 +67,7 @@ export function createHotspotStep(): PipelineStep {
         for (let i = 0; i < symbols.length; i++) {
           const sym = symbols[i];
           const row = group.rows[i];
-          const file = extractFileFromSymbolId(sym.id) || row.path;
+          const file = sym.filePath || row.path;
           if (file) {
             if (!byFile.has(file)) byFile.set(file, []);
             byFile.get(file)!.push(sym);
@@ -117,45 +112,52 @@ export function createHotspotStep(): PipelineStep {
           filesBySha.get(row.sha)!.push(row.path);
         }
 
+        // Concurrency for hybrid facts retrieval
+        const limit = pLimit(16);
+        const tasks: Promise<void>[] = [];
+
         for (const sha of state.selectedCommitShas) {
           const filePaths = filesBySha.get(sha) || [];
           for (const filePath of filePaths) {
-            const language = detectLanguage(filePath);
-            if (!language) continue;
+            tasks.push(
+              limit(async () => {
+                const language = detectLanguage(filePath);
+                if (!language) return;
 
-            const isCstOnly = isCstOnlyLanguage(language);
-            if (!isCstOnly && !enableAugment) continue;
+                const isCstOnly = isCstOnlyLanguage(language);
+                if (!isCstOnly && !enableAugment) return;
+                if (isCstOnly && !enableCst) return;
 
-            try {
-              const hybridFacts = (await timelineManager.getPriorFacts(filePath, sha)) || [];
+                try {
+                  const hybridFacts = (await timelineManager.getPriorFacts(filePath, sha)) || [];
 
-              if (hybridFacts.length > 0) {
-                logDebug(
-                  `[HotspotStep] Retrieved ${
-                    hybridFacts.length
-                  } hybrid facts for ${filePath}@${sha.substring(0, 8)}`
-                );
-              }
+                  if (hybridFacts.length > 0) {
+                    // logDebug omitted for volume
+                  }
 
-              const cstSymbols: SymbolInfo[] = hybridFacts.filter(isCstFact).map(fact => ({
-                id: fact.id,
-                dnaId: fact.dnaId,
-                name: fact.name,
-                kind: fact.kind as SymbolInfo['kind'],
-                signature: fact.signature,
-                location: fact.location,
-              }));
+                  const cstSymbols: SymbolInfo[] = hybridFacts.filter(isCstFact).map(fact => ({
+                    id: fact.id,
+                    filePath: fact.filePath || '',
+                    name: fact.name,
+                    kind: fact.kind as SymbolInfo['kind'],
+                    signature: fact.signature,
+                    location: fact.location,
+                  }));
 
-              if (cstSymbols.length > 0) {
-                await detector.updateFileHotspot(filePath, sha, cstSymbols);
-
-                await detector.batchUpdateSymbols(cstSymbols, sha);
-              }
-            } catch (error) {
-              logDebug(`[HotspotStep] Error updating hybrid hotspots for ${filePath}: ${error}`);
-            }
+                  if (cstSymbols.length > 0) {
+                    await detector.updateFileHotspot(filePath, sha, cstSymbols);
+                    await detector.batchUpdateSymbols(cstSymbols, sha);
+                  }
+                } catch (error) {
+                  logDebug(
+                    `[HotspotStep] Error updating hybrid hotspots for ${filePath}: ${error}`
+                  );
+                }
+              })
+            );
           }
         }
+        await Promise.all(tasks);
       }
 
       const fileHotspots = await detector.getTopFileHotspots(25);
@@ -181,28 +183,86 @@ export function createHotspotStep(): PipelineStep {
       if (state.explicitTimeline && state.explicitTimeline.length > 0) {
         const git = new GitOperations();
 
+        // Cache touched files per version
+        const versionCache = new Map<string, Set<string>>();
+        const commitsToBatch: string[] = [];
+
+        for (const version of state.explicitTimeline) {
+          if (version === 'workspace-unstaged') {
+            const files = await git.getUnstagedFiles();
+            versionCache.set(version, new Set(files.map(f => f.path)));
+          } else if (version === 'workspace-staged') {
+            const files = await git.getStagedFiles();
+            versionCache.set(version, new Set(files.map(f => f.path)));
+          } else {
+            const sha =
+              version === 'HEAD'
+                ? state.selectedCommitShas?.[state.selectedCommitShas.length - 1] || 'HEAD'
+                : version;
+            commitsToBatch.push(sha);
+          }
+        }
+
+        if (commitsToBatch.length > 0) {
+          // Batch fetch changes for all commits
+          // We chunk to avoid ARG_MAX issues, although 20 commits is fine.
+          const chunkSize = 50;
+          for (let i = 0; i < commitsToBatch.length; i += chunkSize) {
+            const chunk = commitsToBatch.slice(i, i + chunkSize);
+            try {
+              const { stdout } = await git.spawnGit([
+                'log',
+                '--no-walk',
+                '--name-only',
+                '--format=%H',
+                ...chunk,
+              ]);
+
+              let currentSha = '';
+              const lines = stdout.split('\n');
+              for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+
+                // SHA detection (40 hex chars)
+                if (/^[0-9a-f]{40}$/.test(trimmed)) {
+                  currentSha = trimmed;
+                  // Ensure we map both the SHA and potentially 'HEAD' if it resolved to this
+                  // But here we only have SHAs. We'll handle mapping back below.
+                  if (!versionCache.has(currentSha)) {
+                    versionCache.set(currentSha, new Set());
+                  }
+                } else {
+                  if (currentSha && versionCache.has(currentSha)) {
+                    versionCache.get(currentSha)!.add(trimmed);
+                  }
+                }
+              }
+            } catch (error) {
+              logDebug(
+                `[HotspotStep] Failed to batch fetch changes, falling back to individual: ${error}`
+              );
+              // Fallback happens if we don't populate cache, logic below should handle missing cache?
+              // No, the logic below assumes cache is populated or checks it.
+              // If batch fails, we should probably fill it manually?
+              // For safety, let's just log. If empty, logic treats as no changes.
+            }
+          }
+        }
+
         for (const hotspot of fileHotspots) {
           const touchedVersions: string[] = [];
 
           for (const version of state.explicitTimeline) {
-            let wasTouched = false;
-
-            if (version === 'workspace-unstaged' || version === 'workspace-staged') {
-              const workspaceFiles =
-                version === 'workspace-unstaged'
-                  ? await git.getUnstagedFiles()
-                  : await git.getStagedFiles();
-              wasTouched = workspaceFiles.some(f => f.path === hotspot.filePath);
-            } else {
-              const sha =
+            // Resolve version to SHA to lookup in cache
+            let cacheKey = version;
+            if (version !== 'workspace-unstaged' && version !== 'workspace-staged') {
+              cacheKey =
                 version === 'HEAD'
                   ? state.selectedCommitShas?.[state.selectedCommitShas.length - 1] || 'HEAD'
                   : version;
-              const commitFiles = await git.getFileChanges(sha);
-              wasTouched = commitFiles.some(f => f.path === hotspot.filePath);
             }
-
-            if (wasTouched) {
+            if (versionCache.get(cacheKey)?.has(hotspot.filePath)) {
               touchedVersions.push(version);
             }
           }

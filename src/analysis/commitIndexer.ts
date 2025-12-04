@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import * as vscode from 'vscode';
 import pLimit = require('p-limit');
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { prepare } from '../storage/statement-wrapper';
@@ -44,7 +45,7 @@ interface FileProcessingResult {
   risks: string[];
   changedSymbols: any[];
   symbolChanges: Array<{
-    dnaId: string;
+    id: string; // DNA hash
     type: string;
     symbol: any;
     filePath: string;
@@ -99,8 +100,8 @@ export class CommitIndexer {
     fn: () => Promise<T>,
     maxRetries: number = 3,
     baseDelay: number = 1000
-  ): Promise<T> {
-    let lastError: Error;
+  ): Promise<T | null> {
+    let lastError: Error = new Error('Unknown error');
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -110,10 +111,10 @@ export class CommitIndexer {
 
         if (attempt === maxRetries) {
           logError(
-            `[CommitIndexer] All retry attempts failed, proceeding with best-effort mode`,
+            `[CommitIndexer] All ${maxRetries} retry attempts exhausted for operation: ${lastError.message}`,
             lastError
           );
-          return await fn();
+          return null;
         }
 
         const exponentialDelay = baseDelay * Math.pow(2, attempt);
@@ -121,16 +122,14 @@ export class CommitIndexer {
         const delay = exponentialDelay + jitter;
 
         logDebug(
-          `[CommitIndexer] Retry attempt ${
-            attempt + 1
-          }/${maxRetries} after ${delay.toFixed(0)}ms: ${lastError.message}`
+          `[CommitIndexer] Retry attempt ${attempt + 1}/${maxRetries} after ${delay.toFixed(0)}ms: ${lastError.message}`
         );
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
 
-    logError('Unexpected: retryWithBackoff reached end without returning');
-    return await fn();
+    logError(`[CommitIndexer] Unexpected: retryWithBackoff loop completed without return`);
+    return null;
   }
 
   /**
@@ -141,13 +140,18 @@ export class CommitIndexer {
     opts?: {
       force?: boolean;
       modules?: string[];
+      token?: vscode.CancellationToken;
       onProgress?: (event: {
         type: 'file_start' | 'file_complete';
         file: string;
         sha: string;
       }) => void;
     }
-  ): Promise<CommitFacts> {
+  ): Promise<CommitFacts | null> {
+    if (opts?.token?.isCancellationRequested) {
+      throw new vscode.CancellationError();
+    }
+
     if (!opts?.force && this.isIndexed(sha)) {
       logDebug(`[CommitIndexer] ${sha} already indexed`);
       this.cacheHits++;
@@ -160,27 +164,15 @@ export class CommitIndexer {
 
     try {
       const facts = await this.indexCommit(sha, opts);
-
       this.markComplete(sha, facts);
-
       return facts;
     } catch (error) {
+      if (error instanceof vscode.CancellationError) {
+         throw error;
+      }
       this.markFailed(sha, error);
-      logError(`Failed to index commit ${sha}`, error);
-
-      return {
-        sha,
-        symbolsAdded: 0,
-        symbolsModified: 0,
-        symbolsRemoved: 0,
-        edgesAdded: 0,
-        edgesRemoved: 0,
-        risks: [`Failed to index: ${(error as Error).message}`],
-        structuralChangeScore: 0,
-        filesChanged: 0,
-        blastRadius: 0,
-        hotspots: [],
-      };
+      logError(`[CommitIndexer] Failed to index commit ${sha}`, error);
+      return Promise.reject(error);
     }
   }
 
@@ -190,7 +182,7 @@ export class CommitIndexer {
   async ensureCommitsIndexed(
     shas: string[],
     concurrency: number = 8,
-    opts?: { force?: boolean; modules?: string[] },
+    opts?: { force?: boolean; modules?: string[]; token?: vscode.CancellationToken },
     onProgress?: (event: {
       type: 'file_start' | 'file_complete';
       file: string;
@@ -200,14 +192,22 @@ export class CommitIndexer {
     const limit = pLimit(concurrency);
     const promises = shas.map(sha =>
       limit(async () => {
+        if (opts?.token?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
         return this.retryWithBackoff(async () => {
+          if (opts?.token?.isCancellationRequested) {
+             throw new vscode.CancellationError();
+          }
           const facts = await this.ensureCommitIndexed(sha, { ...opts, onProgress });
+          if (!facts) return Promise.reject(new Error(`Failed to index ${sha}`));
           return facts;
         });
       })
     );
 
     const results = await Promise.all(promises);
+    const validResults = results.filter((f): f is CommitFacts => f !== null && f !== undefined);
 
     this.snapshotManager.flushSnapshotQueue();
     this.structuralDiffManager.flushDiffQueue();
@@ -219,7 +219,7 @@ export class CommitIndexer {
       } misses (${(stats.hitRate * 100).toFixed(1)}% hit rate)`
     );
 
-    return results;
+    return validResults;
   }
 
   private async indexCommit(
@@ -227,6 +227,7 @@ export class CommitIndexer {
     opts?: {
       force?: boolean;
       modules?: string[];
+      token?: vscode.CancellationToken;
       onProgress?: (event: {
         type: 'file_start' | 'file_complete';
         file: string;
@@ -249,6 +250,9 @@ export class CommitIndexer {
 
     const promises = files.map(file =>
       limit(async () => {
+        if (opts?.token?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
         opts?.onProgress?.({ type: 'file_start', file: file.path, sha });
         const result = await this.processFile(file, sha, parentSha);
         opts?.onProgress?.({ type: 'file_complete', file: file.path, sha });
@@ -282,7 +286,7 @@ export class CommitIndexer {
       changedSymbols.push(...res.changedSymbols);
 
       for (const change of res.symbolChanges) {
-        symbolChanges.set(change.dnaId, change);
+        symbolChanges.set(change.id, change);
       }
       edgesToInsert.push(...res.edgesToInsert);
       fileHotspotsToUpdate.push(...res.hotspots);
@@ -314,10 +318,10 @@ export class CommitIndexer {
     const detectedRisks = this.riskDetector.detectRisks(
       files,
       {
-        added: changedSymbols.filter(s => symbolChanges.get(s.dnaId)?.type === 'added'),
-        removed: changedSymbols.filter(s => symbolChanges.get(s.dnaId)?.type === 'removed'),
+        added: changedSymbols.filter(s => symbolChanges.get(s.id)?.type === 'added'),
+        removed: changedSymbols.filter(s => symbolChanges.get(s.id)?.type === 'removed'),
         modified: changedSymbols
-          .filter(s => symbolChanges.get(s.dnaId)?.type === 'modified')
+          .filter(s => symbolChanges.get(s.id)?.type === 'modified')
           .map(symbol => ({ symbol, changeType: 'modified' as const })),
       },
       { added: allEdges, removed: [] }
@@ -422,7 +426,7 @@ export class CommitIndexer {
 
         for (const symbol of parentSnapshot.symbols) {
           result.symbolChanges.push({
-            dnaId: symbol.dnaId,
+            id: symbol.id, // id is now the DNA hash
             type: 'removed',
             symbol,
             filePath: path,
@@ -460,7 +464,7 @@ export class CommitIndexer {
       for (const symbol of currentSnapshot.symbols) {
         result.changedSymbols.push(symbol);
         result.symbolChanges.push({
-          dnaId: symbol.dnaId,
+          id: symbol.id, // id is now the DNA hash
           type: 'added',
           symbol,
           filePath: path,
@@ -501,7 +505,7 @@ export class CommitIndexer {
       for (const symbol of symbolDiff.added) {
         result.changedSymbols.push(symbol);
         result.symbolChanges.push({
-          dnaId: symbol.dnaId,
+          id: symbol.id, // id is now the DNA hash
           type: 'added',
           symbol,
           filePath: path,
@@ -510,7 +514,7 @@ export class CommitIndexer {
       for (const mod of symbolDiff.modified) {
         result.changedSymbols.push(mod.symbol);
         result.symbolChanges.push({
-          dnaId: mod.symbol.dnaId,
+          id: mod.symbol.id, // id is now the DNA hash
           type: 'modified',
           symbol: mod.symbol,
           filePath: path,
@@ -518,7 +522,7 @@ export class CommitIndexer {
       }
       for (const symbol of symbolDiff.removed) {
         result.symbolChanges.push({
-          dnaId: symbol.dnaId,
+          id: symbol.id, // id is now the DNA hash
           type: 'removed',
           symbol,
           filePath: path,
@@ -618,7 +622,7 @@ export class CommitIndexer {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    this.db.transaction(() => {
+    const transaction = this.db.transaction(() => {
       for (const edge of edges) {
         stmt.run([
           sha,
@@ -630,7 +634,9 @@ export class CommitIndexer {
           edge.isResolved,
         ]);
       }
-    })();
+    });
+
+    transaction();
   }
 
   private async updateHotspotsFromBatch(
@@ -647,7 +653,7 @@ export class CommitIndexer {
 
     const symbols = Array.from(symbolChanges.values())
       .map(change => change.symbol)
-      .filter(s => s && s.id && s.dnaId);
+      .filter(s => s && s.id); // id is now the DNA hash
 
     if (symbols.length > 0) {
       const limit = pLimit(8);
@@ -680,18 +686,29 @@ export class CommitIndexer {
     sha: string,
     symbolChanges: Map<string, { type: string; symbol: any; filePath: string }>
   ): Promise<void> {
-    const stmt = prepare(`
+    // First, ensure symbol_dna records exist
+    const dnaStmt = prepare(`
+      INSERT OR IGNORE INTO symbol_dna (dna_id, first_seen_sha, first_seen_path)
+      VALUES (?, ?, ?)
+    `);
+
+    const symbolStmt = prepare(`
       INSERT OR REPLACE INTO symbols
-      (sha, path, symbol_id, name, kind, signature, change_type, diff_snippet_pre, diff_snippet_post, confidence)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (sha, path, symbol_id, dna_id, name, kind, signature, change_type, diff_snippet_pre, diff_snippet_post, confidence)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     this.db.transaction(() => {
-      for (const [_dnaId, { type, symbol, filePath }] of symbolChanges) {
-        stmt.run([
+      for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
+        // Insert into symbol_dna first (if not exists)
+        dnaStmt.run([dnaId, sha, filePath]);
+
+        // Then insert into symbols
+        symbolStmt.run([
           sha,
           filePath,
-          symbol.id,
+          symbol.semanticId || symbol.id, // Keep semanticId for reference, fallback to id
+          dnaId, // dna_id is the DNA hash (same as symbol.id)
           symbol.name,
           symbol.kind,
           symbol.signature || '',
@@ -766,8 +783,7 @@ export class CommitIndexer {
       const hybridFacts = await this.parser.extractHybridFacts(content, filePath, language);
       const serialized = JSON.stringify(
         hybridFacts.map(f => ({
-          id: f.id,
-          dnaId: f.dnaId,
+          id: f.id, // id is now the DNA hash
           name: f.name,
           kind: f.kind,
         }))
@@ -1046,7 +1062,7 @@ export class CommitIndexer {
 
     const symbols = Array.from(symbolChanges.values())
       .map(change => change.symbol)
-      .filter(s => s && s.id && s.dnaId);
+      .filter(s => s && s.id); // id is now the DNA hash
 
     if (symbols.length > 0) {
       const limit = pLimit(8);
@@ -1078,10 +1094,10 @@ export class CommitIndexer {
   ): void {
     for (const move of movedBlocks) {
       const sourceSymbol = Array.from(symbolChanges.values()).find(
-        change => change.symbol.dnaId === move.sourceSymbolId
+        change => change.symbol.id === move.sourceSymbolId
       );
       const destSymbol = Array.from(symbolChanges.values()).find(
-        change => change.symbol.dnaId === move.destSymbolId
+        change => change.symbol.id === move.destSymbolId
       );
 
       if (sourceSymbol && destSymbol) {

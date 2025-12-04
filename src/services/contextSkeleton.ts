@@ -69,8 +69,8 @@ export class ContextSkeletonService {
   }
 
   private async getAllRepoFiles(): Promise<string[]> {
-    const allFiles = await this.git.getAllFiles();
-    return this.filterFiles(allFiles);
+    const allFiles = await this.git.getAllFiles(); // Already excludes ignored files via --exclude-standard
+    return this.filterFiles(allFiles, true); // Skip redundant git ignore check
   }
 
   private async getChangedFiles(): Promise<string[]> {
@@ -101,7 +101,7 @@ export class ContextSkeletonService {
     });
   }
 
-  private async filterFiles(files: string[]): Promise<string[]> {
+  private async filterFiles(files: string[], skipGitIgnore: boolean = false): Promise<string[]> {
     const gitRoot = this.git.getRoot();
     const filtered: string[] = [];
 
@@ -112,6 +112,7 @@ export class ContextSkeletonService {
           gitRoot,
           status: 'M',
           skipSizeCheck: true,
+          skipGitIgnore, // Skip redundant check if files already came from getAllFiles()
         })
       ) {
         filtered.push(file);

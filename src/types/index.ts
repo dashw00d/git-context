@@ -1,4 +1,4 @@
-import type { DriftFindings } from '../facts/driftDetector';
+import type { DriftFindings } from './drift';
 
 export interface CommitInfo {
   sha: string;
@@ -15,10 +15,10 @@ export interface FileChange {
 }
 
 export interface SymbolInfo {
-  id: string;
-  dnaId: string;
+  id: string; // DNA hash (stable identifier across renames/moves)
   dnaVersion?: 2; // Always 2 when assigned via assignDNAIds
-  semanticId?: string;
+  semanticId?: string; // Legacy field, kept for compatibility
+  filePath: string; // File path where symbol is located
   name: string;
   kind: 'function' | 'class' | 'method' | 'const' | 'interface' | 'type' | 'variable';
   signature: string;

@@ -87,7 +87,7 @@ export class MetricsService {
     }[];
     commitStmt.free?.();
 
-    const commitsByPath: Record<string, typeof allCommits> = {};
+    const commitsByPath: Record<string, any[]> = {};
     for (const c of allCommits) {
       if (!commitsByPath[c.path]) commitsByPath[c.path] = [];
       commitsByPath[c.path].push(c);
@@ -151,7 +151,8 @@ export class MetricsService {
     }
 
     if (allSymbolIds.length > 0) {
-      const SYMBOL_CHUNK_SIZE = 500;
+      // Reduce chunk size to 200 to stay well within SQLite variable limits (usually 999 or 32766)
+      const SYMBOL_CHUNK_SIZE = 200;
       const incomingCounts: Record<string, number> = {};
       const outgoingCounts: Record<string, number> = {};
 

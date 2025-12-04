@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS symbols (
   sha TEXT NOT NULL,
   path TEXT NOT NULL,
   symbol_id TEXT NOT NULL,
+  dna_id TEXT NOT NULL,
   name TEXT NOT NULL,
   kind TEXT NOT NULL,
   signature TEXT,
@@ -76,7 +77,8 @@ CREATE TABLE IF NOT EXISTS symbols (
   naming_convention TEXT,
   convention_confidence REAL,
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
-  UNIQUE(sha, symbol_id)
+  FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE,
+  UNIQUE(sha, dna_id)
 );
 
 -- Dependency edges between symbols
@@ -283,7 +285,7 @@ CREATE INDEX IF NOT EXISTS idx_symbols_path ON symbols(path);
 CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
 CREATE INDEX IF NOT EXISTS idx_symbols_symbol_id ON symbols(symbol_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_convention ON symbols(naming_convention);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_sha_symbol_id ON symbols(sha, symbol_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_sha_dna_id ON symbols(sha, dna_id);
 
 -- Edge queries
 CREATE INDEX IF NOT EXISTS idx_edges_sha ON edges(sha);
@@ -585,6 +587,7 @@ CREATE INDEX IF NOT EXISTS idx_squash_mappings_squash ON squash_mappings(squash_
   sha TEXT NOT NULL,
   path TEXT NOT NULL,
   symbol_id TEXT NOT NULL,
+  dna_id TEXT NOT NULL,
   name TEXT NOT NULL,
   kind TEXT NOT NULL,
   signature TEXT,
@@ -596,7 +599,8 @@ CREATE INDEX IF NOT EXISTS idx_squash_mappings_squash ON squash_mappings(squash_
   naming_convention TEXT,
   convention_confidence REAL,
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
-  UNIQUE(sha, symbol_id)
+  FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE,
+  UNIQUE(sha, dna_id)
 );
 CREATE TABLE IF NOT EXISTS symbol_dna (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -616,7 +620,7 @@ CREATE TABLE IF NOT EXISTS symbol_versions (
   signature_hash TEXT,
   body_hash TEXT,
   FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE,
-  UNIQUE(sha, path, symbol_id)
+  UNIQUE(sha, dna_id)
 );
 CREATE TABLE IF NOT EXISTS symbol_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -640,18 +644,19 @@ CREATE TABLE IF NOT EXISTS dna_decision_log (
   confidence REAL NOT NULL,
   reasoning TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE
+  FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
+  FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_symbols_sha ON symbols(sha);
 CREATE INDEX IF NOT EXISTS idx_symbols_path ON symbols(path);
 CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
 CREATE INDEX IF NOT EXISTS idx_symbols_symbol_id ON symbols(symbol_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_convention ON symbols(naming_convention);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_sha_symbol_id ON symbols(sha, symbol_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_sha_dna_id ON symbols(sha, dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_dna_dna_id ON symbol_dna(dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_versions_dna ON symbol_versions(dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_versions_sha ON symbol_versions(sha);
-CREATE INDEX IF NOT EXISTS idx_symbol_versions_lookup ON symbol_versions(sha, path, symbol_id);
+CREATE INDEX IF NOT EXISTS idx_symbol_versions_lookup ON symbol_versions(sha, dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_history_dna ON symbol_history(symbol_dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_history_sha ON symbol_history(sha);
 CREATE INDEX IF NOT EXISTS idx_symbol_history_dna_sha ON symbol_history(symbol_dna_id, sha);

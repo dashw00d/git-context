@@ -24,6 +24,87 @@ export async function registerCockpitFeatures(
 
   new CockpitEffects(store, providers);
 
+  // Keep the Cockpit view in sync with the latest analysis/facts
+  if (providers.cockpitProvider) {
+    let lastFactsKey: string | null = null;
+    let lastSummaryKey: string | null = null;
+
+    const pushCockpitUpdate = async () => {
+      const state = orchestrator.getState();
+      const facts = state.bundleFacts;
+      const summary = state.bundleSummary;
+
+      if (!facts || !summary) return;
+
+      const factsKey = `${facts.generated_at || ''}|${facts.bundle?.newestSha || ''}|${facts.bundle?.shas?.join(',') || ''}`;
+      const summaryKey = `${summary.id || ''}|${summary.commitCount || 0}|${summary.fileCount || 0}`;
+
+      if (factsKey === lastFactsKey && summaryKey === lastSummaryKey) {
+        return;
+      }
+
+      lastFactsKey = factsKey;
+      lastSummaryKey = summaryKey;
+
+      try {
+        const { GitOperations } = await import('../analysis/git');
+        const { getGitRoot } = await import('../utils/config');
+        const git = new GitOperations();
+        const gitRoot = getGitRoot();
+        let repoName: string | null = null;
+        let branchName: string | null = null;
+        try {
+          repoName = gitRoot ? gitRoot.split('/').pop() || null : null;
+          branchName = await git.getCurrentBranch();
+        } catch {
+          // Ignore errors
+        }
+
+        providers.cockpitProvider!.showCockpit(facts, summary, {
+          llmOutputs: state.llmOutputs,
+          retrievedHistory: state.retrievedHistory,
+          repoName,
+          branchName,
+        });
+      } catch (error) {
+        logError('[CockpitFeatures] Failed to update cockpit', error);
+      }
+    };
+
+    // Initial sync in case facts already exist
+    pushCockpitUpdate();
+
+    // Sync live analysis state to cockpit provider
+    const pushLiveAnalysisUpdate = () => {
+      const state = orchestrator.getState();
+      const liveAnalysis = state.liveAnalysis;
+
+      if (!providers.cockpitProvider || !liveAnalysis) return;
+
+      try {
+        // Update live analysis state in provider
+        providers.cockpitProvider.updateLiveAnalysis(liveAnalysis);
+      } catch (error) {
+        logError('[CockpitFeatures] Failed to update live analysis', error);
+      }
+    };
+
+    shell.registerFeature({
+      effects: [
+        {
+          key: ['bundleFacts', 'bundleSummary'],
+          priority: 50,
+          handler: pushCockpitUpdate,
+        },
+        {
+          key: ['liveAnalysis'],
+          priority: 50,
+          handler: pushLiveAnalysisUpdate,
+        },
+      ],
+    });
+  }
+
   // Keep the Refactor Report view in sync with the latest analysis/facts (including skeleton data)
   if (providers.refactorReportProvider) {
     let lastFactsKey: string | null = null;

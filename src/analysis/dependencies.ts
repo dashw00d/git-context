@@ -279,7 +279,7 @@ export class DependencyExtractor {
 
     const symbolsByFile = new Map<string, SymbolInfo[]>();
     for (const symbol of [...symbols.added, ...symbols.modified.map(m => m.symbol)]) {
-      const filePath = symbol.id.split(':')[0];
+      const filePath = symbol.filePath;
       if (!symbolsByFile.has(filePath)) {
         symbolsByFile.set(filePath, []);
       }
@@ -336,7 +336,7 @@ export class DependencyExtractor {
       currentEdges.push(...edges);
     }
 
-    const modifiedFiles = new Set(symbols.modified.map(m => m.symbol.id.split(':')[0]));
+    const modifiedFiles = new Set(symbols.modified.map(m => m.symbol.filePath));
 
     for (const filePath of modifiedFiles) {
       try {

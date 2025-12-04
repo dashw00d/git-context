@@ -1,13 +1,7 @@
+import { logDebug } from '../../../utils/logger';
 import { WorkspaceIndexer } from '../../workspaceIndexer';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
-
-function updateState<K extends keyof PipelineState>(
-  state: PipelineState,
-  key: K,
-  value: PipelineState[K]
-) {
-  (state as any)[key] = value;
-}
+import { updateState } from './utils';
 
 export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): PipelineStep {
   return {
@@ -16,9 +10,9 @@ export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): 
     deps: [],
 
     async run(state: PipelineState) {
-      console.error('🟦 [WorkspaceStep] Starting run');
+      logDebug('🟦 [WorkspaceStep] Starting run');
       if (!state.includeWorkspace) {
-        console.error('🟦 [WorkspaceStep] No workspace, skipping');
+        logDebug('🟦 [WorkspaceStep] No workspace, skipping');
         updateState(state, 'workspaceFacts', { staged: null, unstaged: null });
         return;
       }
@@ -51,7 +45,7 @@ export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): 
         staged: stagedFacts,
         unstaged: unstagedFacts,
       });
-      console.error('🟦 [WorkspaceStep] Completed successfully');
+      logDebug('🟦 [WorkspaceStep] Completed successfully');
     },
   };
 }

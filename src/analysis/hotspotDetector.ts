@@ -155,7 +155,7 @@ export class HotspotDetector {
       return;
     }
 
-    const dnaIds = symbols.filter(s => s.dnaId).map(s => s.dnaId!);
+    const dnaIds = symbols.filter(s => s.id).map(s => s.id);
     if (dnaIds.length === 0) return;
 
     const placeholders = dnaIds.map(() => '?').join(',');
@@ -179,10 +179,10 @@ export class HotspotDetector {
 
     const symbolMetrics = new Map<string, { hotspotScore: number; riskLevel: string }>();
     for (const symbol of symbols) {
-      if (!symbol.dnaId) continue;
+      if (!symbol.id) continue;
       try {
-        const metrics = await this.calculateSymbolMetrics(symbol.dnaId, sha);
-        symbolMetrics.set(symbol.dnaId, metrics);
+        const metrics = await this.calculateSymbolMetrics(symbol.id, sha);
+        symbolMetrics.set(symbol.id, metrics);
       } catch (error: any) {
         logDebug(
           `[HotspotDetector] Failed to calculate metrics for ${symbol.name}: ${error.message}`
@@ -195,27 +195,27 @@ export class HotspotDetector {
       let updated = 0;
 
       for (const symbol of symbols) {
-        if (!symbol.id || !symbol.dnaId) {
+        if (!symbol.id) {
           skipped++;
           continue;
         }
 
-        const filePath = symbol.id.includes(':') ? symbol.id.split(':')[0] : '';
+        const filePath = symbol.filePath;
         if (!filePath || filePath.trim() === '') {
           skipped++;
           continue;
         }
 
-        const metrics = symbolMetrics.get(symbol.dnaId);
+        const metrics = symbolMetrics.get(symbol.id);
         if (!metrics) {
           skipped++;
           continue;
         }
 
         try {
-          const existingHotspot = this.getSymbolHotspot(symbol.dnaId);
+          const existingHotspot = this.getSymbolHotspot(symbol.id);
 
-          const existingScore = existing.get(symbol.dnaId);
+          const existingScore = existing.get(symbol.id);
           if (existingScore !== undefined) {
             const scoreDelta = Math.abs(metrics.hotspotScore - existingScore);
             const scoreDeltaPercent = existingScore > 0 ? (scoreDelta / existingScore) * 100 : 0;
@@ -229,7 +229,7 @@ export class HotspotDetector {
           const totalCommits = (existingHotspot?.totalCommits || 0) + 1;
 
           insertStmt.run([
-            symbol.dnaId,
+            symbol.id, // id is now the DNA hash
             filePath,
             symbol.kind,
             symbol.name,
@@ -266,26 +266,24 @@ export class HotspotDetector {
    * Update hotspot metrics for a symbol
    */
   async updateSymbolHotspot(symbol: SymbolInfo, sha: string): Promise<void> {
-    if (!symbol.id || !symbol.dnaId) {
-      logDebug(`[HotspotDetector] Skipping invalid symbol ${symbol.name}: missing id/dnaId`);
+    if (!symbol.id) {
+      logDebug(`[HotspotDetector] Skipping invalid symbol ${symbol.name}: missing id`);
       return;
     }
 
-    const filePath = symbol.id.includes(':') ? symbol.id.split(':')[0] : '';
+    const filePath = symbol.filePath;
 
     if (!filePath || filePath.trim() === '') {
-      logDebug(
-        `[HotspotDetector] Skipping symbol ${symbol.name}: no valid file path from ID ${symbol.id}`
-      );
+      logDebug(`[HotspotDetector] Skipping symbol ${symbol.name}: no valid file path`);
       return;
     }
 
     try {
       const now = new Date().toISOString();
 
-      const existing = this.getSymbolHotspot(symbol.dnaId);
+      const existing = this.getSymbolHotspot(symbol.id);
 
-      const metrics = await this.calculateSymbolMetrics(symbol.dnaId, sha);
+      const metrics = await this.calculateSymbolMetrics(symbol.id, sha);
 
       const stmt = this.dbManager.getDatabase().prepare(`
         INSERT OR REPLACE INTO symbol_hotspots
@@ -299,7 +297,7 @@ export class HotspotDetector {
       const totalCommits = (existing?.totalCommits || 0) + 1;
 
       stmt.run([
-        symbol.dnaId,
+        symbol.id, // id is now the DNA hash
         filePath,
         symbol.kind,
         symbol.name,
@@ -662,8 +660,8 @@ export class HotspotDetector {
    */
   private generateCacheKey(symbols: SymbolInfo[], sha: string): string {
     const symbolKeys = symbols
-      .filter(s => s.dnaId)
-      .map(s => `${s.dnaId}:${s.name}`)
+      .filter(s => s.id)
+      .map(s => `${s.id}:${s.name}`)
       .sort()
       .join(',');
     return `${sha}:${symbolKeys}`;

@@ -110,4 +110,12 @@ module.exports = {
       },
     ],
   },
+  overrides: [
+    {
+      files: ['src/analysis/runner/steps/**/*.ts'],
+      rules: {
+        'no-restricted-syntax': 'off',
+      },
+    },
+  ],
 };

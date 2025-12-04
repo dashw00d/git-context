@@ -1,7 +1,9 @@
+import { mergeFacts } from '../facts/factsMerger';
 import { CockpitState, ContextFrame, ExplorerNode } from '../types/cockpit';
-import { logWarn } from '../utils/logger';
+import { logDebug, logWarn } from '../utils/logger';
 import { Action } from './actions';
 import { normalizeBundleConfig } from './bundleConfig';
+import { getCachedFrame, updateTierCache } from './cacheUtils';
 
 function updateNodeStatus(
   nodes: ExplorerNode[],
@@ -97,7 +99,12 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         analysisStep: action.payload.step,
         analysisProgress: action.payload.progress,
       };
-    case 'ANALYSIS_COMPLETED':
+    case 'ANALYSIS_COMPLETED': {
+      const newShas = state.selectedCommitShas;
+      const newIndex =
+        state.currentCommitIndex === undefined && newShas.length > 0
+          ? newShas.length - 1
+          : state.currentCommitIndex;
       return {
         ...state,
         isAnalyzing: false,
@@ -107,7 +114,9 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         bundleReportId: action.payload.reportId,
         retrievedHistory: action.payload.history,
         pipelineErrors: [],
+        currentCommitIndex: newIndex,
       };
+    }
     case 'ANALYSIS_FAILED':
       return { ...state, isAnalyzing: false, error: action.payload.error };
     case 'ANALYSIS_CANCELLED':
@@ -138,21 +147,38 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         selectedStagedPaths: [],
         selectedUnstagedPaths: [],
       };
-    case 'SELECTION_SET':
-      return { ...state, selectedCommitShas: action.payload.shas };
+    case 'SELECTION_SET': {
+      const newShas = action.payload.shas;
+      const newIndex =
+        state.currentCommitIndex === undefined && newShas.length > 0
+          ? newShas.length - 1
+          : state.currentCommitIndex;
+      return {
+        ...state,
+        selectedCommitShas: newShas,
+        currentCommitIndex: newIndex,
+      };
+    }
     case 'STAGED_SELECTION_UPDATED':
       return { ...state, selectedStagedPaths: action.payload.paths };
     case 'UNSTAGED_SELECTION_UPDATED':
       return { ...state, selectedUnstagedPaths: action.payload.paths };
-    case 'SELECTION_UPDATED':
+    case 'SELECTION_UPDATED': {
+      const newShas = action.payload.selectedCommitShas;
+      const newIndex =
+        state.currentCommitIndex === undefined && newShas.length > 0
+          ? newShas.length - 1
+          : state.currentCommitIndex;
       return {
         ...state,
-        selectedCommitShas: action.payload.selectedCommitShas,
+        selectedCommitShas: newShas,
         selectedStagedPaths: action.payload.selectedStagedPaths,
         selectedUnstagedPaths: action.payload.selectedUnstagedPaths,
         selectedFiles: action.payload.selectedFiles,
         workspaceScope: action.payload.workspaceScope,
+        currentCommitIndex: newIndex,
       };
+    }
 
     case 'COMMITS_UPDATED':
       return { ...state, commits: action.payload.commits, hasMoreCommits: action.payload.hasMore };
@@ -228,7 +254,10 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
     case 'BUNDLE_FACTS_UPDATED':
       return {
         ...state,
-        bundleFacts: action.payload.facts,
+        bundleFacts:
+          state.bundleFacts && action.payload.facts
+            ? mergeFacts(state.bundleFacts, action.payload.facts)
+            : action.payload.facts,
         bundleSummary: action.payload.summary ?? state.bundleSummary,
       };
     case 'BUNDLE_CONFIG_UPDATED':
@@ -258,16 +287,27 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
     case 'NAVIGATE_TO': {
       const cleanFrame: ContextFrame = {
         ...action.payload.frame,
-
         data: action.payload.frame.data || undefined,
       };
 
       const shouldPushHistory = state.activeFrame.id !== cleanFrame.id;
 
+      const { frame, isHit, isStale } = getCachedFrame(
+        state.cachedTierResults,
+        cleanFrame.id,
+        cleanFrame
+      );
+
+      logDebug(
+        `[Reducer] Navigating to ${cleanFrame.id}, cache ${
+          isHit ? (isStale ? 'stale' : 'hit') : 'miss'
+        }`
+      );
+
       return {
         ...state,
         history: shouldPushHistory ? [...state.history, state.activeFrame] : state.history,
-        activeFrame: cleanFrame,
+        activeFrame: isStale ? cleanFrame : frame,
       };
     }
     case 'NAVIGATE_BACK': {
@@ -305,13 +345,6 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
     case 'FRAME_ANALYSIS_TIER_1_COMPLETE':
     case 'FRAME_ANALYSIS_TIER_2_COMPLETE':
     case 'FRAME_ANALYSIS_TIER_3_COMPLETE': {
-      if (state.activeFrame.id !== action.payload.frameId) {
-        logWarn(
-          `[Reducer] Dropping stale tier data for ${action.payload.frameId} (current frame: ${state.activeFrame.id})`
-        );
-        return state;
-      }
-
       const tierNum =
         action.type === 'FRAME_ANALYSIS_TIER_1_COMPLETE'
           ? 1
@@ -319,6 +352,22 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
             ? 2
             : 3;
       const tier = tierNum === 1 ? 'structure' : tierNum === 2 ? 'hybrid' : 'semantics';
+
+      if (state.activeFrame.id !== action.payload.frameId) {
+        logWarn(
+          `[Reducer] Caching tier ${tierNum} data for ${action.payload.frameId} (current frame: ${state.activeFrame.id})`
+        );
+
+        return {
+          ...state,
+          cachedTierResults: updateTierCache(
+            state.cachedTierResults,
+            action.payload.frameId,
+            tierNum,
+            action.payload.data
+          ),
+        };
+      }
 
       return {
         ...state,

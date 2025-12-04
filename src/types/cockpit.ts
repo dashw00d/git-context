@@ -1,5 +1,5 @@
-import { WorkspaceFacts } from '../analysis/workspaceIndexer';
 import { RefactorBundleFacts } from '../facts/types';
+import { WorkspaceFacts } from './workspace';
 
 /** Which section (accordion) is active/open in the cockpit sidebar */
 export type CockpitSectionKey = 'commits' | 'bundle' | 'symbols' | 'reports' | 'live';
@@ -171,6 +171,13 @@ export interface CockpitState {
   /* LLM Analysis results (legacy/compat) */
   llmOutputs?: any;
 
+  headInfo?: {
+    sha: string;
+    date: string;
+    message: string;
+    author: string;
+  };
+
   /* Selections */
   selectedCommitShas: string[];
   selectedStagedPaths: string[];
@@ -232,6 +239,17 @@ export interface CockpitState {
   history: ContextFrame[];
   explorerData: ExplorerNode[];
 
+  /* Tier Analysis Caching */
+  cachedTierResults?: Record<
+    string,
+    {
+      tier1?: any;
+      tier2?: any;
+      tier3?: any;
+      timestamp: number;
+    }
+  >;
+
   actionHistory?: Array<{ type: string; payload?: any; timestamp: string }>;
 }
 
@@ -267,201 +285,101 @@ export interface LiveAnalysisSummary {
   hybridDrifts?: number;
 }
 
+/* ---------- Simplified Message Types (mirroring reportWebview.ts) ---------- */
+
+export interface CockpitPayload {
+  // Core bundle data
+  bundleFacts?: RefactorBundleFacts | null;
+  bundleSummary?: BundleSummaryDTO | null;
+  bundleView?: BundleView | null;
+
+  // Navigation & Explorer
+  activeFrame?: ContextFrame;
+  history?: ContextFrame[];
+  explorerData?: ExplorerNode[];
+  nodeMetrics?: Record<string, NodeMetrics>;
+
+  // Analysis status
+  isAnalyzing?: boolean;
+  analysisStep?: string;
+  analysisProgress?: number;
+  error?: string | null;
+
+  // Live analysis
+  liveAnalysis?: {
+    isTracking: boolean;
+    pendingChanges: number;
+    totalEdits: number;
+    status: 'idle' | 'analyzing' | 'ready' | 'error';
+    summary: LiveAnalysisSummary | null;
+    facts: any;
+  };
+
+  // Repo context
+  repoName?: string | null;
+  branchName?: string | null;
+
+  // Bundle config (used by BundleStage)
+  bundleConfig?: BundleConfig;
+  lastNCommits?: number;
+  currentCommitIndex?: number; // Add this line
+
+  // Optional extras
+  commits?: CommitDTO[];
+  hasMoreCommits?: boolean;
+  llmOutputs?: any;
+  retrievedHistory?: any;
+  headInfo?: {
+    sha: string;
+    date: string;
+    message: string;
+    author: string;
+  };
+}
+
+export type CockpitHostMessage =
+  | { type: 'setData'; payload: CockpitPayload }
+  | { type: 'setProgress'; payload: { isAnalyzing: boolean; step?: string; progress?: number } }
+  | { type: 'focusSection'; payload: { section: CockpitSectionKey } }
+  | { type: 'assistantResponse'; payload: { text: string } }
+  | { type: 'updateExplorerTree'; payload: ExplorerNode[] }
+  | { type: 'updateFrame'; payload: { frame: ContextFrame; data: any } };
+
 export type CockpitClientMessage =
+  | { type: 'ready' }
   | {
-      type: 'setActiveSection';
-      section: CockpitSectionKey;
-    }
-  | {
-      type: 'resetAll';
-    }
-  | {
-      type: 'generateReport';
+      type: 'runAnalysis';
       mode: 'selection' | 'lastN' | 'staged' | 'unstaged' | 'changes';
       lastN?: number;
       force?: boolean;
     }
+  | { type: 'openReport'; reportId: string }
+  | { type: 'regenerateReport'; reportId: string }
+  | { type: 'togglePinReport'; reportId: string }
+  | { type: 'deleteReport'; reportId: string }
+  | { type: 'navigateToFrame'; frame: ContextFrame }
+  | { type: 'navigateBack' }
+  | { type: 'switchBundle'; id: string }
   | {
-      type: 'cancelAnalysis';
-    }
-  | {
-      type: 'toggleCommit';
-      sha: string;
-    }
-  | {
-      type: 'addCommitBySha';
-      shaOrRef: string;
-    }
-  | {
-      type: 'loadMoreCommits';
-    }
-  | {
-      type: 'setCommitsFilterText';
-      text: string;
-    }
-  | {
-      type: 'setCommitsFilterScopes';
-      scopes: {
-        staged?: boolean;
-        unstaged?: boolean;
-        history?: boolean;
+      type: 'askAssistant';
+      payload: {
+        text?: string;
+        frame?: ContextFrame;
+        symbolId?: string;
+        filePath?: string;
+        drift?: any;
       };
-    }
-  | {
-      type: 'selectAllStaged';
-    }
-  | {
-      type: 'selectAllUnstaged';
-    }
-  | {
-      type: 'clearSelection';
-    }
-  | {
-      type: 'compareFilesToCommit';
-      sha: string;
-    }
-  | {
-      type: 'bundleRegenerate';
-    }
-  | {
-      type: 'bundleClear';
-    }
-  | {
-      type: 'bundleExport';
-    }
-  | {
-      type: 'openActiveReport';
-    }
-  | {
-      type: 'bundleCancel';
-    }
-  | {
-      type: 'setSymbolFilterText';
-      text: string;
-    }
-  | {
-      type: 'setSymbolKindFilter';
-      kind: string | 'all';
-    }
-  | {
-      type: 'setSymbolChangeFilter';
-      change: 'all' | SymbolChangeType;
-    }
-  | {
-      type: 'openSymbolHistory';
-      symbolId: string;
-    }
-  | {
-      type: 'openSymbolInEditor';
-      symbolId: string;
     }
   | {
       type: 'applyRefactorSuggestion';
       payload: { symbolId: string; suggestedName: string; filePath?: string };
     }
-  | {
-      type: 'askAssistant';
-      payload?: any;
-    }
-  | {
-      type: 'openReport';
-      reportId: string;
-    }
-  | {
-      type: 'regenerateReport';
-      reportId: string;
-    }
-  | {
-      type: 'deleteReport';
-      reportId: string;
-    }
-  | {
-      type: 'openSuperReport';
-    }
-  | {
-      type: 'setLastNCommits';
-      value: number;
-    }
-  | {
-      type: 'togglePinReport';
-      reportId: string;
-    }
-  | {
-      type: 'setReportsFilterText';
-      text: string;
-    }
-  | {
-      type: 'setReportsBranchFilter';
-      branch: string | 'all';
-    }
-  | {
-      type: 'setReportsShowPinnedOnly';
-      value: boolean;
-    }
-  | {
-      type: 'scrollReportToSection';
-      sectionId: string;
-    }
-  | {
-      type: 'openEvidence';
-      evidenceId: string;
-    }
-  | {
-      type: 'generateLiveReport';
-    }
-  | {
-      type: 'startLiveAnalysis';
-    }
-  | {
-      type: 'getExplorerTree';
-    }
-  | {
-      type: 'analyzeFrame';
-      frameId: string;
-    }
-  | {
-      type: 'getBundleData';
-    }
-  | {
-      type: 'createBundle';
-      name: string;
-      config: BundleConfig;
-    }
-  | {
-      type: 'deleteBundle';
-      id: string;
-    }
-  | {
-      type: 'switchBundle';
-      id: string;
-    }
-  | {
-      type: 'updateBundleConfig';
-      config: Partial<BundleConfig>;
-    }
-  | {
-      type: 'ready';
-    }
+  | { type: 'openSymbolInEditor'; symbolId: string }
+  | { type: 'analyzeFrame'; frameId: string }
+  | { type: 'getExplorerTree' }
+  | { type: 'getBundleData' }
+  | { type: 'updateBundleConfig'; config: Partial<BundleConfig> }
+  | { type: 'setLastNCommits'; value: number }
+  | { type: 'updateCommitIndex'; value: number }
   | { type: 'clearError' }
-  | { type: 'navigateToFrame'; frame: ContextFrame }
-  | { type: 'navigateBack' }
-  | { type: 'updateCommitIndex'; value: number };
-
-export type CockpitHostMessage =
-  | { type: 'updateState'; payload: CockpitState }
-  | {
-      type: 'analysisProgress';
-      payload: { isAnalyzing: boolean; step?: string; progress?: number };
-    }
-  | { type: 'focusSection'; payload: { section: CockpitSectionKey } }
-  | { type: 'assistantResponse'; payload: { text: string } }
-  | { type: 'updateExplorerTree'; payload: ExplorerNode[] }
-  | { type: 'updateFrame'; payload: { frame: ContextFrame; data: any } }
-  | {
-      type: 'updateBundle';
-      payload: {
-        view?: BundleView | null;
-        summary?: BundleSummaryDTO | null;
-        facts?: BundleFactsDTO;
-      };
-    };
+  | { type: 'getHeadInfo' };

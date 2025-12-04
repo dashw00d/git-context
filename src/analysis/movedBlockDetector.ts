@@ -148,7 +148,7 @@ export class MovedBlockDetector {
 
     for (const symbol of symbols) {
       try {
-        const filePath = symbol.id.split(':')[0];
+        const filePath = symbol.filePath;
         const contentSha = context === 'deleted' ? await this.getParentSha(commitSha) : commitSha;
         const fileContent = await this.getFileContent(filePath, contentSha);
 
@@ -159,8 +159,8 @@ export class MovedBlockDetector {
 
         blocks.push({
           file: filePath,
-          symbolId: symbol.dnaId,
-          dnaId: symbol.dnaId,
+          symbolId: symbol.id, // id is now the DNA hash
+          dnaId: symbol.id, // id is now the DNA hash
           symbolKind: symbol.kind,
           startLine: symbol.location.start.line,
           endLine: symbol.location.end.line,
@@ -195,16 +195,16 @@ export class MovedBlockDetector {
     const matchedAdded = new Set<string>();
 
     for (const removed of removedSymbols) {
-      if (!removed.dnaId) continue;
+      if (!removed.id) continue;
 
       let bestMatch: SymbolInfo | null = null;
       let bestSimilarity = 0;
 
       for (const added of addedSymbols) {
         if (matchedAdded.has(added.id)) continue;
-        if (!added.dnaId) continue;
+        if (!added.id) continue;
 
-        if (removed.dnaId === added.dnaId) {
+        if (removed.id === added.id) {
           bestMatch = added;
           bestSimilarity = 1.0;
           break;

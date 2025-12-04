@@ -4,6 +4,7 @@ import * as path from 'path';
 import pLimit = require('p-limit');
 import { Database } from 'sql.js';
 import { prepare } from '../storage/statement-wrapper';
+import { WorkspaceFacts } from '../types/workspace';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
@@ -14,21 +15,7 @@ import { StructuralDiffManager } from './structuralDiffManager';
 import { getTreeSitterParser } from './tree-sitter';
 import type { HybridFact } from '../types/cstFacts';
 
-export interface WorkspaceFacts {
-  workspaceHash: string;
-  headSha: string;
-  symbolsAdded: number;
-  symbolsModified: number;
-  symbolsRemoved: number;
-  edgesAdded: number;
-  edgesRemoved: number;
-  risks: string[];
-  filesChanged: number;
-  structuralChangeScore: number;
-  blastRadius: number;
-  incoming?: Map<string, string[]>;
-  outgoing?: Map<string, string[]>;
-}
+export { WorkspaceFacts };
 
 export class WorkspaceIndexer {
   private cstTimelineManager = getCstTimelineManager();
@@ -362,7 +349,7 @@ export class WorkspaceIndexer {
     }
 
     for (const symbol of changedSymbols) {
-      const symbolId = symbol.dnaId || symbol.id;
+      const symbolId = symbol.id; // id is now the DNA hash
 
       impactScore.set(symbolId, (impactScore.get(symbolId) || 0) + 10);
 
@@ -507,7 +494,7 @@ export class WorkspaceIndexer {
    * Get the workspace file tree for the Explorer
    */
   async getWorkspaceTree(): Promise<any[]> {
-    const allFiles = await this.git.getAllFiles();
+    const allFiles = await this.git.getAllFiles(); // Already excludes ignored files via --exclude-standard
     const gitRoot = this.git.getRoot();
 
     const filteredFiles: string[] = [];
@@ -518,6 +505,7 @@ export class WorkspaceIndexer {
           gitRoot,
           status: 'M',
           skipSizeCheck: true,
+          skipGitIgnore: true, // Skip redundant check since getAllFiles() already excluded ignored files
         })
       ) {
         filteredFiles.push(file);
@@ -786,10 +774,79 @@ export class WorkspaceIndexer {
     };
   }
 
-  async getSymbolContext(symbolId: string): Promise<any> {
-    const [filePath, symbolName] = symbolId.split('::');
+  /**
+   * Quick scan for symbols in a list of files (for initial explorer population)
+   * Returns full symbol objects with id, name, kind, signature, location, and filePath
+   */
+  async quickScanSymbols(files: string[]): Promise<any[]> {
+    const limit = pLimit(50); // Concurrent processing
+    const gitRoot = this.git.getRoot();
+    const results: any[] = [];
 
-    if (!filePath || !symbolName) return null;
+    logInfo(`[WorkspaceIndexer] Quick scanning ${files.length} files...`);
+
+    await Promise.all(
+      files.map(filePath =>
+        limit(async () => {
+          try {
+            const fullPath = path.join(gitRoot, filePath);
+            const content = fs.readFileSync(fullPath, 'utf8');
+            const language = detectLanguage(filePath);
+
+            if (language) {
+              const symbols = await this.parser.extractHybridFacts(content, filePath, language);
+              // Filter to only symbol kinds (functions, classes, etc.)
+              const symbolKinds = new Set([
+                'function',
+                'method',
+                'class',
+                'const',
+                'variable',
+                'interface',
+                'enum',
+                'module',
+                'type',
+                'type_alias',
+              ]);
+              const filteredSymbols = symbols.filter((s: any) => symbolKinds.has(s.kind));
+
+              if (filteredSymbols.length > 0) {
+                // logDebug(`[WorkspaceIndexer] Found ${filteredSymbols.length} symbols in ${filePath}`);
+              }
+
+              // Store full symbol objects with filePath
+              filteredSymbols.forEach((s: any) => {
+                results.push({
+                  id: s.id,
+                  name: s.name,
+                  kind: s.kind,
+                  signature: s.signature,
+                  location: s.location,
+                  filePath: filePath,
+                });
+              });
+            }
+          } catch (e) {
+            // Ignore errors during quick scan
+            logDebug(`[WorkspaceIndexer] Quick scan error for ${filePath}: ${e}`);
+          }
+        })
+      )
+    );
+
+    logInfo(`[WorkspaceIndexer] Quick scan complete. Found ${results.length} symbols total.`);
+    return results;
+  }
+
+  async getSymbolContext(symbolId: string): Promise<any> {
+    // Expect filePath::dnaHash or legacy filePath::symbolName
+    const parts = symbolId.split('::');
+    if (parts.length < 2) return null;
+
+    const filePath = parts[0];
+    const identifier = parts[1]; // Name or Hash
+
+    if (!filePath || !identifier) return null;
 
     const content = await this.snapshotManager.getFileContent(filePath);
     if (!content) return null;
@@ -797,18 +854,25 @@ export class WorkspaceIndexer {
     const language = detectLanguage(filePath);
     let symbolRange = null;
     let symbolContent = '';
+    let symbolName = identifier; // Default to identifier if finding by ID fails
 
     if (language) {
       try {
         const symbols = await this.parser.extractHybridFacts(content, filePath, language);
-        const symbol = symbols.find((s: any) => s.name === symbolName) as any;
-        if (symbol && symbol.range) {
-          symbolRange = symbol.range;
+        // Try matching by ID (hash) first, then name
+        const symbol = symbols.find(
+          (s: any) => s.id === identifier || s.name === identifier
+        ) as any;
 
-          const lines = content.split('\n');
-          symbolContent = lines
-            .slice(symbol.range.start.line - 1, symbol.range.end.line)
-            .join('\n');
+        if (symbol) {
+          symbolName = symbol.name;
+          if (symbol.range) {
+            symbolRange = symbol.range;
+            const lines = content.split('\n');
+            symbolContent = lines
+              .slice(symbol.range.start.line - 1, symbol.range.end.line)
+              .join('\n');
+          }
         }
       } catch (e) {
         //empty
