@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
-import * as vscode from 'vscode';
 import pLimit = require('p-limit');
+import * as vscode from 'vscode';
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { prepare } from '../storage/statement-wrapper';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
@@ -107,6 +107,11 @@ export class CommitIndexer {
       try {
         return await fn();
       } catch (error) {
+        // Don't retry on cancellation - re-throw immediately
+        if (error instanceof vscode.CancellationError) {
+          throw error;
+        }
+
         lastError = error as Error;
 
         if (attempt === maxRetries) {
@@ -149,6 +154,7 @@ export class CommitIndexer {
     }
   ): Promise<CommitFacts | null> {
     if (opts?.token?.isCancellationRequested) {
+      logInfo('[CommitIndexer] Operation cancelled by token');
       throw new vscode.CancellationError();
     }
 
@@ -168,7 +174,8 @@ export class CommitIndexer {
       return facts;
     } catch (error) {
       if (error instanceof vscode.CancellationError) {
-         throw error;
+        logInfo('[CommitIndexer] Operation cancelled');
+        throw error;
       }
       this.markFailed(sha, error);
       logError(`[CommitIndexer] Failed to index commit ${sha}`, error);
@@ -193,11 +200,13 @@ export class CommitIndexer {
     const promises = shas.map(sha =>
       limit(async () => {
         if (opts?.token?.isCancellationRequested) {
-            throw new vscode.CancellationError();
+          logInfo('[CommitIndexer] Operation cancelled');
+          throw new vscode.CancellationError();
         }
         return this.retryWithBackoff(async () => {
           if (opts?.token?.isCancellationRequested) {
-             throw new vscode.CancellationError();
+            logInfo('[CommitIndexer] Operation cancelled');
+            throw new vscode.CancellationError();
           }
           const facts = await this.ensureCommitIndexed(sha, { ...opts, onProgress });
           if (!facts) return Promise.reject(new Error(`Failed to index ${sha}`));
@@ -251,7 +260,8 @@ export class CommitIndexer {
     const promises = files.map(file =>
       limit(async () => {
         if (opts?.token?.isCancellationRequested) {
-            throw new vscode.CancellationError();
+          logInfo('[CommitIndexer] Operation cancelled');
+          throw new vscode.CancellationError();
         }
         opts?.onProgress?.({ type: 'file_start', file: file.path, sha });
         const result = await this.processFile(file, sha, parentSha);
@@ -796,6 +806,9 @@ export class CommitIndexer {
   }
 
   private isIndexed(sha: string): boolean {
+    if (!this.db) {
+      return false;
+    }
     const stmt = this.db.prepare(`
       SELECT status FROM commits_analysis
       WHERE sha = ? AND analysis_version = ? AND status = 'complete'
@@ -805,6 +818,22 @@ export class CommitIndexer {
   }
 
   private loadCommitFacts(sha: string): CommitFacts {
+    if (!this.db) {
+      logError('[CommitIndexer] Database not initialized, returning empty facts');
+      return {
+        sha,
+        symbolsAdded: 0,
+        symbolsModified: 0,
+        symbolsRemoved: 0,
+        edgesAdded: 0,
+        edgesRemoved: 0,
+        risks: [],
+        structuralChangeScore: 0,
+        filesChanged: 0,
+        blastRadius: 0,
+        hotspots: [],
+      };
+    }
     const stmt = this.db.prepare(`
       SELECT * FROM commits_analysis WHERE sha = ?
     `);

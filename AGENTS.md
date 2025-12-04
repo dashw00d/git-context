@@ -72,4 +72,4 @@ Please try to adhere to these architecture standards: /docs/src/architecture-pat
 
 ### Useful Commands
 
-npx ts-node benchmarks/pipeline_diagnostics.ts --commit-count=3 --no-workspace --reset-db 2>&1 | head -150
+./out/cli/index.js compare HEAD~1 HEAD // run pipline branch vs main

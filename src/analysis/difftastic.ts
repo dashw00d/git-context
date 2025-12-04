@@ -2,12 +2,14 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getExtensionConfig } from '../utils/config';
-import { logWarn, logError } from '../utils/logger';
+import { logWarn } from '../utils/logger';
 
 export interface DifftasticResult {
-  highlights: MorphHighlight[];
-  morphs: any[]; // Assuming any[] for now, can refine if schema is known
+  highlights: string[];
+  morphs: MorphHighlight[];
   hasStructuralChanges: boolean;
+  hunks?: DiffHunk[];
+  tags?: Map<number, string[]>;
 }
 
 export interface DiffHunk {
@@ -102,11 +104,13 @@ export class DifftasticIntegration {
         fs.writeFileSync(oldFile, oldContent);
         fs.writeFileSync(newFile, newContent);
 
+        const width = '200';
         const difft = spawn(
           this.difftasticPath,
-          ['--display=json', oldFile, newFile],
+          ['--color=never', '--exit-code', '--width', width, oldFile, newFile],
           {
             stdio: ['pipe', 'pipe', 'pipe'],
+            env: { ...process.env, COLUMNS: width, DIFT_WIDTH: width },
           }
         );
 
@@ -160,32 +164,98 @@ export class DifftasticIntegration {
   }
 
   private parseDifftasticOutput(output: string, hasDifferences: boolean): DifftasticResult {
-    // If there are no differences, return an empty result
+    const highlights: string[] = [];
+    const morphs: MorphHighlight[] = [];
+    const hunks: DiffHunk[] = [];
+    const tags = new Map<number, string[]>();
+
     if (!hasDifferences) {
       return {
         highlights: [],
         morphs: [],
         hasStructuralChanges: false,
+        hunks: [],
+        tags,
       };
     }
 
-    try {
-      const parsedJson = JSON.parse(output);
-      // Assuming parsedJson directly contains highlights, morphs, hasStructuralChanges
-      // Add default empty arrays/false in case properties are missing
-      return {
-        highlights: parsedJson.highlights || [],
-        morphs: parsedJson.morphs || [],
-        hasStructuralChanges: parsedJson.hasStructuralChanges || false,
-      };
-    } catch (error) {
-      logError('[DIFFTASTIC] Error parsing JSON output:', error);
-      return {
-        highlights: [],
-        morphs: [],
-        hasStructuralChanges: false,
-      };
+    const lines = output.split('\n');
+    let currentHunk: Partial<DiffHunk> | null = null;
+    let inHunkContext = false;
+
+    const controlFlowKeywords =
+      /\b(if|while|for|switch|return|throw|catch|try|else|do|break|continue)\b/;
+    const interfaceKeywords =
+      /\b(function|class|interface|type|export|import|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\b/;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (trimmed.startsWith('File ')) {
+        continue;
+      }
+
+      const hunkMatch = trimmed.match(/^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@/);
+      if (hunkMatch) {
+        if (currentHunk && currentHunk.lines) {
+          hunks.push(currentHunk as DiffHunk);
+        }
+
+        const [, oldStart, oldCount, newStart, newCount] = hunkMatch;
+        currentHunk = {
+          oldStart: parseInt(oldStart),
+          oldCount: parseInt(oldCount || '1'),
+          newStart: parseInt(newStart),
+          newCount: parseInt(newCount || '1'),
+          lines: [],
+          linesAdded: 0,
+          linesRemoved: 0,
+        };
+        inHunkContext = true;
+
+        highlights.push(trimmed);
+        continue;
+      }
+
+      if (inHunkContext && currentHunk) {
+        currentHunk.lines!.push(line);
+
+        if (line.startsWith('+') && !line.startsWith('+++')) {
+          currentHunk.linesAdded!++;
+        } else if (line.startsWith('-') && !line.startsWith('---')) {
+          currentHunk.linesRemoved!++;
+        }
+
+        if (controlFlowKeywords.test(line)) {
+          const lineTags = tags.get(i + 1) || [];
+          lineTags.push('control-flow');
+          tags.set(i + 1, lineTags);
+        }
+
+        if (interfaceKeywords.test(line)) {
+          const lineTags = tags.get(i + 1) || [];
+          lineTags.push('interface');
+          tags.set(i + 1, lineTags);
+        }
+      }
+
+      if (trimmed) {
+        highlights.push(trimmed);
+      }
     }
+
+    if (currentHunk && currentHunk.lines) {
+      hunks.push(currentHunk as DiffHunk);
+    }
+
+    return {
+      highlights,
+      morphs,
+      hasStructuralChanges: true,
+      hunks,
+      tags,
+    };
   }
 
   private extractLocationFromLine(_line: string): { file: string; line: number } | undefined {

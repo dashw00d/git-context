@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 
+import * as path from 'path';
 import chalk from 'chalk';
 import { Command } from 'commander';
+import moduleAlias from 'module-alias';
 import { prepare } from '../storage/statement-wrapper';
 import { logError, logInfo } from '../utils/logger';
 import { installHooks } from './hooks';
 import { searchSymbol, showCommit, showLastCommits } from './queries';
-
+moduleAlias.addAlias('vscode', path.join(__dirname, 'vscode-mock'));
 const program = new Command();
-
 program.name('ct').description('Commit Tracker CLI').version('0.1.0');
 
 program
@@ -23,8 +24,9 @@ program
       const { getRefactorPipeline } = await import('../services/pipelineFactory');
       const { GitOperations } = await import('../analysis/git');
       const { BranchManager } = await import('../storage/branchManager');
-      const { getDatabaseManager } = await import('../storage/database');
+      const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
 
+      await ensureDatabaseInitialized();
       const refactorPipeline = await getRefactorPipeline();
       const git = new GitOperations();
       const db = getDatabaseManager().getDatabase();
@@ -58,6 +60,9 @@ program
 
     try {
       const { getRefactorPipeline } = await import('../services/pipelineFactory');
+      const { ensureDatabaseInitialized } = await import('../storage/database');
+
+      await ensureDatabaseInitialized();
       const refactorPipeline = await getRefactorPipeline();
 
       await refactorPipeline.analyzeBundle([], true, new Set(['staged', 'unstaged']));
@@ -77,6 +82,9 @@ program
 
     try {
       const { getRefactorPipeline } = await import('../services/pipelineFactory');
+      const { ensureDatabaseInitialized } = await import('../storage/database');
+
+      await ensureDatabaseInitialized();
       const refactorPipeline = await getRefactorPipeline();
 
       await refactorPipeline.indexCommits([sha]);
@@ -143,7 +151,9 @@ program
       const { DependencyExtractor } = await import('../analysis/dependencies');
       const { HotspotDetectorV2 } = await import('../analysis/hotspotDetector');
       const { MovedBlockDetectorV2 } = await import('../analysis/movedBlockDetector');
-      const { getDatabaseManager } = await import('../storage/database');
+      const { getDatabaseManager, ensureDatabaseInitialized } = await import('../storage/database');
+
+      await ensureDatabaseInitialized();
       const db = getDatabaseManager().getDatabase();
 
       const git = new GitOperations();
@@ -218,6 +228,87 @@ program
       logInfo(chalk.green('Hooks installed successfully!'));
     } catch (error) {
       logError(chalk.red(`Failed to install hooks: ${error}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('compare <base> <target>')
+  .description('Compare two branches or SHAs and generate a report')
+  .option('--json', 'Output JSON report only (no formatted output)')
+  .action(async (base, target, options) => {
+    logInfo(chalk.blue(`Comparing ${base} -> ${target}...`));
+
+    try {
+      const { getRefactorPipeline } = await import('../services/pipelineFactory');
+      const { GitOperations } = await import('../analysis/git');
+      const { ensureDatabaseInitialized } = await import('../storage/database');
+      const { formatAttentionReport } = await import('./reportFormatter');
+      const fs = await import('fs');
+
+      await ensureDatabaseInitialized();
+      const refactorPipeline = await getRefactorPipeline();
+      const git = new GitOperations();
+
+      // Get commits in range base..target
+      const range = `${base}..${target}`;
+      const commits = await git.getCommitsInRange(range);
+      const shas = commits.map(c => c.sha);
+
+      if (shas.length === 0) {
+        logInfo(chalk.yellow(`No commits found in range ${range}`));
+        return;
+      }
+
+      logInfo(chalk.blue(`Found ${shas.length} commits to analyze.`));
+
+      // Run pipeline on these commits
+      // We use analyzeBundle with the SHAs.
+      // This will index them if needed and generate facts.
+      logInfo(chalk.blue('Starting pipeline analysis...'));
+      const state = await refactorPipeline.analyzeBundle(shas, false, undefined, event => {
+        if (event.type === 'start') {
+          logInfo(chalk.gray(`[Step] Starting ${event.step.label}...`));
+        } else if (event.type === 'complete') {
+          logInfo(chalk.gray(`[Step] Completed ${event.step.label} in ${event.duration}ms`));
+        } else if (event.type === 'error') {
+          logError(chalk.red(`[Step] Error in ${event.step.label}: ${event.error}`));
+        }
+      });
+      logInfo(chalk.blue('Pipeline analysis returned.'));
+
+      // Generate JSON report
+      const report = {
+        base,
+        target,
+        commits: shas.length,
+        facts: state.bundleFacts,
+        summary: (state as any).bundleSummary,
+      };
+
+      const reportPath = 'comparison_report.json';
+      fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+
+      if (options.json) {
+        logInfo(chalk.green(`Report written to ${reportPath}`));
+      } else {
+        // Generate markdown report with code snippets and context
+        const { generateMarkdownReport } = await import('./markdownReportGenerator');
+        const markdownReport = generateMarkdownReport(state);
+
+        // Write markdown to file
+        const markdownPath = 'ATTENTION_REPORT.md';
+        fs.writeFileSync(markdownPath, markdownReport);
+
+        // Also show terminal summary
+        const attentionReport = formatAttentionReport(state);
+        process.stdout.write(attentionReport + '\n');
+
+        logInfo(chalk.green(`📄 Markdown report: ${markdownPath}`));
+        logInfo(chalk.dim(`JSON report: ${reportPath}`));
+      }
+    } catch (error: any) {
+      logError(chalk.red(`Comparison failed: ${error.stack || error}`));
       process.exit(1);
     }
   });

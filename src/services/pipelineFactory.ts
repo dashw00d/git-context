@@ -12,7 +12,7 @@ import { SnapshotManager } from '../analysis/snapshotManager';
 import { StructuralDiffManager } from '../analysis/structuralDiffManager';
 import { SymbolExtractor } from '../analysis/symbols';
 import { WorkspaceIndexer } from '../analysis/workspaceIndexer';
-import { getDatabaseManager } from '../storage/database';
+import { ensureDatabaseInitialized, getDatabaseManager } from '../storage/database';
 
 export class PipelineFactory {
   private static instance: PipelineFactory;
@@ -31,6 +31,7 @@ export class PipelineFactory {
 
   async getPipeline(): Promise<RefactorPipeline> {
     if (!this.pipeline) {
+      await ensureDatabaseInitialized();
       const db = getDatabaseManager().getDatabase();
       const git = new GitOperations();
 

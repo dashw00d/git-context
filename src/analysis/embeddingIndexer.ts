@@ -136,8 +136,51 @@ export class EmbeddingIndexer {
       `[EmbeddingIndexer] Indexing ${symbolShards.length} symbol shards to ${collectionName}...`
     );
 
+    // Check which symbols already have embeddings to avoid regenerating
+    const pointIds = symbolShards.map(({ symbol }) =>
+      this.symbolToPointId(symbol.symbol_dna_id, symbol.sha)
+    );
+    const existingPoints = new Set<number>();
+
+    try {
+      logInfo(`[EmbeddingIndexer] Checking for ${pointIds.length} existing embeddings...`);
+      const batchSize = 100;
+      for (let i = 0; i < pointIds.length; i += batchSize) {
+        const batch = pointIds.slice(i, i + batchSize);
+        const response = await client.retrieve(collectionName, {
+          ids: batch,
+          with_payload: false,
+          with_vector: false,
+        });
+        response.forEach((point: any) => existingPoints.add(point.id));
+      }
+      logInfo(
+        `[EmbeddingIndexer] Found ${existingPoints.size} existing embeddings, will generate ${symbolShards.length - existingPoints.size} new ones`
+      );
+    } catch (error) {
+      logDebug(
+        `[EmbeddingIndexer] Could not check existing points (collection may be new): ${error}`
+      );
+    }
+
+    // Filter to only symbols that need indexing
+    const shardsToIndex = symbolShards.filter(({ symbol }) => {
+      const pointId = this.symbolToPointId(symbol.symbol_dna_id, symbol.sha);
+      return !existingPoints.has(pointId);
+    });
+
+    if (shardsToIndex.length === 0) {
+      logInfo('[EmbeddingIndexer] All symbols already indexed, skipping embedding generation');
+      return symbolShards.length;
+    }
+
+    logInfo(
+      `[EmbeddingIndexer] Generating embeddings for ${shardsToIndex.length} symbols (concurrency 30)...`
+    );
+
     let processed = 0;
-    await runWithConcurrency(symbolShards, 10, async ({ shard, symbol }) => {
+    let skipped = 0;
+    await runWithConcurrency(shardsToIndex, 30, async ({ shard, symbol }) => {
       try {
         const embedding = await generateEmbedding(shard.text);
 
@@ -153,17 +196,22 @@ export class EmbeddingIndexer {
         });
 
         processed++;
-        if (processed % 10 === 0) {
-          logDebug(`[EmbeddingIndexer] Processed ${processed}/${symbolShards.length} symbols`);
+        if (processed % 50 === 0) {
+          const pct = Math.round((processed / shardsToIndex.length) * 100);
+          const rate = Math.round((processed / (Date.now() - Date.now())) * 1000);
+          logInfo(`[EmbeddingIndexer] Progress: ${processed}/${shardsToIndex.length} (${pct}%)`);
         }
       } catch (error) {
+        skipped++;
         logDebug(
           `[EmbeddingIndexer] Failed to index symbol ${symbol.name}: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     });
 
-    logInfo(`[EmbeddingIndexer] Symbol indexing complete: ${processed}/${symbolShards.length}`);
+    logInfo(
+      `[EmbeddingIndexer] Symbol indexing complete: ${processed} generated, ${existingPoints.size} cached, ${skipped} skipped`
+    );
     return symbolShards.length;
   }
 

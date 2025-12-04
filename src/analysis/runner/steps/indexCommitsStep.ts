@@ -40,31 +40,31 @@ export function createIndexCommitsStep(
       const facts = await commitIndexer.ensureCommitsIndexed(
         shas,
         concurrency,
-        {}, 
+        { token },
         event => {
           // 1. Check cancellation during progress
-          if (token.isCancellationRequested) {
-              // The indexer might not support aborting mid-flight immediately,
-              // but we can stop sending events.
-              return; 
+          if (token?.isCancellationRequested) {
+            // The indexer might not support aborting mid-flight immediately,
+            // but we can stop sending events.
+            return;
           }
 
           // 2. Throttle Events
           const now = Date.now();
           if (now - lastReportTime > THROTTLE_MS || event.type === 'file_complete') {
-             if (state.onEvent) {
-                state.onEvent({
-                  type: 'progress',
-                  step: { id: 'index_commits', label: 'Index commits' } as any,
-                  state,
-                  data: {
-                    file: event.file,
-                    status: event.type === 'file_start' ? 'analyzing' : 'ready',
-                  },
-                  timestamp: new Date().toISOString(),
-                });
-             }
-             lastReportTime = now;
+            if (state.onEvent) {
+              state.onEvent({
+                type: 'progress',
+                step: { id: 'index_commits', label: 'Index commits' } as any,
+                state,
+                data: {
+                  file: event.file,
+                  status: event.type === 'file_start' ? 'analyzing' : 'ready',
+                },
+                timestamp: new Date().toISOString(),
+              });
+            }
+            lastReportTime = now;
           }
         }
       );

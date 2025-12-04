@@ -177,11 +177,16 @@ export class HotspotDetector {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
+    // Batch fetch all symbol histories and total commit count once
+    const symbolHistories = await this.batchGetSymbolHistories(dnaIds);
+    const totalCommits = await this.getTotalCommitCount();
+
     const symbolMetrics = new Map<string, { hotspotScore: number; riskLevel: string }>();
     for (const symbol of symbols) {
       if (!symbol.id) continue;
       try {
-        const metrics = await this.calculateSymbolMetrics(symbol.id, sha);
+        const history = symbolHistories.get(symbol.id) || [];
+        const metrics = this.calculateSymbolMetricsFromHistory(history, totalCommits);
         symbolMetrics.set(symbol.id, metrics);
       } catch (error: any) {
         logDebug(
@@ -628,6 +633,81 @@ export class HotspotDetector {
     `);
     const rows = stmt.all(symbolId, symbolId);
     return rows.map((row: any) => new Date(row.last_changed_date || row.snapshot_date));
+  }
+
+  /**
+   * Batch fetch symbol histories for multiple symbols
+   */
+  private async batchGetSymbolHistories(symbolIds: string[]): Promise<Map<string, Date[]>> {
+    if (symbolIds.length === 0) return new Map();
+
+    const result = new Map<string, Date[]>();
+
+    // Initialize empty arrays for all symbols
+    for (const id of symbolIds) {
+      result.set(id, []);
+    }
+
+    // Batch fetch in chunks to avoid parameter limits
+    const chunkSize = 100;
+    for (let i = 0; i < symbolIds.length; i += chunkSize) {
+      const chunk = symbolIds.slice(i, i + chunkSize);
+      const placeholders = chunk.map(() => '?').join(',');
+
+      const stmt = this.dbManager.getDatabase().prepare(`
+        SELECT symbol_id as id, last_changed_date as date FROM symbol_hotspots
+        WHERE symbol_id IN (${placeholders})
+        UNION ALL
+        SELECT entity_id as id, snapshot_date as date FROM hotspot_snapshots
+        WHERE entity_type = 'symbol' AND entity_id IN (${placeholders})
+        ORDER BY date ASC
+      `);
+
+      const rows = stmt.all(...chunk, ...chunk) as any[];
+      for (const row of rows) {
+        const dates = result.get(row.id) || [];
+        dates.push(new Date(row.date));
+        result.set(row.id, dates);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Calculate symbol metrics from pre-fetched history
+   */
+  private calculateSymbolMetricsFromHistory(
+    history: Date[],
+    totalCommits: number
+  ): {
+    hotspotScore: number;
+    riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  } {
+    const symbolCommits = history.length;
+    const commitFrequency =
+      totalCommits > 0 ? Math.min(1, symbolCommits / Math.sqrt(totalCommits)) : 0;
+
+    const lastChange = history.length > 0 ? new Date(history[history.length - 1]) : new Date();
+    const daysSinceLastChange = (Date.now() - lastChange.getTime()) / (1000 * 60 * 60 * 24);
+    const recency = Math.exp(-daysSinceLastChange / 30);
+
+    const authorDiversity = 0.5; // Placeholder
+    const changeIntensity = Math.min(1, symbolCommits / 20);
+    const temporalClustering = this.calculateTemporalClustering(history);
+
+    const metrics: HotspotMetrics = {
+      commitFrequency,
+      recency,
+      authorDiversity,
+      changeIntensity,
+      temporalClustering,
+    };
+
+    const hotspotScore = this.calculateHotspotScore(metrics);
+    const riskLevel = this.classifyRiskLevel(hotspotScore);
+
+    return { hotspotScore, riskLevel };
   }
 
   private async getTotalCommitCount(): Promise<number> {

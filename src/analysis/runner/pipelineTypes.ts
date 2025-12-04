@@ -22,6 +22,7 @@ export interface PipelineState {
   };
   mode?: 'full' | 'live' | 'cheap_live';
   bundleFacts?: any;
+  bundleSummary?: any;
   history?: any;
   llmOutputs?: any;
 

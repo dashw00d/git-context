@@ -1,10 +1,39 @@
-import { logDebug } from './logger';
+import { logError, logInfo } from './logger';
 
 export class TimeoutError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'TimeoutError';
   }
+}
+
+interface AsyncStat {
+  totalTime: number;
+  count: number;
+  failures: number;
+  timeouts: number;
+}
+
+const stats: Record<string, AsyncStat> = {};
+let statsInterval: NodeJS.Timeout | null = null;
+
+function startStatsLogger() {
+  if (statsInterval) return;
+  statsInterval = setInterval(() => {
+    const entries = Object.entries(stats);
+    if (entries.length === 0) return;
+
+    const summary = entries
+      .map(([type, stat]) => {
+        const avg = Math.round(stat.totalTime / stat.count);
+        return `${type}: ${stat.count} runs, avg ${avg}ms, ${stat.failures} err, ${stat.timeouts} timeout`;
+      })
+      .join('\n');
+
+    logInfo(`\n📊 [AsyncStats] Summary:\n${summary}\n`);
+  }, 30000); // Log every 30s
+  // Unref the interval so it doesn't keep the Node process alive (important for CLI commands)
+  statsInterval.unref();
 }
 
 /**
@@ -20,25 +49,45 @@ export async function withTimeout<T>(
   timeoutMs: number,
   description: string
 ): Promise<T> {
-  logDebug(`⏰ [withTimeout] Starting timeout for: ${description}`);
+  startStatsLogger();
+
+  if (!stats[description]) {
+    stats[description] = { totalTime: 0, count: 0, failures: 0, timeouts: 0 };
+  }
+
+  const startTime = Date.now();
   let timeoutHandle: NodeJS.Timeout;
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutHandle = setTimeout(() => {
-      logDebug(`⏰ [withTimeout] TIMEOUT REACHED: ${description}`);
+      stats[description].timeouts++;
       reject(new TimeoutError(`${description} timed out (${timeoutMs}ms)`));
     }, timeoutMs);
   });
 
   try {
-    logDebug(`⏰ [withTimeout] Racing promise vs timeout`);
     const result = await Promise.race([promise, timeoutPromise]);
-    logDebug(`⏰ [withTimeout] Promise won the race`);
     clearTimeout(timeoutHandle!);
+
+    const duration = Date.now() - startTime;
+    stats[description].totalTime += duration;
+    stats[description].count++;
+
     return result;
   } catch (error) {
-    logDebug(`⏰ [withTimeout] Promise rejected: ${(error as Error).message}`);
     clearTimeout(timeoutHandle!);
+
+    const duration = Date.now() - startTime;
+    stats[description].totalTime += duration;
+    stats[description].count++;
+
+    if (error instanceof TimeoutError) {
+      // Already handled in timeout callback, but we need to rethrow
+    } else {
+      stats[description].failures++;
+      logError(`[withTimeout] ${description} failed: ${(error as Error).message}`);
+    }
+
     // eslint-disable-next-line no-restricted-syntax
     throw error;
   }

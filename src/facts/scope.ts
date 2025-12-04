@@ -228,11 +228,24 @@ export async function computeScope(
 
   const filteredPaths = new Set<string>();
 
-  for (const p of allPaths) {
-    if (await filterPath(p, { git })) {
-      filteredPaths.add(p);
-    }
-  }
+  // Batch git check-ignore to avoid 196 individual calls (each taking ~113ms)
+  const pathsArray = Array.from(allPaths);
+  logDebug(`[Scope] Batch checking ${pathsArray.length} paths for git-ignore...`);
+  const ignoreMap = await git.areIgnored(pathsArray);
+  logDebug(`[Scope] Found ${Array.from(ignoreMap.values()).filter(v => v).length} ignored paths`);
+
+  // Now filter paths with cached ignore results
+  const limit = require('p-limit')(16);
+  const filterPromises = pathsArray.map(p =>
+    limit(async () => {
+      const shouldInclude = await filterPath(p, { git, skipGitIgnore: true }); // Skip since we already checked
+      // Apply the batch ignore check result
+      if (shouldInclude && !ignoreMap.get(p)) {
+        filteredPaths.add(p);
+      }
+    })
+  );
+  await Promise.all(filterPromises);
 
   scope.allPaths = filteredPaths;
 
