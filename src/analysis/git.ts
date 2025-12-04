@@ -13,6 +13,7 @@ export class GitOperations {
   private headShaCache?: { value: string; expires: number };
   private statusCache?: { output: string; expires: number };
   private untrackedCache?: { files: string[]; expires: number };
+  private commitInfoCache = new Map<string, CommitInfo>();
 
   private static gitInstances: Map<string, SimpleGit> = new Map();
 
@@ -42,11 +43,17 @@ export class GitOperations {
    * Get basic commit information
    */
   async getCommitInfo(sha: string): Promise<CommitInfo> {
+    // Check cache first
+    if (this.commitInfoCache.has(sha)) {
+      return this.commitInfoCache.get(sha)!;
+    }
+
     try {
+      // Use git log instead of show - it's faster for getting commit metadata
       const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
       const output = await withTimeout(
-        this.git.raw(['show', '--no-patch', '--date=iso', format, sha]),
-        30000,
+        this.git.raw(['log', '-1', '--date=iso', format, sha]),
+        10000, // Reduced timeout from 30s to 10s
         'Git show commit info'
       );
 
@@ -56,13 +63,17 @@ export class GitOperations {
         return { sha, author: '', date: '', message: '', parent: undefined };
       }
 
-      return {
+      const info = {
         sha: lines[0],
         author: lines[1] || '',
         date: lines[2] || '',
         message: lines[3] || '',
         parent: lines[4] || undefined,
       };
+
+      // Cache the result
+      this.commitInfoCache.set(sha, info);
+      return info;
     } catch (error: any) {
       logError(`Failed to get commit info for ${sha}: ${error.message}`);
       return { sha, author: '', date: '', message: '', parent: undefined };
@@ -81,27 +92,46 @@ export class GitOperations {
         'Git log recent commits'
       );
 
-      const commits: CommitInfo[] = [];
-      const lines = output.split('\n');
-      const blockSize = 5;
-
-      for (let i = 0; i < lines.length; i += blockSize) {
-        if (!lines[i] || !lines[i].trim()) continue;
-
-        commits.push({
-          sha: lines[i],
-          author: lines[i + 1] || '',
-          date: lines[i + 2] || '',
-          message: lines[i + 3] || '',
-          parent: lines[i + 4] || undefined,
-        });
-      }
-
-      return commits;
+      return this.parseCommitLog(output);
     } catch (error: any) {
       logError(`Failed to get recent commits: ${error.message}`);
       return [];
     }
+  }
+
+  async getCommitsInRange(range: string): Promise<CommitInfo[]> {
+    try {
+      const format = '--pretty=format:%H%n%an%n%ad%n%s%n%p';
+      const output = await withTimeout(
+        this.git.raw(['log', '--no-merges', range, '--date=iso', format]),
+        30000,
+        'Git log range commits'
+      );
+
+      return this.parseCommitLog(output);
+    } catch (error: any) {
+      logError(`Failed to get commits in range ${range}: ${error.message}`);
+      return [];
+    }
+  }
+
+  private parseCommitLog(output: string): CommitInfo[] {
+    const commits: CommitInfo[] = [];
+    const lines = output.split('\n');
+    const blockSize = 5;
+
+    for (let i = 0; i < lines.length; i += blockSize) {
+      if (!lines[i] || !lines[i].trim()) continue;
+
+      commits.push({
+        sha: lines[i],
+        author: lines[i + 1] || '',
+        date: lines[i + 2] || '',
+        message: lines[i + 3] || '',
+        parent: lines[i + 4] || undefined,
+      });
+    }
+    return commits;
   }
 
   private async getSharedStatus(ttlMs = 2000): Promise<string> {
@@ -350,6 +380,32 @@ export class GitOperations {
   }
 
   /**
+   * Check if multiple files are ignored by git in a single call
+   * Much more efficient than calling isIgnored for each file individually
+   */
+  async areIgnored(filePaths: string[]): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    if (filePaths.length === 0) return result;
+
+    // Initialize all as not ignored
+    for (const path of filePaths) {
+      result.set(path, false);
+    }
+
+    try {
+      const ignored = await withTimeout(this.git.checkIgnore(filePaths), 5000, 'Git check ignore');
+      // Mark the ignored files
+      for (const path of ignored) {
+        result.set(path, true);
+      }
+    } catch (error) {
+      // If check-ignore fails, assume none are ignored
+    }
+
+    return result;
+  }
+
+  /**
    * Check if a file is ignored by git
    */
   async isIgnored(filePath: string): Promise<boolean> {
@@ -383,6 +439,38 @@ export class GitOperations {
       logError(`Failed to get HEAD SHA: ${error.message}`);
       return '';
     }
+  }
+
+  /**
+   * Get blob SHA for multiple file paths in a single git ls-tree call
+   * Much more efficient than calling getBlobSha for each file individually
+   */
+  async getBlobShas(sha: string, filePaths: string[]): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    if (filePaths.length === 0) return result;
+
+    try {
+      const output = await withTimeout(
+        this.git.raw(['ls-tree', '-r', sha, '--', ...filePaths]),
+        30000,
+        'Git ls-tree'
+      );
+      const lines = output
+        .trim()
+        .split('\n')
+        .filter(l => l.trim());
+
+      for (const line of lines) {
+        const parsed = this.parseLsTreeLine(line);
+        if (parsed) {
+          result.set(parsed.path, parsed.sha);
+        }
+      }
+    } catch (error: any) {
+      logError(`Failed to get blob SHAs at ${sha}: ${error.message}`);
+    }
+
+    return result;
   }
 
   async getBlobSha(sha: string, filePath: string): Promise<string> {

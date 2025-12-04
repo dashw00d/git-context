@@ -38,28 +38,51 @@ async function getSymbolsForVersion(
     return { removed, added };
   }
 
-  // Batch fetch blob SHAs
+  // Batch fetch blob SHAs to avoid thousands of git ls-tree calls
   const pathMap = new Map<string, { blobSha: string; rows: any[] }>();
 
-  // Pre-calculate blob SHAs needed
-  for (const row of symbolRows) {
-    try {
-      let blobSha: string;
-      if (row.change_type === 'removed') {
-        const commitInfo = await git.getCommitInfo(sha);
-        if (!commitInfo.parent) continue;
-        blobSha = await git.getBlobSha(commitInfo.parent, row.path);
-      } else {
-        blobSha = await git.getBlobSha(sha, row.path);
-      }
+  // Group rows by commit (for removed) or current commit (for added)
+  const removedRows = symbolRows.filter(r => r.change_type === 'removed');
+  const addedRows = symbolRows.filter(r => r.change_type === 'added');
 
-      const key = `${blobSha}:${row.path}`;
-      if (!pathMap.has(key)) {
-        pathMap.set(key, { blobSha, rows: [] });
+  // Get parent commit for removed symbols
+  let parentSha: string | undefined;
+  if (removedRows.length > 0) {
+    const commitInfo = await git.getCommitInfo(sha);
+    parentSha = commitInfo.parent;
+  }
+
+  // Batch fetch blob SHAs for removed symbols (at parent commit)
+  if (parentSha && removedRows.length > 0) {
+    const paths = removedRows.map(r => r.path);
+    const blobShas = await git.getBlobShas(parentSha, paths);
+
+    for (const row of removedRows) {
+      const blobSha = blobShas.get(row.path);
+      if (blobSha) {
+        const key = `${blobSha}:${row.path}`;
+        if (!pathMap.has(key)) {
+          pathMap.set(key, { blobSha, rows: [] });
+        }
+        pathMap.get(key)!.rows.push(row);
       }
-      pathMap.get(key)!.rows.push(row);
-    } catch (error) {
-      continue;
+    }
+  }
+
+  // Batch fetch blob SHAs for added symbols (at current commit)
+  if (addedRows.length > 0) {
+    const paths = addedRows.map(r => r.path);
+    const blobShas = await git.getBlobShas(sha, paths);
+
+    for (const row of addedRows) {
+      const blobSha = blobShas.get(row.path);
+      if (blobSha) {
+        const key = `${blobSha}:${row.path}`;
+        if (!pathMap.has(key)) {
+          pathMap.set(key, { blobSha, rows: [] });
+        }
+        pathMap.get(key)!.rows.push(row);
+      }
     }
   }
 

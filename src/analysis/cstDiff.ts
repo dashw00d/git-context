@@ -161,8 +161,8 @@ export class CstDiffManager {
 
     const factLine = newFact.location.start.line;
     const isHighlighted = difftasticResult.highlights.some(h => {
-      // Check if the highlight has a location and if its line matches factLine
-      return h.location?.line === factLine;
+      const match = h.match(/line (\d+)/i);
+      return match && parseInt(match[1]) === factLine;
     });
 
     if (isHighlighted) return true;

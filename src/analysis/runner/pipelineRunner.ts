@@ -2,8 +2,8 @@
 import * as vscode from 'vscode';
 import { withTimeout } from '../../utils/async';
 import { logDebug, logInfo, logError } from '../../utils/logger';
-import { PipelineEventHandler, PipelineState, PipelineStep } from './pipelineTypes';
 import { OPTIONAL_STEPS } from './pipelineConfigs';
+import { PipelineEventHandler, PipelineState, PipelineStep } from './pipelineTypes';
 
 /**
  * Build dependency graph from pipeline steps
@@ -101,16 +101,16 @@ export async function runPipeline(
   for (const level of levels) {
     // 1. Fail Fast: Check cancellation before starting a level
     if (token?.isCancellationRequested) {
-        logInfo('[Pipeline] Cancellation requested. Aborting pipeline.');
-        state.status = 'aborted';
-        state.abortReason = 'Cancellation requested';
-        onEvent?.({ type: 'aborted', state, timestamp: new Date().toISOString() });
-        throw new vscode.CancellationError();
+      logInfo('[Pipeline] Cancellation requested. Aborting pipeline.');
+      state.status = 'aborted';
+      state.abortReason = 'Cancellation requested';
+      onEvent?.({ type: 'aborted', state, timestamp: new Date().toISOString() });
+      throw new vscode.CancellationError();
     }
 
     logInfo(`[Pipeline] Processing level: ${level.join(', ')}`);
 
-    const stepPromises = level.map(async (stepId) => {
+    const stepPromises = level.map(async stepId => {
       const step = steps.find(s => s.id === stepId)!;
       const isOptional = OPTIONAL_STEPS.has(stepId);
 
@@ -121,20 +121,16 @@ export async function runPipeline(
       try {
         // 2. Fail Fast: Check cancellation before specific step
         if (token?.isCancellationRequested) {
-            throw new vscode.CancellationError();
+          throw new vscode.CancellationError();
         }
 
         onEvent?.({ type: 'start', step, state, timestamp: new Date().toISOString() });
-        
+
         // 3. Execution: Pass token to step
         // Wrap in Promise.resolve to handle both async and sync returns
         const runPromise = Promise.resolve(step.run(state, token!));
-        
-        await withTimeout(
-            runPromise, 
-            300000, 
-            `Pipeline step '${step.id}'`
-        );
+
+        await withTimeout(runPromise, 300000, `Pipeline step '${step.id}'`);
 
         // Success handling
         const endTime = Date.now();
@@ -149,20 +145,19 @@ export async function runPipeline(
         let cacheHits: number | undefined;
         let cacheMisses: number | undefined;
         if (step.id === 'bundle_facts' && state.commitFacts) {
-            cacheHits = state.commitFacts.length;
-            cacheMisses = 0;
+          cacheHits = state.commitFacts.length;
+          cacheMisses = 0;
         }
 
         onEvent?.({
-            type: 'complete',
-            step,
-            state,
-            duration,
-            cacheHits,
-            cacheMisses,
-            timestamp: new Date().toISOString()
+          type: 'complete',
+          step,
+          state,
+          duration,
+          cacheHits,
+          cacheMisses,
+          timestamp: new Date().toISOString(),
         });
-
       } catch (error) {
         const endTime = Date.now();
         const duration = endTime - startTime;
@@ -173,33 +168,33 @@ export async function runPipeline(
 
         // Handle Cancellation explicitly
         if (error instanceof vscode.CancellationError) {
-            throw error; // Re-throw to stop the entire pipeline
+          throw error; // Re-throw to stop the entire pipeline
         }
 
         // Handle Standard Errors
         const errorMsg = error instanceof Error ? error.message : String(error);
         state.errors.push({ stepId: step.id, error });
-        
+
         logError(`[Pipeline] Step ${step.id} failed: ${errorMsg}`);
 
         onEvent?.({
-            type: 'error',
-            step,
-            error,
-            state,
-            stepError: { message: errorMsg, stack: error instanceof Error ? error.stack : undefined },
-            timestamp: new Date().toISOString()
+          type: 'error',
+          step,
+          error,
+          state,
+          stepError: { message: errorMsg, stack: error instanceof Error ? error.stack : undefined },
+          timestamp: new Date().toISOString(),
         });
 
         // 4. Circuit Breaker / Wrapper Pattern
         if (isOptional) {
-            // OPTIONAL: Swallow error, mark partial, continue pipeline
-            state.partialReasons!.push(`${step.label} failed: ${errorMsg}`);
-            logInfo(`[Pipeline] Optional step ${step.id} failed. Continuing.`);
+          // OPTIONAL: Swallow error, mark partial, continue pipeline
+          state.partialReasons!.push(`${step.label} failed: ${errorMsg}`);
+          logInfo(`[Pipeline] Optional step ${step.id} failed. Continuing.`);
         } else {
-            // CRITICAL: Re-throw to trigger Promise.all failure
-            state.partialReasons!.push(`CRITICAL: ${step.label} failed: ${errorMsg}`);
-            throw error;
+          // CRITICAL: Re-throw to trigger Promise.all failure
+          state.partialReasons!.push(`CRITICAL: ${step.label} failed: ${errorMsg}`);
+          throw error;
         }
       }
     });
@@ -208,19 +203,19 @@ export async function runPipeline(
     // Promise.all will reject immediately if any CRITICAL step fails.
     // It will wait for optional steps even if they fail (caught above).
     try {
-        await Promise.all(stepPromises);
+      await Promise.all(stepPromises);
     } catch (error) {
-         if (error instanceof vscode.CancellationError) {
-             state.status = 'aborted';
-             state.abortReason = 'Cancellation requested';
-             onEvent?.({ type: 'aborted', state, timestamp: new Date().toISOString() });
-             throw error;
-         }
-         // Critical error
-         state.status = 'aborted';
-         state.abortReason = 'Critical step failed';
-         onEvent?.({ type: 'aborted', state, timestamp: new Date().toISOString() });
-         throw error;
+      if (error instanceof vscode.CancellationError) {
+        state.status = 'aborted';
+        state.abortReason = 'Cancellation requested';
+        onEvent?.({ type: 'aborted', state, timestamp: new Date().toISOString() });
+        throw error;
+      }
+      // Critical error
+      state.status = 'aborted';
+      state.abortReason = 'Critical step failed';
+      onEvent?.({ type: 'aborted', state, timestamp: new Date().toISOString() });
+      throw error;
     }
   }
 
