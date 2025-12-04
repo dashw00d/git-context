@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { ExplorerNode, NodeMetrics } from '../../../../types/cockpit';
+import { useFileAnalysisData } from '../../hooks/useFileAnalysisData';
 
 // Browser-compatible path utilities
 function dirname(filePath: string): string {
@@ -124,6 +125,9 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
     [filePath, explorerData, bundleFacts]
   );
 
+  // Get analysis data for findings badges
+  const analysisData = useFileAnalysisData(filePath || '', bundleFacts);
+
   return (
     <div style={{ position: 'relative' }}>
       <div style={HeaderContainer}>
@@ -194,8 +198,95 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
           )}
         </div>
 
-        {/* Right: Bus Factor & Stats */}
+        {/* Right: Bus Factor & Stats & Findings Badges */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px' }}>
+          {/* Findings Badges */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {analysisData.findings.missing > 0 && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-inputValidation-warningBackground)',
+                  color: 'var(--vscode-inputValidation-warningForeground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title={`${analysisData.findings.missing} missing symbols`}
+              >
+                ⚠️ {analysisData.findings.missing} missing
+              </span>
+            )}
+            {analysisData.findings.zombies > 0 && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-inputValidation-warningBackground)',
+                  color: 'var(--vscode-inputValidation-warningForeground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title={`${analysisData.findings.zombies} zombie symbols`}
+              >
+                👻 {analysisData.findings.zombies} zombies
+              </span>
+            )}
+            {analysisData.findings.dead > 0 && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-inputValidation-errorBackground)',
+                  color: 'var(--vscode-inputValidation-errorForeground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title={`${analysisData.findings.dead} dead symbols`}
+              >
+                💀 {analysisData.findings.dead} dead
+              </span>
+            )}
+            {analysisData.findings.legacyUsed > 0 && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-inputValidation-warningBackground)',
+                  color: 'var(--vscode-inputValidation-warningForeground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title={`${analysisData.findings.legacyUsed} legacy symbols`}
+              >
+                ⚠️ {analysisData.findings.legacyUsed} legacy
+              </span>
+            )}
+            {analysisData.findings.unresolved > 0 && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-inputValidation-warningBackground)',
+                  color: 'var(--vscode-inputValidation-warningForeground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title={`${analysisData.findings.unresolved} unresolved callers`}
+              >
+                ❓ {analysisData.findings.unresolved} unresolved
+              </span>
+            )}
+            {analysisData.hotspots.length > 0 && (
+              <span
+                style={{
+                  fontSize: '10px',
+                  backgroundColor: 'var(--vscode-inputValidation-warningBackground)',
+                  color: 'var(--vscode-inputValidation-warningForeground)',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                }}
+                title={`Hotspot score: ${analysisData.hotspots[0].score.toFixed(1)}`}
+              >
+                🔥 Hotspot ({analysisData.hotspots[0].score.toFixed(0)})
+              </span>
+            )}
+          </div>
           {metrics && (
             <>
               <div title="Bus Factor (Top Authors)" style={{ display: 'flex', gap: '4px' }}>

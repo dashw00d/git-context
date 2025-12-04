@@ -1,30 +1,10 @@
-export type NamingConvention =
-  | 'camelCase'
-  | 'PascalCase'
-  | 'snake_case'
-  | 'SCREAMING_SNAKE'
-  | 'kebab-case'
-  | 'hungarian'
-  | 'mixed'
-  | 'unknown';
+import {
+  ConventionDriftResult,
+  ConventionProfile,
+  NamingConvention,
+} from '../types/naming';
 
-export interface ConventionProfile {
-  convention: NamingConvention;
-  confidence: number;
-  parts: string[];
-}
-
-export interface ConventionDriftResult {
-  dominantConvention: NamingConvention;
-  conventionCounts: Record<NamingConvention, number>;
-  driftSymbols: Array<{
-    name: string;
-    convention: NamingConvention;
-    path: string;
-    suggestedName: string;
-  }>;
-  driftPercent: number;
-}
+export { ConventionDriftResult, ConventionProfile, NamingConvention };
 
 export function detectNamingConvention(name: string): ConventionProfile {
   if (!name || name.length === 0) {

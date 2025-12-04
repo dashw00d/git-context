@@ -137,6 +137,9 @@ export class ExplorerService {
     const fileSymbols = new Map<string, any[]>();
     const workingSymbols = (bundleFacts?.evidence as any)?.['working.symbols'] || [];
 
+    // Normalize path helper
+    const normalize = (p: string) => p.replace(/\\/g, '/').replace(/^\.\//, '');
+
     for (const symbol of workingSymbols) {
       // Handle both old string format and new object format
       let filePath: string;
@@ -161,18 +164,22 @@ export class ExplorerService {
 
       if (!filePath || !symbolId || !symbolName) continue;
 
-      if (!fileSymbols.has(filePath)) {
-        fileSymbols.set(filePath, []);
+      const normalizedPath = normalize(filePath);
+      if (!fileSymbols.has(normalizedPath)) {
+        fileSymbols.set(normalizedPath, []);
       }
-      fileSymbols.get(filePath)?.push({ id: symbolId, name: symbolName });
+      fileSymbols.get(normalizedPath)?.push({ id: symbolId, name: symbolName });
     }
+
+    logInfo(`[ExplorerService] Hydrating symbols for ${fileSymbols.size} files`);
 
     const visit = (node: ExplorerNode) => {
       if (node.type === 'file') {
-        const symbols = fileSymbols.get(node.id);
+        const normalizedId = normalize(node.id);
+        const symbols = fileSymbols.get(normalizedId);
         if (symbols && symbols.length > 0) {
           node.children = symbols.map(s => ({
-            id: s.id,
+            id: `${node.id}::${s.id}`,
             name: s.name,
             type: 'symbol',
             status: 'ready',

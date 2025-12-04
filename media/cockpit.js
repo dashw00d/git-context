@@ -521,7 +521,7 @@
             }
             return element;
           };
-          function createElement29(type, config, children) {
+          function createElement31(type, config, children) {
             var propName;
             var props = {};
             var key = null;
@@ -1095,7 +1095,7 @@
             }
             return dispatcher.useContext(Context);
           }
-          function useState9(initialState) {
+          function useState10(initialState) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useState(initialState);
           }
@@ -1107,7 +1107,7 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useRef(initialValue);
           }
-          function useEffect6(create, deps) {
+          function useEffect7(create, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useEffect(create, deps);
           }
@@ -1119,11 +1119,11 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useLayoutEffect(create, deps);
           }
-          function useCallback(callback, deps) {
+          function useCallback2(callback, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useCallback(callback, deps);
           }
-          function useMemo4(create, deps) {
+          function useMemo9(create, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useMemo(create, deps);
           }
@@ -1620,7 +1620,7 @@
                 error("React.createElement: type is invalid -- expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s", typeString, info);
               }
             }
-            var element = createElement29.apply(this, arguments);
+            var element = createElement31.apply(this, arguments);
             if (element == null) {
               return element;
             }
@@ -1886,19 +1886,19 @@
           exports.memo = memo;
           exports.startTransition = startTransition;
           exports.unstable_act = act;
-          exports.useCallback = useCallback;
+          exports.useCallback = useCallback2;
           exports.useContext = useContext;
           exports.useDebugValue = useDebugValue;
           exports.useDeferredValue = useDeferredValue;
-          exports.useEffect = useEffect6;
+          exports.useEffect = useEffect7;
           exports.useId = useId;
           exports.useImperativeHandle = useImperativeHandle;
           exports.useInsertionEffect = useInsertionEffect;
           exports.useLayoutEffect = useLayoutEffect;
-          exports.useMemo = useMemo4;
+          exports.useMemo = useMemo9;
           exports.useReducer = useReducer;
           exports.useRef = useRef2;
-          exports.useState = useState9;
+          exports.useState = useState10;
           exports.useSyncExternalStore = useSyncExternalStore;
           exports.useTransition = useTransition;
           exports.version = ReactVersion;
@@ -2394,9 +2394,9 @@
           if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart === "function") {
             __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
           }
-          var React29 = require_react();
+          var React32 = require_react();
           var Scheduler = require_scheduler();
-          var ReactSharedInternals = React29.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+          var ReactSharedInternals = React32.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
           var suppressWarning = false;
           function setSuppressWarning(newSuppressWarning) {
             {
@@ -2445,7 +2445,7 @@
           var HostPortal = 4;
           var HostComponent = 5;
           var HostText = 6;
-          var Fragment7 = 7;
+          var Fragment8 = 7;
           var Mode = 8;
           var ContextConsumer = 9;
           var ContextProvider = 10;
@@ -3602,7 +3602,7 @@
                 return "DehydratedFragment";
               case ForwardRef:
                 return getWrappedName$1(type, type.render, "ForwardRef");
-              case Fragment7:
+              case Fragment8:
                 return "Fragment";
               case HostComponent:
                 return type;
@@ -4003,7 +4003,7 @@
             {
               if (props.value == null) {
                 if (typeof props.children === "object" && props.children !== null) {
-                  React29.Children.forEach(props.children, function(child) {
+                  React32.Children.forEach(props.children, function(child) {
                     if (child == null) {
                       return;
                     }
@@ -9427,7 +9427,7 @@
               }
             }
           }
-          function createElement29(type, props, rootContainerElement, parentNamespace) {
+          function createElement31(type, props, rootContainerElement, parentNamespace) {
             var isCustomComponentTag;
             var ownerDocument = getOwnerDocumentFromRootContainer(rootContainerElement);
             var domElement;
@@ -10297,7 +10297,7 @@
               }
               parentNamespace = hostContextDev.namespace;
             }
-            var domElement = createElement29(type, props, rootContainerInstance, parentNamespace);
+            var domElement = createElement31(type, props, rootContainerInstance, parentNamespace);
             precacheFiberNode(internalInstanceHandle, domElement);
             updateFiberProps(domElement, props);
             return domElement;
@@ -12031,7 +12031,7 @@
               }
             }
             function updateFragment2(returnFiber, current2, fragment, lanes, key) {
-              if (current2 === null || current2.tag !== Fragment7) {
+              if (current2 === null || current2.tag !== Fragment8) {
                 var created = createFiberFromFragment(fragment, returnFiber.mode, lanes, key);
                 created.return = returnFiber;
                 return created;
@@ -12434,7 +12434,7 @@
                 if (child.key === key) {
                   var elementType = element.type;
                   if (elementType === REACT_FRAGMENT_TYPE) {
-                    if (child.tag === Fragment7) {
+                    if (child.tag === Fragment8) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var existing = useFiber(child, element.props.children);
                       existing.return = returnFiber;
@@ -17910,7 +17910,7 @@
                 var _resolvedProps2 = workInProgress2.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current2, workInProgress2, type, _resolvedProps2, renderLanes2);
               }
-              case Fragment7:
+              case Fragment8:
                 return updateFragment(current2, workInProgress2, renderLanes2);
               case Mode:
                 return updateMode(current2, workInProgress2, renderLanes2);
@@ -18182,7 +18182,7 @@
               case SimpleMemoComponent:
               case FunctionComponent:
               case ForwardRef:
-              case Fragment7:
+              case Fragment8:
               case Mode:
               case Profiler:
               case ContextConsumer:
@@ -22443,7 +22443,7 @@
             return fiber;
           }
           function createFiberFromFragment(elements, mode, lanes, key) {
-            var fiber = createFiber(Fragment7, elements, key, mode);
+            var fiber = createFiber(Fragment8, elements, key, mode);
             fiber.lanes = lanes;
             return fiber;
           }
@@ -23593,7 +23593,7 @@
   });
 
   // src/webview/cockpit/index.tsx
-  var React28 = __toESM(require_react());
+  var React31 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
   // node_modules/zod/v3/external.js
@@ -27842,7 +27842,13 @@
     commits: external_exports.array(CommitDTOSchema).optional(),
     hasMoreCommits: external_exports.boolean().optional(),
     llmOutputs: external_exports.any().optional(),
-    retrievedHistory: external_exports.any().optional()
+    retrievedHistory: external_exports.any().optional(),
+    headInfo: external_exports.object({
+      sha: external_exports.string(),
+      date: external_exports.string(),
+      message: external_exports.string(),
+      author: external_exports.string()
+    }).optional()
   });
   var CockpitClientMessageSchema = external_exports.discriminatedUnion("type", [
     external_exports.object({ type: external_exports.literal("ready") }),
@@ -27884,7 +27890,8 @@
     external_exports.object({ type: external_exports.literal("updateBundleConfig"), config: BundleConfigSchema.partial() }),
     external_exports.object({ type: external_exports.literal("setLastNCommits"), value: external_exports.number() }),
     external_exports.object({ type: external_exports.literal("updateCommitIndex"), value: external_exports.number() }),
-    external_exports.object({ type: external_exports.literal("clearError") })
+    external_exports.object({ type: external_exports.literal("clearError") }),
+    external_exports.object({ type: external_exports.literal("getHeadInfo") })
   ]);
   var CockpitStateSchema = external_exports.object({
     repoName: external_exports.string().nullable(),
@@ -27906,6 +27913,12 @@
     retrievedHistory: external_exports.any().optional(),
     workspaceFacts: external_exports.any().nullable().optional(),
     llmOutputs: external_exports.any().optional(),
+    headInfo: external_exports.object({
+      sha: external_exports.string(),
+      date: external_exports.string(),
+      message: external_exports.string(),
+      author: external_exports.string()
+    }).optional(),
     selectedCommitShas: external_exports.array(external_exports.string()),
     selectedStagedPaths: external_exports.array(external_exports.string()),
     selectedUnstagedPaths: external_exports.array(external_exports.string()),
@@ -28005,6 +28018,38 @@
       data: external_exports.union([BundleViewSchema, external_exports.any()])
     })
   };
+  var Tier1DataSchema = external_exports.object({
+    content: external_exports.string(),
+    lineCount: external_exports.number(),
+    language: external_exports.string(),
+    filePath: external_exports.string(),
+    fileExists: external_exports.boolean(),
+    symbols: external_exports.array(external_exports.any()).optional(),
+    symbolId: external_exports.string().optional()
+  });
+  var Tier2DataSchema = external_exports.object({
+    blastRadius: external_exports.object({
+      incoming: external_exports.array(external_exports.any()),
+      outgoing: external_exports.array(external_exports.any())
+    }),
+    hotspots: external_exports.array(external_exports.any()),
+    drift: external_exports.array(external_exports.any()),
+    hotspotScore: external_exports.number().optional(),
+    history: external_exports.any().optional(),
+    diff: external_exports.any().optional(),
+    lineCommits: external_exports.array(
+      external_exports.object({
+        line: external_exports.number(),
+        commitSha: external_exports.string(),
+        author: external_exports.string(),
+        date: external_exports.string()
+      })
+    ).optional()
+  });
+  var Tier3DataSchema = external_exports.object({
+    summary: external_exports.string(),
+    risks: external_exports.array(external_exports.any())
+  });
 
   // src/webview/cockpit/components/ErrorBoundary.tsx
   var React = __toESM(require_react());
@@ -28102,7 +28147,7 @@
   };
 
   // src/webview/cockpit/components/SuperWebview.tsx
-  var React27 = __toESM(require_react());
+  var React30 = __toESM(require_react());
 
   // src/utils/messageTracer.ts
   var MessageTracer = class {
@@ -28599,19 +28644,114 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
   };
 
   // src/webview/cockpit/components/Stage.tsx
-  var React26 = __toESM(require_react());
+  var React29 = __toESM(require_react());
 
   // src/webview/cockpit/components/CodeMicroscope.tsx
-  var React25 = __toESM(require_react());
+  var React28 = __toESM(require_react());
+
+  // src/webview/cockpit/hooks/useFileAnalysisData.ts
+  var React5 = __toESM(require_react());
+  var useFileAnalysisData = (fileId, bundleFacts, commitIdx) => {
+    return React5.useMemo(() => {
+      if (!bundleFacts || !fileId) {
+        return {
+          deadSymbols: /* @__PURE__ */ new Set(),
+          legacySymbols: /* @__PURE__ */ new Set(),
+          movedBlocks: [],
+          driftIssues: [],
+          unresolvedCallers: [],
+          hotspots: [],
+          findings: {
+            missing: 0,
+            zombies: 0,
+            dead: 0,
+            legacyUsed: 0,
+            unresolved: 0
+          }
+        };
+      }
+      const deadSymbols = /* @__PURE__ */ new Set();
+      const deadEvidence = bundleFacts.evidence?.["findings.legacyAudit"]?.dead || bundleFacts.evidence?.dead || [];
+      deadEvidence.forEach((item) => {
+        if (item.path === fileId && item.symbol_id) {
+          deadSymbols.add(item.symbol_id);
+        }
+      });
+      const legacySymbols = /* @__PURE__ */ new Set();
+      const legacyEvidence = bundleFacts.evidence?.["findings.legacyAudit"]?.legacyUsed || bundleFacts.evidence?.legacyUsed || [];
+      legacyEvidence.forEach((item) => {
+        if (item.path === fileId && item.symbol_id) {
+          legacySymbols.add(item.symbol_id);
+        }
+      });
+      const movedBlocks = bundleFacts.bundle?.movedLineage || [];
+      const driftIssues = [];
+      const conventionDrift = bundleFacts.findings?.patternDrift?.conventionDrift;
+      if (conventionDrift?.driftSymbols) {
+        conventionDrift.driftSymbols.forEach((ds) => {
+          if (ds.path === fileId) {
+            driftIssues.push({
+              symbolId: ds.symbolId,
+              name: ds.name,
+              convention: ds.convention,
+              suggestedName: ds.suggestedName,
+              path: ds.path
+            });
+          }
+        });
+      }
+      const unresolvedCallers = [];
+      const unresolvedEvidence = bundleFacts.evidence?.["findings.unresolvedCallers"] || bundleFacts.findings?.unresolvedCallers || [];
+      if (Array.isArray(unresolvedEvidence)) {
+        unresolvedEvidence.forEach((item) => {
+          const itemPath = item.path || item.filePath || item.caller_path;
+          if (itemPath === fileId) {
+            unresolvedCallers.push({
+              symbolId: item.symbolId || item.caller_symbol_id,
+              name: item.name || item.caller_name,
+              callerCount: item.callerCount || item.count || item.occurrence_count || 1
+            });
+          }
+        });
+      }
+      const hotspots = [];
+      const hotspotEvidence = bundleFacts.evidence?.hotspots || [];
+      hotspotEvidence.forEach((hotspot) => {
+        if (hotspot.path === fileId || hotspot.file_path === fileId) {
+          hotspots.push({
+            path: hotspot.path || hotspot.file_path,
+            score: hotspot.score || hotspot.hotspot_score || 0,
+            symbolId: hotspot.symbol_id
+          });
+        }
+      });
+      const findings = {
+        missing: bundleFacts.findings?.incompleteness?.missing || 0,
+        zombies: bundleFacts.findings?.incompleteness?.zombies || 0,
+        dead: deadSymbols.size || bundleFacts.findings?.legacyAudit?.dead || 0,
+        legacyUsed: legacySymbols.size || bundleFacts.findings?.legacyAudit?.legacyUsed || 0,
+        unresolved: unresolvedCallers.length || bundleFacts.findings?.unresolvedCallers?.total || 0
+      };
+      return {
+        deadSymbols,
+        legacySymbols,
+        movedBlocks,
+        driftIssues,
+        unresolvedCallers,
+        hotspots,
+        findings
+      };
+    }, [fileId, bundleFacts, commitIdx]);
+  };
 
   // src/webview/cockpit/components/stages/BlastRadiusStage.tsx
-  var React5 = __toESM(require_react());
+  var React6 = __toESM(require_react());
   var BlastRadiusStage = ({
     frame,
     onZoomIn
   }) => {
-    const [showIncoming, setShowIncoming] = React5.useState(true);
-    const [showOutgoing, setShowOutgoing] = React5.useState(true);
+    const [showIncoming, setShowIncoming] = React6.useState(true);
+    const [showOutgoing, setShowOutgoing] = React6.useState(true);
     const incoming = frame.data?.blastRadius?.incoming || [];
     const outgoing = frame.data?.blastRadius?.outgoing || [];
     const center = frame.name;
@@ -28634,7 +28774,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         type: e.type
       }))
     ];
-    return /* @__PURE__ */ React5.createElement(
+    return /* @__PURE__ */ React6.createElement(
       "div",
       {
         style: {
@@ -28647,8 +28787,8 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           gap: "12px"
         }
       },
-      /* @__PURE__ */ React5.createElement("h3", { style: { fontSize: "1.2em", marginBottom: "5px" } }, "Dependencies"),
-      /* @__PURE__ */ React5.createElement(
+      /* @__PURE__ */ React6.createElement("h3", { style: { fontSize: "1.2em", marginBottom: "5px" } }, "Dependencies"),
+      /* @__PURE__ */ React6.createElement(
         "p",
         {
           style: {
@@ -28659,14 +28799,14 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         },
         frame.name
       ),
-      /* @__PURE__ */ React5.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } }, /* @__PURE__ */ React5.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React5.createElement(
+      /* @__PURE__ */ React6.createElement("div", { style: { display: "flex", gap: "8px", marginBottom: "6px" } }, /* @__PURE__ */ React6.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React6.createElement(
         "input",
         {
           type: "checkbox",
           checked: showIncoming,
           onChange: (e) => setShowIncoming(e.target.checked)
         }
-      ), " ", "Incoming"), /* @__PURE__ */ React5.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React5.createElement(
+      ), " ", "Incoming"), /* @__PURE__ */ React6.createElement("label", { style: { display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85em" } }, /* @__PURE__ */ React6.createElement(
         "input",
         {
           type: "checkbox",
@@ -28674,7 +28814,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           onChange: (e) => setShowOutgoing(e.target.checked)
         }
       ), " ", "Outgoing")),
-      /* @__PURE__ */ React5.createElement(
+      /* @__PURE__ */ React6.createElement(
         "div",
         {
           style: {
@@ -28684,7 +28824,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
             minHeight: 180
           }
         },
-        /* @__PURE__ */ React5.createElement("div", { style: { position: "relative", width: "100%", height: 200 } }, /* @__PURE__ */ React5.createElement(
+        /* @__PURE__ */ React6.createElement("div", { style: { position: "relative", width: "100%", height: 200 } }, /* @__PURE__ */ React6.createElement(
           "div",
           {
             style: {
@@ -28706,7 +28846,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           const radius = 65;
           const x = 50 + radius * Math.cos(angle);
           const y = 50 + radius * Math.sin(angle);
-          return /* @__PURE__ */ React5.createElement(
+          return /* @__PURE__ */ React6.createElement(
             "div",
             {
               key: n.id,
@@ -28745,7 +28885,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           const y1 = 50 + radius * Math.sin(angleFrom);
           const x2 = 50 + radius * Math.cos(angleTo);
           const y2 = 50 + radius * Math.sin(angleTo);
-          return /* @__PURE__ */ React5.createElement(
+          return /* @__PURE__ */ React6.createElement(
             "svg",
             {
               key: idx,
@@ -28758,7 +28898,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
                 pointerEvents: "none"
               }
             },
-            /* @__PURE__ */ React5.createElement(
+            /* @__PURE__ */ React6.createElement(
               "line",
               {
                 x1: `${x1}%`,
@@ -28773,7 +28913,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           );
         }))
       ),
-      /* @__PURE__ */ React5.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", flex: 1 } }, /* @__PURE__ */ React5.createElement(
+      /* @__PURE__ */ React6.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", flex: 1 } }, /* @__PURE__ */ React6.createElement(
         "div",
         {
           style: {
@@ -28783,8 +28923,8 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
             overflow: "auto"
           }
         },
-        /* @__PURE__ */ React5.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Incoming (", incoming.length, ")"),
-        incoming.length ? /* @__PURE__ */ React5.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, incoming.map((edge, idx) => /* @__PURE__ */ React5.createElement(
+        /* @__PURE__ */ React6.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Incoming (", incoming.length, ")"),
+        incoming.length ? /* @__PURE__ */ React6.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, incoming.map((edge, idx) => /* @__PURE__ */ React6.createElement(
           "li",
           {
             key: idx,
@@ -28807,8 +28947,8 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           " (",
           edge.type,
           ")"
-        ))) : /* @__PURE__ */ React5.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
-      ), /* @__PURE__ */ React5.createElement(
+        ))) : /* @__PURE__ */ React6.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
+      ), /* @__PURE__ */ React6.createElement(
         "div",
         {
           style: {
@@ -28818,8 +28958,8 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
             overflow: "auto"
           }
         },
-        /* @__PURE__ */ React5.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Outgoing (", outgoing.length, ")"),
-        outgoing.length ? /* @__PURE__ */ React5.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, outgoing.map((edge, idx) => /* @__PURE__ */ React5.createElement(
+        /* @__PURE__ */ React6.createElement("div", { style: { fontWeight: "bold", marginBottom: "6px" } }, "Outgoing (", outgoing.length, ")"),
+        outgoing.length ? /* @__PURE__ */ React6.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, outgoing.map((edge, idx) => /* @__PURE__ */ React6.createElement(
           "li",
           {
             key: idx,
@@ -28842,16 +28982,16 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           " (",
           edge.type,
           ")"
-        ))) : /* @__PURE__ */ React5.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
+        ))) : /* @__PURE__ */ React6.createElement("div", { style: { opacity: 0.6, fontSize: "0.85em" } }, "None")
       ))
     );
   };
 
   // src/webview/cockpit/components/stages/BundleStage.tsx
-  var React12 = __toESM(require_react());
+  var React13 = __toESM(require_react());
 
   // src/webview/cockpit/components/StatsSection.tsx
-  var React6 = __toESM(require_react());
+  var React7 = __toESM(require_react());
   var StatsSection = ({ state, vscode: vscode3 }) => {
     const selectionCount = state.selectedCommitShas.length + (state.selectedStagedPaths.length > 0 ? 1 : 0) + (state.selectedUnstagedPaths.length > 0 ? 1 : 0);
     const bundleFacts = state.bundleFacts;
@@ -28908,7 +29048,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       color: "var(--vscode-descriptionForeground)",
       marginTop: "2px"
     };
-    return /* @__PURE__ */ React6.createElement("div", { style: { padding: "10px" } }, /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Global Health"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement(
+    return /* @__PURE__ */ React7.createElement("div", { style: { padding: "10px" } }, /* @__PURE__ */ React7.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React7.createElement("h3", { style: TitleStyle2 }, "Global Health"), /* @__PURE__ */ React7.createElement("div", { style: RowStyle }, /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement(
       "span",
       {
         style: {
@@ -28918,7 +29058,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       },
       healthScore.toFixed(0),
       "%"
-    ), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Health Score")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement(
+    ), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Health Score")), /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement(
       "span",
       {
         style: {
@@ -28927,7 +29067,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       },
       criticalCount
-    ), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Critical Issues")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement(
+    ), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Critical Issues")), /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement(
       "span",
       {
         style: {
@@ -28936,7 +29076,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       },
       warningCount
-    ), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Warnings")))), /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Scope Analysis"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.commitCount || state.selectedCommitShas.length), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Commits")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.fileCount || 0), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Files")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, bundleSummary?.symbolCount || 0), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Symbols"))), state.bundleReportId && /* @__PURE__ */ React6.createElement(
+    ), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Warnings")))), /* @__PURE__ */ React7.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React7.createElement("h3", { style: TitleStyle2 }, "Scope Analysis"), /* @__PURE__ */ React7.createElement("div", { style: RowStyle }, /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement("span", { style: ValueStyle }, bundleSummary?.commitCount || state.selectedCommitShas.length), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Commits")), /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement("span", { style: ValueStyle }, bundleSummary?.fileCount || 0), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Files")), /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement("span", { style: ValueStyle }, bundleSummary?.symbolCount || 0), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Symbols"))), state.bundleReportId && /* @__PURE__ */ React7.createElement(
       "button",
       {
         onClick: () => postMessageWithTracing(vscode3, {
@@ -28955,7 +29095,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       },
       "Open Full Report"
-    )), /* @__PURE__ */ React6.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React6.createElement("h3", { style: TitleStyle2 }, "Pipeline Diagnostics"), /* @__PURE__ */ React6.createElement("div", { style: RowStyle }, /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement("span", { style: ValueStyle }, currentStep), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Current Step")), /* @__PURE__ */ React6.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React6.createElement(
+    )), /* @__PURE__ */ React7.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React7.createElement("h3", { style: TitleStyle2 }, "Pipeline Diagnostics"), /* @__PURE__ */ React7.createElement("div", { style: RowStyle }, /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement("span", { style: ValueStyle }, currentStep), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Current Step")), /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement(
       "span",
       {
         style: {
@@ -28964,7 +29104,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       },
       pipelineErrors.length
-    ), /* @__PURE__ */ React6.createElement("span", { style: LabelStyle }, "Errors"))), topSteps.length > 0 && /* @__PURE__ */ React6.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React6.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold", marginBottom: "5px" } }, "Top Step Timings"), topSteps.map(([stepId, duration]) => /* @__PURE__ */ React6.createElement(
+    ), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Errors"))), topSteps.length > 0 && /* @__PURE__ */ React7.createElement("div", { style: { marginTop: "10px" } }, /* @__PURE__ */ React7.createElement("div", { style: { fontSize: "0.9em", fontWeight: "bold", marginBottom: "5px" } }, "Top Step Timings"), topSteps.map(([stepId, duration]) => /* @__PURE__ */ React7.createElement(
       "div",
       {
         key: stepId,
@@ -28975,15 +29115,15 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           marginBottom: "4px"
         }
       },
-      /* @__PURE__ */ React6.createElement("span", null, stepId),
-      /* @__PURE__ */ React6.createElement("span", { style: { fontFamily: "monospace" } }, Math.round(duration), "ms")
+      /* @__PURE__ */ React7.createElement("span", null, stepId),
+      /* @__PURE__ */ React7.createElement("span", { style: { fontFamily: "monospace" } }, Math.round(duration), "ms")
     )))));
   };
 
   // src/webview/cockpit/components/stages/templates/ConfigPanel.tsx
-  var React7 = __toESM(require_react());
+  var React8 = __toESM(require_react());
   var ConfigPanel = ({ config, depth, isAnalyzing, onConfigChange, onDepthChange, onApply, onClose }) => {
-    return /* @__PURE__ */ React7.createElement(
+    return /* @__PURE__ */ React8.createElement(
       "div",
       {
         style: {
@@ -28994,7 +29134,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           border: "1px solid var(--vscode-panel-border)"
         }
       },
-      /* @__PURE__ */ React7.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React7.createElement(
+      /* @__PURE__ */ React8.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React8.createElement(
         "label",
         {
           style: {
@@ -29005,7 +29145,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           }
         },
         "Mode"
-      ), /* @__PURE__ */ React7.createElement(
+      ), /* @__PURE__ */ React8.createElement(
         "select",
         {
           value: config.mode,
@@ -29018,12 +29158,12 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
             border: "1px solid var(--vscode-dropdown-border)"
           }
         },
-        /* @__PURE__ */ React7.createElement("option", { value: "repo" }, "Full Repo"),
-        /* @__PURE__ */ React7.createElement("option", { value: "module" }, "Current Module"),
-        /* @__PURE__ */ React7.createElement("option", { value: "changes" }, "My Changes (Staged + Unstaged)"),
-        /* @__PURE__ */ React7.createElement("option", { value: "custom" }, "Custom Roots")
+        /* @__PURE__ */ React8.createElement("option", { value: "repo" }, "Full Repo"),
+        /* @__PURE__ */ React8.createElement("option", { value: "module" }, "Current Module"),
+        /* @__PURE__ */ React8.createElement("option", { value: "changes" }, "My Changes (Staged + Unstaged)"),
+        /* @__PURE__ */ React8.createElement("option", { value: "custom" }, "Custom Roots")
       )),
-      config.mode === "custom" && /* @__PURE__ */ React7.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React7.createElement(
+      config.mode === "custom" && /* @__PURE__ */ React8.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React8.createElement(
         "label",
         {
           style: {
@@ -29034,7 +29174,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           }
         },
         "Roots (comma separated)"
-      ), /* @__PURE__ */ React7.createElement(
+      ), /* @__PURE__ */ React8.createElement(
         "input",
         {
           type: "text",
@@ -29052,7 +29192,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           }
         }
       )),
-      /* @__PURE__ */ React7.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React7.createElement(
+      /* @__PURE__ */ React8.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React8.createElement(
         "label",
         {
           style: {
@@ -29062,7 +29202,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
             cursor: "pointer"
           }
         },
-        /* @__PURE__ */ React7.createElement(
+        /* @__PURE__ */ React8.createElement(
           "input",
           {
             type: "checkbox",
@@ -29073,7 +29213,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         ),
         "Include Connected Set (Callers/Callees)"
       )),
-      /* @__PURE__ */ React7.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React7.createElement(
+      /* @__PURE__ */ React8.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React8.createElement(
         "label",
         {
           style: {
@@ -29084,7 +29224,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           }
         },
         "Exclusions (glob)"
-      ), /* @__PURE__ */ React7.createElement(
+      ), /* @__PURE__ */ React8.createElement(
         "input",
         {
           type: "text",
@@ -29102,7 +29242,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           }
         }
       )),
-      /* @__PURE__ */ React7.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React7.createElement(
+      /* @__PURE__ */ React8.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React8.createElement(
         "label",
         {
           style: {
@@ -29113,7 +29253,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           }
         },
         "Analysis Depth (Commits)"
-      ), /* @__PURE__ */ React7.createElement(
+      ), /* @__PURE__ */ React8.createElement(
         "input",
         {
           type: "number",
@@ -29135,7 +29275,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           }
         }
       )),
-      /* @__PURE__ */ React7.createElement("div", { style: { display: "flex", gap: "10px", marginTop: "10px" } }, /* @__PURE__ */ React7.createElement(
+      /* @__PURE__ */ React8.createElement("div", { style: { display: "flex", gap: "10px", marginTop: "10px" } }, /* @__PURE__ */ React8.createElement(
         "button",
         {
           onClick: () => {
@@ -29160,15 +29300,15 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
   };
 
   // src/webview/cockpit/components/stages/templates/HotspotList.tsx
-  var React8 = __toESM(require_react());
+  var React9 = __toESM(require_react());
   var HotspotList = ({ hotspots, onFileClick, isAnalyzing }) => {
     if (hotspots.length === 0 && !isAnalyzing) {
-      return /* @__PURE__ */ React8.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots available for this scope.");
+      return /* @__PURE__ */ React9.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots available for this scope.");
     }
     if (hotspots.length === 0) {
       return null;
     }
-    return /* @__PURE__ */ React8.createElement(React8.Fragment, null, /* @__PURE__ */ React8.createElement(
+    return /* @__PURE__ */ React9.createElement(React9.Fragment, null, /* @__PURE__ */ React9.createElement(
       "p",
       {
         style: {
@@ -29178,7 +29318,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       },
       "Most modified files (3 months)"
-    ), /* @__PURE__ */ React8.createElement(
+    ), /* @__PURE__ */ React9.createElement(
       "div",
       {
         style: {
@@ -29187,7 +29327,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           gap: "10px"
         }
       },
-      hotspots.map((file, index) => /* @__PURE__ */ React8.createElement(
+      hotspots.map((file, index) => /* @__PURE__ */ React9.createElement(
         "div",
         {
           key: `${file.path}-${index}`,
@@ -29207,7 +29347,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
 Churn: ${file.score || 0}
 +${file.added || 0} / -${file.removed || 0}`
         },
-        /* @__PURE__ */ React8.createElement(
+        /* @__PURE__ */ React9.createElement(
           "div",
           {
             style: {
@@ -29220,7 +29360,7 @@ Churn: ${file.score || 0}
           },
           file.name
         ),
-        /* @__PURE__ */ React8.createElement(
+        /* @__PURE__ */ React9.createElement(
           "div",
           {
             style: {
@@ -29233,8 +29373,8 @@ Churn: ${file.score || 0}
           },
           file.path
         ),
-        /* @__PURE__ */ React8.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7 } }, "+", file.added || 0, " / -", file.removed || 0),
-        /* @__PURE__ */ React8.createElement(
+        /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7 } }, "+", file.added || 0, " / -", file.removed || 0),
+        /* @__PURE__ */ React9.createElement(
           "div",
           {
             style: {
@@ -29245,7 +29385,7 @@ Churn: ${file.score || 0}
               marginTop: "auto"
             }
           },
-          /* @__PURE__ */ React8.createElement(
+          /* @__PURE__ */ React9.createElement(
             "div",
             {
               style: {
@@ -29261,12 +29401,12 @@ Churn: ${file.score || 0}
   };
 
   // src/webview/cockpit/components/stages/templates/RisksList.tsx
-  var React9 = __toESM(require_react());
+  var React10 = __toESM(require_react());
   var RisksList = ({ risks }) => {
     if (risks.length === 0) {
       return null;
     }
-    return /* @__PURE__ */ React9.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React9.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Top Risks"), /* @__PURE__ */ React9.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, risks.map((risk, idx) => /* @__PURE__ */ React9.createElement(
+    return /* @__PURE__ */ React10.createElement("div", { style: { marginTop: "20px" } }, /* @__PURE__ */ React10.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Top Risks"), /* @__PURE__ */ React10.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, risks.map((risk, idx) => /* @__PURE__ */ React10.createElement(
       "li",
       {
         key: idx,
@@ -29278,22 +29418,22 @@ Churn: ${file.score || 0}
           marginBottom: "8px"
         }
       },
-      /* @__PURE__ */ React9.createElement("div", { style: { fontWeight: "bold" } }, risk.name || risk.path),
-      /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.issue),
-      risk.detail && /* @__PURE__ */ React9.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.detail)
+      /* @__PURE__ */ React10.createElement("div", { style: { fontWeight: "bold" } }, risk.name || risk.path),
+      /* @__PURE__ */ React10.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.issue),
+      risk.detail && /* @__PURE__ */ React10.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, risk.detail)
     ))));
   };
 
   // src/webview/cockpit/components/stages/templates/TreemapView.tsx
-  var React11 = __toESM(require_react());
+  var React12 = __toESM(require_react());
 
   // src/webview/cockpit/components/stages/TreemapNode.tsx
-  var React10 = __toESM(require_react());
+  var React11 = __toESM(require_react());
   var TreemapNode = ({ node, depth = 0 }) => {
     const children = node.children || [];
     const hasChildren = children.length > 0;
     const baseColor = node.score > 10 ? "var(--vscode-charts-red)" : node.score > 5 ? "var(--vscode-charts-orange)" : "var(--vscode-charts-green)";
-    return /* @__PURE__ */ React10.createElement(
+    return /* @__PURE__ */ React11.createElement(
       "div",
       {
         style: {
@@ -29313,7 +29453,7 @@ Churn: ${file.score || 0}
 Churn: ${node.score.toFixed(1)}
 +${node.added || 0} / -${node.removed || 0}`
       },
-      /* @__PURE__ */ React10.createElement(
+      /* @__PURE__ */ React11.createElement(
         "div",
         {
           style: {
@@ -29326,10 +29466,10 @@ Churn: ${node.score.toFixed(1)}
             whiteSpace: "nowrap"
           }
         },
-        /* @__PURE__ */ React10.createElement("span", null, node.name),
-        /* @__PURE__ */ React10.createElement("span", { style: { color: baseColor } }, node.score)
+        /* @__PURE__ */ React11.createElement("span", null, node.name),
+        /* @__PURE__ */ React11.createElement("span", { style: { color: baseColor } }, node.score)
       ),
-      /* @__PURE__ */ React10.createElement(
+      /* @__PURE__ */ React11.createElement(
         "div",
         {
           style: {
@@ -29339,7 +29479,7 @@ Churn: ${node.score.toFixed(1)}
             overflow: "hidden"
           }
         },
-        /* @__PURE__ */ React10.createElement(
+        /* @__PURE__ */ React11.createElement(
           "div",
           {
             style: {
@@ -29350,8 +29490,8 @@ Churn: ${node.score.toFixed(1)}
           }
         )
       ),
-      /* @__PURE__ */ React10.createElement("div", { style: { fontSize: "0.7em", opacity: 0.7 } }, "+", node.added || 0, " / -", node.removed || 0),
-      hasChildren && /* @__PURE__ */ React10.createElement("div", { style: { display: "flex", flexWrap: "wrap", flex: 1, overflow: "hidden" } }, children.map((child, index) => /* @__PURE__ */ React10.createElement(
+      /* @__PURE__ */ React11.createElement("div", { style: { fontSize: "0.7em", opacity: 0.7 } }, "+", node.added || 0, " / -", node.removed || 0),
+      hasChildren && /* @__PURE__ */ React11.createElement("div", { style: { display: "flex", flexWrap: "wrap", flex: 1, overflow: "hidden" } }, children.map((child, index) => /* @__PURE__ */ React11.createElement(
         TreemapNode,
         {
           key: child.id || child.path || `${child.name}-${index}`,
@@ -29365,25 +29505,25 @@ Churn: ${node.score.toFixed(1)}
   // src/webview/cockpit/components/stages/templates/TreemapView.tsx
   var TreemapView = ({ treemap, isAnalyzing, hasHotspots }) => {
     if (treemap && treemap.length > 0) {
-      return /* @__PURE__ */ React11.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, treemap.map((node, index) => /* @__PURE__ */ React11.createElement(TreemapNode, { key: node.id || node.path || `${node.name}-${index}`, node })));
+      return /* @__PURE__ */ React12.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" } }, treemap.map((node, index) => /* @__PURE__ */ React12.createElement(TreemapNode, { key: node.id || node.path || `${node.name}-${index}`, node })));
     }
-    return /* @__PURE__ */ React11.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, isAnalyzing ? "Loading heatmap..." : hasHotspots ? "" : "No churn data yet. Run Analyze to populate the heatmap.");
+    return /* @__PURE__ */ React12.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, isAnalyzing ? "Loading heatmap..." : hasHotspots ? "" : "No churn data yet. Run Analyze to populate the heatmap.");
   };
 
   // src/webview/cockpit/components/stages/BundleStage.tsx
   var BundleStage = ({ frame, onZoomIn, cockpitState, vscode: vscode3 }) => {
-    const [isConfigOpen, setIsConfigOpen] = React12.useState(false);
+    const [isConfigOpen, setIsConfigOpen] = React13.useState(false);
     const defaultConfig = {
       mode: "repo",
       roots: [],
       includeConnected: false,
       exclusions: []
     };
-    const [formConfig, setFormConfig] = React12.useState(
+    const [formConfig, setFormConfig] = React13.useState(
       cockpitState?.bundleConfig || defaultConfig
     );
-    const [depth, setDepth] = React12.useState(cockpitState?.lastNCommits || 20);
-    React12.useEffect(() => {
+    const [depth, setDepth] = React13.useState(cockpitState?.lastNCommits || 20);
+    React13.useEffect(() => {
       setFormConfig(
         cockpitState?.bundleConfig || {
           mode: "repo",
@@ -29413,7 +29553,7 @@ Churn: ${node.score.toFixed(1)}
     console.log("[BundleStage] frame.data:", frame.data);
     console.log("[BundleStage] frame.data.hotspots:", frame.data?.hotspots);
     console.log("[BundleStage] frame.data.treemap:", frame.data?.treemap);
-    return /* @__PURE__ */ React12.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React12.createElement(
+    return /* @__PURE__ */ React13.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React13.createElement(
       "div",
       {
         style: {
@@ -29423,8 +29563,8 @@ Churn: ${node.score.toFixed(1)}
           marginBottom: "10px"
         }
       },
-      /* @__PURE__ */ React12.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, "Hotspots"),
-      /* @__PURE__ */ React12.createElement(
+      /* @__PURE__ */ React13.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, "Hotspots"),
+      /* @__PURE__ */ React13.createElement(
         "button",
         {
           onClick: () => setIsConfigOpen(!isConfigOpen),
@@ -29438,7 +29578,7 @@ Churn: ${node.score.toFixed(1)}
         },
         isConfigOpen ? "Hide Scope" : "Configure Scope"
       )
-    ), isConfigOpen && /* @__PURE__ */ React12.createElement(
+    ), isConfigOpen && /* @__PURE__ */ React13.createElement(
       ConfigPanel,
       {
         config: formConfig,
@@ -29449,25 +29589,25 @@ Churn: ${node.score.toFixed(1)}
         onApply: applyConfig,
         onClose: () => setIsConfigOpen(false)
       }
-    ), cockpitState && /* @__PURE__ */ React12.createElement(StatsSection, { state: cockpitState, vscode: vscode3 }), /* @__PURE__ */ React12.createElement(
+    ), cockpitState && /* @__PURE__ */ React13.createElement(StatsSection, { state: cockpitState, vscode: vscode3 }), /* @__PURE__ */ React13.createElement(
       TreemapView,
       {
         treemap: frame.data?.treemap,
         isAnalyzing: cockpitState?.isAnalyzing,
         hasHotspots: frame.data?.hotspots && frame.data.hotspots.length > 0
       }
-    ), frame.data?.hotspots && frame.data.hotspots.length > 0 && /* @__PURE__ */ React12.createElement(
+    ), frame.data?.hotspots && frame.data.hotspots.length > 0 && /* @__PURE__ */ React13.createElement(
       HotspotList,
       {
         hotspots: frame.data.hotspots,
         onFileClick: handleFileClick,
         isAnalyzing: cockpitState?.isAnalyzing
       }
-    ), frame.data?.risks && frame.data.risks.length > 0 && /* @__PURE__ */ React12.createElement(RisksList, { risks: frame.data.risks }));
+    ), frame.data?.risks && frame.data.risks.length > 0 && /* @__PURE__ */ React13.createElement(RisksList, { risks: frame.data.risks }));
   };
 
   // src/webview/cockpit/components/stages/CodeEditor.tsx
-  var React13 = __toESM(require_react());
+  var React14 = __toESM(require_react());
   var EditorContainer = {
     flex: 1,
     overflow: "auto",
@@ -29509,9 +29649,12 @@ Churn: ${node.score.toFixed(1)}
     onClearFocus,
     lineCommits = [],
     orderedCommits = [],
-    currentCommitIndex
+    currentCommitIndex,
+    filePath,
+    bundleFacts
   }) => {
     const lines = content.split("\n");
+    const analysisData = useFileAnalysisData(filePath || "", bundleFacts, currentCommitIndex);
     const focusedSymbol = focusedSymbolId ? symbols.find((s) => (s.id || s.name) === focusedSymbolId) : null;
     const focusedStartLine = focusedSymbol?.location?.start?.line || 0;
     const focusedEndLine = focusedSymbol?.location?.end?.line || 0;
@@ -29534,7 +29677,7 @@ Churn: ${node.score.toFixed(1)}
       if (lineCommitIndex === void 0) return false;
       return lineCommitIndex > currentCommitIndex;
     };
-    const filteredDriftIssues = React13.useMemo(() => {
+    const filteredDriftIssues = React14.useMemo(() => {
       if (currentCommitIndex === void 0) return driftIssues;
       return driftIssues.filter((issue) => {
         if (issue.line) {
@@ -29591,8 +29734,8 @@ Churn: ${node.score.toFixed(1)}
       const hasError = issues.some((i) => i.severity === "error");
       return hasError ? "error" : "warning";
     };
-    const editorRef = React13.useRef(null);
-    React13.useEffect(() => {
+    const editorRef = React14.useRef(null);
+    React14.useEffect(() => {
       if (focusedSymbolId && focusedStartLine > 0 && editorRef.current) {
         const lineElement = editorRef.current.querySelector(`[data-line="${focusedStartLine}"]`);
         if (lineElement) {
@@ -29600,7 +29743,7 @@ Churn: ${node.score.toFixed(1)}
         }
       }
     }, [focusedSymbolId, focusedStartLine]);
-    return /* @__PURE__ */ React13.createElement(
+    return /* @__PURE__ */ React14.createElement(
       "div",
       {
         ref: editorRef,
@@ -29611,7 +29754,7 @@ Churn: ${node.score.toFixed(1)}
           }
         }
       },
-      focusedSymbolId && /* @__PURE__ */ React13.createElement(
+      focusedSymbolId && /* @__PURE__ */ React14.createElement(
         "div",
         {
           style: {
@@ -29624,8 +29767,8 @@ Churn: ${node.score.toFixed(1)}
             alignItems: "center"
           }
         },
-        /* @__PURE__ */ React13.createElement("span", null, "Focused: ", /* @__PURE__ */ React13.createElement("strong", null, focusedSymbol?.name || focusedSymbolId)),
-        /* @__PURE__ */ React13.createElement(
+        /* @__PURE__ */ React14.createElement("span", null, "Focused: ", /* @__PURE__ */ React14.createElement("strong", null, focusedSymbol?.name || focusedSymbolId)),
+        /* @__PURE__ */ React14.createElement(
           "button",
           {
             onClick: (e) => {
@@ -29658,9 +29801,38 @@ Churn: ${node.score.toFixed(1)}
           backgroundColor: severity === "error" ? "var(--vscode-inputValidation-errorBackground)" : "var(--vscode-inputValidation-warningBackground)"
         };
         const symbolAtLine = symbols.find((s) => s.location?.start?.line === lineNumber);
+        const isDeadSymbol = symbolAtLine && (analysisData.deadSymbols.has(symbolAtLine.id || "") || analysisData.deadSymbols.has(symbolAtLine.name));
+        const isLegacySymbol = symbolAtLine && (analysisData.legacySymbols.has(symbolAtLine.id || "") || analysisData.legacySymbols.has(symbolAtLine.name));
+        const driftIssue = symbolAtLine ? analysisData.driftIssues.find(
+          (d) => d.symbolId === symbolAtLine.id || d.name === symbolAtLine.name
+        ) : null;
+        const unresolvedCaller = symbolAtLine ? analysisData.unresolvedCallers.find(
+          (u) => u.symbolId === symbolAtLine.id || u.name === symbolAtLine.name
+        ) : null;
+        const hotspot = symbolAtLine ? analysisData.hotspots.find((h) => h.symbolId === symbolAtLine.id || h.path === filePath) : analysisData.hotspots.find((h) => h.path === filePath);
         const isAfterTime = isLineAfterTime(lineNumber);
         const shouldHide = isAfterTime && currentCommitIndex !== void 0;
-        return /* @__PURE__ */ React13.createElement(
+        let symbolTooltip = "";
+        if (isDeadSymbol) {
+          symbolTooltip = "Dead symbol \u2013 removed but still referenced";
+        } else if (isLegacySymbol) {
+          symbolTooltip = "Legacy symbol \u2013 deprecated but still in use";
+        }
+        if (driftIssue) {
+          symbolTooltip = symbolTooltip ? `${symbolTooltip}
+Convention drift: Should be ${driftIssue.suggestedName}` : `Convention drift: Should be ${driftIssue.suggestedName}`;
+        }
+        if (unresolvedCaller) {
+          const callerText = `${unresolvedCaller.callerCount || 1} unresolved caller${(unresolvedCaller.callerCount || 1) !== 1 ? "s" : ""}`;
+          symbolTooltip = symbolTooltip ? `${symbolTooltip}
+${callerText}` : callerText;
+        }
+        if (hotspot) {
+          const hotspotText = `Hotspot score: ${hotspot.score.toFixed(1)}`;
+          symbolTooltip = symbolTooltip ? `${symbolTooltip}
+${hotspotText}` : hotspotText;
+        }
+        return /* @__PURE__ */ React14.createElement(
           "div",
           {
             key: i,
@@ -29668,17 +29840,59 @@ Churn: ${node.score.toFixed(1)}
             style: {
               ...LineStyle,
               fontSize: isFocused ? "120%" : "100%",
-              opacity: shouldHide ? 0.2 : focusedSymbolId ? isFocused ? 1 : 0.5 : 1,
+              opacity: shouldHide ? 0.2 : isDeadSymbol ? 0.4 : focusedSymbolId ? isFocused ? 1 : 0.5 : 1,
               display: shouldHide ? "none" : "flex",
-              backgroundColor: hasDrift ? severity === "error" ? "rgba(255, 0, 0, 0.05)" : "rgba(255, 165, 0, 0.05)" : "transparent",
+              backgroundColor: hotspot && !shouldHide ? `rgba(255, 165, 0, ${Math.min(0.15, hotspot.score / 100)})` : hasDrift ? severity === "error" ? "rgba(255, 0, 0, 0.05)" : "rgba(255, 165, 0, 0.05)" : "transparent",
               cursor: symbolAtLine && onSymbolClick ? "pointer" : "default",
               transition: "opacity 0.2s, font-size 0.2s",
-              pointerEvents: shouldHide ? "none" : "auto"
+              pointerEvents: shouldHide ? "none" : "auto",
+              textDecoration: isDeadSymbol ? "line-through" : "none",
+              borderLeft: isLegacySymbol && !shouldHide ? "3px solid var(--vscode-inputValidation-warningBorder)" : "none",
+              paddingLeft: isLegacySymbol && !shouldHide ? "9px" : "12px",
+              textDecorationLine: driftIssue && !shouldHide ? "underline" : void 0,
+              textDecorationStyle: driftIssue && !shouldHide ? "wavy" : void 0,
+              textDecorationColor: driftIssue && !shouldHide ? "var(--vscode-inputValidation-warningBorder)" : void 0
             },
             onClick: symbolAtLine && onSymbolClick && !shouldHide ? () => onSymbolClick(symbolAtLine.id || symbolAtLine.name) : void 0,
-            title: shouldHide ? `Line added after selected commit (hidden)` : symbolAtLine ? `Click to focus on ${symbolAtLine.name}` : isFocused ? "Focused symbol" : void 0
+            title: shouldHide ? `Line added after selected commit (hidden)` : symbolTooltip || (symbolAtLine ? `Click to focus on ${symbolAtLine.name}` : isFocused ? "Focused symbol" : void 0)
           },
-          hasDrift && !shouldHide && /* @__PURE__ */ React13.createElement("span", { style: warningStyle, title: driftMessage }, /* @__PURE__ */ React13.createElement("span", null, severity === "error" ? "\u274C" : "\u26A0\uFE0F"), " ", driftMessage || "DRIFT"),
+          hasDrift && !shouldHide && /* @__PURE__ */ React14.createElement("span", { style: warningStyle, title: driftMessage }, /* @__PURE__ */ React14.createElement("span", null, severity === "error" ? "\u274C" : "\u26A0\uFE0F"), " ", driftMessage || "DRIFT"),
+          isDeadSymbol && !shouldHide && /* @__PURE__ */ React14.createElement(
+            "span",
+            {
+              style: {
+                fontSize: "12px",
+                marginRight: "4px",
+                opacity: 0.7
+              },
+              title: symbolTooltip
+            },
+            "\u{1F47B}"
+          ),
+          isLegacySymbol && !shouldHide && /* @__PURE__ */ React14.createElement(
+            "span",
+            {
+              style: {
+                fontSize: "12px",
+                marginRight: "4px",
+                opacity: 0.7
+              },
+              title: symbolTooltip
+            },
+            "\u26A0\uFE0F"
+          ),
+          unresolvedCaller && !shouldHide && /* @__PURE__ */ React14.createElement(
+            "span",
+            {
+              style: {
+                fontSize: "12px",
+                marginRight: "4px",
+                opacity: 0.7
+              },
+              title: symbolTooltip
+            },
+            "\u2753"
+          ),
           line
         );
       })
@@ -29686,12 +29900,12 @@ Churn: ${node.score.toFixed(1)}
   };
 
   // src/webview/cockpit/components/stages/FolderStage.tsx
-  var React15 = __toESM(require_react());
+  var React16 = __toESM(require_react());
 
   // src/webview/cockpit/components/stages/templates/SummaryStats.tsx
-  var React14 = __toESM(require_react());
+  var React15 = __toESM(require_react());
   var SummaryStats = ({ commitCount, fileCount, symbolCount }) => {
-    return /* @__PURE__ */ React14.createElement(
+    return /* @__PURE__ */ React15.createElement(
       "div",
       {
         style: {
@@ -29704,9 +29918,9 @@ Churn: ${node.score.toFixed(1)}
           paddingBottom: "10px"
         }
       },
-      /* @__PURE__ */ React14.createElement("div", null, /* @__PURE__ */ React14.createElement("strong", null, commitCount), " commits"),
-      /* @__PURE__ */ React14.createElement("div", null, /* @__PURE__ */ React14.createElement("strong", null, fileCount), " files"),
-      symbolCount !== void 0 && /* @__PURE__ */ React14.createElement("div", null, /* @__PURE__ */ React14.createElement("strong", null, symbolCount), " symbols")
+      /* @__PURE__ */ React15.createElement("div", null, /* @__PURE__ */ React15.createElement("strong", null, commitCount), " commits"),
+      /* @__PURE__ */ React15.createElement("div", null, /* @__PURE__ */ React15.createElement("strong", null, fileCount), " files"),
+      symbolCount !== void 0 && /* @__PURE__ */ React15.createElement("div", null, /* @__PURE__ */ React15.createElement("strong", null, symbolCount), " symbols")
     );
   };
 
@@ -29722,21 +29936,21 @@ Churn: ${node.score.toFixed(1)}
     };
     const folderPath = frame.id;
     const bundleData = cockpitState?.bundleView;
-    const filteredHotspots = React15.useMemo(() => {
+    const filteredHotspots = React16.useMemo(() => {
       if (!bundleData?.hotspots) return [];
       return bundleData.hotspots.filter((file) => file.path.startsWith(folderPath)).map((file) => ({
         ...file,
         name: file.name || file.path.split("/").pop() || "Unknown"
       }));
     }, [bundleData?.hotspots, folderPath]);
-    const filteredTreemap = React15.useMemo(() => {
+    const filteredTreemap = React16.useMemo(() => {
       if (!bundleData?.treemap) return [];
       return bundleData.treemap.filter((node) => {
         const nodePath = node.path || node.id;
         return nodePath && nodePath.startsWith(folderPath);
       });
     }, [bundleData?.treemap, folderPath]);
-    const filteredRisks = React15.useMemo(() => {
+    const filteredRisks = React16.useMemo(() => {
       if (!bundleData?.risks) return [];
       return bundleData.risks.filter((risk) => risk.path && risk.path.startsWith(folderPath));
     }, [bundleData?.risks, folderPath]);
@@ -29748,7 +29962,7 @@ Churn: ${node.score.toFixed(1)}
     console.log("[FolderStage] folderPath:", folderPath);
     console.log("[FolderStage] filteredHotspots:", filteredHotspots);
     console.log("[FolderStage] filteredTreemap:", filteredTreemap);
-    return /* @__PURE__ */ React15.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React15.createElement(
+    return /* @__PURE__ */ React16.createElement("div", { style: { width: "100%", padding: "10px", overflow: "auto" } }, /* @__PURE__ */ React16.createElement(
       "div",
       {
         style: {
@@ -29758,34 +29972,251 @@ Churn: ${node.score.toFixed(1)}
           marginBottom: "10px"
         }
       },
-      /* @__PURE__ */ React15.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, frame.name),
-      /* @__PURE__ */ React15.createElement("div", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, folderPath)
-    ), cockpitState?.bundleSummary && /* @__PURE__ */ React15.createElement(
+      /* @__PURE__ */ React16.createElement("h3", { style: { fontSize: "1.2em", margin: 0 } }, frame.name),
+      /* @__PURE__ */ React16.createElement("div", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, folderPath)
+    ), cockpitState?.bundleSummary && /* @__PURE__ */ React16.createElement(
       SummaryStats,
       {
         commitCount: cockpitState.bundleSummary.commitCount,
         fileCount,
         symbolCount: symbolCount > 0 ? symbolCount : void 0
       }
-    ), /* @__PURE__ */ React15.createElement(
+    ), /* @__PURE__ */ React16.createElement(
       TreemapView,
       {
         treemap: filteredTreemap,
         isAnalyzing: cockpitState?.isAnalyzing,
         hasHotspots: filteredHotspots.length > 0
       }
-    ), filteredHotspots.length > 0 && /* @__PURE__ */ React15.createElement(
+    ), filteredHotspots.length > 0 && /* @__PURE__ */ React16.createElement(
       HotspotList,
       {
         hotspots: filteredHotspots,
         onFileClick: handleFileClick,
         isAnalyzing: cockpitState?.isAnalyzing
       }
-    ), filteredRisks.length > 0 && /* @__PURE__ */ React15.createElement(RisksList, { risks: filteredRisks }), filteredHotspots.length === 0 && !cockpitState?.isAnalyzing && /* @__PURE__ */ React15.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots found in this folder. Files may not have been modified recently."));
+    ), filteredRisks.length > 0 && /* @__PURE__ */ React16.createElement(RisksList, { risks: filteredRisks }), filteredHotspots.length === 0 && !cockpitState?.isAnalyzing && /* @__PURE__ */ React16.createElement("p", { style: { fontSize: "0.85em", color: "var(--vscode-descriptionForeground)" } }, "No hotspots found in this folder. Files may not have been modified recently."));
+  };
+
+  // src/webview/cockpit/components/stages/MovedBlockGutter.tsx
+  var React17 = __toESM(require_react());
+  var GutterContainer = {
+    width: "12px",
+    backgroundColor: "var(--vscode-editorGutter-background)",
+    borderRight: "1px solid var(--vscode-panel-border)",
+    position: "relative",
+    flexShrink: 0
+  };
+  var MovedBlockIndicator = {
+    position: "absolute",
+    left: 0,
+    width: "3px",
+    backgroundColor: "#9b59b6",
+    // Purple color
+    cursor: "pointer",
+    zIndex: 10
+  };
+  var MovedBlockGutter = ({
+    lineCount,
+    movedBlocks,
+    currentFilePath,
+    vscode: vscode3
+  }) => {
+    const relevantBlocks = React17.useMemo(() => {
+      return movedBlocks.filter((block) => {
+        if (currentFilePath) {
+          return block.destFile === currentFilePath || block.sourceFile === currentFilePath || block.destVersion === currentFilePath || block.sourceVersion === currentFilePath;
+        }
+        return true;
+      });
+    }, [movedBlocks, currentFilePath]);
+    const handleBlockClick = (block) => {
+      if (!vscode3) return;
+      const sourceFrame = {
+        level: "file",
+        id: block.sourceFile || block.sourceVersion,
+        name: block.sourceFile?.split("/").pop() || "Source",
+        status: "scanning"
+      };
+      vscode3.postMessage({ type: "navigateToFrame", frame: sourceFrame });
+    };
+    const blockPositions = React17.useMemo(() => {
+      return relevantBlocks.map((block) => {
+        const startLine = block.destStartLine || 1;
+        const endLine = block.destEndLine || startLine + 10;
+        return {
+          block,
+          startLine,
+          endLine,
+          top: `${(startLine - 1) / lineCount * 100}%`,
+          height: `${(endLine - startLine + 1) / lineCount * 100}%`
+        };
+      });
+    }, [relevantBlocks, lineCount]);
+    if (relevantBlocks.length === 0) {
+      return /* @__PURE__ */ React17.createElement("div", { style: GutterContainer });
+    }
+    return /* @__PURE__ */ React17.createElement("div", { style: GutterContainer }, blockPositions.map((pos, idx) => {
+      const sourceInfo = pos.block.sourceFile ? `${pos.block.sourceFile.split("/").pop()}:${pos.block.sourceStartLine || "?"}\u2013${pos.block.sourceEndLine || "?"}` : `version ${pos.block.sourceVersion}`;
+      const tooltip = `Moved from ${sourceInfo} (${pos.block.moveType})`;
+      return /* @__PURE__ */ React17.createElement(
+        "div",
+        {
+          key: idx,
+          style: {
+            ...MovedBlockIndicator,
+            top: pos.top,
+            height: pos.height
+          },
+          onClick: () => handleBlockClick(pos.block),
+          title: tooltip,
+          onMouseEnter: (e) => {
+            e.currentTarget.style.backgroundColor = "#7d3c98";
+          },
+          onMouseLeave: (e) => {
+            e.currentTarget.style.backgroundColor = "#9b59b6";
+          }
+        }
+      );
+    }));
   };
 
   // src/webview/cockpit/components/stages/PortalsRail.tsx
-  var React16 = __toESM(require_react());
+  var React19 = __toESM(require_react());
+
+  // src/webview/cockpit/components/stages/LineagePanel.tsx
+  var React18 = __toESM(require_react());
+  var PanelContainer = {
+    padding: "12px",
+    overflow: "auto",
+    height: "100%"
+  };
+  var TimelineContainer = {
+    position: "relative",
+    paddingLeft: "24px"
+  };
+  var TimelineLine = {
+    position: "absolute",
+    left: "8px",
+    top: "0",
+    bottom: "0",
+    width: "2px",
+    backgroundColor: "var(--vscode-panel-border)"
+  };
+  var TimelineEntry = {
+    position: "relative",
+    marginBottom: "16px",
+    paddingLeft: "20px"
+  };
+  var EntryDot = {
+    position: "absolute",
+    left: "0",
+    top: "4px",
+    width: "16px",
+    height: "16px",
+    borderRadius: "50%",
+    backgroundColor: "var(--vscode-button-background)",
+    border: "2px solid var(--vscode-panel-border)",
+    zIndex: 10,
+    cursor: "pointer"
+  };
+  var EntryContent = {
+    backgroundColor: "var(--vscode-editor-background)",
+    border: "1px solid var(--vscode-panel-border)",
+    borderRadius: "4px",
+    padding: "8px 12px",
+    fontSize: "11px",
+    cursor: "pointer",
+    transition: "background-color 0.1s"
+  };
+  var LineagePanel = ({
+    symbolId,
+    movedLineage = [],
+    orderedCommits = [],
+    commits = [],
+    vscode: vscode3
+  }) => {
+    const relevantLineage = React18.useMemo(() => {
+      if (!symbolId) return [];
+      return movedLineage.filter(
+        (entry) => entry.symbolId === symbolId || entry.previousSymbolId === symbolId
+      );
+    }, [symbolId, movedLineage]);
+    const sortedLineage = React18.useMemo(() => {
+      return [...relevantLineage].sort((a, b) => {
+        const aIndex = orderedCommits.indexOf(a.sourceVersion || a.destVersion);
+        const bIndex = orderedCommits.indexOf(b.sourceVersion || b.destVersion);
+        return aIndex - bIndex;
+      });
+    }, [relevantLineage, orderedCommits]);
+    const handleEntryClick = (entry) => {
+      if (!vscode3) return;
+      const targetSha = entry.sourceVersion || entry.destVersion;
+      const commitIndex = orderedCommits.indexOf(targetSha);
+      if (commitIndex >= 0) {
+        vscode3.postMessage({ type: "updateCommitIndex", value: commitIndex });
+      }
+      if (entry.sourceVersion && entry.sourceVersion.includes("/")) {
+        const frame = {
+          level: "file",
+          id: entry.sourceVersion,
+          name: entry.sourceVersion.split("/").pop() || "Source",
+          status: "scanning"
+        };
+        vscode3.postMessage({ type: "navigateToFrame", frame });
+      }
+    };
+    const getMoveTypeLabel = (moveType) => {
+      switch (moveType) {
+        case "rename":
+          return "Renamed";
+        case "relocate":
+          return "Moved";
+        case "refactor":
+          return "Refactored";
+        default:
+          return "Changed";
+      }
+    };
+    const getCommitInfo = (sha) => {
+      const commit = commits.find((c) => c.sha === sha);
+      if (commit) {
+        return {
+          date: commit.date ? new Date(commit.date).toLocaleDateString() : "",
+          message: commit.message || "No message"
+        };
+      }
+      return { date: "", message: "Unknown commit" };
+    };
+    if (!symbolId) {
+      return /* @__PURE__ */ React18.createElement("div", { style: PanelContainer }, /* @__PURE__ */ React18.createElement("div", { style: { opacity: 0.6, fontSize: "11px", textAlign: "center", padding: "20px" } }, "Select a symbol to view its lineage"));
+    }
+    if (sortedLineage.length === 0) {
+      return /* @__PURE__ */ React18.createElement("div", { style: PanelContainer }, /* @__PURE__ */ React18.createElement("div", { style: { opacity: 0.6, fontSize: "11px", textAlign: "center", padding: "20px" } }, "No lineage information available for this symbol"));
+    }
+    return /* @__PURE__ */ React18.createElement("div", { style: PanelContainer }, /* @__PURE__ */ React18.createElement("div", { style: { fontSize: "12px", fontWeight: 600, marginBottom: "16px" } }, "Symbol Lineage"), /* @__PURE__ */ React18.createElement("div", { style: TimelineContainer }, /* @__PURE__ */ React18.createElement("div", { style: TimelineLine }), sortedLineage.map((entry, idx) => {
+      const commitInfo = getCommitInfo(entry.sourceVersion || entry.destVersion);
+      const shortSha = (entry.sourceVersion || entry.destVersion).substring(0, 8);
+      return /* @__PURE__ */ React18.createElement("div", { key: idx, style: TimelineEntry }, /* @__PURE__ */ React18.createElement("div", { style: EntryDot, onClick: () => handleEntryClick(entry) }), /* @__PURE__ */ React18.createElement(
+        "div",
+        {
+          style: EntryContent,
+          onClick: () => handleEntryClick(entry),
+          onMouseEnter: (e) => {
+            e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)";
+          },
+          onMouseLeave: (e) => {
+            e.currentTarget.style.backgroundColor = "var(--vscode-editor-background)";
+          }
+        },
+        /* @__PURE__ */ React18.createElement("div", { style: { fontWeight: 600, marginBottom: "4px" } }, getMoveTypeLabel(entry.moveType)),
+        /* @__PURE__ */ React18.createElement("div", { style: { fontSize: "10px", opacity: 0.7, marginBottom: "2px" } }, shortSha, " ", commitInfo.date ? `\u2022 ${commitInfo.date}` : ""),
+        /* @__PURE__ */ React18.createElement("div", { style: { fontSize: "10px", opacity: 0.8 } }, commitInfo.message.length > 50 ? `${commitInfo.message.substring(0, 50)}...` : commitInfo.message)
+      ));
+    })));
+  };
+
+  // src/webview/cockpit/components/stages/PortalsRail.tsx
   function dirname(filePath) {
     const normalized = filePath.replace(/\\/g, "/");
     const lastSlash = normalized.lastIndexOf("/");
@@ -29810,23 +30241,20 @@ Churn: ${node.score.toFixed(1)}
     borderBottom: "1px solid var(--vscode-panel-border)",
     marginTop: "10px"
   };
-  var PortalGroup = ({
-    name,
-    count,
-    type
-  }) => /* @__PURE__ */ React16.createElement(
+  var PortalGroup = ({ name, count, type, isFuture, opacity = 1 }) => /* @__PURE__ */ React19.createElement(
     "div",
     {
       style: {
         padding: "8px 12px",
         borderBottom: "1px solid var(--vscode-panel-border)",
         cursor: "pointer",
-        transition: "background-color 0.1s"
+        transition: "background-color 0.1s, opacity 0.1s",
+        opacity
       },
       onMouseEnter: (e) => e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)",
       onMouseLeave: (e) => e.currentTarget.style.backgroundColor = "transparent"
     },
-    /* @__PURE__ */ React16.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ React16.createElement(
+    /* @__PURE__ */ React19.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } }, /* @__PURE__ */ React19.createElement(
       "span",
       {
         style: {
@@ -29837,9 +30265,20 @@ Churn: ${node.score.toFixed(1)}
           gap: "6px"
         }
       },
-      /* @__PURE__ */ React16.createElement("span", null, type === "incoming" ? "\u2199" : "\u2197"),
-      name
-    ), /* @__PURE__ */ React16.createElement(
+      /* @__PURE__ */ React19.createElement("span", null, type === "incoming" ? "\u2199" : "\u2197"),
+      name,
+      isFuture && /* @__PURE__ */ React19.createElement(
+        "span",
+        {
+          style: {
+            fontSize: "9px",
+            opacity: 0.6,
+            fontStyle: "italic"
+          }
+        },
+        "(future)"
+      )
+    ), /* @__PURE__ */ React19.createElement(
       "span",
       {
         style: {
@@ -29881,9 +30320,52 @@ Churn: ${node.score.toFixed(1)}
     focusedSymbolId,
     currentFilePath,
     currentCommitIndex,
-    orderedCommits = []
+    orderedCommits = [],
+    bundleFacts,
+    vscode: vscode3,
+    commits = []
   }) => {
+    const [activeTab, setActiveTab] = React19.useState("connections");
     const isTimeTravelActive = currentCommitIndex !== void 0 && orderedCommits.length > 0;
+    const edgeHistory = React19.useMemo(() => {
+      if (!bundleFacts?.evidence?.["edge.history"]) {
+        return /* @__PURE__ */ new Map();
+      }
+      const history = bundleFacts.evidence["edge.history"];
+      const map = /* @__PURE__ */ new Map();
+      Object.entries(history).forEach(([key, value]) => {
+        if (value?.createdAt) {
+          map.set(key, value.createdAt);
+        }
+      });
+      return map;
+    }, [bundleFacts]);
+    const filterByTime = React19.useCallback(
+      (refs) => {
+        if (!isTimeTravelActive || currentCommitIndex === void 0 || orderedCommits.length === 0) {
+          return refs;
+        }
+        const selectedCommitSha = orderedCommits[currentCommitIndex];
+        if (!selectedCommitSha) return refs;
+        return refs.map((ref) => {
+          const from = ref.from || "";
+          const to = ref.to || "";
+          const edgeKey = `${from}->${to}`;
+          const createdAt = edgeHistory.get(edgeKey);
+          if (!createdAt) {
+            return { ...ref, isFuture: false, opacity: 0.7 };
+          }
+          const createdAtIndex = orderedCommits.indexOf(createdAt);
+          const existsAtSelected = createdAtIndex >= 0 && createdAtIndex <= currentCommitIndex;
+          return {
+            ...ref,
+            isFuture: !existsAtSelected,
+            opacity: existsAtSelected ? 1 : 0.3
+          };
+        });
+      },
+      [isTimeTravelActive, currentCommitIndex, orderedCommits, edgeHistory]
+    );
     let filteredIncoming = blastRadius?.incoming || [];
     let filteredOutgoing = blastRadius?.outgoing || [];
     if (focusedSymbolId && currentFilePath) {
@@ -29904,11 +30386,13 @@ Churn: ${node.score.toFixed(1)}
         return false;
       });
     }
+    filteredIncoming = filterByTime(filteredIncoming);
+    filteredOutgoing = filterByTime(filteredOutgoing);
     const incomingGroups = filteredIncoming.length > 0 ? groupByFolder(filteredIncoming) : /* @__PURE__ */ new Map();
     const outgoingGroups = filteredOutgoing.length > 0 ? groupByFolder(filteredOutgoing) : /* @__PURE__ */ new Map();
     const hasIncoming = incomingGroups.size > 0 || incomingRefs > 0;
     const hasOutgoing = outgoingGroups.size > 0 || outgoingRefs > 0;
-    return /* @__PURE__ */ React16.createElement("div", { style: RailContainer }, focusedSymbolId && /* @__PURE__ */ React16.createElement(
+    return /* @__PURE__ */ React19.createElement("div", { style: RailContainer }, focusedSymbolId && /* @__PURE__ */ React19.createElement(React19.Fragment, null, /* @__PURE__ */ React19.createElement(
       "div",
       {
         style: {
@@ -29919,7 +30403,56 @@ Churn: ${node.score.toFixed(1)}
       },
       "Filtered: ",
       focusedSymbolId
-    ), isTimeTravelActive && /* @__PURE__ */ React16.createElement(
+    ), /* @__PURE__ */ React19.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          borderBottom: "1px solid var(--vscode-panel-border)"
+        }
+      },
+      /* @__PURE__ */ React19.createElement(
+        "button",
+        {
+          onClick: () => setActiveTab("connections"),
+          style: {
+            flex: 1,
+            padding: "6px",
+            fontSize: "10px",
+            background: activeTab === "connections" ? "var(--vscode-button-background)" : "transparent",
+            color: activeTab === "connections" ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)",
+            border: "none",
+            cursor: "pointer"
+          }
+        },
+        "Connections"
+      ),
+      /* @__PURE__ */ React19.createElement(
+        "button",
+        {
+          onClick: () => setActiveTab("lineage"),
+          style: {
+            flex: 1,
+            padding: "6px",
+            fontSize: "10px",
+            background: activeTab === "lineage" ? "var(--vscode-button-background)" : "transparent",
+            color: activeTab === "lineage" ? "var(--vscode-button-foreground)" : "var(--vscode-foreground)",
+            border: "none",
+            cursor: "pointer"
+          }
+        },
+        "Lineage"
+      )
+    )), activeTab === "lineage" && focusedSymbolId ? /* @__PURE__ */ React19.createElement(
+      LineagePanel,
+      {
+        symbolId: focusedSymbolId,
+        movedLineage: bundleFacts?.bundle?.movedLineage || [],
+        orderedCommits,
+        commits,
+        vscode: vscode3
+      }
+    ) : /* @__PURE__ */ React19.createElement(React19.Fragment, null, isTimeTravelActive && /* @__PURE__ */ React19.createElement(
       "div",
       {
         style: {
@@ -29933,14 +30466,48 @@ Churn: ${node.score.toFixed(1)}
         title: "References shown are current state. They may not have existed at the selected commit time."
       },
       "\u26A0\uFE0F Time travel active: References may differ"
-    ), /* @__PURE__ */ React16.createElement("div", { style: SectionHeader }, "Incoming (Referenced By)"), hasIncoming ? incomingGroups.size > 0 ? Array.from(incomingGroups.entries()).sort((a, b) => b[1] - a[1]).map(([folder, count]) => /* @__PURE__ */ React16.createElement(PortalGroup, { key: folder, name: folder, count, type: "incoming" })) : /* @__PURE__ */ React16.createElement(PortalGroup, { name: "UNKNOWN", count: incomingRefs, type: "incoming" }) : /* @__PURE__ */ React16.createElement("div", { style: { padding: "8px 12px", opacity: 0.5, fontSize: "11px" } }, focusedSymbolId ? `No incoming references for ${focusedSymbolId}` : "No incoming references"), /* @__PURE__ */ React16.createElement("div", { style: SectionHeader }, "Outgoing (References)"), hasOutgoing ? outgoingGroups.size > 0 ? Array.from(outgoingGroups.entries()).sort((a, b) => b[1] - a[1]).map(([folder, count]) => /* @__PURE__ */ React16.createElement(PortalGroup, { key: folder, name: folder, count, type: "outgoing" })) : /* @__PURE__ */ React16.createElement(PortalGroup, { name: "UNKNOWN", count: outgoingRefs, type: "outgoing" }) : /* @__PURE__ */ React16.createElement("div", { style: { padding: "8px 12px", opacity: 0.5, fontSize: "11px" } }, focusedSymbolId ? `No outgoing references for ${focusedSymbolId}` : "No outgoing references"));
+    ), /* @__PURE__ */ React19.createElement("div", { style: SectionHeader }, "Incoming (Referenced By)"), hasIncoming ? incomingGroups.size > 0 ? Array.from(incomingGroups.entries()).sort((a, b) => b[1] - a[1]).map(([folder, count]) => {
+      const representativeRef = filteredIncoming.find((ref) => {
+        const refPath = ref.from || ref.to || "";
+        const folderName = extractFolderName(refPath.split(":")[0]);
+        return folderName === folder;
+      });
+      return /* @__PURE__ */ React19.createElement(
+        PortalGroup,
+        {
+          key: folder,
+          name: folder,
+          count,
+          type: "incoming",
+          isFuture: representativeRef?.isFuture,
+          opacity: representativeRef?.opacity
+        }
+      );
+    }) : /* @__PURE__ */ React19.createElement(PortalGroup, { name: "UNKNOWN", count: incomingRefs, type: "incoming" }) : /* @__PURE__ */ React19.createElement("div", { style: { padding: "8px 12px", opacity: 0.5, fontSize: "11px" } }, focusedSymbolId ? `No incoming references for ${focusedSymbolId}` : "No incoming references"), /* @__PURE__ */ React19.createElement("div", { style: SectionHeader }, "Outgoing (References)"), hasOutgoing ? outgoingGroups.size > 0 ? Array.from(outgoingGroups.entries()).sort((a, b) => b[1] - a[1]).map(([folder, count]) => {
+      const representativeRef = filteredOutgoing.find((ref) => {
+        const refPath = ref.from || ref.to || "";
+        const folderName = extractFolderName(refPath.split(":")[0]);
+        return folderName === folder;
+      });
+      return /* @__PURE__ */ React19.createElement(
+        PortalGroup,
+        {
+          key: folder,
+          name: folder,
+          count,
+          type: "outgoing",
+          isFuture: representativeRef?.isFuture,
+          opacity: representativeRef?.opacity
+        }
+      );
+    }) : /* @__PURE__ */ React19.createElement(PortalGroup, { name: "UNKNOWN", count: outgoingRefs, type: "outgoing" }) : /* @__PURE__ */ React19.createElement("div", { style: { padding: "8px 12px", opacity: 0.5, fontSize: "11px" } }, focusedSymbolId ? `No outgoing references for ${focusedSymbolId}` : "No outgoing references")));
   };
 
   // src/webview/cockpit/components/stages/ReportsStage.tsx
-  var React18 = __toESM(require_react());
+  var React21 = __toESM(require_react());
 
   // src/webview/cockpit/components/ReportList.tsx
-  var React17 = __toESM(require_react());
+  var React20 = __toESM(require_react());
 
   // src/webview/cockpit/utils.ts
   var formatDate = (value) => {
@@ -29959,18 +30526,18 @@ Churn: ${node.score.toFixed(1)}
       (r) => (!filter || (r.title || "").toLowerCase().includes(filter) || (r.summary || "").toLowerCase().includes(filter)) && (!state.reportsShowPinnedOnly || r.pinned) && (state.reportsBranchFilter === "all" || r.branch === state.reportsBranchFilter)
     );
     if (!list.length) {
-      return /* @__PURE__ */ React17.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React17.createElement("div", null, "No reports yet"), /* @__PURE__ */ React17.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
+      return /* @__PURE__ */ React20.createElement("div", { className: "cockpit__empty" }, /* @__PURE__ */ React20.createElement("div", null, "No reports yet"), /* @__PURE__ */ React20.createElement("div", { style: { marginTop: "4px", fontSize: "11px", color: "#8a8f98" } }, "Generate a report by analyzing commits or staged/unstaged changes"));
     }
-    return /* @__PURE__ */ React17.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React17.createElement(
+    return /* @__PURE__ */ React20.createElement("ul", { className: "cockpit__list" }, list.map((r) => /* @__PURE__ */ React20.createElement(
       "li",
       {
         key: r.id,
         className: "cockpit__list-item cockpit__list-item--clickable",
         onClick: () => postMessageWithTracing(vscode3, { type: "openReport", reportId: r.id })
       },
-      /* @__PURE__ */ React17.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React17.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React17.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React17.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React17.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
-      r.summary ? /* @__PURE__ */ React17.createElement("div", { className: "cockpit__message" }, r.summary) : null,
-      /* @__PURE__ */ React17.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React17.createElement(
+      /* @__PURE__ */ React20.createElement("div", { className: "cockpit__row" }, /* @__PURE__ */ React20.createElement("span", null, r.title || "Untitled report"), r.branch && /* @__PURE__ */ React20.createElement("span", { className: "cockpit__badge", title: `Branch: ${r.branch}` }, "\u{1F33F} ", r.branch), /* @__PURE__ */ React20.createElement("span", { className: "cockpit__dim" }, r.pinned ? "\u{1F4CC}" : ""), /* @__PURE__ */ React20.createElement("span", { className: "cockpit__dim" }, formatDate(r.createdAt))),
+      r.summary ? /* @__PURE__ */ React20.createElement("div", { className: "cockpit__message" }, r.summary) : null,
+      /* @__PURE__ */ React20.createElement("div", { className: "cockpit__actions" }, /* @__PURE__ */ React20.createElement(
         "button",
         {
           className: "cockpit__button ghost small",
@@ -29980,7 +30547,7 @@ Churn: ${node.score.toFixed(1)}
           }
         },
         "Regenerate"
-      ), /* @__PURE__ */ React17.createElement(
+      ), /* @__PURE__ */ React20.createElement(
         "button",
         {
           className: "cockpit__button ghost small",
@@ -29990,7 +30557,7 @@ Churn: ${node.score.toFixed(1)}
           }
         },
         r.pinned ? "Unpin" : "Pin"
-      ), /* @__PURE__ */ React17.createElement(
+      ), /* @__PURE__ */ React20.createElement(
         "button",
         {
           className: "cockpit__button ghost small danger",
@@ -30012,11 +30579,11 @@ Churn: ${node.score.toFixed(1)}
   var ReportsStage = ({
     cockpitState,
     vscode: vscode3
-  }) => /* @__PURE__ */ React18.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React18.createElement(ReportList, { state: cockpitState, vscode: vscode3 }));
+  }) => /* @__PURE__ */ React21.createElement("div", { style: { width: "100%", height: "100%", overflow: "auto" } }, /* @__PURE__ */ React21.createElement(ReportList, { state: cockpitState, vscode: vscode3 }));
 
   // src/webview/cockpit/components/stages/SedimentGutter.tsx
-  var React19 = __toESM(require_react());
-  var GutterContainer = {
+  var React22 = __toESM(require_react());
+  var GutterContainer2 = {
     width: "12px",
     height: "100%",
     display: "flex",
@@ -30075,10 +30642,10 @@ Churn: ${node.score.toFixed(1)}
       if (lineCommitIndex === void 0) return false;
       return lineCommitIndex > currentCommitIndex;
     };
-    return /* @__PURE__ */ React19.createElement("div", { style: GutterContainer }, Array.from({ length: lineCount }).map((_, i) => {
+    return /* @__PURE__ */ React22.createElement("div", { style: GutterContainer2 }, Array.from({ length: lineCount }).map((_, i) => {
       const lineNumber = i + 1;
       const isAfterTime = isLineAfterTime(lineNumber);
-      return /* @__PURE__ */ React19.createElement(
+      return /* @__PURE__ */ React22.createElement(
         "div",
         {
           key: i,
@@ -30096,7 +30663,7 @@ Churn: ${node.score.toFixed(1)}
   };
 
   // src/webview/cockpit/components/stages/SignatureView.tsx
-  var React20 = __toESM(require_react());
+  var React23 = __toESM(require_react());
   var SignatureContainer = {
     border: "1px solid var(--vscode-editor-lineHighlightBorder)",
     backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
@@ -30145,7 +30712,7 @@ Churn: ${node.score.toFixed(1)}
     const lineCount = endLine - startLine + 1;
     const displaySignature = signature || `${kind} ${name}`;
     const signatureText = displaySignature.length > 80 ? displaySignature.substring(0, 80) + "..." : displaySignature;
-    return /* @__PURE__ */ React20.createElement(
+    return /* @__PURE__ */ React23.createElement(
       "div",
       {
         style: SignatureContainer,
@@ -30158,10 +30725,10 @@ Churn: ${node.score.toFixed(1)}
         },
         title: `${name} (${kind}) - ${lineCount} lines - Click to focus`
       },
-      /* @__PURE__ */ React20.createElement("span", { style: CollapseIcon }, "\u25B6"),
-      /* @__PURE__ */ React20.createElement("span", { style: SignatureText }, signatureText),
-      /* @__PURE__ */ React20.createElement("span", { style: KindBadge }, kind),
-      hasDrift && /* @__PURE__ */ React20.createElement(
+      /* @__PURE__ */ React23.createElement("span", { style: CollapseIcon }, "\u25B6"),
+      /* @__PURE__ */ React23.createElement("span", { style: SignatureText }, signatureText),
+      /* @__PURE__ */ React23.createElement("span", { style: KindBadge }, kind),
+      hasDrift && /* @__PURE__ */ React23.createElement(
         "span",
         {
           style: {
@@ -30172,7 +30739,7 @@ Churn: ${node.score.toFixed(1)}
         },
         "\u26A0\uFE0F"
       ),
-      riskScore !== void 0 && riskScore > 40 && /* @__PURE__ */ React20.createElement(
+      riskScore !== void 0 && riskScore > 40 && /* @__PURE__ */ React23.createElement(
         "span",
         {
           style: {
@@ -30185,7 +30752,7 @@ Churn: ${node.score.toFixed(1)}
           title: `Risk: ${riskScore}`
         }
       ),
-      /* @__PURE__ */ React20.createElement(
+      /* @__PURE__ */ React23.createElement(
         "span",
         {
           style: {
@@ -30202,7 +30769,7 @@ Churn: ${node.score.toFixed(1)}
   };
 
   // src/webview/cockpit/components/stages/StageHeader.tsx
-  var React21 = __toESM(require_react());
+  var React24 = __toESM(require_react());
   function dirname2(filePath) {
     const normalized = filePath.replace(/\\/g, "/");
     const lastSlash = normalized.lastIndexOf("/");
@@ -30280,16 +30847,17 @@ Churn: ${node.score.toFixed(1)}
     bundleFacts,
     onNeighborClick
   }) => {
-    const siblings = React21.useMemo(
+    const siblings = React24.useMemo(
       () => filePath ? findSiblingFiles(filePath, explorerData, bundleFacts) : [],
       [filePath, explorerData, bundleFacts]
     );
-    return /* @__PURE__ */ React21.createElement("div", { style: { position: "relative" } }, /* @__PURE__ */ React21.createElement("div", { style: HeaderContainer }, /* @__PURE__ */ React21.createElement(
+    const analysisData = useFileAnalysisData(filePath || "", bundleFacts);
+    return /* @__PURE__ */ React24.createElement("div", { style: { position: "relative" } }, /* @__PURE__ */ React24.createElement("div", { style: HeaderContainer }, /* @__PURE__ */ React24.createElement(
       "div",
       {
         style: { ...TitleStyle, flexDirection: "column", alignItems: "flex-start", gap: "4px" }
       },
-      /* @__PURE__ */ React21.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px" } }, /* @__PURE__ */ React21.createElement("span", null, fileName), metrics && metrics.riskScore > 0 && /* @__PURE__ */ React21.createElement(
+      /* @__PURE__ */ React24.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px" } }, /* @__PURE__ */ React24.createElement("span", null, fileName), metrics && metrics.riskScore > 0 && /* @__PURE__ */ React24.createElement(
         "span",
         {
           style: {
@@ -30304,7 +30872,7 @@ Churn: ${node.score.toFixed(1)}
         "Risk: ",
         metrics.riskScore
       )),
-      siblings.length > 0 && /* @__PURE__ */ React21.createElement(
+      siblings.length > 0 && /* @__PURE__ */ React24.createElement(
         "div",
         {
           style: {
@@ -30316,10 +30884,10 @@ Churn: ${node.score.toFixed(1)}
             flexWrap: "wrap"
           }
         },
-        /* @__PURE__ */ React21.createElement("span", { style: { opacity: 0.5 } }, "Neighbors:"),
+        /* @__PURE__ */ React24.createElement("span", { style: { opacity: 0.5 } }, "Neighbors:"),
         siblings.map((siblingPath) => {
           const siblingName = basename(siblingPath);
-          return /* @__PURE__ */ React21.createElement(
+          return /* @__PURE__ */ React24.createElement(
             "button",
             {
               key: siblingPath,
@@ -30346,7 +30914,97 @@ Churn: ${node.score.toFixed(1)}
           );
         })
       )
-    ), /* @__PURE__ */ React21.createElement("div", { style: { display: "flex", alignItems: "center", gap: "12px", fontSize: "11px" } }, metrics && /* @__PURE__ */ React21.createElement(React21.Fragment, null, /* @__PURE__ */ React21.createElement("div", { title: "Bus Factor (Top Authors)", style: { display: "flex", gap: "4px" } }, metrics.authors?.map((author) => /* @__PURE__ */ React21.createElement(
+    ), /* @__PURE__ */ React24.createElement("div", { style: { display: "flex", alignItems: "center", gap: "12px", fontSize: "11px" } }, /* @__PURE__ */ React24.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" } }, analysisData.findings.missing > 0 && /* @__PURE__ */ React24.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "10px",
+          backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+          color: "var(--vscode-inputValidation-warningForeground)",
+          padding: "1px 6px",
+          borderRadius: "4px"
+        },
+        title: `${analysisData.findings.missing} missing symbols`
+      },
+      "\u26A0\uFE0F ",
+      analysisData.findings.missing,
+      " missing"
+    ), analysisData.findings.zombies > 0 && /* @__PURE__ */ React24.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "10px",
+          backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+          color: "var(--vscode-inputValidation-warningForeground)",
+          padding: "1px 6px",
+          borderRadius: "4px"
+        },
+        title: `${analysisData.findings.zombies} zombie symbols`
+      },
+      "\u{1F47B} ",
+      analysisData.findings.zombies,
+      " zombies"
+    ), analysisData.findings.dead > 0 && /* @__PURE__ */ React24.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "10px",
+          backgroundColor: "var(--vscode-inputValidation-errorBackground)",
+          color: "var(--vscode-inputValidation-errorForeground)",
+          padding: "1px 6px",
+          borderRadius: "4px"
+        },
+        title: `${analysisData.findings.dead} dead symbols`
+      },
+      "\u{1F480} ",
+      analysisData.findings.dead,
+      " dead"
+    ), analysisData.findings.legacyUsed > 0 && /* @__PURE__ */ React24.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "10px",
+          backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+          color: "var(--vscode-inputValidation-warningForeground)",
+          padding: "1px 6px",
+          borderRadius: "4px"
+        },
+        title: `${analysisData.findings.legacyUsed} legacy symbols`
+      },
+      "\u26A0\uFE0F ",
+      analysisData.findings.legacyUsed,
+      " legacy"
+    ), analysisData.findings.unresolved > 0 && /* @__PURE__ */ React24.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "10px",
+          backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+          color: "var(--vscode-inputValidation-warningForeground)",
+          padding: "1px 6px",
+          borderRadius: "4px"
+        },
+        title: `${analysisData.findings.unresolved} unresolved callers`
+      },
+      "\u2753 ",
+      analysisData.findings.unresolved,
+      " unresolved"
+    ), analysisData.hotspots.length > 0 && /* @__PURE__ */ React24.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "10px",
+          backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+          color: "var(--vscode-inputValidation-warningForeground)",
+          padding: "1px 6px",
+          borderRadius: "4px"
+        },
+        title: `Hotspot score: ${analysisData.hotspots[0].score.toFixed(1)}`
+      },
+      "\u{1F525} Hotspot (",
+      analysisData.hotspots[0].score.toFixed(0),
+      ")"
+    )), metrics && /* @__PURE__ */ React24.createElement(React24.Fragment, null, /* @__PURE__ */ React24.createElement("div", { title: "Bus Factor (Top Authors)", style: { display: "flex", gap: "4px" } }, metrics.authors?.map((author) => /* @__PURE__ */ React24.createElement(
       "div",
       {
         key: author,
@@ -30365,11 +31023,11 @@ Churn: ${node.score.toFixed(1)}
         title: author
       },
       author.charAt(0).toUpperCase()
-    ))), /* @__PURE__ */ React21.createElement("div", { title: "Incoming References" }, "Refs: ", /* @__PURE__ */ React21.createElement("strong", null, metrics.incomingRefs))))), metrics && /* @__PURE__ */ React21.createElement("div", { style: HealthBarStyle(metrics.riskScore) }));
+    ))), /* @__PURE__ */ React24.createElement("div", { title: "Incoming References" }, "Refs: ", /* @__PURE__ */ React24.createElement("strong", null, metrics.incomingRefs))))), metrics && /* @__PURE__ */ React24.createElement("div", { style: HealthBarStyle(metrics.riskScore) }));
   };
 
   // src/webview/cockpit/components/stages/SymbolBlock.tsx
-  var React22 = __toESM(require_react());
+  var React25 = __toESM(require_react());
   var BlockContainer = {
     border: "1px solid var(--vscode-editor-lineHighlightBorder)",
     backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
@@ -30404,15 +31062,15 @@ Churn: ${node.score.toFixed(1)}
   }) => {
     const lineCount = endLine - startLine + 1;
     const height = Math.max(40, lineCount * 2);
-    return /* @__PURE__ */ React22.createElement(
+    return /* @__PURE__ */ React25.createElement(
       "div",
       {
         style: { ...BlockContainer, height: `${height}px` },
         onClick,
         title: `Click to zoom into ${name}`
       },
-      /* @__PURE__ */ React22.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React22.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React22.createElement("span", { style: NameStyle }, name), /* @__PURE__ */ React22.createElement("span", { style: { fontSize: "10px", opacity: 0.7 } }, "(", kind, ")")), /* @__PURE__ */ React22.createElement("div", { style: MetaStyle }, lineCount, " lines \u2022 C", complexity)),
-      /* @__PURE__ */ React22.createElement("div", { style: { opacity: 0.3, fontSize: "8px", overflow: "hidden" } }, Array.from({ length: Math.min(5, lineCount) }).map((_, i) => /* @__PURE__ */ React22.createElement(
+      /* @__PURE__ */ React25.createElement("div", { style: HeaderStyle3 }, /* @__PURE__ */ React25.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React25.createElement("span", { style: NameStyle }, name), /* @__PURE__ */ React25.createElement("span", { style: { fontSize: "10px", opacity: 0.7 } }, "(", kind, ")")), /* @__PURE__ */ React25.createElement("div", { style: MetaStyle }, lineCount, " lines \u2022 C", complexity)),
+      /* @__PURE__ */ React25.createElement("div", { style: { opacity: 0.3, fontSize: "8px", overflow: "hidden" } }, Array.from({ length: Math.min(5, lineCount) }).map((_, i) => /* @__PURE__ */ React25.createElement(
         "div",
         {
           key: i,
@@ -30428,8 +31086,8 @@ Churn: ${node.score.toFixed(1)}
   };
 
   // src/webview/cockpit/components/stages/SymbolStage.tsx
-  var React23 = __toESM(require_react());
-  var SymbolStage = ({ frame, vscode: vscode3 }) => /* @__PURE__ */ React23.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React23.createElement(
+  var React26 = __toESM(require_react());
+  var SymbolStage = ({ frame, vscode: vscode3 }) => /* @__PURE__ */ React26.createElement("div", { style: { width: "100%", height: "100%", display: "flex", flexDirection: "column" } }, /* @__PURE__ */ React26.createElement(
     "div",
     {
       style: {
@@ -30438,9 +31096,9 @@ Churn: ${node.score.toFixed(1)}
         flexShrink: 0
       }
     },
-    /* @__PURE__ */ React23.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
-    /* @__PURE__ */ React23.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.filePath),
-    frame.data?.drift?.length > 0 && /* @__PURE__ */ React23.createElement("div", { style: { marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React23.createElement(
+    /* @__PURE__ */ React26.createElement("h3", { style: { fontSize: "1.1em", marginBottom: "5px" } }, frame.name),
+    /* @__PURE__ */ React26.createElement("div", { style: { fontSize: "0.8em", opacity: 0.8 } }, frame.data?.filePath),
+    frame.data?.drift?.length > 0 && /* @__PURE__ */ React26.createElement("div", { style: { marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" } }, frame.data.drift.map((d, idx) => /* @__PURE__ */ React26.createElement(
       "span",
       {
         key: idx,
@@ -30455,7 +31113,7 @@ Churn: ${node.score.toFixed(1)}
       "Drift: ",
       d.suggestedName || d.issue || "Rename suggested"
     ))),
-    /* @__PURE__ */ React23.createElement("div", { style: { marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" } }, frame.data?.symbolId && vscode3 && /* @__PURE__ */ React23.createElement(
+    /* @__PURE__ */ React26.createElement("div", { style: { marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" } }, frame.data?.symbolId && vscode3 && /* @__PURE__ */ React26.createElement(
       "button",
       {
         onClick: () => {
@@ -30475,7 +31133,7 @@ Churn: ${node.score.toFixed(1)}
         }
       },
       "Open in Editor"
-    ), frame.data?.drift?.[0]?.suggestedName && vscode3 && /* @__PURE__ */ React23.createElement(
+    ), frame.data?.drift?.[0]?.suggestedName && vscode3 && /* @__PURE__ */ React26.createElement(
       "button",
       {
         onClick: () => {
@@ -30500,7 +31158,7 @@ Churn: ${node.score.toFixed(1)}
         }
       },
       "Apply Suggestion (manual)"
-    ), vscode3 && /* @__PURE__ */ React23.createElement(
+    ), vscode3 && /* @__PURE__ */ React26.createElement(
       "button",
       {
         onClick: () => {
@@ -30525,7 +31183,7 @@ Churn: ${node.score.toFixed(1)}
       },
       "Ask Assistant"
     ))
-  ), /* @__PURE__ */ React23.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React23.createElement(
+  ), /* @__PURE__ */ React26.createElement("div", { style: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" } }, /* @__PURE__ */ React26.createElement(
     "div",
     {
       style: {
@@ -30536,7 +31194,7 @@ Churn: ${node.score.toFixed(1)}
         borderBottom: "1px solid var(--vscode-panel-border)"
       }
     },
-    /* @__PURE__ */ React23.createElement(
+    /* @__PURE__ */ React26.createElement(
       "pre",
       {
         style: {
@@ -30550,7 +31208,7 @@ Churn: ${node.score.toFixed(1)}
       },
       frame.data?.content || "Loading..."
     )
-  ), /* @__PURE__ */ React23.createElement("div", { style: { maxHeight: "220px", overflow: "auto", padding: "10px", flexShrink: 0 } }, /* @__PURE__ */ React23.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Evolution"), /* @__PURE__ */ React23.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.history?.map((commit) => /* @__PURE__ */ React23.createElement(
+  ), /* @__PURE__ */ React26.createElement("div", { style: { maxHeight: "220px", overflow: "auto", padding: "10px", flexShrink: 0 } }, /* @__PURE__ */ React26.createElement("h4", { style: { fontSize: "0.95em", marginBottom: "10px" } }, "Evolution"), /* @__PURE__ */ React26.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, frame.data?.history?.map((commit) => /* @__PURE__ */ React26.createElement(
     "li",
     {
       key: commit.hash || commit.message || commit.date || commit.author,
@@ -30560,12 +31218,12 @@ Churn: ${node.score.toFixed(1)}
         paddingLeft: "8px"
       }
     },
-    /* @__PURE__ */ React23.createElement("div", { style: { fontWeight: "bold", fontSize: "0.85em" } }, commit.message || commit.summary || commit.change),
-    /* @__PURE__ */ React23.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
-  )), !frame.data?.history?.length && /* @__PURE__ */ React23.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
+    /* @__PURE__ */ React26.createElement("div", { style: { fontWeight: "bold", fontSize: "0.85em" } }, commit.message || commit.summary || commit.change),
+    /* @__PURE__ */ React26.createElement("div", { style: { fontSize: "0.75em", opacity: 0.7, marginTop: "2px" } }, commit.date ? new Date(commit.date).toLocaleDateString() : "", " \u2022", " ", commit.author || "unknown")
+  )), !frame.data?.history?.length && /* @__PURE__ */ React26.createElement("li", { style: { opacity: 0.6, fontSize: "0.85em" } }, "No evolution found.")))));
 
   // src/webview/cockpit/components/stages/TimeScrubber.tsx
-  var React24 = __toESM(require_react());
+  var React27 = __toESM(require_react());
   var ScrubberContainer = {
     height: "40px",
     borderTop: "1px solid var(--vscode-panel-border)",
@@ -30583,18 +31241,20 @@ Churn: ${node.score.toFixed(1)}
   var TimeScrubber = ({
     commits = [],
     currentCommitIndex,
-    onCommitIndexChange
+    onCommitIndexChange,
+    bundleFacts,
+    lineCommits = []
   }) => {
-    const [isPlaying, setIsPlaying] = React24.useState(false);
+    const [isPlaying, setIsPlaying] = React27.useState(false);
     const maxIndex = commits.length > 0 ? commits.length - 1 : 0;
     const effectiveIndex = currentCommitIndex !== void 0 ? currentCommitIndex : maxIndex;
-    const [currentIndex, setCurrentIndex] = React24.useState(effectiveIndex);
-    React24.useEffect(() => {
+    const [currentIndex, setCurrentIndex] = React27.useState(effectiveIndex);
+    React27.useEffect(() => {
       if (currentCommitIndex !== void 0) {
         setCurrentIndex(currentCommitIndex);
       }
     }, [currentCommitIndex]);
-    React24.useEffect(() => {
+    React27.useEffect(() => {
       let interval;
       if (isPlaying && commits.length > 0) {
         interval = setInterval(() => {
@@ -30611,7 +31271,7 @@ Churn: ${node.score.toFixed(1)}
       }
       return () => clearInterval(interval);
     }, [isPlaying, maxIndex, commits.length, onCommitIndexChange]);
-    React24.useEffect(() => {
+    React27.useEffect(() => {
       if (currentIndex !== effectiveIndex) {
         onCommitIndexChange(currentIndex);
       }
@@ -30632,10 +31292,25 @@ Churn: ${node.score.toFixed(1)}
       const shortMessage = message.length > 40 ? message.substring(0, 40) + "..." : message;
       return `${shortSha} - ${shortMessage}${date ? ` (${date})` : ""}`;
     };
+    const driftCommitIndices = React27.useMemo(() => {
+      if (!bundleFacts?.findings?.patternDrift?.conventionDrift?.driftSymbols) {
+        return /* @__PURE__ */ new Set();
+      }
+      const indices = /* @__PURE__ */ new Set();
+      if (lineCommits.length > 0 && commits.length > 0) {
+        lineCommits.forEach((lc) => {
+          const commitIndex = commits.findIndex((c) => c.sha === lc.commitSha);
+          if (commitIndex >= 0) {
+            indices.add(commitIndex);
+          }
+        });
+      }
+      return indices;
+    }, [bundleFacts, lineCommits, commits]);
     if (commits.length === 0) {
-      return /* @__PURE__ */ React24.createElement("div", { style: ScrubberContainer }, /* @__PURE__ */ React24.createElement("span", { style: { fontSize: "11px", opacity: 0.7 } }, "No commits available"));
+      return /* @__PURE__ */ React27.createElement("div", { style: ScrubberContainer }, /* @__PURE__ */ React27.createElement("span", { style: { fontSize: "11px", opacity: 0.7 } }, "No commits available"));
     }
-    return /* @__PURE__ */ React24.createElement("div", { style: ScrubberContainer }, /* @__PURE__ */ React24.createElement(
+    return /* @__PURE__ */ React27.createElement("div", { style: ScrubberContainer }, /* @__PURE__ */ React27.createElement(
       "button",
       {
         onClick: () => setIsPlaying(!isPlaying),
@@ -30650,7 +31325,7 @@ Churn: ${node.score.toFixed(1)}
         disabled: commits.length === 0
       },
       isPlaying ? "\u23F8" : "\u25B6"
-    ), /* @__PURE__ */ React24.createElement(
+    ), /* @__PURE__ */ React27.createElement(
       "span",
       {
         style: {
@@ -30663,7 +31338,7 @@ Churn: ${node.score.toFixed(1)}
         }
       },
       formatCommit(currentIndex)
-    ), /* @__PURE__ */ React24.createElement(
+    ), /* @__PURE__ */ React27.createElement("div", { style: { position: "relative", flex: 1, display: "flex", alignItems: "center" } }, /* @__PURE__ */ React27.createElement("div", { style: { position: "relative", flex: 1, display: "flex", alignItems: "center" } }, /* @__PURE__ */ React27.createElement(
       "input",
       {
         type: "range",
@@ -30674,7 +31349,37 @@ Churn: ${node.score.toFixed(1)}
         style: SliderStyle,
         disabled: commits.length === 0
       }
-    ), /* @__PURE__ */ React24.createElement("span", { style: { fontSize: "11px", opacity: 0.7, minWidth: "50px", textAlign: "right" } }, currentIndex + 1, " / ", commits.length), /* @__PURE__ */ React24.createElement(
+    ), Array.from(driftCommitIndices).map((driftIndex) => /* @__PURE__ */ React27.createElement(
+      "div",
+      {
+        key: driftIndex,
+        style: {
+          position: "absolute",
+          left: `${driftIndex / maxIndex * 100}%`,
+          width: "2px",
+          height: "20px",
+          backgroundColor: "var(--vscode-inputValidation-errorBorder)",
+          pointerEvents: "none",
+          zIndex: 5
+        },
+        title: "Convention drift introduced here"
+      }
+    ))), Array.from(driftCommitIndices).map((driftIndex) => /* @__PURE__ */ React27.createElement(
+      "div",
+      {
+        key: driftIndex,
+        style: {
+          position: "absolute",
+          left: `${driftIndex / maxIndex * 100}%`,
+          width: "2px",
+          height: "20px",
+          backgroundColor: "var(--vscode-inputValidation-errorBorder)",
+          pointerEvents: "none",
+          zIndex: 5
+        },
+        title: "Convention drift introduced here"
+      }
+    ))), /* @__PURE__ */ React27.createElement("span", { style: { fontSize: "11px", opacity: 0.7, minWidth: "50px", textAlign: "right" } }, currentIndex + 1, " / ", commits.length), /* @__PURE__ */ React27.createElement(
       "button",
       {
         onClick: () => {
@@ -30729,8 +31434,21 @@ Churn: ${node.score.toFixed(1)}
     };
     const frameData = frame.level === "bundle" ? cockpitState?.bundleView || frame.data : frame.data;
     const renderFrame = frame.level === "bundle" ? { ...frame, data: frameData } : frame;
-    const [zoomLevel, setZoomLevel] = React25.useState("focus");
-    const [focusedSymbolId, setFocusedSymbolId] = React25.useState(null);
+    const [zoomLevel, setZoomLevel] = React28.useState("focus");
+    const [focusedSymbolId, setFocusedSymbolId] = React28.useState(
+      renderFrame.data?.symbolId || null
+    );
+    React28.useEffect(() => {
+      if (renderFrame.data?.symbolId) {
+        setFocusedSymbolId(renderFrame.data.symbolId);
+        setZoomLevel("focus");
+      }
+    }, [renderFrame.data?.symbolId, renderFrame.id]);
+    const analysisData = useFileAnalysisData(
+      renderFrame.level === "file" ? renderFrame.id : "",
+      cockpitState?.bundleFacts,
+      cockpitState?.currentCommitIndex
+    );
     const handleWheel = (e) => {
       if (e.ctrlKey) {
         if (e.deltaY > 0) {
@@ -30756,6 +31474,35 @@ Churn: ${node.score.toFixed(1)}
       const driftIssues = renderFrame.data?.drift || [];
       let orderedCommits = cockpitState?.selectedCommitShas || [];
       let commits = [];
+      const totalCommits2 = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
+    }
+    const totalCommits = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
+    const headInfo = cockpitState?.headInfo;
+    const fileDataHistory = renderFrame.data?.history;
+    const selectedCommitShas = cockpitState?.selectedCommitShas || [];
+    React28.useEffect(() => {
+      if (renderFrame.level === "file" && selectedCommitShas.length === 0 && !fileDataHistory && totalCommits > 0 && !headInfo) {
+        vscode3.postMessage({ type: "getHeadInfo" });
+      }
+    }, [
+      renderFrame.level,
+      selectedCommitShas.length,
+      fileDataHistory,
+      totalCommits,
+      headInfo,
+      vscode3
+    ]);
+    if (renderFrame.level === "file") {
+      const metrics = cockpitState?.nodeMetrics?.[renderFrame.id] || renderFrame.data?.metrics;
+      const content = renderFrame.data?.content || "";
+      const lineCount = renderFrame.data?.lineCount || content.split("\n").length;
+      const symbols = renderFrame.data?.symbols || [];
+      const lineCommits = renderFrame.data?.lineCommits || [];
+      const blastRadius = renderFrame.data?.blastRadius;
+      const driftIssues = renderFrame.data?.drift || [];
+      let orderedCommits = cockpitState?.selectedCommitShas || [];
+      let commits = [];
+      const optimisticHead = cockpitState?.headInfo || null;
       if (orderedCommits.length > 0) {
         commits = (cockpitState?.commits || []).filter((c) => orderedCommits.includes(c.sha)).sort((a, b) => {
           const aIndex = orderedCommits.indexOf(a.sha);
@@ -30776,6 +31523,9 @@ Churn: ${node.score.toFixed(1)}
           message: c.message,
           author: c.author_name || c.author
         }));
+      } else if (optimisticHead) {
+        orderedCommits = [optimisticHead.sha];
+        commits = [optimisticHead];
       }
       const currentCommitIndex = cockpitState?.currentCommitIndex !== void 0 ? cockpitState.currentCommitIndex : orderedCommits.length > 0 ? orderedCommits.length - 1 : void 0;
       const handleNeighborClick = (filePath) => {
@@ -30791,7 +31541,7 @@ Churn: ${node.score.toFixed(1)}
           vscode3.postMessage({ type: "analyzeFrame", frameId: filePath });
         }
       };
-      return /* @__PURE__ */ React25.createElement("div", { style: MicroscopeContainer, onWheel: handleWheel }, /* @__PURE__ */ React25.createElement(
+      return /* @__PURE__ */ React28.createElement("div", { style: MicroscopeContainer, onWheel: handleWheel }, /* @__PURE__ */ React28.createElement(
         StageHeader,
         {
           fileName: renderFrame.name,
@@ -30802,7 +31552,7 @@ Churn: ${node.score.toFixed(1)}
           bundleFacts: cockpitState?.bundleFacts,
           onNeighborClick: handleNeighborClick
         }
-      ), /* @__PURE__ */ React25.createElement(
+      ), /* @__PURE__ */ React28.createElement(
         "div",
         {
           style: {
@@ -30814,7 +31564,7 @@ Churn: ${node.score.toFixed(1)}
             gap: "4px"
           }
         },
-        /* @__PURE__ */ React25.createElement(
+        /* @__PURE__ */ React28.createElement(
           "button",
           {
             onClick: () => setZoomLevel("overview"),
@@ -30822,7 +31572,7 @@ Churn: ${node.score.toFixed(1)}
           },
           "-"
         ),
-        /* @__PURE__ */ React25.createElement(
+        /* @__PURE__ */ React28.createElement(
           "button",
           {
             onClick: () => setZoomLevel("normal"),
@@ -30830,7 +31580,7 @@ Churn: ${node.score.toFixed(1)}
           },
           "="
         ),
-        /* @__PURE__ */ React25.createElement(
+        /* @__PURE__ */ React28.createElement(
           "button",
           {
             onClick: () => setZoomLevel("focus"),
@@ -30838,7 +31588,7 @@ Churn: ${node.score.toFixed(1)}
           },
           "+"
         )
-      ), /* @__PURE__ */ React25.createElement("div", { style: DeepEditorLayout }, /* @__PURE__ */ React25.createElement(
+      ), /* @__PURE__ */ React28.createElement("div", { style: DeepEditorLayout }, /* @__PURE__ */ React28.createElement(
         SedimentGutter,
         {
           lineCount,
@@ -30846,7 +31596,15 @@ Churn: ${node.score.toFixed(1)}
           orderedCommits,
           currentCommitIndex
         }
-      ), zoomLevel === "focus" ? /* @__PURE__ */ React25.createElement(
+      ), /* @__PURE__ */ React28.createElement(
+        MovedBlockGutter,
+        {
+          lineCount,
+          movedBlocks: analysisData.movedBlocks,
+          currentFilePath: renderFrame.id,
+          vscode: vscode3
+        }
+      ), zoomLevel === "focus" ? /* @__PURE__ */ React28.createElement(
         CodeEditor,
         {
           content,
@@ -30858,14 +31616,16 @@ Churn: ${node.score.toFixed(1)}
           onClearFocus: () => setFocusedSymbolId(null),
           lineCommits,
           orderedCommits,
-          currentCommitIndex
+          currentCommitIndex,
+          filePath: renderFrame.id,
+          bundleFacts: cockpitState?.bundleFacts
         }
-      ) : zoomLevel === "overview" ? /* @__PURE__ */ React25.createElement("div", { style: { flex: 1, overflow: "auto", padding: "12px" } }, symbols.length > 0 ? symbols.map((sym) => {
+      ) : zoomLevel === "overview" ? /* @__PURE__ */ React28.createElement("div", { style: { flex: 1, overflow: "auto", padding: "12px" } }, symbols.length > 0 ? symbols.map((sym) => {
         const symbolDriftIssues = driftIssues.filter(
           (issue) => issue.symbol === sym.name
         );
         const hasDrift = symbolDriftIssues.length > 0;
-        return /* @__PURE__ */ React25.createElement(
+        return /* @__PURE__ */ React28.createElement(
           SignatureView,
           {
             key: sym.id || sym.name,
@@ -30882,7 +31642,7 @@ Churn: ${node.score.toFixed(1)}
             }
           }
         );
-      }) : /* @__PURE__ */ React25.createElement("div", { style: { opacity: 0.5, textAlign: "center", marginTop: "40px" } }, "No symbols found. Switch to Focus view.")) : /* @__PURE__ */ React25.createElement("div", { style: { flex: 1, overflow: "auto", padding: "20px" } }, symbols.length > 0 ? symbols.map((sym) => /* @__PURE__ */ React25.createElement(
+      }) : /* @__PURE__ */ React28.createElement("div", { style: { opacity: 0.5, textAlign: "center", marginTop: "40px" } }, "No symbols found. Switch to Focus view.")) : /* @__PURE__ */ React28.createElement("div", { style: { flex: 1, overflow: "auto", padding: "20px" } }, symbols.length > 0 ? symbols.map((sym) => /* @__PURE__ */ React28.createElement(
         SymbolBlock,
         {
           key: sym.id || sym.name,
@@ -30896,7 +31656,7 @@ Churn: ${node.score.toFixed(1)}
             setFocusedSymbolId(sym.id || sym.name);
           }
         }
-      )) : /* @__PURE__ */ React25.createElement("div", { style: { opacity: 0.5, textAlign: "center", marginTop: "40px" } }, "No symbols found. Switch to Focus view.")), /* @__PURE__ */ React25.createElement(
+      )) : /* @__PURE__ */ React28.createElement("div", { style: { opacity: 0.5, textAlign: "center", marginTop: "40px" } }, "No symbols found. Switch to Focus view.")), /* @__PURE__ */ React28.createElement(
         PortalsRail,
         {
           incomingRefs: metrics?.incomingRefs,
@@ -30905,18 +31665,23 @@ Churn: ${node.score.toFixed(1)}
           focusedSymbolId,
           currentFilePath: renderFrame.id,
           currentCommitIndex,
-          orderedCommits
+          orderedCommits,
+          bundleFacts: cockpitState?.bundleFacts,
+          vscode: vscode3,
+          commits
         }
-      )), /* @__PURE__ */ React25.createElement(
+      )), /* @__PURE__ */ React28.createElement(
         TimeScrubber,
         {
           commits,
           currentCommitIndex,
-          onCommitIndexChange: handleCommitIndexChange
+          onCommitIndexChange: handleCommitIndexChange,
+          bundleFacts: cockpitState?.bundleFacts,
+          lineCommits
         }
       ));
     }
-    return /* @__PURE__ */ React25.createElement("div", { style: MicroscopeContainer }, renderFrame.level !== "bundle" && /* @__PURE__ */ React25.createElement("div", { style: { padding: "8px", borderBottom: "1px solid var(--vscode-panel-border)" } }, /* @__PURE__ */ React25.createElement("button", { onClick: onZoomOut, disabled: !frame.parentId }, "\u2190 Back")), /* @__PURE__ */ React25.createElement("div", { style: { flex: 1, overflow: "auto" } }, renderFrame.status === "scanning" ? /* @__PURE__ */ React25.createElement("div", { style: { padding: "20px", textAlign: "center" } }, "Scanning...") : /* @__PURE__ */ React25.createElement(React25.Fragment, null, renderFrame.id === "reports-root" ? cockpitState ? /* @__PURE__ */ React25.createElement(ReportsStage, { cockpitState, vscode: vscode3 }) : /* @__PURE__ */ React25.createElement("div", null, "Loading state...") : /* @__PURE__ */ React25.createElement(React25.Fragment, null, renderFrame.level === "bundle" && /* @__PURE__ */ React25.createElement(
+    return /* @__PURE__ */ React28.createElement("div", { style: MicroscopeContainer }, renderFrame.level !== "bundle" && /* @__PURE__ */ React28.createElement("div", { style: { padding: "8px", borderBottom: "1px solid var(--vscode-panel-border)" } }, /* @__PURE__ */ React28.createElement("button", { onClick: onZoomOut, disabled: !frame.parentId }, "\u2190 Back")), /* @__PURE__ */ React28.createElement("div", { style: { flex: 1, overflow: "auto" } }, renderFrame.status === "scanning" ? /* @__PURE__ */ React28.createElement("div", { style: { padding: "20px", textAlign: "center" } }, /* @__PURE__ */ React28.createElement("div", null, "Scanning ", renderFrame.name, "..."), /* @__PURE__ */ React28.createElement("div", { style: { fontSize: "10px", opacity: 0.7 } }, "Tier ", renderFrame.tier || 1, "/3")) : /* @__PURE__ */ React28.createElement(React28.Fragment, null, renderFrame.id === "reports-root" ? cockpitState ? /* @__PURE__ */ React28.createElement(ReportsStage, { cockpitState, vscode: vscode3 }) : /* @__PURE__ */ React28.createElement("div", null, "Loading state...") : /* @__PURE__ */ React28.createElement(React28.Fragment, null, renderFrame.level === "bundle" && /* @__PURE__ */ React28.createElement(
       BundleStage,
       {
         frame: renderFrame,
@@ -30924,14 +31689,14 @@ Churn: ${node.score.toFixed(1)}
         cockpitState,
         vscode: vscode3
       }
-    ), renderFrame.level === "folder" && /* @__PURE__ */ React25.createElement(
+    ), renderFrame.level === "folder" && /* @__PURE__ */ React28.createElement(
       FolderStage,
       {
         frame: renderFrame,
         onZoomIn: handleZoomIn,
         cockpitState
       }
-    ), renderFrame.level === "blast_radius" && /* @__PURE__ */ React25.createElement(BlastRadiusStage, { frame: renderFrame, onZoomIn: handleZoomIn }), renderFrame.level === "symbol" && /* @__PURE__ */ React25.createElement(SymbolStage, { frame: renderFrame, vscode: vscode3 })))));
+    ), renderFrame.level === "blast_radius" && /* @__PURE__ */ React28.createElement(BlastRadiusStage, { frame: renderFrame, onZoomIn: handleZoomIn }), renderFrame.level === "symbol" && /* @__PURE__ */ React28.createElement(SymbolStage, { frame: renderFrame, vscode: vscode3 })))));
   };
 
   // src/webview/cockpit/components/Stage.tsx
@@ -30942,7 +31707,7 @@ Churn: ${node.score.toFixed(1)}
     cockpitState,
     vscode: vscode3
   }) => {
-    return /* @__PURE__ */ React26.createElement(
+    return /* @__PURE__ */ React29.createElement(
       CodeMicroscope,
       {
         frame,
@@ -30972,15 +31737,15 @@ Churn: ${node.score.toFixed(1)}
     vscode: vscode3,
     cockpitState
   }) => {
-    const [assistantMessages, setAssistantMessages] = React27.useState([]);
-    const [width, setWidth] = React27.useState(window.innerWidth);
-    const [activeTab, setActiveTab] = React27.useState("stage");
-    const [isAssistantOpen, setIsAssistantOpen] = React27.useState(true);
+    const [assistantMessages, setAssistantMessages] = React30.useState([]);
+    const [width, setWidth] = React30.useState(window.innerWidth);
+    const [activeTab, setActiveTab] = React30.useState("stage");
+    const [isAssistantOpen, setIsAssistantOpen] = React30.useState(true);
     const activeFrame = cockpitState.activeFrame;
     const history = cockpitState.history;
     const explorerData = cockpitState.explorerData;
-    const [selection, setSelection] = React27.useState(null);
-    React27.useEffect(() => {
+    const [selection, setSelection] = React30.useState(null);
+    React30.useEffect(() => {
       postMessageWithTracing(vscode3, { type: "getExplorerTree" });
       postMessageWithTracing(vscode3, { type: "getBundleData" });
       const handler = (event) => {
@@ -31000,7 +31765,7 @@ Churn: ${node.score.toFixed(1)}
       window.addEventListener("message", handler);
       return () => window.removeEventListener("message", handler);
     }, [vscode3]);
-    React27.useEffect(() => {
+    React30.useEffect(() => {
       const handleResize = () => setWidth(window.innerWidth);
       window.addEventListener("resize", handleResize);
       return () => window.removeEventListener("resize", handleResize);
@@ -31066,11 +31831,12 @@ Churn: ${node.score.toFixed(1)}
           level = "bundle";
       }
       if (level === "file" || level === "symbol") {
+        const status = node.status === "ready" ? "ready" : "scanning";
         const newFrame = {
           level,
           id: node.id,
           name: node.name,
-          status: "scanning",
+          status,
           parentId: "root"
         };
         postMessageWithTracing(vscode3, {
@@ -31103,7 +31869,7 @@ Churn: ${node.score.toFixed(1)}
     const ErrorBanner = ({
       error,
       onDismiss
-    }) => /* @__PURE__ */ React27.createElement(
+    }) => /* @__PURE__ */ React30.createElement(
       "div",
       {
         style: {
@@ -31118,8 +31884,8 @@ Churn: ${node.score.toFixed(1)}
           zIndex: 1e3
         }
       },
-      /* @__PURE__ */ React27.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", flex: 1 } }, /* @__PURE__ */ React27.createElement("span", null, "\u274C"), /* @__PURE__ */ React27.createElement("span", null, error)),
-      /* @__PURE__ */ React27.createElement(
+      /* @__PURE__ */ React30.createElement("div", { style: { display: "flex", alignItems: "center", gap: "8px", flex: 1 } }, /* @__PURE__ */ React30.createElement("span", null, "\u274C"), /* @__PURE__ */ React30.createElement("span", null, error)),
+      /* @__PURE__ */ React30.createElement(
         "button",
         {
           onClick: onDismiss,
@@ -31140,7 +31906,7 @@ Churn: ${node.score.toFixed(1)}
     const handleDismissError = () => {
       postMessageWithTracing(vscode3, { type: "clearError" });
     };
-    return /* @__PURE__ */ React27.createElement("div", { style: LayoutStyle }, cockpitState.error && /* @__PURE__ */ React27.createElement(ErrorBanner, { error: cockpitState.error, onDismiss: handleDismissError }), /* @__PURE__ */ React27.createElement("div", { style: MainAreaStyle }, isWide && /* @__PURE__ */ React27.createElement(React27.Fragment, null, /* @__PURE__ */ React27.createElement(
+    return /* @__PURE__ */ React30.createElement("div", { style: LayoutStyle }, cockpitState.error && /* @__PURE__ */ React30.createElement(ErrorBanner, { error: cockpitState.error, onDismiss: handleDismissError }), /* @__PURE__ */ React30.createElement("div", { style: MainAreaStyle }, isWide && /* @__PURE__ */ React30.createElement(React30.Fragment, null, /* @__PURE__ */ React30.createElement(
       Sidebar,
       {
         data: explorerData,
@@ -31150,7 +31916,7 @@ Churn: ${node.score.toFixed(1)}
         branchName: cockpitState.branchName || void 0,
         allMetrics: cockpitState.nodeMetrics
       }
-    ), /* @__PURE__ */ React27.createElement(
+    ), /* @__PURE__ */ React30.createElement(
       Stage,
       {
         frame: activeFrame,
@@ -31160,7 +31926,7 @@ Churn: ${node.score.toFixed(1)}
         cockpitState,
         vscode: vscode3
       }
-    ), cockpitState.bundleSummary && cockpitState.bundleSummary.cacheHits !== void 0 && /* @__PURE__ */ React27.createElement(
+    ), cockpitState.bundleSummary && cockpitState.bundleSummary.cacheHits !== void 0 && /* @__PURE__ */ React30.createElement(
       "div",
       {
         style: {
@@ -31180,7 +31946,7 @@ Churn: ${node.score.toFixed(1)}
       " misses (",
       Math.round(cockpitState.bundleSummary.cacheHitRate * 100),
       "%)"
-    )), isMedium && /* @__PURE__ */ React27.createElement(
+    )), isMedium && /* @__PURE__ */ React30.createElement(
       "div",
       {
         style: {
@@ -31191,7 +31957,7 @@ Churn: ${node.score.toFixed(1)}
           minHeight: 0
         }
       },
-      /* @__PURE__ */ React27.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "assistant" ? /* @__PURE__ */ React27.createElement(
+      /* @__PURE__ */ React30.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "assistant" ? /* @__PURE__ */ React30.createElement(
         Assistant,
         {
           frame: activeFrame,
@@ -31199,7 +31965,7 @@ Churn: ${node.score.toFixed(1)}
           messages: assistantMessages,
           onSend: handleSendAssistant
         }
-      ) : /* @__PURE__ */ React27.createElement(React27.Fragment, null, /* @__PURE__ */ React27.createElement(
+      ) : /* @__PURE__ */ React30.createElement(React30.Fragment, null, /* @__PURE__ */ React30.createElement(
         Sidebar,
         {
           data: explorerData,
@@ -31209,7 +31975,7 @@ Churn: ${node.score.toFixed(1)}
           branchName: cockpitState.branchName || void 0,
           allMetrics: cockpitState.nodeMetrics
         }
-      ), /* @__PURE__ */ React27.createElement(
+      ), /* @__PURE__ */ React30.createElement(
         Stage,
         {
           frame: activeFrame,
@@ -31220,7 +31986,7 @@ Churn: ${node.score.toFixed(1)}
           vscode: vscode3
         }
       ))),
-      /* @__PURE__ */ React27.createElement(
+      /* @__PURE__ */ React30.createElement(
         "div",
         {
           style: {
@@ -31231,7 +31997,7 @@ Churn: ${node.score.toFixed(1)}
             height: "40px"
           }
         },
-        /* @__PURE__ */ React27.createElement(
+        /* @__PURE__ */ React30.createElement(
           "div",
           {
             onClick: () => setActiveTab("stage"),
@@ -31247,7 +32013,7 @@ Churn: ${node.score.toFixed(1)}
           },
           "Explorer + Stage"
         ),
-        /* @__PURE__ */ React27.createElement(
+        /* @__PURE__ */ React30.createElement(
           "div",
           {
             onClick: () => setActiveTab("assistant"),
@@ -31264,7 +32030,7 @@ Churn: ${node.score.toFixed(1)}
           "Assistant"
         )
       )
-    ), isNarrow && /* @__PURE__ */ React27.createElement(
+    ), isNarrow && /* @__PURE__ */ React30.createElement(
       "div",
       {
         style: {
@@ -31275,7 +32041,7 @@ Churn: ${node.score.toFixed(1)}
           minHeight: 0
         }
       },
-      /* @__PURE__ */ React27.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "explorer" && /* @__PURE__ */ React27.createElement(
+      /* @__PURE__ */ React30.createElement("div", { style: { flex: 1, overflow: "hidden", display: "flex" } }, activeTab === "explorer" && /* @__PURE__ */ React30.createElement(
         Sidebar,
         {
           data: explorerData,
@@ -31285,7 +32051,7 @@ Churn: ${node.score.toFixed(1)}
           branchName: cockpitState.branchName || void 0,
           allMetrics: cockpitState.nodeMetrics
         }
-      ), activeTab === "stage" && /* @__PURE__ */ React27.createElement(
+      ), activeTab === "stage" && /* @__PURE__ */ React30.createElement(
         Stage,
         {
           frame: activeFrame,
@@ -31295,7 +32061,7 @@ Churn: ${node.score.toFixed(1)}
           cockpitState,
           vscode: vscode3
         }
-      ), activeTab === "assistant" && /* @__PURE__ */ React27.createElement(
+      ), activeTab === "assistant" && /* @__PURE__ */ React30.createElement(
         Assistant,
         {
           frame: activeFrame,
@@ -31304,7 +32070,7 @@ Churn: ${node.score.toFixed(1)}
           onSend: handleSendAssistant
         }
       )),
-      /* @__PURE__ */ React27.createElement(
+      /* @__PURE__ */ React30.createElement(
         "div",
         {
           style: {
@@ -31315,7 +32081,7 @@ Churn: ${node.score.toFixed(1)}
             height: "40px"
           }
         },
-        ["explorer", "stage", "assistant"].map((tab) => /* @__PURE__ */ React27.createElement(
+        ["explorer", "stage", "assistant"].map((tab) => /* @__PURE__ */ React30.createElement(
           "div",
           {
             key: tab,
@@ -31334,7 +32100,7 @@ Churn: ${node.score.toFixed(1)}
           tab === "explorer" ? "\u{1F4C1}" : tab === "stage" ? "\u{1F3AF}" : "\u{1F916}"
         ))
       )
-    )), isAssistantOpen && isWide && /* @__PURE__ */ React27.createElement(
+    )), isAssistantOpen && isWide && /* @__PURE__ */ React30.createElement(
       Assistant,
       {
         frame: activeFrame,
@@ -31407,8 +32173,8 @@ Churn: ${node.score.toFixed(1)}
     nodeMetrics: {}
   };
   var App = () => {
-    const [state, setState] = React28.useState(defaultState);
-    React28.useEffect(() => {
+    const [state, setState] = React31.useState(defaultState);
+    React31.useEffect(() => {
       const handler = (event) => {
         try {
           if (event.data?.type === "analysisError" && event.data?.payload) {
@@ -31465,19 +32231,19 @@ Churn: ${node.score.toFixed(1)}
         window.removeEventListener("message", handler);
       };
     }, []);
-    return /* @__PURE__ */ React28.createElement(ErrorBoundary, null, /* @__PURE__ */ React28.createElement(
+    return /* @__PURE__ */ React31.createElement(ErrorBoundary, null, /* @__PURE__ */ React31.createElement(
       "div",
       {
         className: "cockpit",
         style: { padding: 0, margin: 0, height: "100vh", overflow: "hidden" }
       },
-      /* @__PURE__ */ React28.createElement(SuperWebview, { vscode: vscode2, cockpitState: state })
+      /* @__PURE__ */ React31.createElement(SuperWebview, { vscode: vscode2, cockpitState: state })
     ));
   };
   var rootEl = document.getElementById("root");
   if (rootEl) {
     const root = (0, import_client.createRoot)(rootEl);
-    root.render(/* @__PURE__ */ React28.createElement(App, null));
+    root.render(/* @__PURE__ */ React31.createElement(App, null));
   }
 })();
 /*! Bundled license information:

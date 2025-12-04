@@ -43,11 +43,19 @@ export class AnalysisService {
       return;
     }
 
-    const symbolMatch = frameId.match(/^(.+\.\w+):(.+)$/);
-    const level: 'file' | 'symbol' = symbolMatch ? 'symbol' : 'file';
+    // Check for composite ID (filePath::dnaHash) or legacy (filePath:symbolName)
+    const compositeMatch = frameId.includes('::');
+    const legacyMatch = !compositeMatch && frameId.match(/^(.+\.\w+):(.+)$/);
+
+    const level: 'file' | 'symbol' = compositeMatch || legacyMatch ? 'symbol' : 'file';
     let targetPath = frameId;
-    if (level === 'symbol' && symbolMatch) {
-      targetPath = symbolMatch[1];
+
+    if (level === 'symbol') {
+      if (compositeMatch) {
+        targetPath = frameId.split('::')[0];
+      } else if (legacyMatch) {
+        targetPath = legacyMatch[1];
+      }
     }
 
     let tier1Data: any;
@@ -82,7 +90,42 @@ export class AnalysisService {
     store.dispatch(analysisActions.progress(true, 'Analyzing relationships...'));
     this.pipelineDebugger.startTier(frameId, 2, store.getState().activeFrame.id);
     try {
-      const facts = state.bundleFacts as BundleFactsDTO;
+      let facts = state.bundleFacts as BundleFactsDTO;
+
+      // Issue 2: Ensure comprehensive data by triggering pipeline if needed
+      // If we don't have sufficient facts (e.g. missing edges/graph), run a targeted analysis
+      if (
+        !facts ||
+        !facts.evidence?.['working.edges'] ||
+        (facts.evidence['working.edges'].length === 0 && level === 'file')
+      ) {
+        logInfo(`[AnalysisService] Triggering targeted pipeline analysis for ${targetPath}`);
+        const { getRefactorPipeline } = await import('./pipelineFactory');
+        const pipeline = await getRefactorPipeline();
+        const { GitOperations } = await import('../analysis/git');
+        const git = new GitOperations();
+
+        // Fetch recent commits for this file to build a mini-bundle
+        const history = await git.getFileHistory(targetPath, 5);
+        const shas = history.map((h: any) => h.hash).filter((h: string) => h);
+
+        if (shas.length > 0) {
+          // Run pipeline for these commits + workspace
+          const result = await pipeline.analyzeBundle(shas, true);
+          // Update local facts reference from the pipeline result
+          // Note: We need to fetch the updated facts from the store or result
+          // analyzeBundle returns PipelineState which has bundleFacts
+          if (result.bundleFacts) {
+            facts = result.bundleFacts;
+            // Also update the global store so the UI gets the new graph
+            store.dispatch({
+              type: 'BUNDLE_FACTS_UPDATED',
+              payload: { facts: result.bundleFacts },
+            });
+          }
+        }
+      }
+
       const tier2Data = await withTimeout(
         analyzer.analyzeTier2(frameId, targetPath, facts),
         120000,

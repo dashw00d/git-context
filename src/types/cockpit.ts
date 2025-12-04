@@ -1,4 +1,4 @@
-import { WorkspaceFacts } from '../analysis/workspaceIndexer';
+import { WorkspaceFacts } from './workspace';
 import { RefactorBundleFacts } from '../facts/types';
 
 /** Which section (accordion) is active/open in the cockpit sidebar */
@@ -171,6 +171,13 @@ export interface CockpitState {
   /* LLM Analysis results (legacy/compat) */
   llmOutputs?: any;
 
+  headInfo?: {
+    sha: string;
+    date: string;
+    message: string;
+    author: string;
+  };
+
   /* Selections */
   selectedCommitShas: string[];
   selectedStagedPaths: string[];
@@ -321,6 +328,12 @@ export interface CockpitPayload {
   hasMoreCommits?: boolean;
   llmOutputs?: any;
   retrievedHistory?: any;
+  headInfo?: {
+    sha: string;
+    date: string;
+    message: string;
+    author: string;
+  };
 }
 
 export type CockpitHostMessage =
@@ -367,4 +380,5 @@ export type CockpitClientMessage =
   | { type: 'updateBundleConfig'; config: Partial<BundleConfig> }
   | { type: 'setLastNCommits'; value: number }
   | { type: 'updateCommitIndex'; value: number }
-  | { type: 'clearError' };
+  | { type: 'clearError' }
+  | { type: 'getHeadInfo' };

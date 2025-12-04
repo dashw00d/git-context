@@ -138,11 +138,13 @@ export const SuperWebview: React.FC<{ vscode: any; cockpitState: CockpitState }>
     }
 
     if (level === 'file' || level === 'symbol') {
+      // Fix: Only set to scanning if not already ready
+      const status = node.status === 'ready' ? 'ready' : 'scanning';
       const newFrame: ContextFrame = {
         level,
         id: node.id,
         name: node.name,
-        status: 'scanning',
+        status,
         parentId: 'root',
       };
       postMessageWithTracing(vscode, {

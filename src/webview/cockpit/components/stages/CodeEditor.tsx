@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useFileAnalysisData } from '../../hooks/useFileAnalysisData';
 
 interface DriftIssue {
   type?: string;
@@ -26,6 +27,8 @@ interface CodeEditorProps {
   lineCommits?: Array<{ line: number; commitSha: string; author: string; date: string }>;
   orderedCommits?: string[];
   currentCommitIndex?: number;
+  filePath?: string;
+  bundleFacts?: any;
 }
 
 const EditorContainer: React.CSSProperties = {
@@ -73,8 +76,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   lineCommits = [],
   orderedCommits = [],
   currentCommitIndex,
+  filePath,
+  bundleFacts,
 }) => {
   const lines = content.split('\n');
+
+  // Get analysis data for this file
+  const analysisData = useFileAnalysisData(filePath || '', bundleFacts, currentCommitIndex);
 
   // Find focused symbol's line range
   const focusedSymbol = focusedSymbolId
@@ -259,8 +267,58 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         // Check if this line starts a symbol (for click handling)
         const symbolAtLine = symbols.find(s => s.location?.start?.line === lineNumber);
 
+        // Check if symbol is dead or legacy
+        const isDeadSymbol =
+          symbolAtLine &&
+          (analysisData.deadSymbols.has(symbolAtLine.id || '') ||
+            analysisData.deadSymbols.has(symbolAtLine.name));
+        const isLegacySymbol =
+          symbolAtLine &&
+          (analysisData.legacySymbols.has(symbolAtLine.id || '') ||
+            analysisData.legacySymbols.has(symbolAtLine.name));
+
+        // Check for convention drift
+        const driftIssue = symbolAtLine
+          ? analysisData.driftIssues.find(
+              d => d.symbolId === symbolAtLine.id || d.name === symbolAtLine.name
+            )
+          : null;
+
+        // Check for unresolved callers
+        const unresolvedCaller = symbolAtLine
+          ? analysisData.unresolvedCallers.find(
+              u => u.symbolId === symbolAtLine.id || u.name === symbolAtLine.name
+            )
+          : null;
+
+        // Check for hotspots
+        const hotspot = symbolAtLine
+          ? analysisData.hotspots.find(h => h.symbolId === symbolAtLine.id || h.path === filePath)
+          : analysisData.hotspots.find(h => h.path === filePath);
+
         const isAfterTime = isLineAfterTime(lineNumber);
         const shouldHide = isAfterTime && currentCommitIndex !== undefined;
+
+        // Build tooltip for dead/legacy symbols and drift
+        let symbolTooltip = '';
+        if (isDeadSymbol) {
+          symbolTooltip = 'Dead symbol – removed but still referenced';
+        } else if (isLegacySymbol) {
+          symbolTooltip = 'Legacy symbol – deprecated but still in use';
+        }
+        if (driftIssue) {
+          symbolTooltip = symbolTooltip
+            ? `${symbolTooltip}\nConvention drift: Should be ${driftIssue.suggestedName}`
+            : `Convention drift: Should be ${driftIssue.suggestedName}`;
+        }
+        if (unresolvedCaller) {
+          const callerText = `${unresolvedCaller.callerCount || 1} unresolved caller${(unresolvedCaller.callerCount || 1) !== 1 ? 's' : ''}`;
+          symbolTooltip = symbolTooltip ? `${symbolTooltip}\n${callerText}` : callerText;
+        }
+        if (hotspot) {
+          const hotspotText = `Hotspot score: ${hotspot.score.toFixed(1)}`;
+          symbolTooltip = symbolTooltip ? `${symbolTooltip}\n${hotspotText}` : hotspotText;
+        }
 
         return (
           <div
@@ -269,16 +327,39 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             style={{
               ...LineStyle,
               fontSize: isFocused ? '120%' : '100%',
-              opacity: shouldHide ? 0.2 : focusedSymbolId ? (isFocused ? 1 : 0.5) : 1,
+              opacity: shouldHide
+                ? 0.2
+                : isDeadSymbol
+                  ? 0.4
+                  : focusedSymbolId
+                    ? isFocused
+                      ? 1
+                      : 0.5
+                    : 1,
               display: shouldHide ? 'none' : 'flex',
-              backgroundColor: hasDrift
-                ? severity === 'error'
-                  ? 'rgba(255, 0, 0, 0.05)'
-                  : 'rgba(255, 165, 0, 0.05)'
-                : 'transparent',
+              backgroundColor:
+                hotspot && !shouldHide
+                  ? `rgba(255, 165, 0, ${Math.min(0.15, hotspot.score / 100)})`
+                  : hasDrift
+                    ? severity === 'error'
+                      ? 'rgba(255, 0, 0, 0.05)'
+                      : 'rgba(255, 165, 0, 0.05)'
+                    : 'transparent',
               cursor: symbolAtLine && onSymbolClick ? 'pointer' : 'default',
               transition: 'opacity 0.2s, font-size 0.2s',
               pointerEvents: shouldHide ? 'none' : 'auto',
+              textDecoration: isDeadSymbol ? 'line-through' : 'none',
+              borderLeft:
+                isLegacySymbol && !shouldHide
+                  ? '3px solid var(--vscode-inputValidation-warningBorder)'
+                  : 'none',
+              paddingLeft: isLegacySymbol && !shouldHide ? '9px' : '12px',
+              textDecorationLine: driftIssue && !shouldHide ? 'underline' : undefined,
+              textDecorationStyle: driftIssue && !shouldHide ? 'wavy' : undefined,
+              textDecorationColor:
+                driftIssue && !shouldHide
+                  ? 'var(--vscode-inputValidation-warningBorder)'
+                  : undefined,
             }}
             onClick={
               symbolAtLine && onSymbolClick && !shouldHide
@@ -288,16 +369,53 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             title={
               shouldHide
                 ? `Line added after selected commit (hidden)`
-                : symbolAtLine
-                  ? `Click to focus on ${symbolAtLine.name}`
-                  : isFocused
-                    ? 'Focused symbol'
-                    : undefined
+                : symbolTooltip ||
+                  (symbolAtLine
+                    ? `Click to focus on ${symbolAtLine.name}`
+                    : isFocused
+                      ? 'Focused symbol'
+                      : undefined)
             }
           >
             {hasDrift && !shouldHide && (
               <span style={warningStyle} title={driftMessage}>
                 <span>{severity === 'error' ? '❌' : '⚠️'}</span> {driftMessage || 'DRIFT'}
+              </span>
+            )}
+            {isDeadSymbol && !shouldHide && (
+              <span
+                style={{
+                  fontSize: '12px',
+                  marginRight: '4px',
+                  opacity: 0.7,
+                }}
+                title={symbolTooltip}
+              >
+                👻
+              </span>
+            )}
+            {isLegacySymbol && !shouldHide && (
+              <span
+                style={{
+                  fontSize: '12px',
+                  marginRight: '4px',
+                  opacity: 0.7,
+                }}
+                title={symbolTooltip}
+              >
+                ⚠️
+              </span>
+            )}
+            {unresolvedCaller && !shouldHide && (
+              <span
+                style={{
+                  fontSize: '12px',
+                  marginRight: '4px',
+                  opacity: 0.7,
+                }}
+                title={symbolTooltip}
+              >
+                ❓
               </span>
             )}
             {line}

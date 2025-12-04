@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { CockpitState, ContextFrame } from '../../../types/cockpit';
+import { useFileAnalysisData } from '../hooks/useFileAnalysisData';
 import { BlastRadiusStage } from './stages/BlastRadiusStage';
 import { BundleStage } from './stages/BundleStage';
 import { CodeEditor } from './stages/CodeEditor';
 import { FolderStage } from './stages/FolderStage';
+import { MovedBlockGutter } from './stages/MovedBlockGutter';
 import { PortalsRail } from './stages/PortalsRail';
 import { ReportsStage } from './stages/ReportsStage';
 import { SedimentGutter } from './stages/SedimentGutter';
@@ -59,7 +61,24 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
   const renderFrame = frame.level === 'bundle' ? { ...frame, data: frameData } : frame;
 
   const [zoomLevel, setZoomLevel] = React.useState<'focus' | 'normal' | 'overview'>('focus');
-  const [focusedSymbolId, setFocusedSymbolId] = React.useState<string | null>(null);
+  const [focusedSymbolId, setFocusedSymbolId] = React.useState<string | null>(
+    renderFrame.data?.symbolId || null
+  );
+
+  // Effect to sync focusedSymbolId when frame changes (e.g. navigation to symbol)
+  React.useEffect(() => {
+    if (renderFrame.data?.symbolId) {
+      setFocusedSymbolId(renderFrame.data.symbolId);
+      setZoomLevel('focus');
+    }
+  }, [renderFrame.data?.symbolId, renderFrame.id]);
+
+  // Unconditional hook call
+  const analysisData = useFileAnalysisData(
+    renderFrame.level === 'file' ? renderFrame.id : '',
+    cockpitState?.bundleFacts,
+    cockpitState?.currentCommitIndex
+  );
 
   const handleWheel = (e: React.WheelEvent) => {
     if (e.ctrlKey) {
@@ -96,39 +115,59 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     const totalCommits = (cockpitState?.bundleFacts as any)?.bundle?.totalCommits || 0;
 
     // State for optimistic HEAD commit
-    const [optimisticHead, setOptimisticHead] = React.useState<{
-      sha: string;
-      date: string;
-      message: string;
-      author: string;
-    } | null>(null);
 
     // Load HEAD commit for optimistic time travel if needed
-    React.useEffect(() => {
-      if (
-        orderedCommits.length === 0 &&
-        !renderFrame.data?.history &&
-        totalCommits > 0 &&
-        !optimisticHead
-      ) {
-        (async () => {
-          try {
-            const { GitOperations } = await import('../../../analysis/git');
-            const gitOps = new GitOperations();
-            const headSha = await gitOps.getHeadSha();
-            const headCommit = await gitOps.getCommitInfo(headSha);
-            setOptimisticHead({
-              sha: headSha,
-              date: headCommit.date,
-              message: headCommit.message,
-              author: headCommit.author,
-            });
-          } catch (e) {
-            // Silently fail - optimistic mode won't work without HEAD
-          }
-        })();
-      }
-    }, [orderedCommits.length, renderFrame.data?.history, totalCommits, optimisticHead]);
+    // Fix: Move useEffect to top level (outside conditional) or ensure it's unconditional
+    // Since we are inside 'if (renderFrame.level === 'file')', this entire block is conditional.
+    // BUT CodeMicroscope returns early if level !== 'file' (wait, no it doesn't, it returns differently)
+    // Actually, the 'if (renderFrame.level === 'file')' block returns JSX and DOES NOT fall through.
+    // So the hooks inside are conditional on the prop. This is the issue.
+    
+    // To fix: Move all hooks to the top of the component, before any conditional returns.
+    // We already moved useFileAnalysisData. Now let's move this useEffect.
+  }
+
+  // Moved useEffect to top level
+  // We need to calculate these values at top level or use defaults
+  const totalCommits = (cockpitState?.bundleFacts as any)?.bundle?.totalCommits || 0;
+  const headInfo = cockpitState?.headInfo;
+  const fileDataHistory = renderFrame.data?.history;
+  const selectedCommitShas = cockpitState?.selectedCommitShas || [];
+
+  React.useEffect(() => {
+    if (
+      renderFrame.level === 'file' &&
+      selectedCommitShas.length === 0 &&
+      !fileDataHistory &&
+      totalCommits > 0 &&
+      !headInfo
+    ) {
+      // Request HEAD info from extension host
+      vscode.postMessage({ type: 'getHeadInfo' });
+    }
+  }, [
+    renderFrame.level,
+    selectedCommitShas.length,
+    fileDataHistory,
+    totalCommits,
+    headInfo,
+    vscode
+  ]);
+
+  if (renderFrame.level === 'file') {
+    const metrics = cockpitState?.nodeMetrics?.[renderFrame.id] || renderFrame.data?.metrics;
+    const content = renderFrame.data?.content || '';
+    const lineCount = renderFrame.data?.lineCount || content.split('\n').length;
+    const symbols = renderFrame.data?.symbols || [];
+    const lineCommits = renderFrame.data?.lineCommits || [];
+    const blastRadius = renderFrame.data?.blastRadius;
+    const driftIssues = renderFrame.data?.drift || [];
+
+    // Get ordered commits from state (for commit index calculation)
+    let orderedCommits = cockpitState?.selectedCommitShas || [];
+    let commits: any[] = [];
+
+    const optimisticHead = cockpitState?.headInfo || null;
 
     if (orderedCommits.length > 0) {
       // Use global selection
@@ -234,6 +273,12 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
             orderedCommits={orderedCommits}
             currentCommitIndex={currentCommitIndex}
           />
+          <MovedBlockGutter
+            lineCount={lineCount}
+            movedBlocks={analysisData.movedBlocks}
+            currentFilePath={renderFrame.id}
+            vscode={vscode}
+          />
 
           {zoomLevel === 'focus' ? (
             <CodeEditor
@@ -247,6 +292,8 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
               lineCommits={lineCommits}
               orderedCommits={orderedCommits}
               currentCommitIndex={currentCommitIndex}
+              filePath={renderFrame.id}
+              bundleFacts={cockpitState?.bundleFacts}
             />
           ) : zoomLevel === 'overview' ? (
             <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
@@ -312,6 +359,9 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
             currentFilePath={renderFrame.id}
             currentCommitIndex={currentCommitIndex}
             orderedCommits={orderedCommits}
+            bundleFacts={cockpitState?.bundleFacts}
+            vscode={vscode}
+            commits={commits}
           />
         </div>
 
@@ -319,6 +369,8 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
           commits={commits}
           currentCommitIndex={currentCommitIndex}
           onCommitIndexChange={handleCommitIndexChange}
+          bundleFacts={cockpitState?.bundleFacts}
+          lineCommits={lineCommits}
         />
       </div>
     );
@@ -337,7 +389,12 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
 
       <div style={{ flex: 1, overflow: 'auto' }}>
         {renderFrame.status === 'scanning' ? (
-          <div style={{ padding: '20px', textAlign: 'center' }}>Scanning...</div>
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <div>Scanning {renderFrame.name}...</div>
+            <div style={{ fontSize: '10px', opacity: 0.7 }}>
+              Tier {renderFrame.tier || 1}/3
+            </div>
+          </div>
         ) : (
           <>
             {renderFrame.id === 'reports-root' ? (

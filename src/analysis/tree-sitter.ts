@@ -6,10 +6,24 @@ import { HybridFact, SymbolInfo } from '../types';
 import { getSupportedLanguages } from '../utils/config';
 import { logError, logInfo, logWarn } from '../utils/logger';
 
+// TODO: Future improvements for priority handling:
+// - AbortController to cancel in-flight background work when on-demand arrives
+// - Chunked processing with yield points in pipeline steps (not just parser)
+// - Request-level priority queue for entire pipeline, not just tree-sitter
+// - Eager partial results: return available data immediately, fill gaps async
 export class TreeSitterParser {
-  private workers: Worker[] = [];
-  private workerPoolSize = Math.max(1, os.cpus().length - 1);
-  private taskQueue: Array<{
+  // Separate pools: reserved workers for on-demand, rest for background
+  private onDemandWorkers: Worker[] = [];
+  private backgroundWorkers: Worker[] = [];
+  private totalWorkers = Math.max(2, os.cpus().length - 1);
+  private reservedForOnDemand = Math.max(1, Math.min(2, Math.floor(this.totalWorkers / 3)));
+
+  private highPriorityQueue: Array<{
+    message: any;
+    resolve: (value: any) => void;
+    reject: (reason?: any) => void;
+  }> = [];
+  private lowPriorityQueue: Array<{
     message: any;
     resolve: (value: any) => void;
     reject: (reason?: any) => void;
@@ -20,14 +34,17 @@ export class TreeSitterParser {
   >();
   private nextTaskId = 1;
   private initialized = false;
+  private initializationPromise: Promise<void> | null = null;
 
   async initializeParsers(): Promise<void> {
     if (this.initialized) return;
+    if (this.initializationPromise) return this.initializationPromise;
 
     const wasmDir = path.join(__dirname, '..', '..', 'out', 'wasm');
     const languages = getSupportedLanguages();
 
-    logInfo(`Initializing ${this.workerPoolSize} workers...`);
+    const backgroundWorkerCount = this.totalWorkers - this.reservedForOnDemand;
+    logInfo(`Initializing ${this.totalWorkers} workers (${this.reservedForOnDemand} reserved for on-demand, ${backgroundWorkerCount} for background)...`);
 
     let workerPath = path.join(__dirname, 'parserWorker.js');
     if (!fs.existsSync(workerPath)) {
@@ -41,52 +58,70 @@ export class TreeSitterParser {
       }
     }
 
-    const _initPromises = [];
+    this.initializationPromise = new Promise<void>(resolve => {
+      let initializedCount = 0;
 
-    for (let i = 0; i < this.workerPoolSize; i++) {
-      const worker = new Worker(workerPath);
-      this.workers.push(worker);
+      const createWorker = (isOnDemand: boolean): Worker => {
+        const worker = new Worker(workerPath);
 
-      worker.on('message', msg => {
-        if (msg.type === 'initialized') {
-          // empty
-        } else if (msg.type === 'result') {
-          const task = this.activeTasks.get(msg.id);
-          if (task) {
-            this.activeTasks.delete(msg.id);
-            if (msg.error) {
-              task.reject(new Error(msg.error));
-            } else {
-              task.resolve(msg.data);
+        worker.on('message', msg => {
+          if (msg.type === 'initialized') {
+            initializedCount++;
+            if (initializedCount === this.totalWorkers) {
+              this.initialized = true;
+              logInfo(`All ${this.totalWorkers} workers initialized.`);
+              resolve();
             }
-            this.processQueue(worker);
+          } else if (msg.type === 'result') {
+            const task = this.activeTasks.get(msg.id);
+            if (task) {
+              this.activeTasks.delete(msg.id);
+              if (msg.error) {
+                task.reject(new Error(msg.error));
+              } else {
+                task.resolve(msg.data);
+              }
+              this.processQueue(worker, isOnDemand);
+            }
           }
-        }
-      });
+        });
 
-      worker.on('error', err => {
-        logError(`Worker error: ${err}`);
-      });
+        worker.on('error', err => {
+          logError(`Worker error: ${err}`);
+        });
 
-      worker.postMessage({ type: 'init', wasmDir, languages });
-    }
+        worker.postMessage({ type: 'init', wasmDir, languages });
+        return worker;
+      };
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
+      // Create reserved on-demand workers
+      for (let i = 0; i < this.reservedForOnDemand; i++) {
+        this.onDemandWorkers.push(createWorker(true));
+      }
 
-    this.initialized = true;
+      // Create background workers
+      for (let i = 0; i < backgroundWorkerCount; i++) {
+        this.backgroundWorkers.push(createWorker(false));
+      }
+    });
+
+    return this.initializationPromise;
   }
 
-  private processQueue(worker: Worker) {
-    if (this.taskQueue.length > 0) {
-      const task = this.taskQueue.shift()!;
+  private processQueue(worker: Worker, isOnDemandWorker: boolean) {
+    // On-demand workers only process high priority queue
+    // Background workers only process low priority queue
+    if (isOnDemandWorker && this.highPriorityQueue.length > 0) {
+      const task = this.highPriorityQueue.shift()!;
+      const id = this.nextTaskId++;
+      this.activeTasks.set(id, { resolve: task.resolve, reject: task.reject });
+      worker.postMessage({ ...task.message, id });
+    } else if (!isOnDemandWorker && this.lowPriorityQueue.length > 0) {
+      const task = this.lowPriorityQueue.shift()!;
       const id = this.nextTaskId++;
       this.activeTasks.set(id, { resolve: task.resolve, reject: task.reject });
       worker.postMessage({ ...task.message, id });
     }
-  }
-
-  private getAvailableWorker(): Worker | null {
-    return this.workers[Math.floor(Math.random() * this.workers.length)];
   }
 
   async parse(_content: string, _languageId: string): Promise<any | undefined> {
@@ -100,7 +135,8 @@ export class TreeSitterParser {
     content: string,
     filePath: string,
     languageId: string,
-    existingSymbols?: SymbolInfo[]
+    existingSymbols?: SymbolInfo[],
+    priority: boolean = false
   ): Promise<HybridFact[]> {
     if (!this.initialized) await this.initializeParsers();
 
@@ -114,11 +150,17 @@ export class TreeSitterParser {
         existingSymbols,
       };
 
-      this.taskQueue.push({
+      const task = {
         message,
-        resolve: data => resolve(data.hybridFacts),
+        resolve: (data: any) => resolve(data.hybridFacts),
         reject,
-      });
+      };
+
+      if (priority) {
+        this.highPriorityQueue.push(task);
+      } else {
+        this.lowPriorityQueue.push(task);
+      }
       this.dispatch();
     });
   }
@@ -134,21 +176,29 @@ export class TreeSitterParser {
         maxDepth,
       };
 
-      this.taskQueue.push({ message, resolve, reject });
+      this.lowPriorityQueue.push({ message, resolve, reject });
       this.dispatch();
     });
   }
 
   private dispatch() {
-    const worker = this.workers[Math.floor(Math.random() * this.workers.length)];
-    if (worker && this.taskQueue.length > 0) {
-      this.processQueue(worker);
+    // Dispatch high priority to on-demand workers
+    if (this.highPriorityQueue.length > 0 && this.onDemandWorkers.length > 0) {
+      const worker = this.onDemandWorkers[Math.floor(Math.random() * this.onDemandWorkers.length)];
+      this.processQueue(worker, true);
+    }
+    // Dispatch low priority to background workers
+    if (this.lowPriorityQueue.length > 0 && this.backgroundWorkers.length > 0) {
+      const worker = this.backgroundWorkers[Math.floor(Math.random() * this.backgroundWorkers.length)];
+      this.processQueue(worker, false);
     }
   }
 
   dispose(): void {
-    this.workers.forEach(w => w.terminate());
-    this.workers = [];
+    this.onDemandWorkers.forEach(w => w.terminate());
+    this.backgroundWorkers.forEach(w => w.terminate());
+    this.onDemandWorkers = [];
+    this.backgroundWorkers = [];
   }
 }
 

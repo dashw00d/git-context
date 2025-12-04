@@ -45,8 +45,9 @@ export function createIndexCommitsStep(
               step: { id: 'index_commits', label: 'Index commits' } as any,
               state,
               data: {
+                type: event.type,
                 file: event.file,
-                status: event.type === 'file_start' ? 'analyzing' : 'ready',
+                sha: event.sha,
               },
               timestamp: new Date().toISOString(),
             });

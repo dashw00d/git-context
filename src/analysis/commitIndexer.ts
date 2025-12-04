@@ -600,7 +600,7 @@ export class CommitIndexer {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    this.db.transaction(() => {
+    const transaction = this.db.transaction(() => {
       for (const edge of edges) {
         stmt.run([
           sha,
@@ -612,7 +612,9 @@ export class CommitIndexer {
           edge.isResolved,
         ]);
       }
-    })();
+    });
+
+    transaction();
   }
 
   private async updateHotspotsFromBatch(

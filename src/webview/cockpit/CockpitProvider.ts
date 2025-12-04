@@ -57,6 +57,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
   private _llmOutputs?: any;
   private _retrievedHistory?: any;
   private _lastNCommits?: number;
+  private _debugMode = false;
 
   private bundleManager: BundleManager;
   private hotspotCache: Map<string, any[]> = new Map();
@@ -64,6 +65,8 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
 
   constructor(private readonly extensionUri: vscode.Uri) {
     this.bundleManager = new BundleManager();
+    this._debugMode =
+      vscode.workspace.getConfiguration('git-context').get<boolean>('debugMode', false);
   }
 
   /**
@@ -207,7 +210,14 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       const store = getStore();
       this.unsubscribe = store.subscribe((state, _action) => {
         // Sync active frame if changed (by analysis or other effects)
-        if (state.activeFrame && state.activeFrame !== this._activeFrame) {
+        // Fix: Use deep equality check to catch data updates even if reference is same
+        const activeFrameChanged =
+          state.activeFrame &&
+          (state.activeFrame.id !== this._activeFrame.id ||
+            state.activeFrame.status !== this._activeFrame.status ||
+            JSON.stringify(state.activeFrame.data) !== JSON.stringify(this._activeFrame.data));
+
+        if (activeFrameChanged) {
           this._activeFrame = state.activeFrame;
           this._update();
         }
@@ -240,14 +250,24 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     }
 
     // Initial update if we have data
-    if (this._bundleFacts) {
-      this._update();
-    } else {
-      // Try to hydrate from persisted facts
-      this._hydrateFromPersistedFacts().catch(err =>
-        logDebug(`[Cockpit] Failed to hydrate persisted facts: ${err}`)
-      );
-    }
+    const initSequence = async () => {
+      let hydrated = false;
+      if (!this._bundleFacts) {
+        hydrated = await this._hydrateFromPersistedFacts();
+      } else {
+        hydrated = true;
+        this._update();
+      }
+
+      // Always refresh skeleton and start background analysis to ensure fresh state / DB sync
+      // This fixes the issue where DB has facts but UI doesn't see them until a scan
+      const config = this._getBundleConfig();
+      await this._updateSkeleton(config);
+    };
+
+    initSequence().catch(err =>
+      logError(`[CockpitProvider] Init sequence failed: ${err}`)
+    );
   }
 
   private async _handleMessage(rawMsg: any): Promise<void> {
@@ -383,9 +403,9 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           const { getStore } = await import('../../state/store');
           getStore().dispatch({ type: 'NAVIGATE_TO', payload: { frame: frame as any } });
 
-          // On-demand analysis: If we navigate to a file/symbol and it's marked as scanning,
-          // trigger the analysis service.
-          if ((frame.level === 'file' || frame.level === 'symbol') && frame.status === 'scanning') {
+          // On-demand analysis: Always trigger analysis when navigating to a file/symbol
+          // The service will check cache/state and only fetch what's needed (Tier 1 content is always needed initially)
+          if (frame.level === 'file' || frame.level === 'symbol') {
             const { getAnalysisService } = await import('../../services/analysisService');
             const { getStore } = await import('../../state/store');
             // Run analysis in background (don't await here to keep UI responsive)
@@ -394,9 +414,17 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
                 // Pull updated frame from Redux store after tier completes
                 const store = getStore();
                 const state = store.getState();
-                if (state.activeFrame.id === frameId) {
-                  this._activeFrame = state.activeFrame;
-                  this._update();
+                // Fix: Always update if this frame is active OR if we have cached data
+                // This handles race conditions where user navigates away and back
+                if (
+                  state.activeFrame.id === frameId ||
+                  (state as any).cachedTierResults?.[frameId]
+                ) {
+                  // Only update UI if it's the active frame
+                  if (state.activeFrame.id === frameId) {
+                    this._activeFrame = state.activeFrame;
+                    this._update();
+                  }
                   logInfo(`[CockpitProvider] Updated webview after tier ${tier} for ${frameId}`);
                 }
               })
@@ -510,9 +538,14 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
                 // Pull updated frame from Redux store after tier completes
                 const store = getStore();
                 const state = store.getState();
-                if (state.activeFrame.id === frameId) {
-                  this._activeFrame = state.activeFrame;
-                  this._update();
+                if (
+                  state.activeFrame.id === frameId ||
+                  (state as any).cachedTierResults?.[frameId]
+                ) {
+                  if (state.activeFrame.id === frameId) {
+                    this._activeFrame = state.activeFrame;
+                    this._update();
+                  }
                   logInfo(`[CockpitProvider] Updated webview after tier ${tier} for ${frameId}`);
                 }
               }
@@ -560,6 +593,28 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
           this._error = null;
           this._update();
           break;
+
+        case 'getHeadInfo': {
+          try {
+            const { GitOperations } = await import('../../analysis/git');
+            const gitOps = new GitOperations();
+            const headSha = await gitOps.getHeadSha();
+            const headCommit = await gitOps.getCommitInfo(headSha);
+            const headInfo = {
+              sha: headSha,
+              date: headCommit.date,
+              message: headCommit.message,
+              author: headCommit.author,
+            };
+            this._postMessage({
+              type: 'setData',
+              payload: { headInfo },
+            });
+          } catch (err) {
+            logError('[CockpitProvider] Failed to get HEAD info', err);
+          }
+          break;
+        }
       }
     } catch (error) {
       logError(`[CockpitProvider] Error handling message ${msg.type}`, error);
@@ -669,9 +724,53 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         this._explorerData = nodes;
 
         this._update();
+
+        // Trigger background full analysis (Issue: "entire scope to run in the background")
+        this._startBackgroundAnalysis(config, skeleton.files).catch(err =>
+          logError('[CockpitProvider] Background analysis failed', err)
+        );
       }
     } catch (error) {
       logError('[CockpitProvider] Failed to update skeleton', error);
+    }
+  }
+
+  private async _startBackgroundAnalysis(config: any, files: string[]): Promise<void> {
+    logInfo(`[CockpitProvider] Starting background analysis for ${files.length} files...`);
+    const { getRefactorPipeline } = await import('../../services/pipelineFactory');
+    const pipeline = await getRefactorPipeline();
+    const { GitOperations } = await import('../../analysis/git');
+    const git = new GitOperations();
+
+    // Fetch recent commits for the scope to seed the bundle
+    // We use a small depth (e.g. 5) for the initial background scan to be fast
+    const history = await git.getRecentCommits(5);
+    const shas = history.map(c => c.sha);
+
+    if (shas.length > 0) {
+      // Run pipeline in background
+      // We don't await this in the UI thread (caller catches errors but doesn't block)
+      const result = await pipeline.analyzeBundle(
+        shas,
+        true,
+        undefined,
+        event => {
+          if (event.type === 'progress' && event.data?.type === 'file_complete') {
+            // Update explorer node status when a file is done
+            this.updateExplorerNodeStatus(event.data.file, 'ready');
+          }
+        }
+      );
+
+      if (result.bundleFacts) {
+        // Dispatch update to Redux (which will merge with partial/on-demand facts)
+        const { getStore } = await import('../../state/store');
+        getStore().dispatch({
+          type: 'BUNDLE_FACTS_UPDATED',
+          payload: { facts: result.bundleFacts },
+        });
+        logInfo('[CockpitProvider] Background analysis complete and merged.');
+      }
     }
   }
 
@@ -711,18 +810,18 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async _hydrateFromPersistedFacts(): Promise<void> {
+  private async _hydrateFromPersistedFacts(): Promise<boolean> {
     try {
-      if (this._bundleFacts) return;
+      if (this._bundleFacts) return true;
 
       const { getGitRoot } = await import('../../utils/config');
       const gitRoot = getGitRoot();
-      if (!gitRoot) return;
+      if (!gitRoot) return false;
 
       const path = await import('path');
       const fs = await import('fs');
       const factsPath = path.join(gitRoot, '.git/commit-tracker/last-bundle-facts.json');
-      if (!fs.existsSync(factsPath)) return;
+      if (!fs.existsSync(factsPath)) return false;
 
       const raw = fs.readFileSync(factsPath, 'utf8');
       const facts = JSON.parse(raw);
@@ -740,8 +839,10 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       await this._updateExplorerTree();
       this._update();
       logInfo('[CockpitProvider] Hydrated bundle facts from persisted cache');
+      return true;
     } catch (error) {
       logDebug(`[CockpitProvider] hydrateFromPersistedFacts error: ${error}`);
+      return false;
     }
   }
 
@@ -855,6 +956,10 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    if (this._debugMode && message.type === 'setData') {
+      this._validatePayload(message.payload);
+    }
+
     const parsed = CockpitHostMessageSchema.safeParse(message);
     if (!parsed.success) {
       logError('[CockpitProvider] Validation failed, refusing to send message', {
@@ -875,6 +980,26 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         messageType: message.type,
         stack: error instanceof Error ? error.stack : undefined,
       });
+    }
+  }
+
+  private _validatePayload(payload: CockpitPayload): void {
+    try {
+      const { CockpitPayloadSchema } = require('../../state/schemas');
+      const result = CockpitPayloadSchema.safeParse(payload);
+      if (!result.success) {
+        logWarn(
+          `[CockpitProvider] Payload schema validation issues: ${JSON.stringify(
+            result.error.issues,
+            null,
+            2
+          )}`
+        );
+      } else {
+        logInfo('[CockpitProvider] Payload schema validation passed');
+      }
+    } catch (e) {
+      logWarn(`[CockpitProvider] Validation check failed: ${e}`);
     }
   }
 

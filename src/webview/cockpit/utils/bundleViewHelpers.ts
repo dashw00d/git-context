@@ -35,18 +35,8 @@ export async function buildHotspots(
 
     if (!hotspots.length) {
       try {
-        const { GitOperations } = await import('../../../analysis/git');
-        const gitOps = new GitOperations();
-        const churn = await withTimeout(gitOps.getHotspots(100), 30000, 'Git hotspots');
-        hotspots = churn.map((h: any) => ({
-          path: h.path,
-          name: h.path.split('/').pop(),
-          score: h.count,
-          count: h.count,
-          size: h.size,
-          added: h.added,
-          removed: h.removed,
-        }));
+        // Fallback removed to prevent bundling backend code
+        logDebug('[BundleView] Fallback hotspots not available in webview');
       } catch (err) {
         logDebug(`[BundleView] Fallback hotspots failed: ${err}`);
       }
@@ -62,18 +52,9 @@ export async function buildHotspots(
     return hotspots;
   } else {
     try {
-      const { GitOperations } = await import('../../../analysis/git');
-      const gitOps = new GitOperations();
-      const churn = await withTimeout(gitOps.getHotspots(100), 30000, 'Git hotspots');
-      return churn.map((h: any) => ({
-        path: h.path,
-        name: h.path.split('/').pop(),
-        score: h.count,
-        count: h.count,
-        size: h.size,
-        added: h.added,
-        removed: h.removed,
-      }));
+      // Fallback removed to prevent bundling backend code
+      logDebug('[BundleView] Fallback hotspots (no facts) not available in webview');
+      return [];
     } catch (err) {
       logDebug(`[BundleView] Fallback hotspots (no facts) failed: ${err}`);
       return [];

@@ -1,4 +1,4 @@
-import type { DriftFindings } from '../facts/driftDetector';
+import type { DriftFindings } from './drift';
 
 export interface CommitInfo {
   sha: string;

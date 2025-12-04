@@ -254,6 +254,14 @@ export const CockpitPayloadSchema = z.object({
   hasMoreCommits: z.boolean().optional(),
   llmOutputs: z.any().optional(),
   retrievedHistory: z.any().optional(),
+  headInfo: z
+    .object({
+      sha: z.string(),
+      date: z.string(),
+      message: z.string(),
+      author: z.string(),
+    })
+    .optional(),
 });
 
 export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
@@ -297,6 +305,7 @@ export const CockpitClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('setLastNCommits'), value: z.number() }),
   z.object({ type: z.literal('updateCommitIndex'), value: z.number() }),
   z.object({ type: z.literal('clearError') }),
+  z.object({ type: z.literal('getHeadInfo') }),
 ]);
 
 export const CockpitStateSchema = z
@@ -322,6 +331,14 @@ export const CockpitStateSchema = z
     retrievedHistory: z.any().optional(),
     workspaceFacts: z.any().nullable().optional(),
     llmOutputs: z.any().optional(),
+    headInfo: z
+      .object({
+        sha: z.string(),
+        date: z.string(),
+        message: z.string(),
+        author: z.string(),
+      })
+      .optional(),
     selectedCommitShas: z.array(z.string()),
     selectedStagedPaths: z.array(z.string()),
     selectedUnstagedPaths: z.array(z.string()),
@@ -426,3 +443,42 @@ export const ActionPayloadSchemas: Record<string, z.ZodType<any>> = {
     data: z.union([BundleViewSchema, z.any()]),
   }),
 };
+
+/* ---------- Analysis Tier Schemas ---------- */
+
+export const Tier1DataSchema = z.object({
+  content: z.string(),
+  lineCount: z.number(),
+  language: z.string(),
+  filePath: z.string(),
+  fileExists: z.boolean(),
+  symbols: z.array(z.any()).optional(),
+  symbolId: z.string().optional(),
+});
+
+export const Tier2DataSchema = z.object({
+  blastRadius: z.object({
+    incoming: z.array(z.any()),
+    outgoing: z.array(z.any()),
+  }),
+  hotspots: z.array(z.any()),
+  drift: z.array(z.any()),
+  hotspotScore: z.number().optional(),
+  history: z.any().optional(),
+  diff: z.any().optional(),
+  lineCommits: z
+    .array(
+      z.object({
+        line: z.number(),
+        commitSha: z.string(),
+        author: z.string(),
+        date: z.string(),
+      })
+    )
+    .optional(),
+});
+
+export const Tier3DataSchema = z.object({
+  summary: z.string(),
+  risks: z.array(z.any()),
+});
