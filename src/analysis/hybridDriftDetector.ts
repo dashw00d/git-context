@@ -116,10 +116,10 @@ export async function detectHybridDrift(
     }
 
     if (!isModified && priorFacts) {
-      const priorFact = priorFacts.find(p => p.id === fact.id || p.id === fact.id);
+      const priorFact = priorFacts.find(p => p.dnaId === fact.dnaId || p.id === fact.id);
       if (priorFact) {
         if (
-          priorFact.id !== fact.id ||
+          priorFact.dnaId !== fact.dnaId ||
           priorFact.location.start.line !== fact.location.start.line
         ) {
           isModified = true;

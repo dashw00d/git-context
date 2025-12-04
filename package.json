@@ -404,7 +404,6 @@
     "lint": "eslint src --ext ts",
     "lint:errors": "eslint src --ext ts --quiet",
     "lint:fix": "eslint src --ext ts --fix",
-    "fix": "npm run format && npm run lint:fix",
     "build:cockpit": "esbuild src/webview/cockpit/index.tsx --bundle --outfile=media/cockpit.js --format=iife --platform=browser --loader:.tsx=tsx --loader:.ts=ts --jsx=automatic --sourcemap",
     "test": "vitest --reporter=json --reporter=default",
     "test:watch": "vitest --watch",

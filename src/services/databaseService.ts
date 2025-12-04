@@ -1,7 +1,3 @@
-import { ensureDatabaseInitialized } from '../storage/database';
-import { prepare } from '../storage/statement-wrapper';
-import { logError } from '../utils/logger';
-import { ServiceBase, ServiceConfig } from './base/ServiceBase';
 import type { MovedBlock } from '../analysis/movedBlockDetector';
 import type { Hotspot } from '../contracts/llmContext';
 import type {
@@ -9,7 +5,11 @@ import type {
   CommitMetadata,
   CommitSearchOptions,
 } from '../services/commitService';
+import { ensureDatabaseInitialized } from '../storage/database';
+import { prepare } from '../storage/statement-wrapper';
 import type { EdgeInfo, SymbolInfo } from '../types';
+import { logError } from '../utils/logger';
+import { ServiceBase, ServiceConfig } from './base/ServiceBase';
 
 export interface SymbolWithDNA extends SymbolInfo {
   dna: string;
@@ -222,16 +222,15 @@ export class DatabaseService extends ServiceBase {
         const stmt = prepare(`
           SELECT s.*, sv.dna_id as dna
           FROM symbol_versions sv
-          JOIN symbols s ON sv.sha = s.sha AND sv.dna_id = s.dna_id
+          JOIN symbols s ON sv.sha = s.sha AND sv.symbol_id = s.symbol_id
           WHERE sv.dna_id = ?
         `);
         const results = stmt.all(dnaHash) as any[];
         stmt.free?.();
 
         return results.map(row => ({
-          id: row.dna_id, // id is now the DNA hash
-          semanticId: row.symbol_id, // Keep symbol_id as semanticId for reference
-          filePath: row.path || '',
+          id: row.symbol_id,
+          dnaId: row.dna_id,
           name: row.name,
           kind: row.kind as SymbolInfo['kind'],
           signature: row.signature,
@@ -258,8 +257,8 @@ export class DatabaseService extends ServiceBase {
         stmt.free?.();
 
         return results.map(row => ({
-          id: row.dna_id || row.symbol_id, // id is now the DNA hash
-          filePath: row.path || '',
+          id: row.symbol_id,
+          dnaId: row.dna_id,
           name: row.name,
           kind: row.kind as SymbolInfo['kind'],
           signature: row.signature,

@@ -1,4 +1,4 @@
-import { logDebug } from './logger';
+import { logError } from './logger';
 
 export class TimeoutError extends Error {
   constructor(message: string) {
@@ -20,26 +20,25 @@ export async function withTimeout<T>(
   timeoutMs: number,
   description: string
 ): Promise<T> {
-  logDebug(`⏰ [withTimeout] Starting timeout for: ${description}`);
+  console.error(`⏰ [withTimeout] Starting timeout for: ${description}`);
   let timeoutHandle: NodeJS.Timeout;
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutHandle = setTimeout(() => {
-      logDebug(`⏰ [withTimeout] TIMEOUT REACHED: ${description}`);
+      console.error(`⏰ [withTimeout] TIMEOUT REACHED: ${description}`);
       reject(new TimeoutError(`${description} timed out (${timeoutMs}ms)`));
     }, timeoutMs);
   });
 
   try {
-    logDebug(`⏰ [withTimeout] Racing promise vs timeout`);
+    console.error(`⏰ [withTimeout] Racing promise vs timeout`);
     const result = await Promise.race([promise, timeoutPromise]);
-    logDebug(`⏰ [withTimeout] Promise won the race`);
+    console.error(`⏰ [withTimeout] Promise won the race`);
     clearTimeout(timeoutHandle!);
     return result;
   } catch (error) {
-    logDebug(`⏰ [withTimeout] Promise rejected: ${(error as Error).message}`);
+    console.error(`⏰ [withTimeout] Promise rejected:`, error);
     clearTimeout(timeoutHandle!);
-    // eslint-disable-next-line no-restricted-syntax
     throw error;
   }
 }

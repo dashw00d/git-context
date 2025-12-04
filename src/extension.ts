@@ -253,8 +253,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
       vscode.commands.registerCommand('git-context.debug.dumpState', async () => {
-        const { getStore } = await import('./state/store');
-        const state = getStore().getState();
+        if (!cockpitProvider) {
+          vscode.window.showErrorMessage('Cockpit provider not initialized');
+          return;
+        }
+        const state = cockpitProvider.getState();
         const doc = await vscode.workspace.openTextDocument({
           content: JSON.stringify(state, null, 2),
           language: 'json',
@@ -273,7 +276,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
         try {
           const text = editor.document.getText();
-          JSON.parse(text); // Parse to validate JSON
+          const state = JSON.parse(text);
           // State injection removed - use explicit actions instead
           vscode.window.showInformationMessage(
             'State injection removed. Use explicit Redux actions instead.'

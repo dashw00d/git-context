@@ -2,7 +2,14 @@ import { withTimeout } from '../../../utils/async';
 import { logError } from '../../../utils/logger';
 import { BundleStoryEngine } from '../../bundleStoryEngine';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
-import { updateState } from './utils';
+
+function updateState<K extends keyof PipelineState>(
+  state: PipelineState,
+  key: K,
+  value: PipelineState[K]
+) {
+  (state as any)[key] = value;
+}
 
 export function createHistoryRetrievalStep(storyEngine: BundleStoryEngine): PipelineStep {
   return {

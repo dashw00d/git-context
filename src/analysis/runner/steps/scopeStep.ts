@@ -1,8 +1,14 @@
 import { computeScope } from '../../../facts/scope';
-import { logDebug } from '../../../utils/logger';
 import { GitOperations } from '../../git';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
-import { updateState } from './utils';
+
+function updateState<K extends keyof PipelineState>(
+  state: PipelineState,
+  key: K,
+  value: PipelineState[K]
+) {
+  (state as any)[key] = value;
+}
 
 export function createScopeStep(git?: GitOperations): PipelineStep {
   return {
@@ -11,12 +17,12 @@ export function createScopeStep(git?: GitOperations): PipelineStep {
     deps: [],
 
     async run(state: PipelineState) {
-      logDebug('🟩 [ScopeStep] Starting run');
+      console.error('🟩 [ScopeStep] Starting run');
       // Use workspaceParts from state (set by ReportService based on scope parameter)
       // Don't override it - this allows staged-only or unstaged-only analysis
       const workspaceParts = state.workspaceParts;
 
-      logDebug('🟩 [ScopeStep] Calling computeScope...');
+      console.error('🟩 [ScopeStep] Calling computeScope...');
       const scope = await computeScope(
         state.selectedCommitShas,
         workspaceParts,
@@ -24,9 +30,9 @@ export function createScopeStep(git?: GitOperations): PipelineStep {
         state.liveOverrides?.keys(),
         git
       );
-      logDebug('🟩 [ScopeStep] computeScope returned, updating state');
+      console.error('🟩 [ScopeStep] computeScope returned, updating state');
       updateState(state, 'scope', scope);
-      logDebug('🟩 [ScopeStep] Completed successfully');
+      console.error('🟩 [ScopeStep] Completed successfully');
     },
   };
 }

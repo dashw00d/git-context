@@ -1,7 +1,14 @@
 import { logError } from '../../../utils/logger';
 import { EmbeddingIndexer } from '../../embeddingIndexer';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
-import { updateState } from './utils';
+
+function updateState<K extends keyof PipelineState>(
+  state: PipelineState,
+  key: K,
+  value: PipelineState[K]
+) {
+  (state as any)[key] = value;
+}
 
 export function createEmbeddingStep(embeddingIndexer: EmbeddingIndexer): PipelineStep {
   return {

@@ -1,4 +1,4 @@
-import pLimit = require('p-limit');
+/* eslint-disable no-restricted-syntax */
 import { LegacyDetector } from '../../../facts/legacyAudit';
 import { isCstFact } from '../../../types/cstFacts';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../../../utils/config';
@@ -10,12 +10,11 @@ export function createLegacyStep(): PipelineStep {
   return {
     id: 'legacy',
     label: 'Audit legacy code',
-    deps: ['intended', 'working', 'scope', 'index_commits', 'workspace_overlay'],
+    deps: ['intended', 'working', 'scope', 'drift', 'index_commits', 'workspace_overlay'],
 
     async run(state: PipelineState) {
       if (!state.intended || !state.working || !state.scope) {
-        logDebug('[LegacyStep] Intended, working, and scope required. Skipping.');
-        return;
+        throw new Error('Intended, working, and scope required');
       }
 
       const detector = new LegacyDetector();
@@ -54,7 +53,7 @@ export function createLegacyStep(): PipelineStep {
 
       if (enableCst || enableAugment) {
         const timelineManager = getCstTimelineManager();
-        const scopeFiles = Array.from(state.scope.allPaths);
+        const scopeFiles = state.scope.allPaths;
 
         if (!state.completedSteps.has('index_commits')) {
           logDebug(
@@ -67,44 +66,41 @@ export function createLegacyStep(): PipelineStep {
           );
         }
 
-        const limit = pLimit(16);
-        await Promise.all(
-          scopeFiles.map(filePath =>
-            limit(async () => {
-              const language = detectLanguage(filePath);
-              if (!language) return;
+        for (const filePath of scopeFiles) {
+          const language = detectLanguage(filePath);
+          if (!language) continue;
 
-              const isCstOnly = isCstOnlyLanguage(language);
-              if (!isCstOnly && !enableAugment) return;
+          const isCstOnly = isCstOnlyLanguage(language);
+          if (!isCstOnly && !enableAugment) continue;
 
-              try {
-                let versionToCheck: string;
-                if (state.scope!.unstagedFiles?.has(filePath)) {
-                  versionToCheck = 'workspace-unstaged';
-                } else if (state.scope!.stagedFiles?.has(filePath)) {
-                  versionToCheck = 'workspace-staged';
-                } else {
-                  versionToCheck = state.selectedCommitShas?.[0] || 'HEAD';
-                }
-                const facts = (await timelineManager.getPriorFacts(filePath, versionToCheck)) || [];
+          try {
+            let versionToCheck: string;
+            if (state.scope.unstagedFiles?.has(filePath)) {
+              versionToCheck = 'workspace-unstaged';
+            } else if (state.scope.stagedFiles?.has(filePath)) {
+              versionToCheck = 'workspace-staged';
+            } else {
+              versionToCheck = state.selectedCommitShas?.[0] || 'HEAD';
+            }
+            const facts = (await timelineManager.getPriorFacts(filePath, versionToCheck)) || [];
 
-                if (facts.length > 0) {
-                  // logDebug(`[LegacyStep] Retrieved ${facts.length} hybrid facts for ${filePath}@${versionToCheck}`);
-                }
+            if (facts.length > 0) {
+              logDebug(
+                `[LegacyStep] Retrieved ${facts.length} hybrid facts for ${filePath}@${versionToCheck}`
+              );
+            }
 
-                for (const fact of facts) {
-                  if (isCstFact(fact) && fact.timeline.length > 5) {
-                    logDebug(
-                      `[LegacyStep] CST fact ${fact.name} has long timeline (${fact.timeline.length} versions)`
-                    );
-                  }
-                }
-              } catch (error) {
-                logDebug(`[LegacyStep] Error checking CST legacy for ${filePath}: ${error}`);
+            for (const fact of facts) {
+              if (isCstFact(fact) && fact.timeline.length > 5) {
+                logDebug(
+                  `[LegacyStep] CST fact ${fact.name} has long timeline (${fact.timeline.length} versions)`
+                );
               }
-            })
-          )
-        );
+            }
+          } catch (error) {
+            logDebug(`[LegacyStep] Error checking CST legacy for ${filePath}: ${error}`);
+          }
+        }
       }
 
       state.legacy = legacy;

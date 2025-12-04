@@ -1,8 +1,26 @@
 import * as path from 'path';
-import { FileNamingConvention, ImportPathConvention, ImportPathStyle } from '../types/convention';
 import { getSupportedExtensions, isJSLanguage, isPHPLanguage } from '../utils/config';
 
-export { FileNamingConvention, ImportPathConvention, ImportPathStyle };
+export type ImportPathStyle =
+  | 'absolute'
+  | 'relative'
+  | 'alias'
+  | 'package'
+  | 'index'
+  | 'extension'
+  | 'no-extension';
+
+export interface ImportPathConvention {
+  style: ImportPathStyle;
+  path: string;
+  line: number;
+}
+
+export interface FileNamingConvention {
+  style: 'PascalCase' | 'camelCase' | 'kebab-case' | 'snake_case' | 'SCREAMING_SNAKE' | 'mixed';
+  filename: string;
+  path: string;
+}
 
 export function detectImportPathStyle(importPath: string): ImportPathStyle {
   if (!importPath) return 'package';

@@ -343,12 +343,10 @@ export class SymbolExtractor {
     ]);
     const symbols = facts.filter(f => symbolKinds.has(f.kind)) as SymbolInfo[];
 
-    // Preserve filePath and temporary id (will be replaced by DNA in assignDNAIds)
     return symbols.map(symbol => ({
       ...symbol,
-      semanticId: symbol.id, // Keep original ID as semanticId for reference
-      filePath: symbol.filePath || filePath, // Ensure filePath is set
-      id: symbol.id, // Keep temporary ID, will be replaced by DNA
+      semanticId: symbol.id,
+      id: `${filePath}:${symbol.id}`,
     }));
   }
 
@@ -369,9 +367,7 @@ export class SymbolExtractor {
         symbol.location.start.line,
         symbol.location.end.line
       );
-      // Use filePath as key for bodyText lookup (assignDNAIds will use this)
-      const key = symbol.filePath || filePath;
-      bodyTexts.set(key, bodyText);
+      bodyTexts.set(symbol.id, bodyText);
     }
 
     return { symbols, bodyTexts };

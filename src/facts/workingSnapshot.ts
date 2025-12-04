@@ -5,7 +5,7 @@ import { GitOperations } from '../analysis/git';
 import { SymbolExtractor } from '../analysis/symbols';
 import { EdgeContext, SymbolContext } from '../contracts/llmContext';
 import { getGitRoot } from '../utils/config';
-import { logError, logInfo, logWarn, logDebug } from '../utils/logger';
+import { logError, logInfo, logWarn } from '../utils/logger';
 
 export interface WorkingSnapshot {
   symbolsById: Map<string, SymbolContext>;
@@ -22,7 +22,6 @@ export async function getWorkingSnapshot(
   liveOverrides?: Map<string, string>
 ): Promise<WorkingSnapshot> {
   const gitRoot = getGitRoot();
-  logDebug(`[WorkingSnapshot] gitRoot: ${gitRoot}`);
   if (!gitRoot) {
     logError('Not in a git repository');
     return {
@@ -47,7 +46,7 @@ export async function getWorkingSnapshot(
       const fullPath = path.join(gitRoot, filePath);
 
       if (!fs.existsSync(fullPath)) {
-        logInfo(`Skipping non-existent path: ${filePath} (full: ${fullPath})`);
+        logInfo(`Skipping non-existent path: ${filePath}`);
         continue;
       }
 
@@ -68,27 +67,21 @@ export async function getWorkingSnapshot(
       }
 
       const symbols = await symbolExtractor.extractSymbolsFromContent(content, filePath);
-      // Assign DNA IDs to symbols
-      const bodyTexts = new Map([[filePath, content]]);
-      const { assignDNAIds } = await import('../analysis/symbolDna');
-      const { detectLanguage } = await import('../utils/config');
-      const language = detectLanguage(filePath);
-      const symbolsWithDNA = await assignDNAIds(symbols, bodyTexts, language || undefined);
 
-      for (const symbol of symbolsWithDNA) {
-        if (!symbol.id) {
-          logWarn(`Invalid symbol: missing DNA ID in ${filePath}: ${symbol.name}`);
+      for (const symbol of symbols) {
+        if (!symbol.id || !symbol.id.includes(':')) {
+          logWarn(
+            `Invalid symbol ID format in ${filePath}: ${symbol.id}. Expected format: path:semanticId`
+          );
           continue;
         }
 
         const symbolContext: SymbolContext = {
           id: 0, // Placeholder for working snapshot (not from database)
-          symbol_id: symbol.id, // id is now the DNA hash
+          symbol_id: symbol.id,
           name: symbol.name,
           kind: symbol.kind,
           signature: symbol.signature,
-          dnaId: symbol.id, // Keep for compatibility
-          filePath: symbol.filePath, // Store file path
           loc_pre: symbol.location
             ? {
                 start: { line: symbol.location.start.line, column: symbol.location.start.column },
@@ -119,7 +112,6 @@ export async function getWorkingSnapshot(
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logWarn(`Skipped ${filePath}: ${errorMsg}`);
-      logError(`[WorkingSnapshot] Error processing ${filePath}`, error);
     }
   }
 

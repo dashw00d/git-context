@@ -45,10 +45,8 @@ export const BundleStage: React.FC<{
     if (!vscode) return;
     postMessageWithTracing(vscode, { type: 'updateBundleConfig', config: formConfig });
     postMessageWithTracing(vscode, { type: 'setLastNCommits', value: depth });
-
-    // Phased Scanning: We no longer trigger full analysis automatically.
-    // The user will trigger analysis on-demand by navigating to files.
-    // We just update the scope/skeleton here.
+    const mode = formConfig.mode === 'changes' ? ('changes' as const) : ('selection' as const);
+    postMessageWithTracing(vscode, { type: 'generateReport', mode, force: true });
   };
 
   const handleFileClick = (file: any) => {

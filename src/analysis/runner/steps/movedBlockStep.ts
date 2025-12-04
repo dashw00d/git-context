@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax */
 import { getDatabaseManager } from '../../../storage/database';
 import { prepare } from '../../../storage/statement-wrapper';
 import { SymbolInfo } from '../../../types';
@@ -34,85 +35,34 @@ async function getSymbolsForVersion(
   `);
   const symbolRows = symbolsStmt.all(sha) as any[];
 
-  if (symbolRows.length === 0) {
-    return { removed, added };
-  }
-
-  // Batch fetch blob SHAs
-  const pathMap = new Map<string, { blobSha: string; rows: any[] }>();
-
-  // Pre-calculate blob SHAs needed
   for (const row of symbolRows) {
     try {
       let blobSha: string;
+
       if (row.change_type === 'removed') {
         const commitInfo = await git.getCommitInfo(sha);
-        if (!commitInfo.parent) continue;
+        if (!commitInfo.parent) {
+          continue;
+        }
         blobSha = await git.getBlobSha(commitInfo.parent, row.path);
       } else {
         blobSha = await git.getBlobSha(sha, row.path);
       }
 
-      const key = `${blobSha}:${row.path}`;
-      if (!pathMap.has(key)) {
-        pathMap.set(key, { blobSha, rows: [] });
-      }
-      pathMap.get(key)!.rows.push(row);
-    } catch (error) {
-      continue;
-    }
-  }
+      const snapshotStmt = prepare(`
+        SELECT symbols_json FROM file_snapshots
+        WHERE blob_sha = ? AND file_path = ?
+      `);
+      const snapshot = snapshotStmt.get([blobSha, row.path]) as any;
 
-  // Batch fetch snapshots
-  const uniqueBlobs = Array.from(new Set(Array.from(pathMap.values()).map(v => v.blobSha)));
+      if (snapshot) {
+        const symbols: SymbolInfo[] = JSON.parse(snapshot.symbols_json);
+        const fullSymbol = symbols.find(s => s.id === row.symbol_id);
 
-  if (uniqueBlobs.length === 0) return { removed, added };
-
-  // Fetch all snapshots for these blobs in chunks to avoid parameter limits
-  const chunkSize = 50;
-  const loadedSnapshots = new Map<string, any>();
-
-  for (let i = 0; i < uniqueBlobs.length; i += chunkSize) {
-    const chunk = uniqueBlobs.slice(i, i + chunkSize);
-    const placeholders = chunk.map(() => '?').join(',');
-    const snapshotStmt = prepare(`
-      SELECT blob_sha, file_path, symbols_json FROM file_snapshots
-      WHERE blob_sha IN (${placeholders})
-    `);
-
-    const chunkRows = snapshotStmt.all(...chunk) as any[];
-    for (const row of chunkRows) {
-      // We might have multiple entries for same blob_sha (different paths)
-      // We prefer the one matching our file path if possible, or just any.
-      // Since content is same, symbols should be same.
-      // We store by blob_sha + file_path for exact match,
-      // but also maybe just blob_sha if we trust content?
-      // The existing code queried by (blob_sha, file_path).
-      // Let's store by composite key.
-      loadedSnapshots.set(`${row.blob_sha}:${row.file_path}`, row);
-    }
-  }
-
-  for (const [_, { blobSha, rows }] of pathMap) {
-    const filePath = rows[0].path;
-    // Try exact match first
-    const snapshot = loadedSnapshots.get(`${blobSha}:${filePath}`);
-
-    // If not found by exact path, try to find ANY snapshot with this blobSha?
-    // The original code was strict: WHERE blob_sha = ? AND file_path = ?
-    // If that returned nothing, it skipped. So we should stick to strict match.
-
-    if (snapshot) {
-      const symbols: SymbolInfo[] = JSON.parse(snapshot.symbols_json);
-      const symbolMap = new Map(symbols.map(s => [s.id, s]));
-
-      for (const row of rows) {
-        const fullSymbol = symbolMap.get(row.symbol_id);
         if (fullSymbol) {
           const symbolWithDna: SymbolInfo = {
             ...fullSymbol,
-            id: row.dna_id || fullSymbol.id,
-            filePath: fullSymbol.filePath || row.path || '',
+            dnaId: row.dna_id || fullSymbol.dnaId || fullSymbol.id,
           };
 
           if (row.change_type === 'removed') {
@@ -122,6 +72,8 @@ async function getSymbolsForVersion(
           }
         }
       }
+    } catch (error) {
+      continue;
     }
   }
 
@@ -155,23 +107,20 @@ export function createMovedBlockStep(): PipelineStep {
           `[MovedBlockStep] Detecting cross-version moves across ${state.explicitTimeline.length} versions`
         );
 
-        // Iterate from Oldest -> Newest (reverse of standard git log order)
-        // explicitTimeline is usually [Newest, ..., Oldest]
-        for (let i = state.explicitTimeline.length - 1; i > 0; i--) {
-          const currentVersion = state.explicitTimeline[i]; // Older
-          const nextVersion = state.explicitTimeline[i - 1]; // Newer
+        for (let i = 0; i < state.explicitTimeline.length - 1; i++) {
+          const currentVersion = state.explicitTimeline[i];
+          const nextVersion = state.explicitTimeline[i + 1];
 
           const currentSymbols = await getSymbolsForVersion(currentVersion, state, db, git);
           const nextSymbols = await getSymbolsForVersion(nextVersion, state, db, git);
 
-          // Match Removed in Current (Old) -> Added in Next (New)
-          const matches = detector.matchByDna(currentSymbols.removed, nextSymbols.added);
+          const matches = detector.matchByDna(nextSymbols.removed, currentSymbols.added);
 
           for (const match of matches) {
             let moveType: 'rename' | 'relocate' | 'refactor' = 'relocate';
-            if (match.removed.name !== match.added.name) {
+            if (match.removed.id !== match.added.id && match.removed.dnaId === match.added.dnaId) {
               moveType = 'rename';
-            } else if (match.removed.filePath !== match.added.filePath) {
+            } else if (match.removed.id.split(':')[0] !== match.added.id.split(':')[0]) {
               moveType = 'relocate';
             } else {
               moveType = 'refactor';
@@ -180,13 +129,13 @@ export function createMovedBlockStep(): PipelineStep {
             crossVersionLineage.push({
               symbolId: match.added.id,
               previousSymbolId: match.removed.id,
-              sourceVersion: currentVersion,
-              destVersion: nextVersion,
+              sourceVersion: nextVersion,
+              destVersion: currentVersion,
               moveType,
               versionDescription: `${describeVersionPosition(
-                currentVersion,
+                nextVersion,
                 state.explicitTimeline
-              )} → ${describeVersionPosition(nextVersion, state.explicitTimeline)}`,
+              )} → ${describeVersionPosition(currentVersion, state.explicitTimeline)}`,
             });
           }
         }

@@ -21,11 +21,7 @@ export class AnalysisService {
     return AnalysisService.instance;
   }
 
-  async analyzeFrame(
-    frameId: string,
-    view?: any,
-    onTierComplete?: (tier: number, frameId: string) => void
-  ) {
+  async analyzeFrame(frameId: string, view?: any) {
     const store = getStore();
     const state = store.getState();
     const activeFrame = state.activeFrame.id;
@@ -43,27 +39,18 @@ export class AnalysisService {
       return;
     }
 
-    // Check for composite ID (filePath::dnaHash) or legacy (filePath:symbolName)
-    const compositeMatch = frameId.includes('::');
-    const legacyMatch = !compositeMatch && frameId.match(/^(.+\.\w+):(.+)$/);
-
-    const level: 'file' | 'symbol' = compositeMatch || legacyMatch ? 'symbol' : 'file';
+    const symbolMatch = frameId.match(/^(.+\.\w+):(.+)$/);
+    const level: 'file' | 'symbol' = symbolMatch ? 'symbol' : 'file';
     let targetPath = frameId;
-
-    if (level === 'symbol') {
-      if (compositeMatch) {
-        targetPath = frameId.split('::')[0];
-      } else if (legacyMatch) {
-        targetPath = legacyMatch[1];
-      }
+    if (level === 'symbol' && symbolMatch) {
+      targetPath = symbolMatch[1];
     }
 
     let tier1Data: any;
     this.pipelineDebugger.startTier(frameId, 1, activeFrame);
     try {
-      const facts = state.bundleFacts as BundleFactsDTO;
       tier1Data = await withTimeout(
-        analyzer.analyzeTier1(frameId, targetPath, gitRoot, facts),
+        analyzer.analyzeTier1(frameId, targetPath, gitRoot),
         120000,
         'Tier 1 analysis'
       );
@@ -73,9 +60,6 @@ export class AnalysisService {
         type: 'FRAME_ANALYSIS_TIER_1_COMPLETE',
         payload: { frameId, data: tier1Data },
       });
-      if (onTierComplete) {
-        onTierComplete(1, frameId);
-      }
     } catch (error) {
       this.pipelineDebugger.failTier(frameId, 1, String(error));
       logError(`[Tier 1] Failed for ${frameId}`, error);
@@ -90,42 +74,7 @@ export class AnalysisService {
     store.dispatch(analysisActions.progress(true, 'Analyzing relationships...'));
     this.pipelineDebugger.startTier(frameId, 2, store.getState().activeFrame.id);
     try {
-      let facts = state.bundleFacts as BundleFactsDTO;
-
-      // Issue 2: Ensure comprehensive data by triggering pipeline if needed
-      // If we don't have sufficient facts (e.g. missing edges/graph), run a targeted analysis
-      if (
-        !facts ||
-        !facts.evidence?.['working.edges'] ||
-        (facts.evidence['working.edges'].length === 0 && level === 'file')
-      ) {
-        logInfo(`[AnalysisService] Triggering targeted pipeline analysis for ${targetPath}`);
-        const { getRefactorPipeline } = await import('./pipelineFactory');
-        const pipeline = await getRefactorPipeline();
-        const { GitOperations } = await import('../analysis/git');
-        const git = new GitOperations();
-
-        // Fetch recent commits for this file to build a mini-bundle
-        const history = await git.getFileHistory(targetPath, 5);
-        const shas = history.map((h: any) => h.hash).filter((h: string) => h);
-
-        if (shas.length > 0) {
-          // Run pipeline for these commits + workspace
-          const result = await pipeline.analyzeBundle(shas, true);
-          // Update local facts reference from the pipeline result
-          // Note: We need to fetch the updated facts from the store or result
-          // analyzeBundle returns PipelineState which has bundleFacts
-          if (result.bundleFacts) {
-            facts = result.bundleFacts;
-            // Also update the global store so the UI gets the new graph
-            store.dispatch({
-              type: 'BUNDLE_FACTS_UPDATED',
-              payload: { facts: result.bundleFacts },
-            });
-          }
-        }
-      }
-
+      const facts = state.bundleFacts as BundleFactsDTO;
       const tier2Data = await withTimeout(
         analyzer.analyzeTier2(frameId, targetPath, facts),
         120000,
@@ -137,9 +86,6 @@ export class AnalysisService {
         type: 'FRAME_ANALYSIS_TIER_2_COMPLETE',
         payload: { frameId, data: tier2Data },
       });
-      if (onTierComplete) {
-        onTierComplete(2, frameId);
-      }
     } catch (error) {
       this.pipelineDebugger.failTier(frameId, 2, String(error));
       logError(`[Tier 2] Failed for ${frameId}`, error);
@@ -165,9 +111,6 @@ export class AnalysisService {
         type: 'FRAME_ANALYSIS_TIER_3_COMPLETE',
         payload: { frameId, data: tier3Data },
       });
-      if (onTierComplete) {
-        onTierComplete(3, frameId);
-      }
       logInfo(`[AnalysisService] Analyzed frame ${frameId} (${level})`);
     } catch (error) {
       this.pipelineDebugger.failTier(frameId, 3, String(error));

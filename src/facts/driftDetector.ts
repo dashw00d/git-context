@@ -4,19 +4,22 @@ import {
   analyzeImportPathDrift,
   detectFileNamingConvention,
   extractImportPaths,
+  FileNamingConvention,
+  ImportPathConvention,
 } from '../analysis/conventionEnhancements';
 import { BaseDetector, DetectorConfig } from '../analysis/detectors/BaseDetector';
-import { analyzeConventionDrift, detectNamingConvention } from '../analysis/namingConventions';
-import { SymbolContext } from '../contracts/llmContext';
+import {
+  analyzeConventionDrift,
+  detectNamingConvention,
+  NamingConvention,
+} from '../analysis/namingConventions';
+import { EdgeContext, SymbolContext } from '../contracts/llmContext';
 import { prepare } from '../storage/statement-wrapper';
-import { FileNamingConvention, ImportPathConvention } from '../types/convention';
-import { DriftFindings, IntendedState, UnresolvedCallerFact } from '../types/drift';
-import { NamingConvention } from '../types/naming';
 import { detectLanguage, getGitRoot } from '../utils/config';
 import { logWarn } from '../utils/logger';
+import { IntendedState } from './intendedMap';
 import { WorkingSnapshot } from './workingSnapshot';
-
-export { DriftFindings, UnresolvedCallerFact };
+import type { HybridFact } from '../types/cstFacts';
 
 /**
  * Safely extract line number from symbol location
@@ -27,22 +30,134 @@ function extractLineFromSymbol(symbol: SymbolContext): number | undefined {
 }
 
 /**
- * Safely extract file path from symbol
- * Uses filePath field if available, otherwise falls back to finding it in symbolsByFile
+ * Safely extract file path from symbol ID
+ * Symbol IDs are expected to be in format "path/to/file:kind:name" or similar
  */
-function extractPathFromSymbol(symbol: SymbolContext, working?: WorkingSnapshot): string {
-  if (symbol.filePath) {
-    return symbol.filePath;
+function extractPathFromSymbolId(symbolId: string): string {
+  if (!symbolId || typeof symbolId !== 'string') {
+    return 'unknown';
   }
-  // Fallback: find file path from working snapshot
-  if (working) {
-    for (const [filePath, symbols] of working.symbolsByFile) {
-      if (symbols.some(s => s.symbol_id === symbol.symbol_id)) {
-        return filePath;
-      }
-    }
+
+  const colonIndex = symbolId.indexOf(':');
+  if (colonIndex === -1) {
+    logWarn(`Invalid symbol ID format (no colon found): ${symbolId}`);
+    return 'unknown';
   }
-  return 'unknown';
+
+  const path = symbolId.substring(0, colonIndex);
+  if (!path) {
+    logWarn(`Invalid symbol ID format (empty path): ${symbolId}`);
+    return 'unknown';
+  }
+
+  return path;
+}
+
+export interface DriftFindings {
+  missing_symbols: Array<{
+    symbol_id: string;
+    expected: IntendedState;
+    introducedAtVersion?: string;
+    resolvedAtVersion?: string;
+    versionDescription?: string;
+  }>;
+  zombie_symbols: Array<{
+    symbol_id: string;
+    expected: IntendedState;
+    found: SymbolContext;
+    introducedAtVersion?: string;
+    resolvedAtVersion?: string;
+    versionDescription?: string;
+  }>;
+  divergent_symbols: Array<{
+    symbol_id: string;
+    expected: IntendedState;
+    found: SymbolContext;
+    introducedAtVersion?: string;
+    resolvedAtVersion?: string;
+    versionDescription?: string;
+  }>;
+  missing_edges: Array<{
+    from: string;
+    to: string;
+    type: string;
+    expected: IntendedState;
+    introducedAtVersion?: string;
+    resolvedAtVersion?: string;
+    versionDescription?: string;
+  }>;
+  zombie_edges: Array<{
+    from: string;
+    to: string;
+    type: string;
+    found: EdgeContext;
+    introducedAtVersion?: string;
+    resolvedAtVersion?: string;
+    versionDescription?: string;
+  }>;
+  hotspots: Array<{ path: string; drift_count: number }>;
+  conventionDrift?: {
+    dominantConvention: NamingConvention;
+    driftPercent: number;
+    driftSymbols: Array<{
+      symbolId: string;
+      name: string;
+      convention: NamingConvention;
+      suggestedName: string;
+      path: string;
+    }>;
+    importDrift?: {
+      dominantStyle: string;
+      driftPercent: number;
+      driftImports: Array<{
+        file: string;
+        line: number;
+        importPath: string;
+        style: string;
+      }>;
+    };
+    fileNamingDrift?: {
+      dominantStyle: FileNamingConvention['style'];
+      driftPercent: number;
+      driftFiles: Array<{
+        path: string;
+        style: FileNamingConvention['style'];
+        filename: string;
+      }>;
+    };
+  };
+  mixedConventionFiles?: Array<{
+    path: string;
+    conventions: NamingConvention[];
+    symbolCount: number;
+    driftPercent: number;
+  }>;
+  divergentClusters?: Array<Set<SymbolContext>>;
+  suggestedConsolidations?: Array<{ symbols: string[]; similarity: number }>;
+  unresolved_callers?: Array<UnresolvedCallerFact>;
+  /**
+   * Hybrid drifts: CST facts that have changed or are missing
+   * For CST-only languages and hybrid augmentation
+   */
+  hybridDrifts?: Array<{
+    fact: HybridFact;
+    type: 'missing' | 'zombie' | 'divergent' | 'modified';
+    expected?: IntendedState;
+    timelineDelta?: Array<{ version: string; delta: any }>;
+    introducedAtVersion?: string;
+    resolvedAtVersion?: string;
+  }>;
+}
+
+export interface UnresolvedCallerFact {
+  caller_symbol_id?: string;
+  caller_name?: string;
+  caller_path?: string;
+  caller_line?: number;
+  callee_name: string;
+  guessed_target_dna_id?: string | null;
+  occurrence_count: number;
+  severity: number;
 }
 
 /**
@@ -137,7 +252,7 @@ function clusterByShape(symbols: SymbolContext[]): Set<SymbolContext>[] {
   const symbolsWithoutDna: SymbolContext[] = [];
 
   for (const symbol of symbols) {
-    const dnaHash = symbol.dnaId || symbol.symbol_id; // symbol_id is now DNA hash
+    const dnaHash = symbol.dnaId;
 
     if (dnaHash) {
       if (!dnaClusters.has(dnaHash)) {
@@ -195,8 +310,8 @@ function clusterBySignature(symbols: SymbolContext[]): Set<SymbolContext>[] {
  * Calculate similarity between two symbols (0-1 scale)
  */
 function calculateSymbolSimilarity(a: SymbolContext, b: SymbolContext): number {
-  const aDna = a.dnaId || a.symbol_id; // symbol_id is now DNA hash
-  const bDna = b.dnaId || b.symbol_id; // symbol_id is now DNA hash
+  const aDna = a.dnaId;
+  const bDna = b.dnaId;
 
   if (aDna && bDna) {
     return aDna === bDna ? 1.0 : 0.0;
@@ -388,9 +503,7 @@ export function detectDrift(
     ...findings.zombie_symbols,
     ...findings.divergent_symbols,
   ]) {
-    // symbol_id is now DNA hash, need to find file path from working snapshot
-    const symbol = working.symbolsById.get(finding.symbol_id);
-    const path = symbol ? extractPathFromSymbol(symbol, working) : 'unknown';
+    const path = extractPathFromSymbolId(finding.symbol_id);
     fileDrift.set(path, (fileDrift.get(path) || 0) + 1);
   }
 
@@ -451,7 +564,7 @@ function detectUnresolvedCallers(
     const current = facts.get(key) || {
       caller_symbol_id: edge.from_symbol_id,
       caller_name: caller?.name,
-      caller_path: caller ? extractPathFromSymbol(caller, working) : undefined,
+      caller_path: caller?.symbol_id ? extractPathFromSymbolId(caller.symbol_id) : undefined,
       callee_name: calleeName || calleeRaw,
       guessed_target_dna_id: guessed,
       caller_line: caller ? extractLineFromSymbol(caller) : undefined,
@@ -557,7 +670,7 @@ function detectConventionDrift(working: WorkingSnapshot): {
     const symbols = Array.from(working.symbolsById.values()).map(s => ({
       name: s.name,
       kind: s.kind,
-      path: extractPathFromSymbol(s, working),
+      path: extractPathFromSymbolId(s.symbol_id),
     }));
 
     if (symbols.length === 0) {
@@ -570,7 +683,7 @@ function detectConventionDrift(working: WorkingSnapshot): {
       .map(ds => {
         const symbolId =
           Array.from(working.symbolsById.entries()).find(
-            ([, s]) => s.name === ds.name && extractPathFromSymbol(s, working) === ds.path
+            ([, s]) => s.name === ds.name && extractPathFromSymbolId(s.symbol_id) === ds.path
           )?.[0] || '';
 
         return {

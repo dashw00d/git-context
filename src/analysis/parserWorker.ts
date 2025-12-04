@@ -76,8 +76,8 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
       if (nameNode) {
         const name = nameNode.text;
         return {
-          id: `${node.type === 'method_declaration' ? 'method' : 'function'}_${name}`, // Temporary ID, will be replaced by DNA
-          filePath,
+          id: `${node.type === 'method_declaration' ? 'method' : 'function'}_${name}`,
+          dnaId: `${node.type === 'method_declaration' ? 'method' : 'function'}_${name}`,
           name,
           kind: node.type === 'method_declaration' ? 'method' : 'function',
           signature: node.text.split('{')[0].trim(),
@@ -93,8 +93,8 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
       if (nameNode) {
         const name = nameNode.text;
         return {
-          id: `class_${name}`, // Temporary ID, will be replaced by DNA
-          filePath,
+          id: `class_${name}`,
+          dnaId: `class_${name}`,
           name,
           kind: 'class',
           signature: `class ${name}`,
@@ -111,8 +111,8 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
       if (nameNode) {
         const name = nameNode.text;
         return {
-          id: `${node.type === 'method_definition' ? 'method' : 'function'}_${name}`, // Temporary ID, will be replaced by DNA
-          filePath,
+          id: `${node.type === 'method_definition' ? 'method' : 'function'}_${name}`,
+          dnaId: `${node.type === 'method_definition' ? 'method' : 'function'}_${name}`,
           name,
           kind: node.type === 'method_definition' ? 'method' : 'function',
           signature: node.text.split('{')[0].trim(),
@@ -128,8 +128,8 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
       if (nameNode) {
         const name = nameNode.text;
         return {
-          id: `class_${name}`, // Temporary ID, will be replaced by DNA
-          filePath,
+          id: `class_${name}`,
+          dnaId: `class_${name}`,
           name,
           kind: 'class',
           signature: `class ${name}`,

@@ -360,8 +360,7 @@ export function getGitRoot(): string | undefined {
       const root = findGitRootForPath(folder.uri.fsPath);
       if (root) return root;
     }
-    // Fallback to process.cwd() if no git root found in workspace folders
-    return findGitRootForPath(process.cwd());
+    return undefined;
   } else {
     return findGitRootForPath(process.cwd());
   }

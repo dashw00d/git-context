@@ -12,11 +12,7 @@ export function getMessageTracer(): MessageTracer {
 }
 
 export function postMessageWithTracing(vscode: any, message: CockpitClientMessage): void {
-  const parsed = CockpitClientMessageSchema.safeParse(message);
-  if (!parsed.success) {
-    // Validation failed - message won't be posted
-    return;
-  }
-  getMessageTracer().logOutgoing(parsed.data.type, parsed.data, 'webview');
-  vscode.postMessage(parsed.data);
+  const parsed = CockpitClientMessageSchema.parse(message);
+  getMessageTracer().logOutgoing(parsed.type, parsed, 'webview');
+  vscode.postMessage(parsed);
 }

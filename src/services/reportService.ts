@@ -9,7 +9,7 @@ import { getReportManager } from '../storage/reportManager';
 import { prepare } from '../storage/statement-wrapper';
 import { CommitAnalysis, EdgeInfo, SymbolInfo } from '../types';
 import { makeBundleFingerprint, PIPELINE_VERSION, PROMPT_VERSION } from '../utils/fingerprint';
-import { logDebug, logError, logInfo, logWarn } from '../utils/logger';
+import { logDebug, logError, logInfo } from '../utils/logger';
 import { isWorkspaceSha } from '../utils/workspace';
 
 export class ReportService {
@@ -50,11 +50,11 @@ export class ReportService {
       //empty
     }
   ): Promise<string | null> {
-    logDebug(`🚀 [ReportService] generateReport called with ${shas.length} SHAs`);
-    logDebug(
-      `🚀 [ReportService] Input SHAs: ${shas.slice(0, 10).join(', ')}${shas.length > 10 ? '...' : ''}`
-    );
-    logDebug(`🚀 [ReportService] Scope: ${scope}`);
+    console.error('🚀 [ReportService] generateReport called:', {
+      shas,
+      scope,
+      force: options.force,
+    });
     const pipeline = await getRefactorPipeline();
     const reportManager = getReportManager();
     let _serializedHistory: any = undefined;
@@ -65,9 +65,7 @@ export class ReportService {
 
     if (!options.force && !options.existingReportId) {
       const cachedReport = reportManager.loadByFingerprint(fingerprint);
-      logDebug(
-        `🔍 [ReportService] Cache lookup for ${fingerprint}: ${cachedReport ? 'hit' : 'miss'}`
-      );
+      console.error('🔍 [ReportService] Cache lookup:', { fingerprint, found: !!cachedReport });
       if (cachedReport) {
         const facts = cachedReport.facts;
         const isEmpty = !facts || (facts.scope.files === 0 && facts.working.symbols === 0);
@@ -111,27 +109,8 @@ export class ReportService {
       payload: { step: 'Analyzing commits...' },
     });
 
-    // Update cockpit provider with analysis start
-    try {
-      const { getCockpitProvider } = await import('../extension');
-      const cockpitProvider = getCockpitProvider();
-      if (cockpitProvider) {
-        cockpitProvider.setProgress(true, 'Analyzing commits...', 0);
-      }
-    } catch {
-      // Ignore if provider not available
-    }
-
     try {
       const includeWorkspace = scope === 'staged' || scope === 'unstaged' || scope === 'full';
-
-      logDebug(`🔧 [ReportService] Filtering SHAs...`);
-      logDebug(`🔧 [ReportService] - Input shas.length: ${shas.length}`);
-      shas.forEach((sha, idx) => {
-        const isWs = isWorkspaceSha(sha);
-        logDebug(`🔧 [ReportService]   [${idx}] ${sha.substring(0, 40)} - isWorkspaceSha: ${isWs}`);
-      });
-
       const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
       const workspaceShas = shas.filter(isWorkspaceSha);
 
@@ -144,23 +123,20 @@ export class ReportService {
         workspaceParts = new Set(['staged', 'unstaged']);
       }
 
-      logDebug(
-        `🔧 [ReportService] About to call pipeline.analyzeBundle with ${commitShas.length} commits`
-      );
-      logDebug(
-        `🔧 [ReportService] Filtered results: commitShas: ${commitShas.length}, workspaceShas: ${workspaceShas.length}`
-      );
-      logDebug(
-        `🔧 [ReportService] commitShas: ${commitShas.slice(0, 5).join(', ')}${commitShas.length > 5 ? '...' : ''}`
-      );
+      console.error('🔧 [ReportService] About to call pipeline.analyzeBundle:', {
+        commitShas: commitShas.length,
+        includeWorkspace,
+        workspaceParts: workspaceParts ? Array.from(workspaceParts) : null,
+      });
 
       const result = await pipeline.analyzeBundle(
         commitShas,
         includeWorkspace,
         workspaceParts,
-        async event => {
-          logDebug(
-            `📡 [Pipeline Event] ${event.type} for ${'step' in event ? event.step?.id : 'no-step'}`
+        event => {
+          console.error(
+            `📡 [Pipeline Event] ${event.type}`,
+            'step' in event ? event.step?.id : 'no-step'
           );
           const timings: Record<string, number> = {};
           if (event.state?.stepTimings) {
@@ -175,19 +151,10 @@ export class ReportService {
               ? [{ stepId: event.step.id, error: String(event.error) }]
               : undefined;
           const healthPayload = {
-            currentStepId:
-              event.type === 'finished' || event.type === 'aborted'
-                ? null
-                : 'step' in event
-                  ? event.step?.id
-                  : undefined,
+            currentStepId: event.type === 'finished' ? null : event.step?.id,
             stepTimings: Object.keys(timings).length ? timings : undefined,
             pipelineErrors: pipelineError,
           };
-          // Update cockpit provider directly
-          const { getCockpitProvider } = await import('../extension');
-          const cockpitProvider = getCockpitProvider();
-
           switch (event.type) {
             case 'start':
               getStore().dispatch({
@@ -195,9 +162,6 @@ export class ReportService {
                 payload: { step: event.step.label },
               });
               getStore().dispatch(pipelineActions.health(healthPayload));
-              if (cockpitProvider) {
-                cockpitProvider.setProgress(true, event.step.label, undefined);
-              }
               break;
 
             case 'complete':
@@ -206,9 +170,6 @@ export class ReportService {
                 payload: { step: event.step.label, progress: 100 },
               });
               getStore().dispatch(pipelineActions.health(healthPayload));
-              if (cockpitProvider) {
-                cockpitProvider.setProgress(true, event.step.label, 100);
-              }
               break;
 
             case 'error':
@@ -217,15 +178,11 @@ export class ReportService {
                 payload: { error: String(event.error) },
               });
               getStore().dispatch(pipelineActions.health(healthPayload));
-              if (cockpitProvider) {
-                cockpitProvider.setProgress(false, undefined, undefined);
-                cockpitProvider.setError(String(event.error));
-              }
               break;
 
             case 'finished':
               getStore().dispatch(pipelineActions.health(healthPayload));
-              if (event.state.status === 'completed') {
+              if (event.state.errors.length === 0) {
                 const history = event.state.history;
                 _serializedHistory = history
                   ? {
@@ -236,17 +193,7 @@ export class ReportService {
                     }
                   : undefined;
               }
-              // Don't set progress to false here - wait for ANALYSIS_COMPLETED
               break;
-
-            case 'aborted':
-              getStore().dispatch(pipelineActions.health(healthPayload));
-              if (cockpitProvider) {
-                cockpitProvider.setProgress(false, undefined, undefined);
-                cockpitProvider.setError(event.state.abortReason || 'Pipeline aborted');
-              }
-              break;
-
             case 'progress':
               if (event.data && event.data.file) {
                 getStore().dispatch({
@@ -256,55 +203,44 @@ export class ReportService {
                     status: event.data.status,
                   },
                 });
-                // Update explorer node status in cockpit provider
-                if (cockpitProvider && event.data.status) {
-                  cockpitProvider.updateExplorerNodeStatus(event.data.file, event.data.status);
-                }
               }
               break;
           }
         }
       );
 
-      logDebug('🟢 Pipeline finished, checking results...');
+      console.error('🟢 Pipeline finished, checking results...');
+      const optionalSteps = ['drift', 'legacy', 'hotspots', 'moved_blocks'];
+      const criticalErrors = result.errors.filter(err => !optionalSteps.includes(err.stepId));
 
-      if (result.status === 'aborted') {
-        logDebug(`🔴 Pipeline aborted: ${result.abortReason || 'Unknown reason'}`);
-        logError(`Pipeline failed: ${result.abortReason || 'Critical step failure'}`);
+      if (criticalErrors.length > 0) {
+        console.error('🔴 Critical errors found:', criticalErrors);
+        logError(`Pipeline failed: ${criticalErrors[0].error}`);
         return null;
       }
 
       if (result.errors.length > 0) {
-        logDebug(`🟡 Optional step failures: ${result.errors.map(e => e.stepId).join(', ')}`);
+        console.error(
+          '🟡 Optional step failures:',
+          result.errors.map(e => e.stepId)
+        );
         logInfo(
           `Pipeline completed with ${result.errors.length} optional step failures: ${result.errors.map(e => e.stepId).join(', ')}`
         );
       }
 
       if (options.cancellationToken?.isCancellationRequested) {
-        logDebug('🔴 Analysis cancelled');
+        console.error('🔴 Analysis cancelled');
         getStore().dispatch({ type: 'ANALYSIS_CANCELLED' });
         return null;
       }
 
       if (!result.bundleFacts) {
         const failedSteps = result.errors.map(err => err.stepId).join(', ');
-        const partialReasons = result.partialReasons?.join('; ') || '';
-
-        let errorMessage: string;
-        if (failedSteps) {
-          errorMessage = `Analysis failed - Pipeline steps failed: ${failedSteps}`;
-          if (partialReasons) {
-            errorMessage += `\nDetails: ${partialReasons}`;
-          }
-        } else {
-          errorMessage = 'Analysis failed - Bundle facts unavailable from pipeline';
-          if (partialReasons) {
-            errorMessage += `\nReasons: ${partialReasons}`;
-          }
-        }
-
-        logDebug(`🔴 No bundleFacts: ${errorMessage}`);
+        const errorMessage = failedSteps
+          ? `Bundle facts unavailable; pipeline steps failed: ${failedSteps}`
+          : 'Bundle facts unavailable from pipeline result';
+        console.error('🔴 No bundleFacts:', errorMessage);
         logError(`[ReportService] ${errorMessage}`);
         getStore().dispatch({
           type: 'ANALYSIS_FAILED',
@@ -313,7 +249,7 @@ export class ReportService {
         return null;
       }
 
-      logDebug('🟢 Got bundleFacts, processing report...');
+      console.error('🟢 Got bundleFacts, processing report...');
       const facts = result.bundleFacts;
       const llmOutputs = result.llmOutputs;
       const llmAnalysis = llmOutputs?.llmAnalysis;
@@ -415,57 +351,11 @@ export class ReportService {
         hotspots: (facts as any).evidence?.hotspots || (facts as any).findings?.hotspots,
       });
 
-      logDebug(
-        `🟢 Updating cockpit with facts: ${facts.scope.files} files, ${facts.working.symbols} symbols`
-      );
-
-      // Update cockpit directly via provider
-      try {
-        const { getCockpitProvider } = await import('../extension');
-        const cockpitProvider = getCockpitProvider();
-        if (cockpitProvider) {
-          const { GitOperations } = await import('../analysis/git');
-          const git = new GitOperations();
-          let repoName: string | null = null;
-          let branchName: string | null = null;
-          try {
-            const { getGitRoot } = await import('../utils/config');
-            const gitRoot = getGitRoot();
-            repoName = gitRoot ? gitRoot.split('/').pop() || null : null;
-            branchName = await git.getCurrentBranch();
-          } catch {
-            // Ignore errors getting repo context
-          }
-
-          cockpitProvider.showCockpit(
-            facts,
-            {
-              id: reportId,
-              commitCount: shas.length,
-              fileCount: facts.scope.files,
-              symbolCount: facts.working.symbols,
-              createdAt: new Date().toISOString(),
-              debtScore: 0,
-            },
-            {
-              llmOutputs: llmAnalysis ? { llmAnalysis } : undefined,
-              retrievedHistory: _serializedHistory,
-              repoName,
-              branchName,
-            }
-          );
-          // Mark analysis as complete
-          cockpitProvider.setProgress(false, undefined, undefined);
-          logInfo('[ReportService] Updated cockpit via provider');
-        } else {
-          logWarn('[ReportService] CockpitProvider not available, skipping UI update');
-        }
-      } catch (error) {
-        logError('[ReportService] Failed to update cockpit', error);
-        // Don't fail report generation if cockpit update fails
-      }
-
-      // Still dispatch for other consumers (effects, etc.)
+      console.error('🟢 Dispatching ANALYSIS_COMPLETED with facts:', {
+        files: facts.scope.files,
+        symbols: facts.working.symbols,
+        hotspots: (facts as any).evidence?.hotspots?.length || 0,
+      });
       getStore().dispatch({
         type: 'ANALYSIS_COMPLETED',
         payload: {
@@ -491,17 +381,6 @@ export class ReportService {
           error: error instanceof Error ? error.message : String(error),
         },
       });
-      // Update cockpit provider with error
-      try {
-        const { getCockpitProvider } = await import('../extension');
-        const cockpitProvider = getCockpitProvider();
-        if (cockpitProvider) {
-          cockpitProvider.setProgress(false, undefined, undefined);
-          cockpitProvider.setError(error instanceof Error ? error.message : String(error));
-        }
-      } catch {
-        // Ignore if provider not available
-      }
       return null;
     }
   }
@@ -881,8 +760,8 @@ export class ReportService {
 
   private makePlaceholderSymbol(id: string): SymbolInfo {
     return {
-      id, // id is now the DNA hash
-      filePath: 'unknown',
+      id,
+      dnaId: id,
       name: id,
       kind: 'function',
       signature: id,
@@ -1007,9 +886,9 @@ export class ReportService {
     return md;
   }
 
-  private extractSymbolName(symbolId: string, symbol?: SymbolInfo): string {
-    // symbolId is now DNA hash, use symbol.name if available, otherwise return DNA hash
-    return symbol?.name || symbolId;
+  private extractSymbolName(symbolId: string): string {
+    const parts = symbolId.split(':');
+    return parts.length > 1 ? parts[parts.length - 1] : symbolId;
   }
 }
 

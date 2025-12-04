@@ -11,7 +11,6 @@ export interface PathFilterOptions {
   status?: 'A' | 'M' | 'D' | 'R' | 'C' | 'U';
   commitSha?: string;
   skipSizeCheck?: boolean;
-  skipGitIgnore?: boolean; // Skip git ignore check if files already came from ls-files --exclude-standard
 }
 
 export interface PathFilterResult {
@@ -65,8 +64,7 @@ export async function shouldProcessPath(
     return { shouldProcess: false, reason: `extension .${ext} not allowed` };
   }
 
-  // Skip git ignore check if files already came from ls-files --exclude-standard
-  if (options.git && !options.skipGitIgnore) {
+  if (options.git) {
     const cacheKey = `${filePath}:workspace:gitignore`;
     let isIgnored: boolean;
 

@@ -51,10 +51,6 @@ export class ExplorerService {
 
     if (skeleton && skeleton.files.length > 0) {
       fileNodes = this.buildFileTree(skeleton.files, 'scanning');
-      // Hydrate symbols if facts are available (e.g. from Quick Scan)
-      if (bundleFacts) {
-        this.hydrateSymbols(fileNodes, bundleFacts);
-      }
     } else if (bundleFacts) {
       const files = (bundleFacts.evidence as any)?.['scope.files'] || [];
       fileNodes = this.buildFileTree(files, 'ready');
@@ -137,49 +133,20 @@ export class ExplorerService {
     const fileSymbols = new Map<string, any[]>();
     const workingSymbols = (bundleFacts?.evidence as any)?.['working.symbols'] || [];
 
-    // Normalize path helper
-    const normalize = (p: string) => p.replace(/\\/g, '/').replace(/^\.\//, '');
-
-    for (const symbol of workingSymbols) {
-      // Handle both old string format and new object format
-      let filePath: string;
-      let symbolId: string;
-      let symbolName: string;
-
-      if (typeof symbol === 'string') {
-        // Legacy format: "filePath:symbolName:symbolId"
-        const parts = symbol.split(':');
-        if (parts.length < 3) continue;
-        symbolId = parts.pop()!; // Last part is ID
-        symbolName = parts.pop()!; // Second to last is name
-        filePath = parts.join(':'); // Rest is path
-      } else if (symbol && typeof symbol === 'object') {
-        // New format: { id, name, kind, filePath, ... }
-        filePath = symbol.filePath;
-        symbolId = symbol.id;
-        symbolName = symbol.name;
-      } else {
-        continue;
+    for (const symbolId of workingSymbols) {
+      const [filePath, symbolName] = symbolId.split(':');
+      if (!fileSymbols.has(filePath)) {
+        fileSymbols.set(filePath, []);
       }
-
-      if (!filePath || !symbolId || !symbolName) continue;
-
-      const normalizedPath = normalize(filePath);
-      if (!fileSymbols.has(normalizedPath)) {
-        fileSymbols.set(normalizedPath, []);
-      }
-      fileSymbols.get(normalizedPath)?.push({ id: symbolId, name: symbolName });
+      fileSymbols.get(filePath)?.push({ id: symbolId, name: symbolName });
     }
-
-    logInfo(`[ExplorerService] Hydrating symbols for ${fileSymbols.size} files`);
 
     const visit = (node: ExplorerNode) => {
       if (node.type === 'file') {
-        const normalizedId = normalize(node.id);
-        const symbols = fileSymbols.get(normalizedId);
+        const symbols = fileSymbols.get(node.id);
         if (symbols && symbols.length > 0) {
           node.children = symbols.map(s => ({
-            id: `${node.id}::${s.id}`,
+            id: s.id,
             name: s.name,
             type: 'symbol',
             status: 'ready',

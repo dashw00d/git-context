@@ -1,9 +1,15 @@
 import { getDatabaseManager } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
-import { IntendedState } from '../types/drift';
 import { logInfo, logWarn } from '../utils/logger';
 
-export { IntendedState };
+export interface IntendedState {
+  expect: 'present' | 'absent';
+  lastName?: string;
+  lastPath?: string;
+  lastSig?: string;
+  lastSha: string;
+  isRenamed?: boolean;
+}
 
 /**
  * Build intended refactor map by folding selected commits oldest→newest, respecting renames

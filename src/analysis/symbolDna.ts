@@ -135,8 +135,6 @@ function normalizeSignature(sig: string): string {
 
 /**
  * Assign DNA IDs to symbols
- * Sets id = DNA hash (replacing any temporary ID)
- * Uses filePath for bodyText lookup if available, otherwise falls back to id
  */
 export async function assignDNAIds(
   symbols: SymbolInfo[],
@@ -146,19 +144,16 @@ export async function assignDNAIds(
   const results: SymbolInfo[] = [];
 
   for (const symbol of symbols) {
-    // Try to get bodyText using filePath first, then fall back to id
-    const bodyTextKey = symbol.filePath || symbol.id;
-    const bodyText = bodyTexts?.get(bodyTextKey);
+    const bodyText = bodyTexts?.get(symbol.id);
     const bodyHash = bodyText ? computeBodyHash(bodyText) : undefined;
 
     const dnaId = await computeSymbolDNA(symbol, bodyText, language);
 
     const enhanced: SymbolInfo = {
       ...symbol,
-      id: dnaId, // id becomes the DNA hash
+      dnaId,
       bodyHash,
       dnaVersion: 2,
-      filePath: symbol.filePath, // Preserve filePath
     };
 
     results.push(enhanced);

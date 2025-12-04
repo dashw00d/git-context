@@ -175,13 +175,9 @@ export class DatabaseManager {
               }
               stmt.free();
               return results;
-            } catch (error: any) {
+            } catch (error) {
               console.error('Statement.all() error:', error);
-              console.error('SQL:', sql);
-              console.error('Params:', params);
-              throw new Error(
-                `Database query failed: ${error.message}\nSQL: ${sql.substring(0, 100)}...`
-              );
+              return []; // Return empty array instead of throwing
             }
           },
         };

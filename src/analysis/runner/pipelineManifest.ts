@@ -86,7 +86,7 @@ const manifest: StepDescriptor[] = [
   {
     id: 'legacy',
     label: 'Detect legacy',
-    deps: ['intended', 'working', 'scope', 'index_commits', 'workspace_overlay'],
+    deps: ['intended', 'working', 'scope', 'drift', 'index_commits', 'workspace_overlay'],
     factory: () => createLegacyStep(),
   },
   {

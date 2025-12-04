@@ -88,12 +88,12 @@ export class CstDiffManager {
     for (const newFact of newFacts) {
       const oldFact = oldFactMap.get(newFact.id);
       if (!oldFact) {
-        const oldByDna = Array.from(oldFactMap.values()).find(f => f.id === newFact.id);
+        const oldByDna = Array.from(oldFactMap.values()).find(f => f.dnaId === newFact.dnaId);
         if (oldByDna) {
           const delta: DeltaChange = {
             type: 'modified',
-            oldDna: oldByDna.id,
-            newDna: newFact.id,
+            oldDna: oldByDna.dnaId,
+            newDna: newFact.dnaId,
             locationDelta: {
               oldLine: oldByDna.location.start.line,
               newLine: newFact.location.start.line,
@@ -114,8 +114,8 @@ export class CstDiffManager {
         if (isModified) {
           const delta: DeltaChange = {
             type: 'modified',
-            oldDna: oldFact.id,
-            newDna: newFact.id,
+            oldDna: oldFact.dnaId,
+            newDna: newFact.dnaId,
             locationDelta:
               oldFact.location.start.line !== newFact.location.start.line
                 ? {
@@ -131,7 +131,7 @@ export class CstDiffManager {
 
     for (const oldFact of oldFacts) {
       if (!newFactMap.has(oldFact.id)) {
-        const newByDna = Array.from(newFactMap.values()).find(f => f.id === oldFact.id);
+        const newByDna = Array.from(newFactMap.values()).find(f => f.dnaId === oldFact.dnaId);
         if (!newByDna) {
           removedFacts.push(oldFact);
         }
@@ -151,7 +151,7 @@ export class CstDiffManager {
     oldTree?: any,
     newTree?: any
   ): boolean {
-    if (oldFact.id !== newFact.id) {
+    if (oldFact.dnaId !== newFact.dnaId) {
       return true;
     }
 
@@ -161,8 +161,8 @@ export class CstDiffManager {
 
     const factLine = newFact.location.start.line;
     const isHighlighted = difftasticResult.highlights.some(h => {
-      // Check if the highlight has a location and if its line matches factLine
-      return h.location?.line === factLine;
+      const match = h.match(/line (\d+)/i);
+      return match && parseInt(match[1]) === factLine;
     });
 
     if (isHighlighted) return true;
@@ -218,12 +218,12 @@ export class CstDiffManager {
     for (const newFact of newFacts) {
       const oldFact = oldFactMap.get(newFact.id);
       if (!oldFact) {
-        const oldByDna = Array.from(oldFactMap.values()).find(f => f.id === newFact.id);
+        const oldByDna = Array.from(oldFactMap.values()).find(f => f.dnaId === newFact.dnaId);
         if (oldByDna) {
           const delta: DeltaChange = {
             type: 'modified',
-            oldDna: oldByDna.id,
-            newDna: newFact.id,
+            oldDna: oldByDna.dnaId,
+            newDna: newFact.dnaId,
             locationDelta: {
               oldLine: oldByDna.location.start.line,
               newLine: newFact.location.start.line,
@@ -234,13 +234,13 @@ export class CstDiffManager {
           addedFacts.push(newFact);
         }
       } else if (
-        oldFact.id !== newFact.id ||
+        oldFact.dnaId !== newFact.dnaId ||
         oldFact.location.start.line !== newFact.location.start.line
       ) {
         const delta: DeltaChange = {
           type: 'modified',
-          oldDna: oldFact.id,
-          newDna: newFact.id,
+          oldDna: oldFact.dnaId,
+          newDna: newFact.dnaId,
           locationDelta:
             oldFact.location.start.line !== newFact.location.start.line
               ? {
@@ -255,7 +255,7 @@ export class CstDiffManager {
 
     for (const oldFact of oldFacts) {
       if (!newFactMap.has(oldFact.id)) {
-        const newByDna = Array.from(newFactMap.values()).find(f => f.id === oldFact.id);
+        const newByDna = Array.from(newFactMap.values()).find(f => f.dnaId === oldFact.dnaId);
         if (!newByDna) {
           removedFacts.push(oldFact);
         }

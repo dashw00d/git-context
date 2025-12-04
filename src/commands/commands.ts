@@ -11,7 +11,7 @@ import { getReportService } from '../services/reportService';
 import { getCockpitOrchestrator } from '../state/cockpitOrchestrator';
 import { getStore } from '../state/store';
 import { prepare } from '../storage/statement-wrapper';
-import { logDebug, logError, logInfo } from '../utils/logger';
+import { logError, logInfo } from '../utils/logger';
 import { isWorkspaceSha, makeWorkspaceSha, parseWorkspaceSha } from '../utils/workspace';
 import { RefactorReportProvider } from '../webview/reports/refactorReportProvider';
 
@@ -273,10 +273,6 @@ export async function registerCommands(
       async (forceReanalyze = false) => {
         try {
           const state = orchestrator.getState();
-          logDebug(`🔍 [AnalyzeCmd] State selectedCommitShas: ${state.selectedCommitShas.length}`);
-          logDebug(
-            `🔍 [AnalyzeCmd] State SHAs: ${state.selectedCommitShas.slice(0, 10).join(', ')}${state.selectedCommitShas.length > 10 ? '...' : ''}`
-          );
           const selected = new Set(state.selectedCommitShas);
 
           let branchLoaded = false;
@@ -349,11 +345,6 @@ export async function registerCommands(
           }
 
           const shas = Array.from(selected);
-          logDebug(`🔍 [AnalyzeCmd] Selected SHAs from state: ${shas.length}`);
-          logDebug(
-            `🔍 [AnalyzeCmd] SHAs: ${shas.slice(0, 10).join(', ')}${shas.length > 10 ? '...' : ''}`
-          );
-
           if (shas.length === 0) {
             vscode.window.showWarningMessage(
               'Please select commits or workspace changes to analyze.'
@@ -362,8 +353,6 @@ export async function registerCommands(
           }
 
           const commitShas = shas.filter(sha => !isWorkspaceSha(sha));
-          logDebug(`🔍 [AnalyzeCmd] Commit SHAs (non-workspace): ${commitShas.length}`);
-          logDebug(`🔍 [AnalyzeCmd] Workspace SHAs: ${shas.filter(isWorkspaceSha).length}`);
           if (commitShas.length > 0) {
             const git = new GitOperations();
             let estFiles = 0;

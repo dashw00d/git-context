@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { LineagePanel } from './LineagePanel';
 
 // Browser-compatible path utilities
 function dirname(filePath: string): string {
@@ -16,9 +15,6 @@ interface PortalsRailProps {
   currentFilePath?: string;
   currentCommitIndex?: number;
   orderedCommits?: string[];
-  bundleFacts?: any;
-  vscode?: any;
-  commits?: Array<{ sha: string; date?: string; message?: string }>;
 }
 
 const RailContainer: React.CSSProperties = {
@@ -42,20 +38,17 @@ const SectionHeader: React.CSSProperties = {
   marginTop: '10px',
 };
 
-const PortalGroup: React.FC<{
-  name: string;
-  count: number;
-  type: 'incoming' | 'outgoing';
-  isFuture?: boolean;
-  opacity?: number;
-}> = ({ name, count, type, isFuture, opacity = 1 }) => (
+const PortalGroup: React.FC<{ name: string; count: number; type: 'incoming' | 'outgoing' }> = ({
+  name,
+  count,
+  type,
+}) => (
   <div
     style={{
       padding: '8px 12px',
       borderBottom: '1px solid var(--vscode-panel-border)',
       cursor: 'pointer',
-      transition: 'background-color 0.1s, opacity 0.1s',
-      opacity,
+      transition: 'background-color 0.1s',
     }}
     onMouseEnter={e =>
       (e.currentTarget.style.backgroundColor = 'var(--vscode-list-hoverBackground)')
@@ -74,17 +67,6 @@ const PortalGroup: React.FC<{
       >
         <span>{type === 'incoming' ? '↙' : '↗'}</span>
         {name}
-        {isFuture && (
-          <span
-            style={{
-              fontSize: '9px',
-              opacity: 0.6,
-              fontStyle: 'italic',
-            }}
-          >
-            (future)
-          </span>
-        )}
       </span>
       <span
         style={{
@@ -144,14 +126,8 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
   currentFilePath,
   currentCommitIndex,
   orderedCommits = [],
-  bundleFacts,
-  vscode,
-  commits = [],
 }) => {
-  const [activeTab, setActiveTab] = React.useState<'connections' | 'lineage'>('connections');
   const isTimeTravelActive = currentCommitIndex !== undefined && orderedCommits.length > 0;
-
-  // Use blastRadius.incoming/outgoing directly - edge.history is not produced by the pipeline
   // Filter references if a symbol is focused
   let filteredIncoming = blastRadius?.incoming || [];
   let filteredOutgoing = blastRadius?.outgoing || [];
@@ -199,154 +175,67 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
   return (
     <div style={RailContainer}>
       {focusedSymbolId && (
-        <>
-          <div
-            style={{
-              ...SectionHeader,
-              backgroundColor: 'var(--vscode-editor-selectionBackground)',
-              marginTop: '0',
-            }}
-          >
-            Filtered: {focusedSymbolId}
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              borderBottom: '1px solid var(--vscode-panel-border)',
-            }}
-          >
-            <button
-              onClick={() => setActiveTab('connections')}
-              style={{
-                flex: 1,
-                padding: '6px',
-                fontSize: '10px',
-                background:
-                  activeTab === 'connections' ? 'var(--vscode-button-background)' : 'transparent',
-                color:
-                  activeTab === 'connections'
-                    ? 'var(--vscode-button-foreground)'
-                    : 'var(--vscode-foreground)',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              Connections
-            </button>
-            <button
-              onClick={() => setActiveTab('lineage')}
-              style={{
-                flex: 1,
-                padding: '6px',
-                fontSize: '10px',
-                background:
-                  activeTab === 'lineage' ? 'var(--vscode-button-background)' : 'transparent',
-                color:
-                  activeTab === 'lineage'
-                    ? 'var(--vscode-button-foreground)'
-                    : 'var(--vscode-foreground)',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              Lineage
-            </button>
-          </div>
-        </>
+        <div
+          style={{
+            ...SectionHeader,
+            backgroundColor: 'var(--vscode-editor-selectionBackground)',
+            marginTop: '0',
+          }}
+        >
+          Filtered: {focusedSymbolId}
+        </div>
       )}
-      {activeTab === 'lineage' && focusedSymbolId ? (
-        <LineagePanel
-          symbolId={focusedSymbolId}
-          movedLineage={bundleFacts?.bundle?.movedLineage || []}
-          orderedCommits={orderedCommits}
-          commits={commits}
-          vscode={vscode}
-        />
+      {isTimeTravelActive && (
+        <div
+          style={{
+            ...SectionHeader,
+            backgroundColor: 'var(--vscode-inputValidation-warningBackground)',
+            color: 'var(--vscode-inputValidation-warningForeground)',
+            fontSize: '9px',
+            padding: '6px 10px',
+            marginTop: '0',
+          }}
+          title="References shown are current state. They may not have existed at the selected commit time."
+        >
+          ⚠️ Time travel active: References may differ
+        </div>
+      )}
+      <div style={SectionHeader}>Incoming (Referenced By)</div>
+      {hasIncoming ? (
+        incomingGroups.size > 0 ? (
+          Array.from(incomingGroups.entries())
+            .sort((a, b) => b[1] - a[1]) // Sort by count descending
+            .map(([folder, count]) => (
+              <PortalGroup key={folder} name={folder} count={count} type="incoming" />
+            ))
+        ) : (
+          <PortalGroup name="UNKNOWN" count={incomingRefs} type="incoming" />
+        )
       ) : (
-        <>
-          {isTimeTravelActive && (
-            <div
-              style={{
-                ...SectionHeader,
-                backgroundColor: 'var(--vscode-inputValidation-warningBackground)',
-                color: 'var(--vscode-inputValidation-warningForeground)',
-                fontSize: '9px',
-                padding: '6px 10px',
-                marginTop: '0',
-              }}
-              title="References shown are current state. They may not have existed at the selected commit time."
-            >
-              ⚠️ Time travel active: References may differ
-            </div>
-          )}
-          <div style={SectionHeader}>Incoming (Referenced By)</div>
-          {hasIncoming ? (
-            incomingGroups.size > 0 ? (
-              Array.from(incomingGroups.entries())
-                .sort((a, b) => b[1] - a[1]) // Sort by count descending
-                .map(([folder, count]) => {
-                  // Find representative ref for this folder to check time status
-                  const representativeRef = filteredIncoming.find((ref: any) => {
-                    const refPath = ref.from || ref.to || '';
-                    const folderName = extractFolderName(refPath.split(':')[0]);
-                    return folderName === folder;
-                  });
-                  return (
-                    <PortalGroup
-                      key={folder}
-                      name={folder}
-                      count={count}
-                      type="incoming"
-                      isFuture={representativeRef?.isFuture}
-                      opacity={representativeRef?.opacity}
-                    />
-                  );
-                })
-            ) : (
-              <PortalGroup name="UNKNOWN" count={incomingRefs} type="incoming" />
-            )
-          ) : (
-            <div style={{ padding: '8px 12px', opacity: 0.5, fontSize: '11px' }}>
-              {focusedSymbolId
-                ? `No incoming references for ${focusedSymbolId}`
-                : 'No incoming references'}
-            </div>
-          )}
+        <div style={{ padding: '8px 12px', opacity: 0.5, fontSize: '11px' }}>
+          {focusedSymbolId
+            ? `No incoming references for ${focusedSymbolId}`
+            : 'No incoming references'}
+        </div>
+      )}
 
-          <div style={SectionHeader}>Outgoing (References)</div>
-          {hasOutgoing ? (
-            outgoingGroups.size > 0 ? (
-              Array.from(outgoingGroups.entries())
-                .sort((a, b) => b[1] - a[1]) // Sort by count descending
-                .map(([folder, count]) => {
-                  // Find representative ref for this folder to check time status
-                  const representativeRef = filteredOutgoing.find((ref: any) => {
-                    const refPath = ref.from || ref.to || '';
-                    const folderName = extractFolderName(refPath.split(':')[0]);
-                    return folderName === folder;
-                  });
-                  return (
-                    <PortalGroup
-                      key={folder}
-                      name={folder}
-                      count={count}
-                      type="outgoing"
-                      isFuture={representativeRef?.isFuture}
-                      opacity={representativeRef?.opacity}
-                    />
-                  );
-                })
-            ) : (
-              <PortalGroup name="UNKNOWN" count={outgoingRefs} type="outgoing" />
-            )
-          ) : (
-            <div style={{ padding: '8px 12px', opacity: 0.5, fontSize: '11px' }}>
-              {focusedSymbolId
-                ? `No outgoing references for ${focusedSymbolId}`
-                : 'No outgoing references'}
-            </div>
-          )}
-        </>
+      <div style={SectionHeader}>Outgoing (References)</div>
+      {hasOutgoing ? (
+        outgoingGroups.size > 0 ? (
+          Array.from(outgoingGroups.entries())
+            .sort((a, b) => b[1] - a[1]) // Sort by count descending
+            .map(([folder, count]) => (
+              <PortalGroup key={folder} name={folder} count={count} type="outgoing" />
+            ))
+        ) : (
+          <PortalGroup name="UNKNOWN" count={outgoingRefs} type="outgoing" />
+        )
+      ) : (
+        <div style={{ padding: '8px 12px', opacity: 0.5, fontSize: '11px' }}>
+          {focusedSymbolId
+            ? `No outgoing references for ${focusedSymbolId}`
+            : 'No outgoing references'}
+        </div>
       )}
     </div>
   );

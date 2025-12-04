@@ -4,8 +4,6 @@ export interface RefactorBundleFacts {
   version: '2.0';
   generated_at: string;
   confidence: number;
-  partial?: boolean;
-  partialReasons?: string[];
   bundle: {
     oldestSha: string;
     newestSha?: string;
@@ -18,7 +16,6 @@ export interface RefactorBundleFacts {
       destVersion: string;
       moveType: 'rename' | 'relocate' | 'refactor';
     }>;
-    totalCommits?: number;
   };
   scope: {
     files: number;

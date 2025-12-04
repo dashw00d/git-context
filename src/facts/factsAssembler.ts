@@ -37,7 +37,6 @@ export async function buildRefactorBundleFacts(
       destVersion: string;
       moveType: 'rename' | 'relocate' | 'refactor';
     }>;
-    totalCommits?: number;
   }
 ): Promise<RefactorBundleFacts> {
   const intendedSize = options.intended.size;
@@ -64,8 +63,7 @@ export async function buildRefactorBundleFacts(
     options.working,
     options.drift,
     options.legacy,
-    options.hotspots,
-    options.totalCommits
+    options.hotspots
   );
 
   if (options.timeline) {
@@ -73,9 +71,6 @@ export async function buildRefactorBundleFacts(
   }
   if (options.movedLineage) {
     facts.bundle.movedLineage = options.movedLineage;
-  }
-  if (options.totalCommits !== undefined) {
-    facts.bundle.totalCommits = options.totalCommits;
   }
 
   try {
@@ -94,8 +89,7 @@ export async function assembleFacts(
   working: WorkingSnapshot,
   drift: DriftFindings,
   legacy: LegacyAuditResult,
-  hotspots?: any[],
-  totalCommits?: number
+  hotspots?: any[]
 ): Promise<RefactorBundleFacts> {
   const intendedCounts = calculateIntendedCounts(intended);
   const intendedLists = getIntendedLists(intended);
@@ -149,7 +143,6 @@ export async function assembleFacts(
       oldestSha,
       newestSha,
       shas: commitShas,
-      totalCommits,
     },
     scope: {
       files: scope.commitFiles.size,
@@ -417,9 +410,7 @@ function getWorkingLists(working: WorkingSnapshot): {
   edges: string[];
 } {
   return {
-    symbols: Array.from(working.symbolsById.values()).map(
-      s => `${s.filePath}:${s.name}:${s.symbol_id}`
-    ),
+    symbols: Array.from(working.symbolsById.keys()),
     edges: working.edges.map(e => `${e.from_symbol_id} -> ${e.to_symbol_id} (${e.edge_type})`),
   };
 }

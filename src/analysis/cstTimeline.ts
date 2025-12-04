@@ -228,7 +228,7 @@ export class CstTimelineManager {
     }
 
     const priorFact = priorFacts.find(
-      p => p.id === fact.id || (p.name === fact.name && this.sameKind(p, fact))
+      p => p.dnaId === fact.dnaId || (p.name === fact.name && this.sameKind(p, fact))
     );
 
     if (!priorFact) {
@@ -238,7 +238,7 @@ export class CstTimelineManager {
       };
     }
 
-    const dnaChanged = priorFact.id !== fact.id;
+    const dnaChanged = priorFact.dnaId !== fact.dnaId;
     const locationChanged =
       priorFact.location.start.line !== fact.location.start.line ||
       priorFact.location.start.column !== fact.location.start.column;
@@ -246,8 +246,8 @@ export class CstTimelineManager {
     if (dnaChanged || locationChanged) {
       return {
         type: 'modified',
-        oldDna: priorFact.id,
-        newDna: fact.id,
+        oldDna: priorFact.dnaId,
+        newDna: fact.dnaId,
         locationDelta: locationChanged
           ? {
               oldLine: priorFact.location.start.line,
@@ -259,8 +259,8 @@ export class CstTimelineManager {
 
     return {
       type: 'modified',
-      oldDna: priorFact.id,
-      newDna: fact.id,
+      oldDna: priorFact.dnaId,
+      newDna: fact.dnaId,
     };
   }
 
@@ -285,7 +285,7 @@ export class CstTimelineManager {
     const serialized = JSON.stringify(
       facts.map(f => ({
         id: f.id,
-        dnaId: f.id,
+        dnaId: f.dnaId,
         name: f.name,
         kind: f.kind,
       }))

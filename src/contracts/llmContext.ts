@@ -84,12 +84,11 @@ export interface FileContext {
 
 export interface SymbolContext {
   id: number;
-  symbol_id: string; // DNA hash (stable identifier)
+  symbol_id: string;
   name: string;
   kind: string;
   signature?: string;
-  dnaId?: string; // Legacy field, same as symbol_id
-  filePath?: string; // File path where symbol is located
+  dnaId?: string;
   loc_pre?: Loc;
   loc_post?: Loc;
   mod_reason?: ModReason;

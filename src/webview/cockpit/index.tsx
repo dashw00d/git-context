@@ -81,67 +81,85 @@ const App: React.FC = () => {
 
   React.useEffect(() => {
     const handler = (event: MessageEvent) => {
-      try {
-        // Handle unparsed analysisError messages (legacy support)
-        if (event.data?.type === 'analysisError' && event.data?.payload) {
-          setState(prev => ({
-            ...prev,
-            error: event.data.payload?.error || event.data.payload?.message || 'Analysis failed',
-            isAnalyzing: false,
-          }));
-          return;
-        }
+      console.log('[Webview] Received message event:', event.data?.type || 'unknown');
 
-        const parsed = CockpitHostMessageSchema.safeParse(event.data);
-        if (!parsed.success) {
-          // Log validation errors for debugging
-          return;
-        }
+      // Handle unparsed analysisError messages (legacy support, before schema validation)
+      if (event.data?.type === 'analysisError' && event.data?.payload) {
+        console.log('[Webview] Analysis error received (legacy)');
+        setState(prev => ({
+          ...prev,
+          error: event.data.payload?.error || event.data.payload?.message || 'Analysis failed',
+          isAnalyzing: false,
+        }));
+        return;
+      }
 
-        const message = parsed.data as CockpitHostMessage;
+      const parsed = CockpitHostMessageSchema.safeParse(event.data);
+      if (!parsed.success) {
+        console.warn('[Webview] Ignoring invalid host message', event.data, parsed.error);
+        return;
+      }
 
-        if (message.type === 'setData') {
-          // Direct state replacement - no merge
-          setState(() => {
-            const newState: CockpitState = {
-              ...defaultState,
-              ...message.payload,
-              // Ensure required fields have defaults
-              activeFrame: message.payload.activeFrame || defaultState.activeFrame,
-              history: message.payload.history || [],
-              explorerData: message.payload.explorerData || [],
-              nodeMetrics: message.payload.nodeMetrics || {},
-              liveAnalysis: message.payload.liveAnalysis || defaultState.liveAnalysis,
-            };
-            return newState;
-          });
-        } else if (message.type === 'setProgress') {
-          setState(prev => ({
-            ...prev,
-            isAnalyzing: message.payload.isAnalyzing,
-            analysisStep: message.payload.step,
-            analysisProgress: message.payload.progress,
-          }));
-        } else if (message.type === 'focusSection') {
-          setState(prev => ({ ...prev, activeSection: message.payload.section }));
-        } else if (message.type === 'assistantResponse') {
-          // This is handled by SuperWebview's message handler
-        } else if (message.type === 'updateExplorerTree') {
-          setState(prev => ({ ...prev, explorerData: message.payload }));
-        } else if (message.type === 'updateFrame') {
-          setState(prev => ({
-            ...prev,
-            activeFrame: message.payload.frame,
-          }));
-        }
-      } catch (error) {
-        // Log errors but don't crash
+      const message = parsed.data as CockpitHostMessage;
+      console.log(`[Webview] Processing message type: ${message.type}`);
+
+      if (message.type === 'updateState') {
+        console.log('[Webview] Received updateState keys:', Object.keys(message.payload));
+        console.log(
+          '[Webview] bundleFacts:',
+          message.payload.bundleFacts ? 'EXISTS' : 'NULL/UNDEFINED'
+        );
+        console.log('[Webview] bundleSummary:', message.payload.bundleSummary);
+        console.log('[Webview] isAnalyzing:', message.payload.isAnalyzing);
+
+        setState(prev => {
+          const newState: any = { ...prev };
+          for (const key in message.payload) {
+            const value = (message.payload as any)[key];
+            if (
+              value &&
+              typeof value === 'object' &&
+              !Array.isArray(value) &&
+              value.constructor === Object
+            ) {
+              newState[key] = { ...(prev as any)[key], ...value };
+            } else {
+              newState[key] = value;
+            }
+          }
+          console.log('[Webview] State updated, new keys:', Object.keys(newState));
+          return newState as CockpitState;
+        });
+      } else if (message.type === 'analysisProgress') {
+        console.log('[Webview] Updating analysis progress');
+        setState(prev => ({
+          ...prev,
+          isAnalyzing: message.payload.isAnalyzing,
+          analysisStep: message.payload.step,
+          analysisProgress: message.payload.progress,
+        }));
+      } else if (message.type === 'focusSection') {
+        console.log('[Webview] Focusing section:', message.payload.section);
+        setState(prev => ({ ...prev, activeSection: message.payload.section }));
+      } else if (message.type === 'updateExplorerTree') {
+        console.log('[Webview] Updating explorer tree');
+        setState(prev => ({ ...prev, explorerData: message.payload }));
+      } else if (message.type === 'updateBundle') {
+        console.log('[Webview] Updating bundle');
+        setState(prev => ({
+          ...prev,
+          bundleView: message.payload.view ?? prev.bundleView,
+          bundleSummary: message.payload.summary ?? prev.bundleSummary,
+          bundleFacts: message.payload.facts ?? prev.bundleFacts,
+        }));
       }
     };
 
+    console.log('[Webview] Setting up message listener');
     window.addEventListener('message', handler);
     postMessageWithTracing(vscode, { type: 'ready' });
     return () => {
+      console.log('[Webview] Cleaning up message listener');
       window.removeEventListener('message', handler);
     };
   }, []);

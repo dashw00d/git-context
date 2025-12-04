@@ -14,14 +14,14 @@ export interface ScopeSet {
 }
 
 /**
- * Extract file path from symbol DNA hash by querying the database
- * Since symbolId is now a DNA hash, we need to look it up in the symbols table
+ * Extract file path from symbol ID (heuristic)
  */
-function extractFileFromSymbolId(
-  symbolId: string,
-  dnaToPathCache: Map<string, string>
-): string | null {
-  return dnaToPathCache.get(symbolId) || null;
+function extractFileFromSymbolId(symbolId: string): string | null {
+  const parts = symbolId.split(':');
+  if (parts.length >= 2) {
+    return parts[0];
+  }
+  return null;
 }
 
 /**
@@ -71,22 +71,8 @@ async function computeBlastRadiusNeighbors(
     changedSymbols.add(symbolId);
   }
 
-  // Build a cache of dna_id -> path for efficient lookups
-  // Since symbolId in edges table is now DNA hash, we need to map it to file paths
-  // Use symbol_versions table which has both dna_id and path
-  const dnaToPathCache = new Map<string, string>();
-  const symbolVersionsStmt = prepare(`
-    SELECT DISTINCT dna_id, path FROM symbol_versions
-    WHERE dna_id IS NOT NULL AND path IS NOT NULL
-  `);
-  const symbolVersions = symbolVersionsStmt.all() as Array<{ dna_id: string; path: string }>;
-  for (const row of symbolVersions) {
-    dnaToPathCache.set(row.dna_id, row.path);
-  }
-  logDebug(`🟩 [computeBlastRadius] Built DNA->path cache with ${dnaToPathCache.size} entries`);
-
   const adjacencyMap = new Map<string, Array<{ neighborId: string; confidence: number }>>();
-  logDebug('🟩 [computeBlastRadius] Querying edges table...');
+  console.error('🟩 [computeBlastRadius] Querying edges table...');
   const edgesStmt = prepare(`
     SELECT from_symbol_id, to_symbol_id, confidence
     FROM edges
@@ -94,7 +80,7 @@ async function computeBlastRadiusNeighbors(
     LIMIT 5000  -- Reasonable limit for full repo analysis
   `);
   const allEdges = edgesStmt.all() as any[];
-  logDebug(`🟩 [computeBlastRadius] Got ${allEdges.length} edges`);
+  console.error(`🟩 [computeBlastRadius] Got ${allEdges.length} edges`);
 
   for (const edge of allEdges) {
     const fromId = edge.from_symbol_id;
@@ -130,7 +116,7 @@ async function computeBlastRadiusNeighbors(
     for (const { neighborId, confidence } of neighbors) {
       if (changedSymbols.has(neighborId)) continue;
 
-      const filePath = extractFileFromSymbolId(neighborId, dnaToPathCache);
+      const filePath = extractFileFromSymbolId(neighborId);
       if (filePath && !commitFiles.has(filePath)) {
         const depthWeight = 1.0 / (depth + 1);
         const weightedConfidence = confidence * depthWeight;
@@ -214,14 +200,14 @@ export async function computeScope(
     }
   }
 
-  logDebug('[computeScope] Calling computeBlastRadiusNeighbors...');
+  console.error('🟩 [computeScope] Calling computeBlastRadiusNeighbors...');
   const blastRadiusFiles = await computeBlastRadiusNeighbors(
     commitShas,
     scope.commitFiles,
     scope.workingChanged,
     20
   );
-  logDebug('[computeScope] computeBlastRadiusNeighbors returned');
+  console.error('🟩 [computeScope] computeBlastRadiusNeighbors returned');
   blastRadiusFiles.forEach(f => scope.blastRadius.add(f));
 
   const allPaths = new Set([...scope.commitFiles, ...scope.workingChanged, ...scope.blastRadius]);
