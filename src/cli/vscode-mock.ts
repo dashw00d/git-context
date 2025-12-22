@@ -36,7 +36,8 @@ export const workspace = {
 
 export const window = {
   createOutputChannel: () => ({
-    appendLine: console.log,
+    // eslint-disable-next-line no-console
+    appendLine: (msg: string) => console.log(msg),
     show: () => {
       // empty
     },
@@ -79,7 +80,11 @@ export class CancellationTokenSource {
   constructor() {
     this.token = {
       isCancellationRequested: false,
-      onCancellationRequested: () => ({ dispose: () => {} }),
+      onCancellationRequested: () => ({
+        dispose: () => {
+          /* mock */
+        },
+      }),
     };
   }
 
@@ -87,5 +92,7 @@ export class CancellationTokenSource {
     this.token.isCancellationRequested = true;
   }
 
-  dispose() {}
+  dispose() {
+    /* mock */
+  }
 }

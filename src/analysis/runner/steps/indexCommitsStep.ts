@@ -24,8 +24,7 @@ export function createIndexCommitsStep(
         return;
       }
 
-      // Set plan data on indexer for direct access (avoids cache lookups)
-      commitIndexer.setPlanData(state.plan);
+      // Plan data is now passed directly to ensureCommitsIndexed
 
       const startTime = Date.now();
 
@@ -43,7 +42,7 @@ export function createIndexCommitsStep(
       const facts = await commitIndexer.ensureCommitsIndexed(
         shas,
         concurrency,
-        { token },
+        { token, plan: state.plan },
         event => {
           // 1. Check cancellation during progress
           if (token?.isCancellationRequested) {

@@ -68,7 +68,6 @@ export class CommitIndexer {
   private cacheMisses = 0;
   private cstTimelineManager = getCstTimelineManager();
   private parser = getTreeSitterParser();
-  private planData?: import('./runner/pipelineTypes').PlanData;
 
   constructor(
     private db: any,
@@ -84,21 +83,16 @@ export class CommitIndexer {
   }
 
   /**
-   * Set plan data for direct access (avoids cache lookups)
-   */
-  setPlanData(plan: import('./runner/pipelineTypes').PlanData | undefined): void {
-    this.planData = plan;
-    this.dependencyExtractor.setPlanData(plan);
-    this.movedBlockDetector.setPlanData(plan);
-  }
-
-  /**
    * Get content from plan data or fallback to git
    */
-  private async getContent(sha: string, path: string): Promise<string> {
+  private async getContent(
+    sha: string,
+    path: string,
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<string> {
     // Try plan data first (synchronous, no lookup overhead)
-    if (this.planData?.content.has(`${sha}:${path}`)) {
-      return this.planData.content.get(`${sha}:${path}`)!;
+    if (plan?.content.has(`${sha}:${path}`)) {
+      return plan.content.get(`${sha}:${path}`)!;
     }
     // Fallback to git (will log warning)
     return this.git.safeGetFileContent(sha, path);
@@ -107,9 +101,13 @@ export class CommitIndexer {
   /**
    * Get blob SHA from plan data or fallback to git
    */
-  private async getBlobSha(sha: string, path: string): Promise<string> {
+  private async getBlobSha(
+    sha: string,
+    path: string,
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<string> {
     // Try plan data first
-    const tree = this.planData?.trees.get(sha);
+    const tree = plan?.trees.get(sha);
     if (tree?.has(path)) {
       return tree.get(path)!.sha;
     }
@@ -188,6 +186,7 @@ export class CommitIndexer {
         file: string;
         sha: string;
       }) => void;
+      plan?: import('./runner/pipelineTypes').PlanData;
     }
   ): Promise<CommitFacts | null> {
     if (opts?.token?.isCancellationRequested) {
@@ -226,7 +225,12 @@ export class CommitIndexer {
   async ensureCommitsIndexed(
     shas: string[],
     concurrency: number = 8,
-    opts?: { force?: boolean; modules?: string[]; token?: vscode.CancellationToken },
+    opts?: {
+      force?: boolean;
+      modules?: string[];
+      token?: vscode.CancellationToken;
+      plan?: import('./runner/pipelineTypes').PlanData;
+    },
     onProgress?: (event: {
       type: 'file_start' | 'file_complete';
       file: string;
@@ -312,7 +316,7 @@ export class CommitIndexer {
           throw new vscode.CancellationError();
         }
         opts?.onProgress?.({ type: 'file_start', file: file.path, sha });
-        const result = await this.processFile(file, sha, parentSha);
+        const result = await this.processFile(file, sha, parentSha, opts?.plan);
         opts?.onProgress?.({ type: 'file_complete', file: file.path, sha });
         return result;
       })
@@ -431,7 +435,8 @@ export class CommitIndexer {
         .map(s => s.symbol),
       Array.from(symbolChanges.values())
         .filter(s => s.type === 'added')
-        .map(s => s.symbol)
+        .map(s => s.symbol),
+      opts?.plan
     );
 
     this.reconcileMovesWithSymbols(symbolChanges, movedBlocks);
@@ -450,7 +455,8 @@ export class CommitIndexer {
   private async processFile(
     file: FileChange,
     sha: string,
-    parentSha: string | null
+    parentSha: string | null,
+    plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<FileProcessingResult | null> {
     const { path, status } = file;
     const result: FileProcessingResult = {
@@ -473,7 +479,7 @@ export class CommitIndexer {
         git: this.git,
         commitSha: sha,
         status: file.status,
-        plan: this.planData,
+        plan,
         skipSizeCheck: status === 'D',
       },
       'CommitIndexer'
@@ -485,8 +491,8 @@ export class CommitIndexer {
 
     if (status === 'D') {
       if (parentSha) {
-        const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path));
-        const parentContent = await this.getContent(parentSha, path);
+        const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path, plan));
+        const parentContent = await this.getContent(parentSha, path, plan);
         const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
           path,
           parentBlobSha,
@@ -518,8 +524,8 @@ export class CommitIndexer {
       return result;
     }
 
-    const currentBlobSha = file.newSha || (await this.getBlobSha(sha, path));
-    const currentContent = await this.getContent(sha, path);
+    const currentBlobSha = file.newSha || (await this.getBlobSha(sha, path, plan));
+    const currentContent = await this.getContent(sha, path, plan);
     const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
       path,
       currentBlobSha,
@@ -553,14 +559,14 @@ export class CommitIndexer {
         });
       }
     } else if (status === 'M' && parentSha) {
-      const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path));
+      const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path, plan));
 
       if (parentBlobSha === currentBlobSha) {
         await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
         return result;
       }
 
-      const parentContent = await this.getContent(parentSha, path);
+      const parentContent = await this.getContent(parentSha, path, plan);
       const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
         path,
         parentBlobSha,
@@ -991,7 +997,8 @@ export class CommitIndexer {
   private async storeEdges(
     sha: string,
     files: Array<{ path: string; status: string }>,
-    parentSha: string | null
+    parentSha: string | null,
+    plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<void> {
     const stmt = prepare(`
       INSERT OR REPLACE INTO edges
@@ -1018,7 +1025,7 @@ export class CommitIndexer {
           git: this.git,
           status: status as 'A' | 'M' | 'D' | 'R' | 'C' | 'U',
           commitSha: sha,
-          plan: this.planData,
+          plan,
           skipSizeCheck: status === 'D',
         },
         'CommitIndexer.storeEdges'

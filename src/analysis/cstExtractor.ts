@@ -240,17 +240,17 @@ export class CstExtractor {
   }
 
   private hashCstSubset(node: any, includeChildren: boolean = true): string {
-    const serialized = this.serializeNodeForHash(node, includeChildren);
+    const serialized = this.serializeNodeForHash(node, includeChildren, 5);
     return crypto.createHash('sha256').update(serialized).digest('hex').substring(0, 16);
   }
 
-  private serializeNodeForHash(node: any, includeChildren: boolean): string {
+  private serializeNodeForHash(node: any, includeChildren: boolean, maxDepth: number): string {
     const parts: string[] = [node.type];
 
-    if (includeChildren && node.childCount > 0) {
+    if (includeChildren && maxDepth > 0 && node.childCount > 0) {
       for (const child of node.children) {
         if (child.isNamed) {
-          parts.push(this.serializeNodeForHash(child, true));
+          parts.push(this.serializeNodeForHash(child, true, maxDepth - 1));
         }
       }
     }

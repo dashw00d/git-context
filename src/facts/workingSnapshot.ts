@@ -77,8 +77,8 @@ export async function getWorkingSnapshot(
         }
 
         const symbols = await symbolExtractor.extractSymbolsFromContent(content, filePath);
-        // Assign DNA IDs to symbols - skip expensive AST parsing by not providing language
-        // This makes DNA computation use only signature + body shape, not AST n-grams
+
+        // Cache lines for DNA and potentially other uses
         const contentLines = content.split('\n');
         const bodyTexts = new Map<string, string>();
         for (const symbol of symbols) {
@@ -89,7 +89,7 @@ export async function getWorkingSnapshot(
             bodyTexts.set(symbol.filePath || filePath, bodyText);
           }
         }
-        // Pass undefined for language to skip expensive tree-sitter parsing in DNA computation
+
         const symbolsWithDNA = await assignDNAIds(symbols, bodyTexts, undefined);
 
         for (const symbol of symbolsWithDNA) {
@@ -99,13 +99,13 @@ export async function getWorkingSnapshot(
           }
 
           const symbolContext: SymbolContext = {
-            id: 0, // Placeholder for working snapshot (not from database)
-            symbol_id: symbol.id, // id is now the DNA hash
+            id: 0,
+            symbol_id: symbol.id,
             name: symbol.name,
             kind: symbol.kind,
             signature: symbol.signature,
-            dnaId: symbol.id, // Keep for compatibility
-            filePath: symbol.filePath, // Store file path
+            dnaId: symbol.id,
+            filePath: symbol.filePath,
             loc_pre: symbol.location
               ? {
                   start: { line: symbol.location.start.line, column: symbol.location.start.column },
@@ -122,7 +122,13 @@ export async function getWorkingSnapshot(
           symbolsByFile.get(filePath)!.push(symbolContext);
         }
 
-        const fileEdges = dependencyExtractor.extractDependencies(content, filePath, symbols);
+        const fileEdges = dependencyExtractor.extractDependencies(
+          content,
+          filePath,
+          symbols,
+          0,
+          contentLines
+        );
         edges.push(
           ...fileEdges.map(edge => ({
             from_symbol_id: edge.from,

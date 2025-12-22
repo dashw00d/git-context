@@ -7,22 +7,19 @@ import { GitOperations } from './git';
 export class DependencyExtractor {
   private readonly MAX_DEPTH = 3;
   private resolvedSymbols = new Map<string, boolean>();
-  private planData?: import('./runner/pipelineTypes').PlanData;
-
-  /**
-   * Set plan data for direct content access (avoids cache lookups)
-   */
-  setPlanData(plan: import('./runner/pipelineTypes').PlanData | undefined): void {
-    this.planData = plan;
-  }
 
   /**
    * Get content from plan data or fallback to git
    */
-  private async getContent(sha: string, path: string, git: GitOperations): Promise<string> {
+  private async getContent(
+    sha: string,
+    path: string,
+    git: GitOperations,
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<string> {
     // Try plan data first (synchronous, no lookup overhead)
-    if (this.planData?.content.has(`${sha}:${path}`)) {
-      return this.planData.content.get(`${sha}:${path}`)!;
+    if (plan?.content.has(`${sha}:${path}`)) {
+      return plan.content.get(`${sha}:${path}`)!;
     }
     // Fallback to git
     return git.safeGetFileContent(sha, path);
@@ -35,7 +32,8 @@ export class DependencyExtractor {
     content: string,
     filePath: string,
     symbols: SymbolInfo[],
-    depth: number = 0
+    depth: number = 0,
+    contentLines?: string[]
   ): EdgeInfo[] {
     if (depth > this.MAX_DEPTH) {
       logWarn(`Max recursion depth reached for ${filePath}`);
@@ -49,11 +47,18 @@ export class DependencyExtractor {
 
     const edges: EdgeInfo[] = [];
 
-    const importEdges = this.extractImports(content, filePath, language, symbols);
+    const importEdges = this.extractImports(content, filePath, language, symbols, contentLines);
     edges.push(...importEdges);
 
     for (const symbol of symbols) {
-      const callEdges = this.extractCallsFromSymbol(content, filePath, symbol, language, symbols);
+      const callEdges = this.extractCallsFromSymbol(
+        content,
+        filePath,
+        symbol,
+        language,
+        symbols,
+        contentLines
+      );
       edges.push(...callEdges);
     }
 
@@ -72,10 +77,11 @@ export class DependencyExtractor {
     content: string,
     filePath: string,
     language: string,
-    knownSymbols: SymbolInfo[]
+    knownSymbols: SymbolInfo[],
+    contentLines?: string[]
   ): EdgeInfo[] {
     const edges: EdgeInfo[] = [];
-    const lines = content.split('\n');
+    const lines = contentLines || content.split('\n');
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -144,15 +150,23 @@ export class DependencyExtractor {
     filePath: string,
     symbol: SymbolInfo,
     language: string,
-    knownSymbols: SymbolInfo[]
+    knownSymbols: SymbolInfo[],
+    contentLines?: string[]
   ): EdgeInfo[] {
     const edges: EdgeInfo[] = [];
 
-    const lines = content.split('\n');
+    const lines = contentLines || content.split('\n');
     const startLine = symbol.location.start.line - 1;
     const endLine = symbol.location.end.line - 1;
 
     const symbolContent = lines.slice(startLine, endLine + 1).join('\n');
+
+    if (symbolContent.length > 100000) {
+      logWarn(
+        `[DependencyExtractor] Symbol content too large for dependency extraction (${symbolContent.length} chars) in ${filePath}`
+      );
+      return [];
+    }
 
     if (isPHPLanguage(language)) {
       const callMatches = symbolContent.matchAll(/(\w+)\s*\(/g);
@@ -485,7 +499,8 @@ export class DependencyExtractor {
     symbols: { added: SymbolInfo[]; removed: SymbolInfo[]; modified: any[] },
     fileContents: Map<string, string>,
     files: FileChange[],
-    git: GitOperations
+    git: GitOperations,
+    plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<{
     added: EdgeInfo[];
     removed: EdgeInfo[];
@@ -515,7 +530,7 @@ export class DependencyExtractor {
           const parentPath =
             fileChange?.status === 'R' && fileChange.oldPath ? fileChange.oldPath : filePath;
 
-          const previousContent = await this.getContent(commitInfo.parent, parentPath, git);
+          const previousContent = await this.getContent(commitInfo.parent, parentPath, git, plan);
 
           const previousFileSymbols = symbols.modified
             .filter(m => m.symbol.id.startsWith(`${filePath}: `) && m.previousSymbol)

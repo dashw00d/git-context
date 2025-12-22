@@ -12,8 +12,7 @@ export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): 
     async run(state: PipelineState) {
       logDebug('🟦 [WorkspaceStep] Starting run');
 
-      // Set plan data for direct content access
-      workspaceIndexer.setPlanData(state.plan);
+      // Plan data is now passed directly to analyzeWorkspace
 
       if (!state.includeWorkspace) {
         logDebug('🟦 [WorkspaceStep] No workspace, skipping');
@@ -35,9 +34,9 @@ export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): 
 
       for (const version of timeline) {
         if (version === 'workspace-unstaged' && shouldProcessUnstaged) {
-          unstagedFacts = await workspaceIndexer.analyzeWorkspace('unstaged');
+          unstagedFacts = await workspaceIndexer.analyzeWorkspace('unstaged', state.plan);
         } else if (version === 'workspace-staged' && shouldProcessStaged) {
-          stagedFacts = await workspaceIndexer.analyzeWorkspace('staged');
+          stagedFacts = await workspaceIndexer.analyzeWorkspace('staged', state.plan);
         }
 
         if (version !== 'workspace-unstaged' && version !== 'workspace-staged') {

@@ -20,7 +20,6 @@ export { WorkspaceFacts };
 export class WorkspaceIndexer {
   private cstTimelineManager = getCstTimelineManager();
   private parser = getTreeSitterParser();
-  private planData?: import('./runner/pipelineTypes').PlanData;
 
   constructor(
     private db: Database,
@@ -32,19 +31,16 @@ export class WorkspaceIndexer {
   }
 
   /**
-   * Set plan data for direct content access (avoids cache lookups)
-   */
-  setPlanData(plan: import('./runner/pipelineTypes').PlanData | undefined): void {
-    this.planData = plan;
-  }
-
-  /**
    * Get content from plan data or fallback to git
    */
-  private async getContent(sha: string, path: string): Promise<string> {
+  private async getContent(
+    sha: string,
+    path: string,
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<string> {
     // Try plan data first (synchronous, no lookup overhead)
-    if (this.planData?.content.has(`${sha}:${path}`)) {
-      return this.planData.content.get(`${sha}:${path}`)!;
+    if (plan?.content.has(`${sha}:${path}`)) {
+      return plan.content.get(`${sha}:${path}`)!;
     }
     // Fallback to git
     return this.git.safeGetFileContent(sha, path);
@@ -53,9 +49,13 @@ export class WorkspaceIndexer {
   /**
    * Get blob SHA from plan data or fallback to git
    */
-  private async getBlobSha(sha: string, path: string): Promise<string> {
+  private async getBlobSha(
+    sha: string,
+    path: string,
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<string> {
     // Try plan data first
-    const tree = this.planData?.trees.get(sha);
+    const tree = plan?.trees.get(sha);
     if (tree?.has(path)) {
       return tree.get(path)!.sha;
     }
@@ -66,7 +66,10 @@ export class WorkspaceIndexer {
   /**
    * Analyze workspace overlay (staged or unstaged changes)
    */
-  async analyzeWorkspace(mode: 'staged' | 'unstaged'): Promise<WorkspaceFacts | null> {
+  async analyzeWorkspace(
+    mode: 'staged' | 'unstaged',
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<WorkspaceFacts | null> {
     const headSha = await this.git.getHeadSha();
     const changedFiles =
       mode === 'staged' ? await this.git.getStagedFiles() : await this.git.getUnstagedFiles();
@@ -81,7 +84,7 @@ export class WorkspaceIndexer {
           gitRoot,
           status: file.status,
           commitSha: 'HEAD',
-          plan: this.planData,
+          plan,
           skipSizeCheck: file.status === 'D',
         })
       ) {
@@ -122,8 +125,8 @@ export class WorkspaceIndexer {
 
         try {
           if (status === 'D') {
-            const headBlobSha = await this.getBlobSha('HEAD', filePath);
-            const headContent = await this.getContent('HEAD', filePath);
+            const headBlobSha = await this.getBlobSha('HEAD', filePath, plan);
+            const headContent = await this.getContent('HEAD', filePath, plan);
             const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
               filePath,
               headBlobSha,
@@ -200,8 +203,8 @@ export class WorkspaceIndexer {
               structuralChange: 0,
             };
           } else {
-            const headBlobSha = await this.getBlobSha('HEAD', filePath);
-            const headContent = await this.getContent('HEAD', filePath);
+            const headBlobSha = await this.getBlobSha('HEAD', filePath, plan);
+            const headContent = await this.getContent('HEAD', filePath, plan);
             const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
               filePath,
               headBlobSha,
@@ -528,7 +531,7 @@ export class WorkspaceIndexer {
   /**
    * Get the workspace file tree for the Explorer
    */
-  async getWorkspaceTree(): Promise<any[]> {
+  async getWorkspaceTree(plan?: import('./runner/pipelineTypes').PlanData): Promise<any[]> {
     const allFiles = await this.git.getAllFiles(); // Already excludes ignored files via --exclude-standard
     const gitRoot = this.git.getRoot();
 
@@ -538,7 +541,7 @@ export class WorkspaceIndexer {
         await filterPath(file, {
           git: this.git,
           gitRoot,
-          plan: this.planData,
+          plan,
           status: 'M',
           skipSizeCheck: true,
           skipGitIgnore: true, // Skip redundant check since getAllFiles() already excluded ignored files

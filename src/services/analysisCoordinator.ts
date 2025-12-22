@@ -113,7 +113,8 @@ export class AnalysisCoordinator {
             summary: result.bundleSummary || {
               id: `frm-${Date.now()}`,
               commitCount: shas.length,
-              fileCount: 0,
+              fileCount: (result.bundleFacts?.scope?.files as number) || 0,
+              symbolCount: (result.bundleFacts?.working?.symbols as number) || 0,
             },
             reportId: `frm-${Date.now()}`,
           },
