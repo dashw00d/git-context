@@ -36,23 +36,32 @@ export function createInitStep(git: GitOperations): PipelineStep {
       const allShas = ['HEAD', ...(state.selectedCommitShas || [])];
       logInfo(`[InitStep] Gathering data for ${allShas.length} commits`);
 
-      // 2. Get file changes for all commits (populates plan.fileChanges)
+      // 2. Get file changes for all commits in PARALLEL (populates plan.fileChanges)
       const parentShas = new Set<string>();
-      for (const sha of allShas) {
-        if (sha.startsWith('workspace')) continue;
-        try {
-          const files = await git.getFileChanges(sha);
-          plan.fileChanges.set(sha, files);
+      const limit = pLimit(8); // Parallelize up to 8 commits
 
-          // Track parent commits for parent content
-          const commitInfo = await git.getCommitInfo(sha);
-          if (commitInfo.parent) {
-            parentShas.add(commitInfo.parent);
-          }
-        } catch (error) {
-          logWarn(`[InitStep] Failed to get file changes for ${sha}: ${error}`);
-        }
-      }
+      const commitTasks = allShas
+        .filter(sha => !sha.startsWith('workspace'))
+        .map(sha =>
+          limit(async () => {
+            try {
+              const files = await git.getFileChanges(sha);
+              plan.fileChanges.set(sha, files);
+              // Also cache in gitCacheService for other code paths
+              cacheService.cacheFileChanges(sha, files);
+
+              // Track parent commits for parent content
+              const commitInfo = await git.getCommitInfo(sha);
+              if (commitInfo.parent) {
+                parentShas.add(commitInfo.parent);
+              }
+            } catch (error) {
+              logWarn(`[InitStep] Failed to get file changes for ${sha}: ${error}`);
+            }
+          })
+        );
+
+      await Promise.all(commitTasks);
 
       // 3. Get workspace changes
       const staged = await git.getStagedFiles();

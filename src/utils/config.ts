@@ -372,8 +372,8 @@ export async function getProjectId(): Promise<string | undefined> {
   if (!gitRoot) return undefined;
 
   try {
-    const simpleGit = require('simple-git');
-    const git = simpleGit(gitRoot);
+    const { GitOperations } = require('../analysis/git');
+    const git = GitOperations.getSimpleGit(gitRoot);
     try {
       const config = await git.getConfig('remote.origin.url');
       const remoteUrl = config.value || '';

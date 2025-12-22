@@ -119,9 +119,8 @@ export async function registerCoreFeatures(
         const { GitOperations } = await import('../analysis/git');
         try {
           const git = new GitOperations();
-          const simpleGit = require('simple-git');
           const gitRoot = git.getRoot();
-          const gitInstance = simpleGit(gitRoot);
+          const gitInstance = GitOperations.getSimpleGit(gitRoot);
           sha = await gitInstance.revparse([shaOrRef]);
         } catch {
           vscode.window.showErrorMessage(`Could not resolve ref: ${shaOrRef}`);

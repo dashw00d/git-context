@@ -14,6 +14,7 @@ export class GitOperations {
   private statusCache?: { output: string; expires: number };
   private untrackedCache?: { files: string[]; expires: number };
   private commitInfoCache = new Map<string, CommitInfo>();
+  private static sharedCommitInfoCache = new Map<string, CommitInfo>();
 
   private static gitInstances: Map<string, SimpleGit> = new Map();
 
@@ -23,14 +24,14 @@ export class GitOperations {
       logError('GitOperations: Not in a git repository');
       this.gitRoot = '';
       if (!GitOperations.gitInstances.has('')) {
-        GitOperations.gitInstances.set('', simpleGit('', { maxConcurrentProcesses: 10 }));
+        GitOperations.gitInstances.set('', simpleGit(''));
       }
       this.git = GitOperations.gitInstances.get('')!;
       return;
     }
     this.gitRoot = root;
     if (!GitOperations.gitInstances.has(root)) {
-      GitOperations.gitInstances.set(root, simpleGit(root, { maxConcurrentProcesses: 10 }));
+      GitOperations.gitInstances.set(root, simpleGit(root));
     }
     this.git = GitOperations.gitInstances.get(root)!;
   }
@@ -40,10 +41,26 @@ export class GitOperations {
   }
 
   /**
+   * Get the shared SimpleGit instance for a given root.
+   * Use this instead of creating new simpleGit() instances to avoid queue contention.
+   */
+  public static getSimpleGit(root?: string): SimpleGit {
+    const actualRoot = root || getGitRoot() || '';
+    if (!GitOperations.gitInstances.has(actualRoot)) {
+      GitOperations.gitInstances.set(actualRoot, simpleGit(actualRoot));
+    }
+    return GitOperations.gitInstances.get(actualRoot)!;
+  }
+
+  /**
    * Get basic commit information
    */
   async getCommitInfo(sha: string): Promise<CommitInfo> {
-    // Check cache first
+    // Check shared static cache first (survives across instances)
+    if (GitOperations.sharedCommitInfoCache.has(sha)) {
+      return GitOperations.sharedCommitInfoCache.get(sha)!;
+    }
+    // Check instance cache
     if (this.commitInfoCache.has(sha)) {
       return this.commitInfoCache.get(sha)!;
     }
@@ -71,8 +88,9 @@ export class GitOperations {
         parent: lines[4] || undefined,
       };
 
-      // Cache the result
+      // Cache the result in both instance and shared cache
       this.commitInfoCache.set(sha, info);
+      GitOperations.sharedCommitInfoCache.set(sha, info);
       return info;
     } catch (error: any) {
       logError(`Failed to get commit info for ${sha}: ${error.message}`);

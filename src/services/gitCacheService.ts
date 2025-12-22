@@ -226,6 +226,14 @@ export class GitCacheService {
     return files;
   }
 
+  /**
+   * Pre-populate file changes cache from init step data.
+   * This prevents redundant git diff-tree calls from other code paths.
+   */
+  cacheFileChanges(sha: string, files: FileChange[]): void {
+    this.fileChangesCache.set(sha, files);
+  }
+
   private addBlobNeed(
     plan: ContentPlan,
     blobSha: string,
