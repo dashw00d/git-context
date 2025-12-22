@@ -1,4 +1,4 @@
-import { logDebug } from '../../../utils/logger';
+import { logDebug, logInfo } from '../../../utils/logger';
 import { WorkspaceIndexer } from '../../workspaceIndexer';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 import { updateState } from './utils';
@@ -34,9 +34,17 @@ export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): 
 
       for (const version of timeline) {
         if (version === 'workspace-unstaged' && shouldProcessUnstaged) {
+          const unstagedStartTime = Date.now();
+          logDebug('🟦 [WorkspaceStep] Starting unstaged analysis');
           unstagedFacts = await workspaceIndexer.analyzeWorkspace('unstaged', state.plan);
+          const unstagedDuration = Date.now() - unstagedStartTime;
+          logInfo(`[WorkspaceStep] 🕐 Unstaged analysis: ${unstagedDuration}ms`);
         } else if (version === 'workspace-staged' && shouldProcessStaged) {
+          const stagedStartTime = Date.now();
+          logDebug('🟦 [WorkspaceStep] Starting staged analysis');
           stagedFacts = await workspaceIndexer.analyzeWorkspace('staged', state.plan);
+          const stagedDuration = Date.now() - stagedStartTime;
+          logInfo(`[WorkspaceStep] 🕐 Staged analysis: ${stagedDuration}ms`);
         }
 
         if (version !== 'workspace-unstaged' && version !== 'workspace-staged') {

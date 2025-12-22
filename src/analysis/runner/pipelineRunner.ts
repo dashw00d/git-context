@@ -130,7 +130,11 @@ export async function runPipeline(
         // Wrap in Promise.resolve to handle both async and sync returns
         const runPromise = Promise.resolve(step.run(state, token!));
 
-        await withTimeout(runPromise, 300000, `Pipeline step '${step.id}'`);
+        // Use longer timeout for steps that can legitimately take a long time
+        // index_commits and workspace_overlay can take 10+ minutes on large repos
+        const timeoutMs =
+          step.id === 'index_commits' || step.id === 'workspace_overlay' ? 600000 : 300000; // 10 min for slow steps, 5 min for others
+        await withTimeout(runPromise, timeoutMs, `Pipeline step '${step.id}'`);
 
         // Success handling
         const endTime = Date.now();

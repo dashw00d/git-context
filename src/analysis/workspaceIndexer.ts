@@ -115,13 +115,14 @@ export class WorkspaceIndexer {
     const changedSymbols: any[] = [];
     const allEdges: any[] = [];
 
-    const limit = pLimit(8);
+    const limit = pLimit(1); // DEBUG: Sequential processing to identify bottlenecks
     const startTime = Date.now();
     const version = mode === 'staged' ? 'workspace-staged' : 'workspace-unstaged';
 
     const filePromises = filteredFiles.map(file =>
       limit(async () => {
         const { path: filePath, status } = file;
+        const fileStartTime = Date.now(); // DEBUG timing
 
         try {
           if (status === 'D') {
@@ -133,7 +134,7 @@ export class WorkspaceIndexer {
               headContent
             );
 
-            return {
+            const result = {
               added: 0,
               modified: 0,
               removed: headSnapshot.symbols.length,
@@ -144,6 +145,8 @@ export class WorkspaceIndexer {
               risks: ['deletion'],
               structuralChange: 0,
             };
+            logInfo(`[WorkspaceIndexer] 🕐 ${filePath} (D): ${Date.now() - fileStartTime}ms`);
+            return result;
           }
 
           const fullPath = path.join(gitRoot, filePath);
@@ -191,7 +194,7 @@ export class WorkspaceIndexer {
           );
 
           if (status === 'A' || status === 'U') {
-            return {
+            const result = {
               added: workspaceSnapshot.symbols.length,
               modified: 0,
               removed: 0,
@@ -202,6 +205,10 @@ export class WorkspaceIndexer {
               risks: [],
               structuralChange: 0,
             };
+            logInfo(
+              `[WorkspaceIndexer] 🕐 ${filePath} (${status}): ${Date.now() - fileStartTime}ms`
+            );
+            return result;
           } else {
             const headBlobSha = await this.getBlobSha('HEAD', filePath, plan);
             const headContent = await this.getContent('HEAD', filePath, plan);
@@ -243,7 +250,7 @@ export class WorkspaceIndexer {
             if (structDiff.interfaceChanged) risks.push('breaking-api');
             if (structDiff.controlFlowChanged) risks.push('refactor');
 
-            return {
+            const result = {
               added: diff.added.length,
               modified: diff.modified.length,
               removed: diff.removed.length,
@@ -254,9 +261,12 @@ export class WorkspaceIndexer {
               risks,
               structuralChange: structDiff.structuralChangeScore,
             };
+            logInfo(`[WorkspaceIndexer] 🕐 ${filePath} (M): ${Date.now() - fileStartTime}ms`);
+            return result;
           }
         } catch (error: any) {
           logDebug(`[WorkspaceIndexer] Error processing ${filePath}: ${error.message}`);
+          logInfo(`[WorkspaceIndexer] 🕐 ${filePath} (ERR): ${Date.now() - fileStartTime}ms`);
 
           return {
             added: 0,

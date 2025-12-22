@@ -237,14 +237,21 @@ export class CommitIndexer {
       sha: string;
     }) => void
   ): Promise<CommitFacts[]> {
-    const limit = pLimit(concurrency);
-    const promises = shas.map(sha =>
+    // DEBUG: Force sequential to identify bottlenecks
+    const effectiveConcurrency = 1;
+    logInfo(
+      `[CommitIndexer] DEBUG: Using concurrency=${effectiveConcurrency} (was ${concurrency})`
+    );
+    const limit = pLimit(effectiveConcurrency);
+
+    const promises = shas.map((sha, idx) =>
       limit(async () => {
+        const commitStart = Date.now(); // DEBUG timing
         if (opts?.token?.isCancellationRequested) {
           logInfo('[CommitIndexer] Operation cancelled');
           throw new vscode.CancellationError();
         }
-        return this.retryWithBackoff(async () => {
+        const result = await this.retryWithBackoff(async () => {
           if (opts?.token?.isCancellationRequested) {
             logInfo('[CommitIndexer] Operation cancelled');
             throw new vscode.CancellationError();
@@ -253,6 +260,10 @@ export class CommitIndexer {
           if (!facts) return Promise.reject(new Error(`Failed to index ${sha}`));
           return facts;
         });
+        logInfo(
+          `[CommitIndexer] 🕐 Commit ${idx + 1}/${shas.length} ${sha.substring(0, 8)}: ${Date.now() - commitStart}ms`
+        );
+        return result;
       })
     );
 
@@ -302,15 +313,18 @@ export class CommitIndexer {
 
     const parentSha = commitInfo.parent || null;
 
-    const CONCURRENCY = 8;
+    // DEBUG: Force sequential to identify bottlenecks
+    const CONCURRENCY = 1;
     const limit = pLimit(CONCURRENCY);
 
     logInfo(
-      `[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY})`
+      `[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY} - DEBUG mode)`
     );
 
-    const promises = files.map(file =>
+    const commitFileStartTime = Date.now();
+    const promises = files.map((file, fileIdx) =>
       limit(async () => {
+        const fileStartTime = Date.now();
         if (opts?.token?.isCancellationRequested) {
           logInfo('[CommitIndexer] Operation cancelled');
           throw new vscode.CancellationError();
@@ -318,10 +332,18 @@ export class CommitIndexer {
         opts?.onProgress?.({ type: 'file_start', file: file.path, sha });
         const result = await this.processFile(file, sha, parentSha, opts?.plan);
         opts?.onProgress?.({ type: 'file_complete', file: file.path, sha });
+        const fileDuration = Date.now() - fileStartTime;
+        logInfo(
+          `[CommitIndexer] 🕐 File ${fileIdx + 1}/${files.length} ${file.path}: ${fileDuration}ms`
+        );
         return result;
       })
     );
     const results = await Promise.all(promises);
+    const commitFileDuration = Date.now() - commitFileStartTime;
+    logInfo(
+      `[CommitIndexer] 🕐 All files for commit ${sha.substring(0, 8)}: ${commitFileDuration}ms (${files.length} files)`
+    );
 
     let totalSymbolsAdded = 0;
     let totalSymbolsModified = 0;
@@ -524,15 +546,27 @@ export class CommitIndexer {
       return result;
     }
 
+    const fileStartTime = Date.now();
+
+    const blobShaTime = Date.now();
     const currentBlobSha = file.newSha || (await this.getBlobSha(sha, path, plan));
+    logDebug(`[CommitIndexer] 🕐 getBlobSha for ${path}: ${Date.now() - blobShaTime}ms`);
+
+    const getContentTime = Date.now();
     const currentContent = await this.getContent(sha, path, plan);
+    logDebug(`[CommitIndexer] 🕐 getContent for ${path}: ${Date.now() - getContentTime}ms (${currentContent.length} bytes)`);
+
+    const snapshotTime = Date.now();
     const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
       path,
       currentBlobSha,
       currentContent
     );
+    logDebug(`[CommitIndexer] 🕐 Snapshot creation for ${path}: ${Date.now() - snapshotTime}ms`);
 
+    const hybridFactsTime = Date.now();
     await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
+    logDebug(`[CommitIndexer] 🕐 extractAndSaveHybridFacts for ${path}: ${Date.now() - hybridFactsTime}ms`);
 
     if (status === 'A') {
       result.symbolsAdded += currentSnapshot.symbols.length;
@@ -567,13 +601,20 @@ export class CommitIndexer {
       }
 
       const parentContent = await this.getContent(parentSha, path, plan);
+
+      const parentSnapshotTime = Date.now();
       const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
         path,
         parentBlobSha,
         parentContent
       );
+      logDebug(
+        `[CommitIndexer] 🕐 Parent snapshot for ${path}: ${Date.now() - parentSnapshotTime}ms`
+      );
 
+      const diffTime = Date.now();
       const symbolDiff = this.snapshotManager.compareSnapshots(parentSnapshot, currentSnapshot);
+      logDebug(`[CommitIndexer] 🕐 Symbol diff for ${path}: ${Date.now() - diffTime}ms`);
 
       result.symbolsAdded += symbolDiff.added.length;
       result.symbolsModified += symbolDiff.modified.length;
@@ -647,6 +688,7 @@ export class CommitIndexer {
         }
       }
 
+      const structDiffTime = Date.now();
       const structDiff = await this.structuralDiffManager.getOrCreateStructuralDiff(
         parentBlobSha,
         currentBlobSha,
@@ -654,6 +696,7 @@ export class CommitIndexer {
         parentContent,
         currentContent
       );
+      logDebug(`[CommitIndexer] 🕐 Structural diff for ${path}: ${Date.now() - structDiffTime}ms`);
 
       result.maxStructuralChange = structDiff.structuralChangeScore;
 
@@ -683,6 +726,8 @@ export class CommitIndexer {
       result.hotspots.push({ path, symbols: fileSymbols });
     }
 
+    const totalFileTime = Date.now() - fileStartTime;
+    logDebug(`[CommitIndexer] 🕐 Total processFile for ${path}: ${totalFileTime}ms`);
     return result;
   }
 
@@ -740,7 +785,7 @@ export class CommitIndexer {
       .filter(s => s && s.id); // id is now the DNA hash
 
     if (symbols.length > 0) {
-      const limit = pLimit(8);
+      const limit = pLimit(1); // DEBUG: Sequential processing
       const batches: SymbolInfo[][] = [];
       const batchSize = 50;
 
@@ -832,14 +877,19 @@ export class CommitIndexer {
     }
 
     try {
+      const parseStart = Date.now();
       const hybridFacts = await this.parser.extractHybridFacts(
         content,
         filePath,
         language,
         existingSymbols
       );
+      logDebug(`[CommitIndexer] 🕐 parser.extractHybridFacts for ${filePath}: ${Date.now() - parseStart}ms (${hybridFacts.length} facts)`);
 
+      const saveStart = Date.now();
       await this.cstTimelineManager.saveFacts(filePath, commitSha, hybridFacts, prevHash);
+      logDebug(`[CommitIndexer] 🕐 cstTimelineManager.saveFacts for ${filePath}: ${Date.now() - saveStart}ms`);
+
       if (hybridFacts.length > 0) {
         logDebug(
           `[CommitIndexer] Saved ${
@@ -1170,7 +1220,7 @@ export class CommitIndexer {
       .filter(s => s && s.id); // id is now the DNA hash
 
     if (symbols.length > 0) {
-      const limit = pLimit(8);
+      const limit = pLimit(1); // DEBUG: Sequential processing
       const batches: SymbolInfo[][] = [];
       const batchSize = 50;
 

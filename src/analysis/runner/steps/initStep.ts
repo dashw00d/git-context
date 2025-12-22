@@ -36,30 +36,37 @@ export function createInitStep(git: GitOperations): PipelineStep {
       const allShas = ['HEAD', ...(state.selectedCommitShas || [])];
       logInfo(`[InitStep] Gathering data for ${allShas.length} commits`);
 
-      // 2. Get file changes for all commits in PARALLEL (populates plan.fileChanges)
+      // 2. Get file changes for all commits SEQUENTIALLY (DEBUG mode)
       const parentShas = new Set<string>();
-      const limit = pLimit(8); // Parallelize up to 8 commits
+      const limit = pLimit(1); // DEBUG: Sequential processing to identify bottlenecks
+      const commitShas = allShas.filter(sha => !sha.startsWith('workspace'));
 
-      const commitTasks = allShas
-        .filter(sha => !sha.startsWith('workspace'))
-        .map(sha =>
-          limit(async () => {
-            try {
-              const files = await git.getFileChanges(sha);
-              plan.fileChanges.set(sha, files);
-              // Also cache in gitCacheService for other code paths
-              cacheService.cacheFileChanges(sha, files);
+      const commitTasks = commitShas.map((sha, idx) =>
+        limit(async () => {
+          const commitStartTime = Date.now();
+          try {
+            const files = await git.getFileChanges(sha);
+            plan.fileChanges.set(sha, files);
+            // Also cache in gitCacheService for other code paths
+            cacheService.cacheFileChanges(sha, files);
 
-              // Track parent commits for parent content
-              const commitInfo = await git.getCommitInfo(sha);
-              if (commitInfo.parent) {
-                parentShas.add(commitInfo.parent);
-              }
-            } catch (error) {
-              logWarn(`[InitStep] Failed to get file changes for ${sha}: ${error}`);
+            // Track parent commits for parent content
+            const commitInfo = await git.getCommitInfo(sha);
+            if (commitInfo.parent) {
+              parentShas.add(commitInfo.parent);
             }
-          })
-        );
+            const commitDuration = Date.now() - commitStartTime;
+            logInfo(
+              `[InitStep] 🕐 Commit ${idx + 1}/${commitShas.length} ${sha.substring(0, 8)}: ${commitDuration}ms`
+            );
+          } catch (error) {
+            const commitDuration = Date.now() - commitStartTime;
+            logWarn(
+              `[InitStep] Failed to get file changes for ${sha} after ${commitDuration}ms: ${error}`
+            );
+          }
+        })
+      );
 
       await Promise.all(commitTasks);
 

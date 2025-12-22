@@ -94,11 +94,12 @@ export function createDriftStep(): PipelineStep {
             `[DriftStep] Retrieved ${totalFacts} hybrid facts across ${factsByFile.size} files`
           );
 
-          const limit = pLimit(24);
+          const limit = pLimit(1); // DEBUG: Sequential processing
           const startTime = Date.now();
 
-          const driftPromises = eligibleFiles.map(filePath =>
+          const driftPromises = eligibleFiles.map((filePath, idx) =>
             limit(async () => {
+              const fileStartTime = Date.now();
               try {
                 const currentFacts = factsByFile.get(filePath) || [];
                 if (currentFacts.length === 0) return [];
@@ -112,9 +113,16 @@ export function createDriftStep(): PipelineStep {
                   state.scope!,
                   state.selectedCommitShas || []
                 );
+                const fileDuration = Date.now() - fileStartTime;
+                logInfo(
+                  `[DriftStep] 🕐 File ${idx + 1}/${eligibleFiles.length} ${filePath}: ${fileDuration}ms`
+                );
                 return fileDrifts;
               } catch (error) {
-                logDebug(`[DriftStep] Error detecting hybrid drift for ${filePath}: ${error}`);
+                const fileDuration = Date.now() - fileStartTime;
+                logDebug(
+                  `[DriftStep] Error detecting hybrid drift for ${filePath} after ${fileDuration}ms: ${error}`
+                );
                 return [];
               }
             })

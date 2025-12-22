@@ -172,34 +172,77 @@ export class GitOperations {
     GitOperations.pendingStatusPromise = (async () => {
       try {
         const { spawn } = await import('child_process');
+        const startTime = Date.now();
+        logDebug(`[GitOperations] Starting git status --porcelain in ${this.gitRoot}`);
+
         const output = await new Promise<string>((resolve, reject) => {
+          // Use GIT_OPTIONS to skip hooks and optional locks for faster execution
+          // This helps avoid hangs from slow hooks or lock contention
+          const env = {
+            ...process.env,
+            GIT_OPTIONS: '--no-optional-locks',
+          };
+
           const proc = spawn('git', ['status', '--porcelain'], {
             cwd: this.gitRoot,
             stdio: ['pipe', 'pipe', 'pipe'],
+            env,
           });
 
           let stdout = '';
+          let stderr = '';
+          let hasOutput = false;
+
           proc.stdout.on('data', (data: Buffer) => {
             stdout += data.toString();
+            hasOutput = true;
+            const elapsed = Date.now() - startTime;
+            if (elapsed > 5000 && elapsed % 10000 < 100) {
+              // Log progress every 10 seconds after 5 seconds
+              logDebug(
+                `[GitOperations] git status still running, ${elapsed}ms elapsed, ${stdout.length} bytes received`
+              );
+            }
           });
 
-          // Set timeout
+          proc.stderr.on('data', (data: Buffer) => {
+            stderr += data.toString();
+            logWarn(`[GitOperations] git status stderr: ${data.toString().trim()}`);
+          });
+
+          // Set timeout - increased from 30s to 120s for large repos
           const timeout = setTimeout(() => {
-            proc.kill();
-            reject(new Error('git status --porcelain timed out'));
-          }, 30000);
+            const elapsed = Date.now() - startTime;
+            logWarn(
+              `[GitOperations] git status --porcelain timed out after ${elapsed}ms. stdout length: ${stdout.length}, hasOutput: ${hasOutput}, stderr: ${stderr || '(none)'}`
+            );
+            proc.kill('SIGKILL'); // Force kill if SIGTERM doesn't work
+            const errorMsg = stderr
+              ? `git status --porcelain timed out after ${elapsed}ms. stderr: ${stderr}`
+              : `git status --porcelain timed out after ${elapsed}ms`;
+            reject(new Error(errorMsg));
+          }, 120000); // 120 seconds
 
           proc.on('close', code => {
             clearTimeout(timeout);
+            const elapsed = Date.now() - startTime;
             if (code === 0) {
+              logDebug(
+                `[GitOperations] git status --porcelain completed in ${elapsed}ms, ${stdout.length} bytes`
+              );
               resolve(stdout);
             } else {
-              reject(new Error(`git status --porcelain exited with code ${code}`));
+              const errorMsg = stderr
+                ? `git status --porcelain exited with code ${code} after ${elapsed}ms. stderr: ${stderr}`
+                : `git status --porcelain exited with code ${code} after ${elapsed}ms`;
+              logWarn(`[GitOperations] ${errorMsg}`);
+              reject(new Error(errorMsg));
             }
           });
 
           proc.on('error', err => {
             clearTimeout(timeout);
+            logError(`[GitOperations] git status --porcelain spawn error:`, err);
             reject(err);
           });
         });
@@ -234,34 +277,76 @@ export class GitOperations {
     GitOperations.pendingUntrackedPromise = (async () => {
       try {
         const { spawn } = await import('child_process');
+        const startTime = Date.now();
+        logDebug(`[GitOperations] Starting git ls-files --others in ${this.gitRoot}`);
+
         const output = await new Promise<string>((resolve, reject) => {
+          // Use GIT_OPTIONS to skip hooks and optional locks for faster execution
+          const env = {
+            ...process.env,
+            GIT_OPTIONS: '--no-optional-locks',
+          };
+
           const proc = spawn('git', ['ls-files', '--others', '--exclude-standard'], {
             cwd: this.gitRoot,
             stdio: ['pipe', 'pipe', 'pipe'],
+            env,
           });
 
           let stdout = '';
+          let stderr = '';
+          let hasOutput = false;
+
           proc.stdout.on('data', (data: Buffer) => {
             stdout += data.toString();
+            hasOutput = true;
+            const elapsed = Date.now() - startTime;
+            if (elapsed > 5000 && elapsed % 10000 < 100) {
+              // Log progress every 10 seconds after 5 seconds
+              logDebug(
+                `[GitOperations] git ls-files still running, ${elapsed}ms elapsed, ${stdout.length} bytes received`
+              );
+            }
           });
 
-          // Set timeout
+          proc.stderr.on('data', (data: Buffer) => {
+            stderr += data.toString();
+            logWarn(`[GitOperations] git ls-files stderr: ${data.toString().trim()}`);
+          });
+
+          // Set timeout - increased from 30s to 120s for large repos
           const timeout = setTimeout(() => {
-            proc.kill();
-            reject(new Error('git ls-files --others timed out'));
-          }, 30000);
+            const elapsed = Date.now() - startTime;
+            logWarn(
+              `[GitOperations] git ls-files --others timed out after ${elapsed}ms. stdout length: ${stdout.length}, hasOutput: ${hasOutput}, stderr: ${stderr || '(none)'}`
+            );
+            proc.kill('SIGKILL'); // Force kill if SIGTERM doesn't work
+            const errorMsg = stderr
+              ? `git ls-files --others timed out after ${elapsed}ms. stderr: ${stderr}`
+              : `git ls-files --others timed out after ${elapsed}ms`;
+            reject(new Error(errorMsg));
+          }, 120000); // 120 seconds
 
           proc.on('close', code => {
             clearTimeout(timeout);
+            const elapsed = Date.now() - startTime;
             if (code === 0) {
+              logDebug(
+                `[GitOperations] git ls-files --others completed in ${elapsed}ms, ${stdout.length} bytes`
+              );
               resolve(stdout);
             } else {
-              reject(new Error(`git ls-files --others exited with code ${code}`));
+              const errorMsg = stderr
+                ? `git ls-files --others exited with code ${code} after ${elapsed}ms. stderr: ${stderr}`
+                : `git ls-files --others exited with code ${code} after ${elapsed}ms`;
+              logWarn(`[GitOperations] ${errorMsg}`);
+              reject(new Error(errorMsg));
             }
           });
 
           proc.on('error', err => {
             clearTimeout(timeout);
+            logError(`[GitOperations] git ls-files --others spawn error:`, err);
             reject(err);
           });
         });
