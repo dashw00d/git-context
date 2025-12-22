@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import pLimit = require('p-limit');
 import { getGitCacheService } from '../../../services/gitCacheService';
 import { getDatabase } from '../../../storage/database';
+import { DatabaseWriteQueue } from '../../../storage/databaseWriteQueue';
 import { logDebug, logInfo, logWarn } from '../../../utils/logger';
 import { GitOperations } from '../../git';
 import { PipelineState, PipelineStep, PlanData, TreeEntry } from '../pipelineTypes';
@@ -142,15 +143,18 @@ export function createInitStep(git: GitOperations): PipelineStep {
       // 8. Batch fetch all blob content
       const blobContent = await batchFetchBlobs(git, Array.from(blobsToFetch));
 
-      // 9. Map blob content to sha:path keys
+      // 9. Map blob content to sha:path keys and queue for batch write
       for (const [blobSha, content] of blobContent) {
         const usages = blobUsage.get(blobSha) || [];
         for (const { sha, path } of usages) {
           plan.content.set(`${sha}:${path}`, content);
         }
-        // Also persist to DB via cache service
+        // Queue blob for batch write (non-blocking)
         await cacheService.storeBlob(blobSha, content);
       }
+
+      // Flush all queued blob writes to fix p8 concurrency performance issue
+      await DatabaseWriteQueue.getInstance().flushAll();
 
       // 10. Store plan in state
       state.plan = plan;

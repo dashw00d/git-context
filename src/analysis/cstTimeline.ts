@@ -1,4 +1,5 @@
 import { getDatabase } from '../storage/database';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { DeltaChange, HybridFact, isCstFact } from '../types/cstFacts';
 import { logDebug, logError } from '../utils/logger';
@@ -55,17 +56,8 @@ export class CstTimelineManager {
       }
     }
 
-    // Prepare all inserts synchronously (no async in loop)
-    const insertData: Array<{
-      filePath: string;
-      version: string;
-      factId: string;
-      dnaId: string;
-      serializedFact: string;
-      timelineJson: string;
-      hash: string;
-      createdAt: string;
-    }> = [];
+    // Queue all facts for batch write
+    const writeQueue = DatabaseWriteQueue.getInstance();
 
     for (const fact of facts) {
       const dnaId = dnaMap.get(fact.id)!;
@@ -73,46 +65,27 @@ export class CstTimelineManager {
       // Compute delta synchronously using pre-built lookup
       const delta = this.computeDeltaSync(fact, dnaId, priorFactsById, priorFactsByNameKind);
 
-      // Build timeline entry
+      // Build timeline entry (needed for serialization)
       const timelineEntry = { version: commitSha, dna: dnaId, delta };
       const timeline = isCstFact(fact) ? [...fact.timeline, timelineEntry] : [timelineEntry];
 
-      insertData.push({
-        filePath,
-        version: commitSha,
-        factId: fact.id,
-        dnaId,
-        serializedFact: JSON.stringify(fact),
-        timelineJson: JSON.stringify(timeline),
-        hash: fileHash,
-        createdAt: timestamp,
+      // Queue for batch write with pre-computed DNA and timeline
+      writeQueue.queue({
+        type: 'hybrid_fact',
+        data: {
+          filePath,
+          version: commitSha,
+          fact,
+          delta,
+          hash: fileHash,
+          dnaId, // Pre-computed DNA
+          timeline, // Pre-computed timeline
+        },
       });
     }
 
-    // Batch insert all facts in a single transaction
-    const stmt = prepare(`
-      INSERT OR REPLACE INTO hybrid_facts
-      (file_path, version, fact_id, dna_id, serialized_fact, timeline_json, hash, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    db.transaction(() => {
-      for (const data of insertData) {
-        stmt.run([
-          data.filePath,
-          data.version,
-          data.factId,
-          data.dnaId,
-          data.serializedFact,
-          data.timelineJson,
-          data.hash,
-          data.createdAt,
-        ]);
-      }
-    })();
-
     logDebug(
-      `[CstTimeline] Saved ${facts.length} hybrid facts for ${filePath}@${commitSha.substring(0, 8)}`
+      `[CstTimeline] Queued ${facts.length} hybrid facts for ${filePath}@${commitSha.substring(0, 8)}`
     );
   }
 

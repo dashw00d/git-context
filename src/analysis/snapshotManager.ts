@@ -1,5 +1,6 @@
 import { LRUCache } from 'lru-cache';
 import { prepare } from '../storage/statement-wrapper';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { EdgeInfo, SymbolInfo } from '../types';
 import { detectLanguage, getExtensionConfig } from '../utils/config';
 import { logDebug } from '../utils/logger';
@@ -22,8 +23,7 @@ export class SnapshotManager {
   private snapshotCache: LRUCache<string, FileSnapshot> | null = null;
   private cacheHits = 0;
   private cacheMisses = 0;
-  private writeQueue: FileSnapshot[] = [];
-  private readonly BATCH_SIZE = 50;
+  private writeQueue = DatabaseWriteQueue.getInstance();
 
   constructor(
     private db: any,
@@ -135,7 +135,8 @@ export class SnapshotManager {
 
     snapshot._cacheSize = JSON.stringify(snapshot).length;
 
-    this.queueSnapshot(snapshot);
+    // Queue snapshot for batch write
+    this.writeQueue.queue({ type: 'snapshot', data: snapshot });
 
     const lruCacheKey = `${blobSha}:${filePath}`;
     this.snapshotCache?.set(lruCacheKey, snapshot);
@@ -145,11 +146,11 @@ export class SnapshotManager {
 
   /**
    * Flush any pending snapshot writes (call at end of processing)
+   * Now handled by centralized DatabaseWriteQueue
    */
   flushSnapshotQueue(): void {
-    while (this.writeQueue.length > 0) {
-      this.flushSnapshotQueueInternal();
-    }
+    // No-op: flushing is handled by DatabaseWriteQueue.flushAll()
+    // Kept for backward compatibility
   }
 
   private getCachedSnapshot(blobSha: string, filePath: string): FileSnapshot | null {
@@ -173,47 +174,6 @@ export class SnapshotManager {
     snapshot._cacheSize = JSON.stringify(snapshot).length;
 
     return snapshot;
-  }
-
-  private queueSnapshot(snapshot: FileSnapshot): void {
-    this.writeQueue.push(snapshot);
-    if (this.writeQueue.length >= this.BATCH_SIZE) {
-      this.flushSnapshotQueueInternal();
-    }
-  }
-
-  private flushSnapshotQueueInternal(): void {
-    if (this.writeQueue.length === 0) return;
-    const batch = this.writeQueue.splice(0, this.BATCH_SIZE);
-
-    const stmt = prepare(`
-      INSERT OR REPLACE INTO file_snapshots
-      (blob_sha, file_path, language, symbols_json, edges_json, shape_hash, body_hash, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const now = new Date().toISOString();
-
-    this.db.transaction(() => {
-      for (const snapshot of batch) {
-        stmt.run([
-          snapshot.blobSha,
-          snapshot.filePath,
-          snapshot.language,
-          JSON.stringify(snapshot.symbols),
-          JSON.stringify(snapshot.edges),
-          snapshot.shapeHash || '',
-          snapshot.bodyHash || '',
-          now,
-        ]);
-      }
-    })();
-
-    logDebug(`[SnapshotManager] Batched ${batch.length} snapshot writes`);
-  }
-
-  private storeSnapshot(snapshot: FileSnapshot): void {
-    this.queueSnapshot(snapshot);
   }
 
   private detectLanguage(filePath: string): string {

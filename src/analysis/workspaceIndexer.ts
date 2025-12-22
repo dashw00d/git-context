@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import pLimit = require('p-limit');
 import { Database } from 'sql.js';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { WorkspaceFacts } from '../types/workspace';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
@@ -115,7 +116,7 @@ export class WorkspaceIndexer {
     const changedSymbols: any[] = [];
     const allEdges: any[] = [];
 
-    const limit = pLimit(1); // DEBUG: Sequential processing to identify bottlenecks
+    const limit = pLimit(8);
     const startTime = Date.now();
     const version = mode === 'staged' ? 'workspace-staged' : 'workspace-unstaged';
 
@@ -298,9 +299,9 @@ export class WorkspaceIndexer {
       totalRemoved += result.removed;
       totalEdgesAdded += result.edgesAdded;
       totalEdgesRemoved += result.edgesRemoved;
-      changedSymbols.push(...result.symbols);
-      allEdges.push(...result.edges);
-      allRisks.push(...result.risks);
+      for (const s of result.symbols) changedSymbols.push(s);
+      for (const e of result.edges) allEdges.push(e);
+      for (const r of result.risks) allRisks.push(r);
       maxStructuralChange = Math.max(maxStructuralChange, result.structuralChange);
     }
 
@@ -440,27 +441,11 @@ export class WorkspaceIndexer {
   }
 
   private cacheWorkspace(facts: WorkspaceFacts): void {
-    const stmt = prepare(`
-      INSERT OR REPLACE INTO workspace_analysis
-      (head_sha, workspace_hash, symbols_added, symbols_modified, symbols_removed,
-       edges_added, edges_removed, risks, files_changed, structural_change_score,
-       blast_radius, analyzed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run([
-      facts.headSha,
-      facts.workspaceHash,
-      facts.symbolsAdded,
-      facts.symbolsModified,
-      facts.symbolsRemoved,
-      facts.edgesAdded,
-      facts.edgesRemoved,
-      JSON.stringify(facts.risks),
-      facts.filesChanged,
-      facts.structuralChangeScore,
-      facts.blastRadius,
-      new Date().toISOString(),
-    ]);
+    const writeQueue = DatabaseWriteQueue.getInstance();
+    writeQueue.queue({
+      type: 'workspace_analysis',
+      data: facts,
+    });
   }
 
   /**

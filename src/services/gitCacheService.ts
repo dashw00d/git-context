@@ -12,6 +12,7 @@
  */
 
 import { spawn } from 'child_process';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { GitOperations } from '../analysis/git';
 import { FileChange } from '../types';
 import { logInfo, logWarn } from '../utils/logger';
@@ -357,22 +358,15 @@ export class GitCacheService {
    * Store blob in cache and DB
    */
   async storeBlob(blobSha: string, content: string): Promise<void> {
+    // Update in-memory cache immediately
     this.blobCache.set(blobSha, content);
 
-    if (this.db) {
-      try {
-        this.db
-          .prepare(
-            `
-          INSERT OR IGNORE INTO blob_content (blob_sha, content, size, created_at)
-          VALUES (?, ?, ?, ?)
-        `
-          )
-          .run(blobSha, content, content.length, new Date().toISOString());
-      } catch (error) {
-        logWarn(`[GitCacheService] Failed to store blob ${blobSha}: ${error}`);
-      }
-    }
+    // Queue for batch write (non-blocking)
+    const writeQueue = DatabaseWriteQueue.getInstance();
+    writeQueue.queue({
+      type: 'blob',
+      data: { blobSha, content, size: content.length },
+    });
   }
 
   /**

@@ -1,5 +1,6 @@
 import { DatabaseService, getDatabaseService } from '../services/databaseService';
 import { getDatabaseManager } from '../storage/database';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
@@ -453,32 +454,9 @@ export class MovedBlockDetector {
    * Store moved blocks in database
    */
   private async storeMovedBlocks(movedBlocks: MovedBlock[]): Promise<void> {
+    const writeQueue = DatabaseWriteQueue.getInstance();
     for (const block of movedBlocks) {
-      const stmt = prepare(`
-        INSERT INTO moved_blocks (
-          commit_sha, source_file, source_symbol_id, source_start_line, source_end_line,
-          source_content_hash, dest_file, dest_symbol_id, dest_start_line, dest_end_line,
-          dest_content_hash, similarity_score, block_type, move_reason, line_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      stmt.run(
-        block.commitSha,
-        block.sourceFile,
-        block.sourceSymbolId || null,
-        block.sourceStartLine,
-        block.sourceEndLine,
-        block.sourceContentHash,
-        block.destFile,
-        block.destSymbolId || null,
-        block.destStartLine,
-        block.destEndLine,
-        block.destContentHash,
-        block.similarityScore,
-        block.blockType,
-        block.moveReason,
-        block.lineCount
-      );
+      writeQueue.queue({ type: 'moved_block', data: block });
     }
   }
 
@@ -486,13 +464,18 @@ export class MovedBlockDetector {
    * Store symbol lineage in database
    */
   private async storeSymbolLineage(lineage: SymbolLineage[]): Promise<void> {
-    for (const entry of lineage) {
-      const stmt = prepare(`
-        INSERT INTO symbol_lineage (symbol_id, previous_symbol_id, commit_sha, move_type)
-        VALUES (?, ?, ?, ?)
-      `);
+    const writeQueue = DatabaseWriteQueue.getInstance();
 
-      stmt.run(entry.symbolId, entry.previousSymbolId, entry.commitSha, entry.moveType);
+    for (const entry of lineage) {
+      writeQueue.queue({
+        type: 'symbol_lineage',
+        data: {
+          symbolId: entry.symbolId,
+          previousSymbolId: entry.previousSymbolId,
+          commitSha: entry.commitSha,
+          moveType: entry.moveType,
+        },
+      });
     }
   }
 

@@ -35,10 +35,10 @@ export class BranchManager {
       return;
     }
     try {
-      this.db.prepare(`UPDATE commit_branches SET is_head = 0 WHERE branch = ?`).run(branch);
-      this.db
-        .prepare(`UPDATE commit_branches SET is_head = 1 WHERE sha = ? AND branch = ?`)
-        .run(headSha, branch);
+      const writeQueue = DatabaseWriteQueue.getInstance();
+      // Queue branch head updates
+      writeQueue.queue({ type: 'commit_branch', data: { branch, isHead: false } });
+      writeQueue.queue({ type: 'commit_branch', data: { branch, sha: headSha, isHead: true } });
       this.db
         .prepare(
           `

@@ -1,5 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import * as vscode from 'vscode';
+import { DatabaseWriteQueue } from '../../storage/databaseWriteQueue';
 import { withTimeout } from '../../utils/async';
 import { logDebug, logInfo, logError } from '../../utils/logger';
 import { OPTIONAL_STEPS } from './pipelineConfigs';
@@ -225,6 +226,15 @@ export async function runPipeline(
 
   if (state.status === 'pending') {
     state.status = 'completed';
+  }
+
+  // Flush all queued database writes before completing pipeline
+  try {
+    await DatabaseWriteQueue.getInstance().flushAll();
+    logDebug('[Pipeline] Flushed all queued database writes');
+  } catch (error) {
+    logError(`[Pipeline] Failed to flush database writes: ${error}`);
+    // Don't fail the pipeline if flush fails - writes will be flushed by auto-flush
   }
 
   const pipelineEndTime = Date.now();

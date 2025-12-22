@@ -3,6 +3,7 @@
 import * as crypto from 'crypto';
 import pLimit = require('p-limit');
 import * as vscode from 'vscode';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { prepare } from '../storage/statement-wrapper';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
@@ -237,11 +238,8 @@ export class CommitIndexer {
       sha: string;
     }) => void
   ): Promise<CommitFacts[]> {
-    // DEBUG: Force sequential to identify bottlenecks
-    const effectiveConcurrency = 1;
-    logInfo(
-      `[CommitIndexer] DEBUG: Using concurrency=${effectiveConcurrency} (was ${concurrency})`
-    );
+    const effectiveConcurrency = concurrency;
+    // logInfo(`[CommitIndexer] Using concurrency=${effectiveConcurrency}`);
     const limit = pLimit(effectiveConcurrency);
 
     const promises = shas.map((sha, idx) =>
@@ -270,8 +268,8 @@ export class CommitIndexer {
     const results = await Promise.all(promises);
     const validResults = results.filter((f): f is CommitFacts => f !== null && f !== undefined);
 
-    this.snapshotManager.flushSnapshotQueue();
-    this.structuralDiffManager.flushDiffQueue();
+    // Flush all queued database writes (replaces individual flushSnapshotQueue/flushDiffQueue calls)
+    await DatabaseWriteQueue.getInstance().flushAll();
 
     const stats = this.getCacheStats();
     logInfo(
@@ -313,13 +311,10 @@ export class CommitIndexer {
 
     const parentSha = commitInfo.parent || null;
 
-    // DEBUG: Force sequential to identify bottlenecks
-    const CONCURRENCY = 1;
+    const CONCURRENCY = opts?.force ? 1 : 8;
     const limit = pLimit(CONCURRENCY);
 
-    logInfo(
-      `[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY} - DEBUG mode)`
-    );
+    // logInfo(`[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY})`);
 
     const commitFileStartTime = Date.now();
     const promises = files.map((file, fileIdx) =>
@@ -366,8 +361,10 @@ export class CommitIndexer {
       totalEdgesAdded += res.edgesAdded;
       totalEdgesRemoved += res.edgesRemoved;
       maxStructuralChange = Math.max(maxStructuralChange, res.maxStructuralChange);
-      allRisks.push(...res.risks);
-      changedSymbols.push(...res.changedSymbols);
+
+      // Use loops instead of spread to prevent stack overflow on large arrays
+      for (const r of res.risks) allRisks.push(r);
+      for (const s of res.changedSymbols) changedSymbols.push(s);
 
       // Log if file had structural change
       if (res.maxStructuralChange > 0) {
@@ -379,8 +376,8 @@ export class CommitIndexer {
       for (const change of res.symbolChanges) {
         symbolChanges.set(change.id, change);
       }
-      edgesToInsert.push(...res.edgesToInsert);
-      fileHotspotsToUpdate.push(...res.hotspots);
+      for (const e of res.edgesToInsert) edgesToInsert.push(e);
+      for (const h of res.hotspots) fileHotspotsToUpdate.push(h);
     }
 
     for (const edge of edgesToInsert) {
@@ -418,7 +415,7 @@ export class CommitIndexer {
       { added: allEdges, removed: [] }
     );
 
-    allRisks.push(...detectedRisks);
+    for (const r of detectedRisks) allRisks.push(r);
 
     const facts: CommitFacts = {
       sha,
@@ -554,7 +551,9 @@ export class CommitIndexer {
 
     const getContentTime = Date.now();
     const currentContent = await this.getContent(sha, path, plan);
-    logDebug(`[CommitIndexer] 🕐 getContent for ${path}: ${Date.now() - getContentTime}ms (${currentContent.length} bytes)`);
+    logDebug(
+      `[CommitIndexer] 🕐 getContent for ${path}: ${Date.now() - getContentTime}ms (${currentContent.length} bytes)`
+    );
 
     const snapshotTime = Date.now();
     const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
@@ -566,7 +565,9 @@ export class CommitIndexer {
 
     const hybridFactsTime = Date.now();
     await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
-    logDebug(`[CommitIndexer] 🕐 extractAndSaveHybridFacts for ${path}: ${Date.now() - hybridFactsTime}ms`);
+    logDebug(
+      `[CommitIndexer] 🕐 extractAndSaveHybridFacts for ${path}: ${Date.now() - hybridFactsTime}ms`
+    );
 
     if (status === 'A') {
       result.symbolsAdded += currentSnapshot.symbols.length;
@@ -745,27 +746,22 @@ export class CommitIndexer {
       isResolved: number;
     }>
   ): Promise<void> {
-    const stmt = prepare(`
-      INSERT OR REPLACE INTO edges
-      (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+    const writeQueue = DatabaseWriteQueue.getInstance();
 
-    const transaction = this.db.transaction(() => {
-      for (const edge of edges) {
-        stmt.run([
+    for (const edge of edges) {
+      writeQueue.queue({
+        type: 'edge',
+        data: {
           sha,
-          edge.from,
-          edge.to,
-          edge.changeType,
-          edge.edgeType,
-          edge.confidence,
-          edge.isResolved,
-        ]);
-      }
-    });
-
-    transaction();
+          from: edge.from,
+          to: edge.to,
+          changeType: edge.changeType,
+          edgeType: edge.edgeType,
+          confidence: edge.confidence,
+          isResolved: edge.isResolved,
+        },
+      });
+    }
   }
 
   private async updateHotspotsFromBatch(
@@ -815,39 +811,21 @@ export class CommitIndexer {
     sha: string,
     symbolChanges: Map<string, { type: string; symbol: any; filePath: string }>
   ): Promise<void> {
-    // First, ensure symbol_dna records exist
-    const dnaStmt = prepare(`
-      INSERT OR IGNORE INTO symbol_dna (dna_id, first_seen_sha, first_seen_path)
-      VALUES (?, ?, ?)
-    `);
+    const writeQueue = DatabaseWriteQueue.getInstance();
 
-    const symbolStmt = prepare(`
-      INSERT OR REPLACE INTO symbols
-      (sha, path, symbol_id, dna_id, name, kind, signature, change_type, diff_snippet_pre, diff_snippet_post, confidence)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
+      // Queue symbol_dna insert
+      writeQueue.queue({
+        type: 'symbol',
+        data: { sha, path: filePath, symbol, changeType: type, isDna: true },
+      });
 
-    this.db.transaction(() => {
-      for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
-        // Insert into symbol_dna first (if not exists)
-        dnaStmt.run([dnaId, sha, filePath]);
-
-        // Then insert into symbols
-        symbolStmt.run([
-          sha,
-          filePath,
-          symbol.semanticId || symbol.id, // Keep semanticId for reference, fallback to id
-          dnaId, // dna_id is the DNA hash (same as symbol.id)
-          symbol.name,
-          symbol.kind,
-          symbol.signature || '',
-          type,
-          '',
-          '',
-          1.0,
-        ]);
-      }
-    })();
+      // Queue symbols insert
+      writeQueue.queue({
+        type: 'symbol',
+        data: { sha, path: filePath, symbol, changeType: type, isDna: false },
+      });
+    }
   }
 
   /**
@@ -884,11 +862,15 @@ export class CommitIndexer {
         language,
         existingSymbols
       );
-      logDebug(`[CommitIndexer] 🕐 parser.extractHybridFacts for ${filePath}: ${Date.now() - parseStart}ms (${hybridFacts.length} facts)`);
+      logDebug(
+        `[CommitIndexer] 🕐 parser.extractHybridFacts for ${filePath}: ${Date.now() - parseStart}ms (${hybridFacts.length} facts)`
+      );
 
       const saveStart = Date.now();
       await this.cstTimelineManager.saveFacts(filePath, commitSha, hybridFacts, prevHash);
-      logDebug(`[CommitIndexer] 🕐 cstTimelineManager.saveFacts for ${filePath}: ${Date.now() - saveStart}ms`);
+      logDebug(
+        `[CommitIndexer] 🕐 cstTimelineManager.saveFacts for ${filePath}: ${Date.now() - saveStart}ms`
+      );
 
       if (hybridFacts.length > 0) {
         logDebug(
@@ -979,37 +961,19 @@ export class CommitIndexer {
   }
 
   private markPending(sha: string): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO commits_analysis
-      (sha, status, analysis_version, analyzed_at)
-      VALUES (?, ?, ?, ?)
-    `);
-    stmt.run([sha, 'pending', ANALYSIS_VERSION, new Date().toISOString()]);
+    const writeQueue = DatabaseWriteQueue.getInstance();
+    writeQueue.queue({
+      type: 'commit_analysis',
+      data: { sha, status: 'pending' },
+    });
   }
 
   private markComplete(sha: string, facts: CommitFacts): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO commits_analysis
-      (sha, status, analysis_version, symbols_added, symbols_modified, symbols_removed,
-       edges_added, edges_removed, risks, blast_radius, structural_change_score,
-       files_changed, hotspots_json, analyzed_at)
-      VALUES (?, 'complete', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run([
-      sha,
-      ANALYSIS_VERSION,
-      facts.symbolsAdded,
-      facts.symbolsModified,
-      facts.symbolsRemoved,
-      facts.edgesAdded,
-      facts.edgesRemoved,
-      JSON.stringify(facts.risks),
-      facts.blastRadius,
-      facts.structuralChangeScore,
-      facts.filesChanged,
-      JSON.stringify(facts.hotspots),
-      new Date().toISOString(),
-    ]);
+    const writeQueue = DatabaseWriteQueue.getInstance();
+    writeQueue.queue({
+      type: 'commit_analysis',
+      data: { sha, status: 'complete', facts },
+    });
   }
 
   private async storeSymbolHistory(
@@ -1017,31 +981,15 @@ export class CommitIndexer {
     symbolChanges: Map<string, { type: string; symbol: any; filePath: string }>,
     impactScores: Map<string, number>
   ): Promise<void> {
-    const stmt = prepare(`
-      INSERT INTO symbol_history
-      (symbol_dna_id, sha, file_path, name, kind, signature, body_hash,
-       change_type, impact_score, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    const writeQueue = DatabaseWriteQueue.getInstance();
 
-    this.db.transaction(() => {
-      for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
-        const impactScore = impactScores.get(dnaId) || 0;
-
-        stmt.run([
-          dnaId,
-          sha,
-          filePath,
-          symbol.name,
-          symbol.kind,
-          symbol.signature,
-          symbol.bodyHash || null,
-          type,
-          impactScore,
-          new Date().toISOString(),
-        ]);
-      }
-    })();
+    for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
+      const impactScore = impactScores.get(dnaId) || 0;
+      writeQueue.queue({
+        type: 'symbol_history',
+        data: { dnaId, sha, filePath, symbol, impactScore, changeType: type },
+      });
+    }
   }
 
   private async storeEdges(
@@ -1269,28 +1217,17 @@ export class CommitIndexer {
   }
 
   private markFailed(sha: string, _error: unknown): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO commits_analysis
-      (sha, status, analysis_version, analyzed_at)
-      VALUES (?, 'failed', ?, ?)
-    `);
-    stmt.run([sha, ANALYSIS_VERSION, new Date().toISOString()]);
+    DatabaseWriteQueue.getInstance().queue({
+      type: 'commit_analysis',
+      data: { sha, status: 'failed' },
+    });
   }
 
   private storeCommitMetadata(info: any, filesChanged: number): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO commits_metadata
-      (sha, author, date, message, parent, files_changed, loaded_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run([
-      info.sha,
-      info.author,
-      info.date,
-      info.message,
-      info.parent || null,
-      filesChanged,
-      new Date().toISOString(),
-    ]);
+    const writeQueue = DatabaseWriteQueue.getInstance();
+    writeQueue.queue({
+      type: 'commit_metadata',
+      data: { sha: info.sha, info, filesChanged },
+    });
   }
 }
