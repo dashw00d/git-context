@@ -156,7 +156,7 @@ export class GitOperations {
     return commits;
   }
 
-  private async getSharedStatus(ttlMs = 2000): Promise<string> {
+  private async getSharedStatus(ttlMs = 10000): Promise<string> {
     const now = Date.now();
     // Check cache first
     if (GitOperations.statusCache && GitOperations.statusCache.expires > now) {
@@ -168,16 +168,45 @@ export class GitOperations {
       return GitOperations.pendingStatusPromise;
     }
 
-    // Create new request and cache the promise
+    // Create new request using spawn directly (bypasses simple-git queue)
     GitOperations.pendingStatusPromise = (async () => {
       try {
-        const output = await withTimeout(
-          this.git.raw(['status', '--porcelain']),
-          30000,
-          'Git status porcelain'
-        );
+        const { spawn } = await import('child_process');
+        const output = await new Promise<string>((resolve, reject) => {
+          const proc = spawn('git', ['status', '--porcelain'], {
+            cwd: this.gitRoot,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
 
-        GitOperations.statusCache = { output, expires: now + ttlMs };
+          let stdout = '';
+          proc.stdout.on('data', (data: Buffer) => {
+            stdout += data.toString();
+          });
+
+          // Set timeout
+          const timeout = setTimeout(() => {
+            proc.kill();
+            reject(new Error('git status --porcelain timed out'));
+          }, 30000);
+
+          proc.on('close', code => {
+            clearTimeout(timeout);
+            if (code === 0) {
+              resolve(stdout);
+            } else {
+              reject(new Error(`git status --porcelain exited with code ${code}`));
+            }
+          });
+
+          proc.on('error', err => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+        });
+
+        // Calculate expiration AFTER operation completes, not before
+        const expiresAt = Date.now() + ttlMs;
+        GitOperations.statusCache = { output, expires: expiresAt };
         GitOperations.untrackedCache = undefined;
         return output;
       } finally {
@@ -189,7 +218,7 @@ export class GitOperations {
     return GitOperations.pendingStatusPromise;
   }
 
-  private async getSharedUntracked(ttlMs = 2000): Promise<string[]> {
+  private async getSharedUntracked(ttlMs = 10000): Promise<string[]> {
     const now = Date.now();
     // Check cache first
     if (GitOperations.untrackedCache && GitOperations.untrackedCache.expires > now) {
@@ -201,16 +230,46 @@ export class GitOperations {
       return GitOperations.pendingUntrackedPromise;
     }
 
-    // Create new request and cache the promise
+    // Create new request using spawn directly (bypasses simple-git queue)
     GitOperations.pendingUntrackedPromise = (async () => {
       try {
-        const output = await withTimeout(
-          this.git.raw(['ls-files', '--others', '--exclude-standard']),
-          30000,
-          'Git ls-files untracked'
-        );
+        const { spawn } = await import('child_process');
+        const output = await new Promise<string>((resolve, reject) => {
+          const proc = spawn('git', ['ls-files', '--others', '--exclude-standard'], {
+            cwd: this.gitRoot,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+
+          let stdout = '';
+          proc.stdout.on('data', (data: Buffer) => {
+            stdout += data.toString();
+          });
+
+          // Set timeout
+          const timeout = setTimeout(() => {
+            proc.kill();
+            reject(new Error('git ls-files --others timed out'));
+          }, 30000);
+
+          proc.on('close', code => {
+            clearTimeout(timeout);
+            if (code === 0) {
+              resolve(stdout);
+            } else {
+              reject(new Error(`git ls-files --others exited with code ${code}`));
+            }
+          });
+
+          proc.on('error', err => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+        });
+
         const files = this.parseFileList(output);
-        GitOperations.untrackedCache = { files, expires: now + ttlMs };
+        // Calculate expiration AFTER operation completes, not before
+        const expiresAt = Date.now() + ttlMs;
+        GitOperations.untrackedCache = { files, expires: expiresAt };
         return files;
       } finally {
         // Clear pending promise when done (success or failure)
@@ -464,7 +523,7 @@ export class GitOperations {
 
   /**
    * Check if multiple files are ignored by git in a single call
-   * Much more efficient than calling isIgnored for each file individually
+   * Uses spawn directly to bypass simple-git queue for parallelism
    */
   async areIgnored(filePaths: string[]): Promise<Map<string, boolean>> {
     const result = new Map<string, boolean>();
@@ -475,8 +534,8 @@ export class GitOperations {
       const { getGitCacheService } = await import('../services/gitCacheService');
       const cache = getGitCacheService();
       if (cache.isIgnoreCacheWarmed()) {
-        for (const path of filePaths) {
-          result.set(path, cache.isIgnored(path));
+        for (const p of filePaths) {
+          result.set(p, cache.isIgnored(p));
         }
         return result;
       }
@@ -485,15 +544,44 @@ export class GitOperations {
     }
 
     // Initialize all as not ignored
-    for (const path of filePaths) {
-      result.set(path, false);
+    for (const p of filePaths) {
+      result.set(p, false);
     }
 
+    // Use spawn directly with --stdin to bypass simple-git queue
     try {
-      const ignored = await withTimeout(this.git.checkIgnore(filePaths), 5000, 'Git check ignore');
+      const { spawn } = await import('child_process');
+      const ignored = await new Promise<string[]>(resolve => {
+        const proc = spawn('git', ['check-ignore', '--stdin'], {
+          cwd: this.gitRoot,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        let stdout = '';
+        proc.stdout.on('data', (data: Buffer) => {
+          stdout += data.toString();
+        });
+
+        proc.on('close', () => {
+          // check-ignore exits with 1 if no files are ignored, 0 if some are
+          // Either way, parse stdout for ignored files
+          const ignoredPaths = stdout
+            .trim()
+            .split('\n')
+            .filter(line => line.trim());
+          resolve(ignoredPaths);
+        });
+
+        proc.on('error', () => resolve([]));
+
+        // Write all paths to stdin
+        proc.stdin.write(filePaths.join('\n'));
+        proc.stdin.end();
+      });
+
       // Mark the ignored files
-      for (const path of ignored) {
-        result.set(path, true);
+      for (const p of ignored) {
+        result.set(p, true);
       }
     } catch (error) {
       // If check-ignore fails, assume none are ignored
@@ -504,7 +592,7 @@ export class GitOperations {
 
   /**
    * Check if a file is ignored by git
-   * Uses cache if available, falls back to direct call
+   * Uses cache if available, falls back to areIgnored (spawn-based)
    */
   async isIgnored(filePath: string): Promise<boolean> {
     // Check cache first (import dynamically to avoid circular deps)
@@ -518,13 +606,14 @@ export class GitOperations {
       // Cache not available, fall through to direct call
     }
 
-    // Direct call (cold start only)
+    // Use areIgnored which uses spawn directly (bypasses simple-git queue)
     try {
-      const result = await withTimeout(this.git.checkIgnore([filePath]), 5000, 'Git check ignore');
-      if (result.length > 0) {
-        logDebug(`${filePath} IS IGNORED. Result: ${JSON.stringify(result)}`);
+      const result = await this.areIgnored([filePath]);
+      const isIgn = result.get(filePath) ?? false;
+      if (isIgn) {
+        logDebug(`${filePath} IS IGNORED.`);
       }
-      return result.length > 0;
+      return isIgn;
     } catch (error) {
       return false;
     }
@@ -548,10 +637,37 @@ export class GitOperations {
       }
 
       // Create new request and cache the promise
+      // Use spawn directly to bypass simple-git's queue (like getFullTree does)
+      // This avoids waiting behind other queued git operations
       GitOperations.pendingHeadShaPromise = (async () => {
         try {
-          const result = await withTimeout(this.git.revparse(['HEAD']), 5000, 'Git revparse HEAD');
-          GitOperations.headShaCache = { value: result, expires: now + 5000 };
+          const { spawn } = await import('child_process');
+          const result = await new Promise<string>((resolve, reject) => {
+            const proc = spawn('git', ['rev-parse', 'HEAD'], {
+              cwd: this.gitRoot,
+              stdio: ['pipe', 'pipe', 'pipe'],
+            });
+
+            let stdout = '';
+            proc.stdout.on('data', (data: Buffer) => {
+              stdout += data.toString();
+            });
+
+            proc.on('close', code => {
+              if (code === 0) {
+                resolve(stdout.trim());
+              } else {
+                reject(new Error(`git rev-parse HEAD exited with code ${code}`));
+              }
+            });
+
+            proc.on('error', reject);
+          });
+
+          // Calculate expiration AFTER operation completes, not before
+          // HEAD SHA only changes on commit/checkout, so cache for 30 seconds
+          const expiresAt = Date.now() + 30000;
+          GitOperations.headShaCache = { value: result, expires: expiresAt };
           return result;
         } finally {
           // Clear pending promise when done (success or failure)

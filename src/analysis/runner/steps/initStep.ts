@@ -170,22 +170,15 @@ async function getFullTree(git: GitOperations, sha: string): Promise<Map<string,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    let stdout = '';
+    let buffer = '';
     lsTree.stdout.on('data', (data: Buffer) => {
-      stdout += data.toString();
-    });
+      buffer += data.toString('utf8');
+      const lines = buffer.split('\n');
+      // Keep the last partial line in the buffer
+      buffer = lines.pop() || '';
 
-    lsTree.on('close', code => {
-      if (code !== 0) {
-        resolve(treeMap);
-        return;
-      }
-
-      const lines = stdout
-        .trim()
-        .split('\n')
-        .filter((l: string) => l.trim());
       for (const line of lines) {
+        if (!line.trim()) continue;
         const tabIndex = line.indexOf('\t');
         if (tabIndex === -1) continue;
 
@@ -199,6 +192,26 @@ async function getFullTree(git: GitOperations, sha: string): Promise<Map<string,
             sha: meta[2],
             path,
           });
+        }
+      }
+    });
+
+    lsTree.on('close', code => {
+      // Process remaining buffer
+      if (buffer.trim()) {
+        const line = buffer;
+        const tabIndex = line.indexOf('\t');
+        if (tabIndex !== -1) {
+          const meta = line.slice(0, tabIndex).split(' ');
+          const path = line.slice(tabIndex + 1);
+          if (meta.length >= 3) {
+            treeMap.set(path, {
+              mode: meta[0],
+              type: meta[1],
+              sha: meta[2],
+              path,
+            });
+          }
         }
       }
       resolve(treeMap);
@@ -218,22 +231,28 @@ async function warmIgnoreCache(
 ): Promise<void> {
   if (paths.length === 0) return;
 
-  const CHUNK_SIZE = 100;
+  // Optimize: Use larger chunks for check-ignore to reduce process overhead and queue contention
+  const CHUNK_SIZE = 2000;
   const chunks: string[][] = [];
   for (let i = 0; i < paths.length; i += CHUNK_SIZE) {
     chunks.push(paths.slice(i, i + CHUNK_SIZE));
   }
 
-  const limit = pLimit(4);
+  // Use lower concurrency to avoid saturating git queue
+  const limit = pLimit(1);
 
   await Promise.all(
     chunks.map(chunk =>
       limit(async () => {
-        const ignoreMap = await git.areIgnored(chunk);
-        for (const [path, isIgnored] of ignoreMap) {
-          if (isIgnored) {
-            ignoredSet.add(path);
+        try {
+          const ignoreMap = await git.areIgnored(chunk);
+          for (const [path, isIgnored] of ignoreMap) {
+            if (isIgnored) {
+              ignoredSet.add(path);
+            }
           }
+        } catch (error) {
+          logWarn(`[InitStep] Failed check-ignore chunk: ${error}`);
         }
       })
     )
@@ -256,17 +275,18 @@ async function warmSizes(
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    let stdout = Buffer.alloc(0);
+    let buffer = '';
     let currentIndex = 0;
 
-    catFile.stdout.on('data', (chunk: Buffer) => {
-      stdout = Buffer.concat([stdout, chunk]);
+    catFile.stdout.setEncoding('utf8');
+    catFile.stdout.on('data', (chunk: string) => {
+      buffer += chunk;
 
       while (currentIndex < items.length) {
-        const lineEnd = stdout.indexOf('\n');
+        const lineEnd = buffer.indexOf('\n');
         if (lineEnd === -1) break;
 
-        const line = stdout.slice(0, lineEnd).toString();
+        const line = buffer.slice(0, lineEnd);
         const parts = line.split(' ');
 
         if (parts.length >= 3 && parts[1] === 'blob') {
@@ -277,7 +297,7 @@ async function warmSizes(
           }
         }
 
-        stdout = stdout.slice(lineEnd + 1);
+        buffer = buffer.slice(lineEnd + 1);
         currentIndex++;
       }
     });
