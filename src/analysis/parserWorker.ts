@@ -3,7 +3,7 @@ import * as path from 'path';
 import { parentPort } from 'worker_threads';
 import { SymbolInfo } from '../types';
 import { isCstOnlyLanguage, LANGUAGES } from '../utils/config';
-import { logWarn } from '../utils/logger';
+import { logError, logWarn } from '../utils/logger';
 import { CstExtractor } from './cstExtractor';
 const { Parser, Language } = require('web-tree-sitter');
 
@@ -147,19 +147,45 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
 function extractSymbols(tree: any, filePath: string, language: string): SymbolInfo[] {
   const symbols: SymbolInfo[] = [];
   const cursor = tree.walk();
+  const MAX_ITERATIONS = 100000; // Safety limit to prevent infinite loops
+  let iterations = 0;
 
-  while (true) {
-    const node = cursor.currentNode;
-    const symbol = extractSymbolFromNode(node, filePath, language);
-    if (symbol) {
-      symbols.push(symbol);
+  try {
+    while (iterations < MAX_ITERATIONS) {
+      iterations++;
+      const node = cursor.currentNode;
+      const symbol = extractSymbolFromNode(node, filePath, language);
+      if (symbol) {
+        symbols.push(symbol);
+      }
+
+      if (cursor.gotoFirstChild()) continue;
+      while (!cursor.gotoNextSibling()) {
+        if (!cursor.gotoParent()) return symbols;
+      }
     }
 
-    if (cursor.gotoFirstChild()) continue;
-    while (!cursor.gotoNextSibling()) {
-      if (!cursor.gotoParent()) return symbols;
+    if (iterations >= MAX_ITERATIONS) {
+      logWarn(
+        `[ParserWorker] Reached max iterations limit for ${filePath}, stopping symbol extraction early`
+      );
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (
+      errorMsg.includes('Maximum call stack') ||
+      errorMsg.includes('stack overflow') ||
+      errorMsg.includes('RangeError')
+    ) {
+      logWarn(
+        `[ParserWorker] Stack overflow in extractSymbols for ${filePath}, returning partial symbols`
+      );
+    } else {
+      logError(`[ParserWorker] Error in extractSymbols for ${filePath}: ${errorMsg}`);
     }
   }
+
+  return symbols;
 }
 
 async function initialize(wasmDir: string, languages: string[]) {
@@ -209,7 +235,32 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
     }
 
     try {
-      const tree = parser.parse(msg.content);
+      let tree: any;
+      try {
+        tree = parser.parse(msg.content);
+      } catch (parseError) {
+        const parseErrorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+        if (
+          parseErrorMsg.includes('Maximum call stack') ||
+          parseErrorMsg.includes('stack overflow') ||
+          parseErrorMsg.includes('RangeError')
+        ) {
+          logWarn(`[ParserWorker] Stack overflow parsing ${msg.filePath}, returning empty result`);
+          parentPort?.postMessage({
+            type: 'result',
+            id: msg.id,
+            data: { symbols: [], hybridFacts: [] },
+          });
+          return;
+        }
+        logError(`[ParserWorker] Unexpected parse error for ${msg.filePath}:`, parseError);
+        parentPort?.postMessage({
+          type: 'result',
+          id: msg.id,
+          data: { symbols: [], hybridFacts: [] },
+        });
+        return;
+      }
 
       const result: any = {};
 
@@ -218,7 +269,31 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
         const symbols =
           msg.existingSymbols ||
           (isCstOnly ? [] : extractSymbols(tree, msg.filePath, msg.languageId));
-        const cstFacts = cstExtractor.extractCstFacts(tree, msg.filePath, msg.languageId, symbols);
+
+        // Wrap CST extraction in try-catch for stack overflow
+        let cstFacts: any[] = [];
+        try {
+          cstFacts = cstExtractor.extractCstFacts(tree, msg.filePath, msg.languageId, symbols);
+        } catch (cstError) {
+          const cstErrorMsg = cstError instanceof Error ? cstError.message : String(cstError);
+          if (
+            cstErrorMsg.includes('Maximum call stack') ||
+            cstErrorMsg.includes('stack overflow') ||
+            cstErrorMsg.includes('RangeError')
+          ) {
+            logWarn(
+              `[ParserWorker] Stack overflow in CST extraction for ${msg.filePath}, skipping CST facts`
+            );
+            cstFacts = [];
+          } else {
+            logError(
+              `[ParserWorker] Unexpected error in CST extraction for ${msg.filePath}:`,
+              cstError
+            );
+            cstFacts = [];
+          }
+        }
+
         result.hybridFacts = [...symbols, ...cstFacts];
       } else {
         result.symbols = extractSymbols(tree, msg.filePath, msg.languageId);
@@ -227,7 +302,23 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
       tree.delete();
       parentPort?.postMessage({ type: 'result', id: msg.id, data: result });
     } catch (error) {
-      parentPort?.postMessage({ type: 'result', id: msg.id, error: String(error) });
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      // Check for stack overflow specifically
+      if (
+        errorMsg.includes('Maximum call stack') ||
+        errorMsg.includes('stack overflow') ||
+        errorMsg.includes('RangeError')
+      ) {
+        logWarn(`[ParserWorker] Stack overflow parsing ${msg.filePath}, returning empty result`);
+        parentPort?.postMessage({
+          type: 'result',
+          id: msg.id,
+          data: { symbols: [], hybridFacts: [] },
+        });
+      } else {
+        parentPort?.postMessage({ type: 'result', id: msg.id, error: errorMsg });
+      }
     }
   } else if (msg.type === 'serialize') {
     if (!isInitialized) {

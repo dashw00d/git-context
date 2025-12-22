@@ -1,5 +1,6 @@
 import { logError } from '../utils/logger';
 import { getDatabaseManager } from './database';
+import { DatabaseWriteQueue } from './databaseWriteQueue';
 
 export class BranchManager {
   private _db: any;

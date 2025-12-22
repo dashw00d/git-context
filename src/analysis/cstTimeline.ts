@@ -34,7 +34,6 @@ export class CstTimelineManager {
 
     const fileHash = this.computeFileHash(facts);
     const priorFacts = prevHash ? await this.getFactsByHash(filePath, prevHash) : null;
-    const timestamp = new Date().toISOString();
 
     // Pre-compute all DNA hashes in parallel (avoid redundant async calls)
     const dnaMap = new Map<string, string>();

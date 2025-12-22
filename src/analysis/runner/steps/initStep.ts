@@ -207,7 +207,7 @@ async function getFullTree(git: GitOperations, sha: string): Promise<Map<string,
       }
     });
 
-    lsTree.on('close', code => {
+    lsTree.on('close', _code => {
       // Process remaining buffer
       if (buffer.trim()) {
         const line = buffer;

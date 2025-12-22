@@ -1,5 +1,5 @@
-import { prepare } from '../storage/statement-wrapper';
 import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
+import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
 import { getCstDiffManager } from './cstDiff';
 import { getDifftasticIntegration } from './difftastic';
@@ -13,13 +13,6 @@ export interface StructuralDiffMetrics {
   linesAdded: number;
   linesRemoved: number;
   rawData?: any;
-}
-
-interface QueuedDiff {
-  parentBlobSha: string;
-  currentBlobSha: string;
-  filePath: string;
-  metrics: StructuralDiffMetrics;
 }
 
 export class StructuralDiffManager {

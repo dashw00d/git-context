@@ -5,7 +5,6 @@ import { GitOperations } from '../../../analysis/git';
 import { RefactorBundleFacts } from '../../../facts/types';
 import { getAnalysisService } from '../../../services/analysisService';
 import { getRefactorPipeline } from '../../../services/pipelineFactory';
-import { getStore } from '../../../state/store';
 import { BundleSummaryDTO } from '../../../types/cockpit';
 import { withTimeout } from '../../../utils/async';
 import { getGitRoot } from '../../../utils/config';
@@ -155,7 +154,7 @@ export class AnalysisController {
   public async startBackgroundAnalysis(
     config: any,
     files: string[],
-    onProgress: (event: any) => void
+    _onProgress: (event: any) => void
   ): Promise<void> {
     logInfo(`[AnalysisController] Starting background analysis for ${files.length} files...`);
     const { GitOperations } = await import('../../../analysis/git');

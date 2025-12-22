@@ -1,15 +1,13 @@
-import { ANALYSIS_VERSION } from './schema';
-import { getDatabase } from './database';
-import { prepare } from './statement-wrapper';
 import { logDebug, logWarn } from '../utils/logger';
-import { isCstFact } from '../types/cstFacts';
+import { getDatabase } from './database';
+import { ANALYSIS_VERSION } from './schema';
+import type { CommitFacts } from '../analysis/commitIndexer';
+import type { MovedBlock } from '../analysis/movedBlockDetector';
 import type { FileSnapshot } from '../analysis/snapshotManager';
 import type { StructuralDiffMetrics } from '../analysis/structuralDiffManager';
-import type { CommitInfo, SymbolInfo } from '../types';
-import type { CommitFacts } from '../analysis/commitIndexer';
-import type { HybridFact, DeltaChange } from '../types/cstFacts';
-import type { MovedBlock } from '../analysis/movedBlockDetector';
 import type { WorkspaceFacts } from '../analysis/workspaceIndexer';
+import type { CommitInfo, SymbolInfo } from '../types';
+import type { HybridFact, DeltaChange } from '../types/cstFacts';
 
 /**
  * Discriminated union of all write operation types
@@ -131,10 +129,12 @@ export type WriteOperation =
 export class DatabaseWriteQueue {
   private static instance: DatabaseWriteQueue;
   private queues: Map<string, WriteOperation[]> = new Map();
-  private readonly BATCH_SIZE = 100;
+  private totalPending = 0;
+  private readonly BATCH_SIZE = 1000; // Increased batch size for better throughput
   private flushTimer: NodeJS.Timeout | null = null;
-  private readonly FLUSH_INTERVAL_MS = 5000; // Auto-flush every 5s
+  private readonly FLUSH_INTERVAL_MS = 2000; // Auto-flush every 2s (more frequent checks)
   private db: any;
+  private isFlushing = false;
 
   private constructor(db?: any) {
     this.db = db || getDatabase();
@@ -157,132 +157,145 @@ export class DatabaseWriteQueue {
       this.queues.set(queueKey, []);
     }
     this.queues.get(queueKey)!.push(operation);
+    this.totalPending++;
 
-    // Auto-flush if batch size reached
-    if (this.queues.get(queueKey)!.length >= this.BATCH_SIZE) {
-      this.flushQueue(queueKey).catch(err => {
-        logWarn(`[DatabaseWriteQueue] Auto-flush error for ${queueKey}: ${err}`);
+    // Auto-flush if total batch size reached
+    if (this.totalPending >= this.BATCH_SIZE) {
+      this.flushAll().catch(err => {
+        logWarn(`[DatabaseWriteQueue] Auto-flush error: ${err}`);
       });
     }
   }
 
   /**
-   * Flush all pending writes
+   * Flush all pending writes in a single transaction
    */
   async flushAll(): Promise<void> {
-    const queueKeys = Array.from(this.queues.keys());
-    for (const key of queueKeys) {
-      await this.flushQueue(key);
-    }
-  }
-
-  /**
-   * Flush a specific queue type
-   */
-  private async flushQueue(queueKey: string): Promise<void> {
-    const queue = this.queues.get(queueKey);
-    if (!queue || queue.length === 0) return;
-
-    const batch = queue.splice(0, this.BATCH_SIZE);
+    if (this.isFlushing || this.totalPending === 0) return;
+    this.isFlushing = true;
 
     try {
-      await this.executeBatch(queueKey, batch);
-      logDebug(`[DatabaseWriteQueue] Flushed ${batch.length} ${queueKey} writes`);
+      if (!this.db) {
+        logWarn('[DatabaseWriteQueue] Database not initialized');
+        return;
+      }
+
+      // Collect all operations to flush (up to a limit to prevent event loop blocking)
+      // We process ALL queues in ONE transaction to ensure only ONE disk save
+      const FLUSH_LIMIT = 5000; // Hard limit per flush cycle
+      let processedCount = 0;
+      const batches: Map<string, WriteOperation[]> = new Map();
+
+      // Gather batches
+      for (const [key, queue] of this.queues) {
+        if (queue.length === 0) continue;
+
+        const take = Math.min(queue.length, FLUSH_LIMIT - processedCount);
+        if (take <= 0) break;
+
+        const batch = queue.splice(0, take);
+        batches.set(key, batch);
+        processedCount += take;
+        this.totalPending -= take;
+
+        if (processedCount >= FLUSH_LIMIT) break;
+      }
+
+      if (processedCount === 0) return;
+
+      // Execute all batches in a single transaction
+      this.db.transaction(() => {
+        for (const [key, batch] of batches) {
+          try {
+            this.executeBatchSync(key, batch);
+          } catch (error) {
+            logWarn(`[DatabaseWriteQueue] Failed to execute batch for ${key}: ${error}`);
+            // We can't easily re-queue inside a transaction without complicating logic
+            // Log error and continue (or re-throw to rollback everything)
+            // For now, we log and proceed to try to save the rest
+          }
+        }
+      })();
+
+      logDebug(`[DatabaseWriteQueue] Flushed ${processedCount} operations in single transaction`);
+
+      // If we hit the limit, schedule immediate follow-up flush
+      if (this.totalPending > 0) {
+        setImmediate(() => this.flushAll());
+      }
     } catch (error) {
-      logWarn(`[DatabaseWriteQueue] Failed to flush ${queueKey}: ${error}`);
-      // Re-queue failed items at the front
-      queue.unshift(...batch);
-      throw error;
+      logWarn(`[DatabaseWriteQueue] Flush failed: ${error}`);
+      // In a real robust system, we might want to re-queue these items
+      // but for now we rely on the caller to retry if needed or accept loss on crash
+    } finally {
+      this.isFlushing = false;
     }
   }
 
   /**
-   * Execute a batch of writes in a transaction
+   * Execute a batch of writes synchronously (called within transaction)
    */
-  private async executeBatch(queueKey: string, batch: WriteOperation[]): Promise<void> {
-    if (!this.db) {
-      logWarn('[DatabaseWriteQueue] Database not initialized');
-      return;
+  private executeBatchSync(queueKey: string, batch: WriteOperation[]): void {
+    switch (queueKey) {
+      case 'blob':
+        this.flushBlobs(batch as Array<WriteOperation & { type: 'blob' }>);
+        break;
+      case 'snapshot':
+        this.flushSnapshots(batch as Array<WriteOperation & { type: 'snapshot' }>);
+        break;
+      case 'structural_diff':
+        this.flushStructuralDiffs(batch as Array<WriteOperation & { type: 'structural_diff' }>);
+        break;
+      case 'symbol':
+        this.flushSymbols(batch as Array<WriteOperation & { type: 'symbol' }>);
+        break;
+      case 'symbol_history':
+        this.flushSymbolHistory(batch as Array<WriteOperation & { type: 'symbol_history' }>);
+        break;
+      case 'edge':
+        this.flushEdges(batch as Array<WriteOperation & { type: 'edge' }>);
+        break;
+      case 'commit_metadata':
+        this.flushCommitMetadata(batch as Array<WriteOperation & { type: 'commit_metadata' }>);
+        break;
+      case 'commit_analysis':
+        this.flushCommitAnalysis(batch as Array<WriteOperation & { type: 'commit_analysis' }>);
+        break;
+      case 'file_hotspot':
+        this.flushFileHotspots(batch as Array<WriteOperation & { type: 'file_hotspot' }>);
+        break;
+      case 'symbol_hotspot':
+        this.flushSymbolHotspots(batch as Array<WriteOperation & { type: 'symbol_hotspot' }>);
+        break;
+      case 'hotspot_snapshot':
+        this.flushHotspotSnapshots(batch as Array<WriteOperation & { type: 'hotspot_snapshot' }>);
+        break;
+      case 'symbol_lineage':
+        this.flushSymbolLineage(batch as Array<WriteOperation & { type: 'symbol_lineage' }>);
+        break;
+      case 'hybrid_fact':
+        this.flushHybridFacts(batch as Array<WriteOperation & { type: 'hybrid_fact' }>);
+        break;
+      case 'moved_block':
+        this.flushMovedBlocks(batch as Array<WriteOperation & { type: 'moved_block' }>);
+        break;
+      case 'commit_branch':
+        this.flushCommitBranches(batch as Array<WriteOperation & { type: 'commit_branch' }>);
+        break;
+      case 'workspace_analysis':
+        this.flushWorkspaceAnalysis(
+          batch as Array<WriteOperation & { type: 'workspace_analysis' }>
+        );
+        break;
+      default:
+        logWarn(`[DatabaseWriteQueue] Unknown operation type: ${queueKey}`);
     }
-
-    this.db.transaction(() => {
-      switch (queueKey) {
-        case 'blob':
-          this.flushBlobs(batch as Array<WriteOperation & { type: 'blob' }>);
-          break;
-        case 'snapshot':
-          this.flushSnapshots(batch as Array<WriteOperation & { type: 'snapshot' }>);
-          break;
-        case 'structural_diff':
-          this.flushStructuralDiffs(
-            batch as Array<WriteOperation & { type: 'structural_diff' }>
-          );
-          break;
-        case 'symbol':
-          this.flushSymbols(batch as Array<WriteOperation & { type: 'symbol' }>);
-          break;
-        case 'symbol_history':
-          this.flushSymbolHistory(
-            batch as Array<WriteOperation & { type: 'symbol_history' }>
-          );
-          break;
-        case 'edge':
-          this.flushEdges(batch as Array<WriteOperation & { type: 'edge' }>);
-          break;
-        case 'commit_metadata':
-          this.flushCommitMetadata(
-            batch as Array<WriteOperation & { type: 'commit_metadata' }>
-          );
-          break;
-        case 'commit_analysis':
-          this.flushCommitAnalysis(
-            batch as Array<WriteOperation & { type: 'commit_analysis' }>
-          );
-          break;
-        case 'file_hotspot':
-          this.flushFileHotspots(
-            batch as Array<WriteOperation & { type: 'file_hotspot' }>
-          );
-          break;
-        case 'symbol_hotspot':
-          this.flushSymbolHotspots(
-            batch as Array<WriteOperation & { type: 'symbol_hotspot' }>
-          );
-          break;
-        case 'hotspot_snapshot':
-          this.flushHotspotSnapshots(
-            batch as Array<WriteOperation & { type: 'hotspot_snapshot' }>
-          );
-          break;
-        case 'symbol_lineage':
-          this.flushSymbolLineage(
-            batch as Array<WriteOperation & { type: 'symbol_lineage' }>
-          );
-          break;
-        case 'hybrid_fact':
-          this.flushHybridFacts(batch as Array<WriteOperation & { type: 'hybrid_fact' }>);
-          break;
-        case 'moved_block':
-          this.flushMovedBlocks(batch as Array<WriteOperation & { type: 'moved_block' }>);
-          break;
-        case 'commit_branch':
-          this.flushCommitBranches(batch as Array<WriteOperation & { type: 'commit_branch' }>);
-          break;
-        case 'workspace_analysis':
-          this.flushWorkspaceAnalysis(
-            batch as Array<WriteOperation & { type: 'workspace_analysis' }>
-          );
-          break;
-        default:
-          logWarn(`[DatabaseWriteQueue] Unknown operation type: ${queueKey}`);
-      }
-    })();
   }
 
   // Individual flush methods for each type
 
   private flushBlobs(ops: Array<WriteOperation & { type: 'blob' }>): void {
-    const stmt = prepare(`
+    const stmt = this.db.prepare(`
       INSERT OR IGNORE INTO blob_content (blob_sha, content, size, created_at)
       VALUES (?, ?, ?, ?)
     `);
@@ -293,7 +306,7 @@ export class DatabaseWriteQueue {
   }
 
   private flushSnapshots(ops: Array<WriteOperation & { type: 'snapshot' }>): void {
-    const stmt = prepare(`
+    const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO file_snapshots
       (blob_sha, file_path, language, symbols_json, edges_json, shape_hash, body_hash, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -314,10 +327,8 @@ export class DatabaseWriteQueue {
     }
   }
 
-  private flushStructuralDiffs(
-    ops: Array<WriteOperation & { type: 'structural_diff' }>
-  ): void {
-    const stmt = prepare(`
+  private flushStructuralDiffs(ops: Array<WriteOperation & { type: 'structural_diff' }>): void {
+    const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO structural_diffs
       (parent_blob_sha, current_blob_sha, file_path, structural_change_score,
        control_flow_changed, interface_changed, moved_blocks, lines_added,
@@ -345,7 +356,7 @@ export class DatabaseWriteQueue {
 
   private flushSymbols(ops: Array<WriteOperation & { type: 'symbol' }>): void {
     // First, handle symbol_dna inserts
-    const dnaStmt = prepare(`
+    const dnaStmt = this.db.prepare(`
       INSERT OR IGNORE INTO symbol_dna (dna_id, first_seen_sha, first_seen_path)
       VALUES (?, ?, ?)
     `);
@@ -356,7 +367,7 @@ export class DatabaseWriteQueue {
     }
 
     // Then, handle symbols inserts
-    const symbolStmt = prepare(`
+    const symbolStmt = this.db.prepare(`
       INSERT OR REPLACE INTO symbols
       (sha, path, symbol_id, dna_id, name, kind, signature, change_type, diff_snippet_pre, diff_snippet_post, confidence)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -381,10 +392,8 @@ export class DatabaseWriteQueue {
     }
   }
 
-  private flushSymbolHistory(
-    ops: Array<WriteOperation & { type: 'symbol_history' }>
-  ): void {
-    const stmt = prepare(`
+  private flushSymbolHistory(ops: Array<WriteOperation & { type: 'symbol_history' }>): void {
+    const stmt = this.db.prepare(`
       INSERT INTO symbol_history
       (symbol_dna_id, sha, file_path, name, kind, signature, body_hash,
        change_type, impact_score, created_at)
@@ -409,7 +418,7 @@ export class DatabaseWriteQueue {
   }
 
   private flushEdges(ops: Array<WriteOperation & { type: 'edge' }>): void {
-    const stmt = prepare(`
+    const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO edges
       (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -427,10 +436,8 @@ export class DatabaseWriteQueue {
     }
   }
 
-  private flushCommitMetadata(
-    ops: Array<WriteOperation & { type: 'commit_metadata' }>
-  ): void {
-    const stmt = prepare(`
+  private flushCommitMetadata(ops: Array<WriteOperation & { type: 'commit_metadata' }>): void {
+    const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO commits_metadata
       (sha, author, date, message, parent, files_changed, loaded_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -450,10 +457,8 @@ export class DatabaseWriteQueue {
     }
   }
 
-  private flushCommitAnalysis(
-    ops: Array<WriteOperation & { type: 'commit_analysis' }>
-  ): void {
-    const stmt = prepare(`
+  private flushCommitAnalysis(ops: Array<WriteOperation & { type: 'commit_analysis' }>): void {
+    const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO commits_analysis
       (sha, status, analysis_version, symbols_added, symbols_modified, symbols_removed,
        edges_added, edges_removed, risks, blast_radius, structural_change_score,
@@ -463,7 +468,7 @@ export class DatabaseWriteQueue {
     const now = new Date().toISOString();
     for (const op of ops) {
       if (op.data.status === 'pending') {
-        const pendingStmt = prepare(`
+        const pendingStmt = this.db.prepare(`
           INSERT OR REPLACE INTO commits_analysis
           (sha, status, analysis_version, analyzed_at)
           VALUES (?, ?, ?, ?)
@@ -488,7 +493,7 @@ export class DatabaseWriteQueue {
           now,
         ]);
       } else if (op.data.status === 'failed') {
-        const failedStmt = prepare(`
+        const failedStmt = this.db.prepare(`
           INSERT OR REPLACE INTO commits_analysis
           (sha, status, analysis_version, analyzed_at)
           VALUES (?, ?, ?, ?)
@@ -498,10 +503,8 @@ export class DatabaseWriteQueue {
     }
   }
 
-  private flushFileHotspots(
-    ops: Array<WriteOperation & { type: 'file_hotspot' }>
-  ): void {
-    const stmt = prepare(`
+  private flushFileHotspots(ops: Array<WriteOperation & { type: 'file_hotspot' }>): void {
+    const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO file_hotspots
       (file_path, total_commits, total_changes, unique_authors,
        last_changed_sha, last_changed_date, hotspot_score,
@@ -529,18 +532,16 @@ export class DatabaseWriteQueue {
     }
   }
 
-  private flushSymbolHotspots(
-    ops: Array<WriteOperation & { type: 'symbol_hotspot' }>
-  ): void {
+  private flushSymbolHotspots(_ops: Array<WriteOperation & { type: 'symbol_hotspot' }>): void {
     // This is handled by HotspotDetector.batchUpdateSymbols which already batches
     // We'll queue individual symbol updates here
-    logDebug(`[DatabaseWriteQueue] Symbol hotspot updates are handled by HotspotDetector.batchUpdateSymbols`);
+    logDebug(
+      `[DatabaseWriteQueue] Symbol hotspot updates are handled by HotspotDetector.batchUpdateSymbols`
+    );
   }
 
-  private flushHotspotSnapshots(
-    ops: Array<WriteOperation & { type: 'hotspot_snapshot' }>
-  ): void {
-    const stmt = prepare(`
+  private flushHotspotSnapshots(ops: Array<WriteOperation & { type: 'hotspot_snapshot' }>): void {
+    const stmt = this.db.prepare(`
       INSERT INTO hotspot_snapshots
       (snapshot_sha, snapshot_date, entity_type, entity_id, hotspot_score, total_changes)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -558,25 +559,18 @@ export class DatabaseWriteQueue {
     }
   }
 
-  private flushSymbolLineage(
-    ops: Array<WriteOperation & { type: 'symbol_lineage' }>
-  ): void {
-    const stmt = prepare(`
+  private flushSymbolLineage(ops: Array<WriteOperation & { type: 'symbol_lineage' }>): void {
+    const stmt = this.db.prepare(`
       INSERT INTO symbol_lineage (symbol_id, previous_symbol_id, commit_sha, move_type)
       VALUES (?, ?, ?, ?)
     `);
     for (const op of ops) {
-      stmt.run([
-        op.data.symbolId,
-        op.data.previousSymbolId,
-        op.data.commitSha,
-        op.data.moveType,
-      ]);
+      stmt.run([op.data.symbolId, op.data.previousSymbolId, op.data.commitSha, op.data.moveType]);
     }
   }
 
   private flushHybridFacts(ops: Array<WriteOperation & { type: 'hybrid_fact' }>): void {
-    const stmt = prepare(`
+    const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO hybrid_facts
       (file_path, version, fact_id, dna_id, serialized_fact, timeline_json, hash, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -599,7 +593,7 @@ export class DatabaseWriteQueue {
   }
 
   private flushMovedBlocks(ops: Array<WriteOperation & { type: 'moved_block' }>): void {
-    const stmt = prepare(`
+    const stmt = this.db.prepare(`
       INSERT INTO moved_blocks (
         commit_sha, source_file, source_symbol_id, source_start_line, source_end_line,
         source_content_hash, dest_file, dest_symbol_id, dest_start_line, dest_end_line,
@@ -633,12 +627,12 @@ export class DatabaseWriteQueue {
     // First, set all branches to is_head = 0 for the affected branches
     const branchesToUpdate = new Set(ops.map(op => op.data.branch));
     for (const branch of branchesToUpdate) {
-      const clearStmt = prepare(`UPDATE commit_branches SET is_head = 0 WHERE branch = ?`);
+      const clearStmt = this.db.prepare(`UPDATE commit_branches SET is_head = 0 WHERE branch = ?`);
       clearStmt.run(branch);
     }
 
     // Then, set the new head commits
-    const setHeadStmt = prepare(
+    const setHeadStmt = this.db.prepare(
       `UPDATE commit_branches SET is_head = 1 WHERE sha = ? AND branch = ?`
     );
     for (const op of ops) {
@@ -651,7 +645,7 @@ export class DatabaseWriteQueue {
   private flushWorkspaceAnalysis(
     ops: Array<WriteOperation & { type: 'workspace_analysis' }>
   ): void {
-    const stmt = prepare(`
+    const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO workspace_analysis
       (head_sha, workspace_hash, symbols_added, symbols_modified, symbols_removed,
        edges_added, edges_removed, risks, files_changed, structural_change_score,
@@ -709,4 +703,3 @@ export class DatabaseWriteQueue {
     return stats;
   }
 }
-

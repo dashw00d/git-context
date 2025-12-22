@@ -1,6 +1,6 @@
 import { LRUCache } from 'lru-cache';
-import { prepare } from '../storage/statement-wrapper';
 import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
+import { prepare } from '../storage/statement-wrapper';
 import { EdgeInfo, SymbolInfo } from '../types';
 import { detectLanguage, getExtensionConfig } from '../utils/config';
 import { logDebug } from '../utils/logger';

@@ -12,8 +12,8 @@
  */
 
 import { spawn } from 'child_process';
-import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { GitOperations } from '../analysis/git';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { FileChange } from '../types';
 import { logInfo, logWarn } from '../utils/logger';
 

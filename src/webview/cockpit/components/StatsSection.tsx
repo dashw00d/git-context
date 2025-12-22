@@ -140,7 +140,7 @@ export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => 
         <div style={RowStyle}>
           <div style={ItemStyle}>
             <span style={ValueStyle}>
-              {bundleSummary?.commitCount || state.selectedCommitShas.length}
+              {bundleSummary?.commitCount || state.selectedCommitShas?.length || 0}
             </span>
             <span style={LabelStyle}>Commits</span>
           </div>

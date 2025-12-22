@@ -813,7 +813,7 @@ export class CommitIndexer {
   ): Promise<void> {
     const writeQueue = DatabaseWriteQueue.getInstance();
 
-    for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
+    for (const [_dnaId, { type, symbol, filePath }] of symbolChanges) {
       // Queue symbol_dna insert
       writeQueue.queue({
         type: 'symbol',

@@ -1,7 +1,6 @@
 import { DeltaChange, HybridFact, isCstFact } from '../types/cstFacts';
 import { detectLanguage } from '../utils/config';
 import { logDebug } from '../utils/logger';
-import { AstSerializer } from './astSerializer';
 import { DifftasticResult, getDifftasticIntegration } from './difftastic';
 import { getTreeSitterParser } from './tree-sitter';
 

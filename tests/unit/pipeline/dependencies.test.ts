@@ -57,14 +57,14 @@ describe('DependencyExtractor', () => {
       expect(edges).toContainEqual(
         expect.objectContaining({
           from: 'src/test.ts: main',
-          to: 'function_helper ',
+          to: 'function_helper',
           type: 'calls',
         })
       );
       expect(edges).toContainEqual(
         expect.objectContaining({
           from: 'src/test.ts: main',
-          to: 'function_calculate ',
+          to: 'function_calculate',
           type: 'calls',
         })
       );

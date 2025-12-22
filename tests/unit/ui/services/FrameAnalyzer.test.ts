@@ -72,6 +72,29 @@ describe('FrameAnalyzer', () => {
         fileExists: false,
       }));
     });
+
+    it('should handle working.symbols in string format', async () => {
+      const mockContent = 'class Test {}';
+      (fs.readFileSync as any).mockReturnValue(mockContent);
+
+      const bundleFacts = {
+        evidence: {
+          'working.symbols': [
+            'src/test.ts:Test:class_Test_id',
+            'other/file.ts:Other:class_Other_id',
+          ],
+        },
+      } as any;
+
+      const result = await analyzer.analyzeTier1('frame1', 'src/test.ts', mockGitRoot, bundleFacts);
+
+      expect(result.symbols).toHaveLength(1);
+      expect(result.symbols[0]).toEqual(expect.objectContaining({
+        filePath: 'src/test.ts',
+        name: 'Test',
+        symbolId: 'class_Test_id',
+      }));
+    });
   });
 
   describe('analyzeTier2', () => {

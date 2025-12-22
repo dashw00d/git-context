@@ -66,7 +66,7 @@ export class FrameAnalyzer {
 
     const language =
       detectLanguage(targetPath) ||
-      path.extname(fullPath).toLowerCase().replace('.', '') ||
+      (fullPath ? path.extname(fullPath).toLowerCase().replace('.', '') : '') ||
       'unknown';
 
     // Extract symbol ID if present in frameId (filePath::symbolId)
@@ -79,14 +79,29 @@ export class FrameAnalyzer {
       // Extract symbols if language is supported
       let symbols: any[] = [];
 
-      const normalizePath = (p: string) => p.replace(/^\.\//, '').replace(/\\/g, '/');
+      const normalizePath = (p: string) => p?.replace(/^\.\//, '').replace(/\\/g, '/') || '';
 
       // First, try to use quick scan symbols from bundleFacts
       if (bundleFacts?.evidence?.['working.symbols']) {
-        const quickSymbols = bundleFacts.evidence['working.symbols'] as any[];
+        const rawSymbols = bundleFacts.evidence['working.symbols'] as any[];
+
+        // Handle both string format "path:name:id" and object format
+        const quickSymbols = rawSymbols.map(s => {
+          if (typeof s === 'string') {
+            const parts = s.split(':');
+            return {
+              filePath: parts[0],
+              name: parts[1],
+              symbolId: parts[2],
+            };
+          }
+          return s;
+        });
+
         // Filter symbols for this file
         const fileSymbols = quickSymbols.filter(
-          (s: any) => normalizePath(s.filePath) === normalizePath(normalizedTargetPath)
+          (s: any) =>
+            s?.filePath && normalizePath(s.filePath) === normalizePath(normalizedTargetPath)
         );
 
         if (fileSymbols.length > 0) {
