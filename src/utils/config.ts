@@ -396,8 +396,11 @@ export async function getProjectId(): Promise<string | undefined> {
 }
 
 function findGitRootForPath(startPath: string): string | undefined {
+  if (!startPath) return undefined;
   let currentPath = startPath;
-  const rootPath = path.parse(currentPath).root;
+  const parsed = path.parse(currentPath);
+  if (!parsed) return undefined;
+  const rootPath = parsed.root;
 
   while (currentPath !== rootPath) {
     const gitPath = path.join(currentPath, '.git');
@@ -406,7 +409,7 @@ function findGitRootForPath(startPath: string): string | undefined {
       const normalized = path.resolve(currentPath);
 
       if (normalized !== path.parse(normalized).root) {
-        return normalized + path.sep;
+        return normalized;
       }
       return normalized;
     }

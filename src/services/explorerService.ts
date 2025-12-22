@@ -1,5 +1,7 @@
 import { BundleFactsDTO, ExplorerNode } from '../types/cockpit';
+import { getGitRoot } from '../utils/config';
 import { logInfo } from '../utils/logger';
+import { normalizeToRelative } from '../utils/path';
 
 export class ExplorerService {
   private static instance: ExplorerService;
@@ -137,8 +139,9 @@ export class ExplorerService {
     const fileSymbols = new Map<string, any[]>();
     const workingSymbols = (bundleFacts?.evidence as any)?.['working.symbols'] || [];
 
-    // Normalize path helper
-    const normalize = (p: string) => p.replace(/\\/g, '/').replace(/^\.\//, '');
+    // Normalize path helper using shared logic
+    const gitRoot = getGitRoot();
+    const normalize = (p: string) => normalizeToRelative(p, gitRoot);
 
     for (const symbol of workingSymbols) {
       // Handle both old string format and new object format

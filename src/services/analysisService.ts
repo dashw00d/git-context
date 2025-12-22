@@ -1,8 +1,9 @@
+import * as path from 'path';
 import { analysisActions } from '../state/actionCreators';
 import { getStore } from '../state/store';
 import { BundleFactsDTO } from '../types/cockpit';
 import { withTimeout } from '../utils/async';
-import { logError, logInfo } from '../utils/logger';
+import { logDebug, logError, logInfo } from '../utils/logger';
 import { PipelineDebugger } from '../utils/pipelineDebugger';
 import { FrameAnalyzer } from '../webview/cockpit/services/FrameAnalyzer';
 
@@ -56,6 +57,17 @@ export class AnalysisService {
       } else if (legacyMatch) {
         targetPath = legacyMatch[1];
       }
+    }
+
+    // Normalize targetPath: if absolute, make it relative to gitRoot
+    if (path.isAbsolute(targetPath)) {
+      const relative = path.relative(gitRoot, targetPath);
+      logInfo(
+        `[AnalysisService] Normalized absolute targetPath: ${targetPath} -> ${relative} (gitRoot: ${gitRoot})`
+      );
+      targetPath = relative;
+    } else {
+      logDebug(`[AnalysisService] Using relative targetPath: ${targetPath}`);
     }
 
     let tier1Data: any;

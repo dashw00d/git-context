@@ -9,9 +9,9 @@ interface StatsSectionProps {
 
 export const StatsSection: React.FC<StatsSectionProps> = ({ state, vscode }) => {
   const selectionCount =
-    state.selectedCommitShas.length +
-    (state.selectedStagedPaths.length > 0 ? 1 : 0) +
-    (state.selectedUnstagedPaths.length > 0 ? 1 : 0);
+    (state.selectedCommitShas?.length || 0) +
+    ((state.selectedStagedPaths?.length || 0) > 0 ? 1 : 0) +
+    ((state.selectedUnstagedPaths?.length || 0) > 0 ? 1 : 0);
 
   const bundleFacts = state.bundleFacts;
   const bundleSummary = state.bundleSummary;

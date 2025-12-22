@@ -7,6 +7,7 @@ import { Tier1DataSchema, Tier2DataSchema, Tier3DataSchema } from '../../../stat
 import { BundleFactsDTO } from '../../../types/cockpit';
 import { detectLanguage } from '../../../utils/config';
 import { logDebug, logError, logWarn } from '../../../utils/logger';
+import { normalizeToAbsolute, normalizeToRelative } from '../../../utils/path';
 
 type Tier1Data = {
   content: string;
@@ -56,7 +57,13 @@ export class FrameAnalyzer {
     workspaceRoot: string,
     bundleFacts?: BundleFactsDTO
   ): Promise<Tier1Data & { symbolId?: string }> {
-    const fullPath = path.join(workspaceRoot, targetPath);
+    const fullPath = normalizeToAbsolute(targetPath, workspaceRoot);
+    const normalizedTargetPath = normalizeToRelative(targetPath, workspaceRoot);
+
+    logDebug(
+      `[FrameAnalyzer] Analyzing Tier 1: frameId=${frameId}, targetPath=${targetPath}, workspaceRoot=${workspaceRoot} -> fullPath=${fullPath}`
+    );
+
     const language =
       detectLanguage(targetPath) ||
       path.extname(fullPath).toLowerCase().replace('.', '') ||
@@ -79,7 +86,7 @@ export class FrameAnalyzer {
         const quickSymbols = bundleFacts.evidence['working.symbols'] as any[];
         // Filter symbols for this file
         const fileSymbols = quickSymbols.filter(
-          (s: any) => normalizePath(s.filePath) === normalizePath(targetPath)
+          (s: any) => normalizePath(s.filePath) === normalizePath(normalizedTargetPath)
         );
 
         if (fileSymbols.length > 0) {
@@ -95,7 +102,7 @@ export class FrameAnalyzer {
           const parser = getTreeSitterParser();
           const hybridFacts = await parser.extractHybridFacts(
             content,
-            targetPath,
+            normalizedTargetPath,
             language,
             undefined,
             true // High priority
@@ -123,7 +130,7 @@ export class FrameAnalyzer {
         content,
         lineCount,
         language,
-        filePath: targetPath,
+        filePath: normalizedTargetPath,
         fileExists: true,
         symbols,
         symbolId,
@@ -148,9 +155,10 @@ export class FrameAnalyzer {
         content: '[File not found on disk]',
         lineCount: 1,
         language,
-        filePath: targetPath,
+        filePath: normalizedTargetPath,
         fileExists: false,
         symbols: [],
+        symbolId,
       };
     }
   }

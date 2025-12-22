@@ -53,7 +53,8 @@ export async function getWorkingSnapshot(
   const promises = Array.from(scopePaths).map(filePath =>
     limit(async () => {
       try {
-        const fullPath = path.join(gitRoot, filePath);
+        // Safely construct full path, handling if filePath is already absolute (double-rooting defense)
+        const fullPath = path.isAbsolute(filePath) ? filePath : path.join(gitRoot, filePath);
 
         if (!fs.existsSync(fullPath)) {
           logInfo(`Skipping non-existent path: ${filePath} (full: ${fullPath})`);

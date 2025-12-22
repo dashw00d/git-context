@@ -29125,7 +29125,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
   // src/webview/cockpit/components/StatsSection.tsx
   var React7 = __toESM(require_react());
   var StatsSection = ({ state, vscode: vscode3 }) => {
-    const selectionCount = state.selectedCommitShas.length + (state.selectedStagedPaths.length > 0 ? 1 : 0) + (state.selectedUnstagedPaths.length > 0 ? 1 : 0);
+    const selectionCount = (state.selectedCommitShas?.length || 0) + ((state.selectedStagedPaths?.length || 0) > 0 ? 1 : 0) + ((state.selectedUnstagedPaths?.length || 0) > 0 ? 1 : 0);
     const bundleFacts = state.bundleFacts;
     const bundleSummary = state.bundleSummary;
     const findings = bundleFacts?.findings;

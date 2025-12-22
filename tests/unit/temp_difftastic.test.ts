@@ -1,3 +1,4 @@
+import { describe, beforeAll, afterAll, it, expect } from 'vitest';
 import { getDifftasticIntegration } from '../../src/analysis/difftastic';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -35,10 +36,10 @@ describe('DifftasticIntegration with JSON output', () => {
       newFilePath
     );
 
-    console.log('Difftastic JSON Output:', JSON.stringify(result.rawJson, null, 2));
+    console.log('Difftastic Highlights:', result.highlights.length);
 
     expect(result).toBeDefined();
-    expect(result.rawJson).toBeInstanceOf(Array);
-    expect(result.rawJson.length).toBeGreaterThan(0);
+    expect(result.highlights).toBeInstanceOf(Array);
+    expect(result.highlights.length).toBeGreaterThan(0);
   });
 });
