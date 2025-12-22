@@ -79,6 +79,7 @@ export const initialState: CockpitState = {
   pipelineStepTimings: {},
   nodeMetrics: {},
   currentCommitIndex: undefined,
+  ignoreNextFactsUpdate: false,
 };
 
 export function cockpitReducer(state: CockpitState = initialState, action: Action): CockpitState {
@@ -433,6 +434,7 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
             action.payload.facts !== undefined ? action.payload.facts : state.liveAnalysis.facts,
           pendingChanges: action.payload.pendingChanges ?? state.liveAnalysis.pendingChanges,
           totalEdits: action.payload.totalEdits ?? state.liveAnalysis.totalEdits,
+          isTracking: action.payload.isTracking ?? state.liveAnalysis.isTracking,
         },
       };
 
@@ -455,6 +457,11 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
       return { ...state, nodeMetrics: action.payload.metrics };
     case 'COMMIT_INDEX_UPDATED':
       return { ...state, currentCommitIndex: action.payload.index };
+
+    case 'IGNORE_NEXT_FACTS_UPDATE':
+      return { ...state, ignoreNextFactsUpdate: true };
+    case 'FACTS_UPDATE_IGNORED':
+      return { ...state, ignoreNextFactsUpdate: false };
 
     default:
       return state;

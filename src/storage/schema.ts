@@ -733,7 +733,7 @@ CREATE INDEX IF NOT EXISTS idx_file_conventions_path ON file_conventions(path);`
     currentVersion: 1,
   },
 
-  // Structural Module: file_snapshots, structural_diffs, workspace_analysis
+  // Structural Module: file_snapshots, structural_diffs, workspace_analysis, blob_content
   structural: {
     schema: `CREATE TABLE IF NOT EXISTS file_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -791,12 +791,26 @@ CREATE TABLE IF NOT EXISTS hybrid_facts (
   created_at TEXT NOT NULL,
   UNIQUE(file_path, version, fact_id)
 );
+CREATE TABLE IF NOT EXISTS blob_content (
+  blob_sha TEXT PRIMARY KEY,
+  content TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS commit_file_blobs (
+  commit_sha TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  blob_sha TEXT NOT NULL,
+  PRIMARY KEY (commit_sha, file_path),
+  FOREIGN KEY (blob_sha) REFERENCES blob_content(blob_sha)
+);
 CREATE INDEX IF NOT EXISTS idx_snapshots_blob ON file_snapshots(blob_sha);
 CREATE INDEX IF NOT EXISTS idx_structural_diffs_pair ON structural_diffs(parent_blob_sha, current_blob_sha);
 CREATE INDEX IF NOT EXISTS idx_workspace_head ON workspace_analysis(head_sha);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_file_version ON hybrid_facts(file_path, version);
 CREATE INDEX IF NOT EXISTS idx_hybrid_facts_dna ON hybrid_facts(dna_id);
-CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash);`,
+CREATE INDEX IF NOT EXISTS idx_hybrid_facts_hash ON hybrid_facts(file_path, hash);
+CREATE INDEX IF NOT EXISTS idx_cfb_blob ON commit_file_blobs(blob_sha);`,
     migrations: [],
     currentVersion: 1,
   },

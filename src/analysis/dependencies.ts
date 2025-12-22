@@ -7,6 +7,26 @@ import { GitOperations } from './git';
 export class DependencyExtractor {
   private readonly MAX_DEPTH = 3;
   private resolvedSymbols = new Map<string, boolean>();
+  private planData?: import('./runner/pipelineTypes').PlanData;
+
+  /**
+   * Set plan data for direct content access (avoids cache lookups)
+   */
+  setPlanData(plan: import('./runner/pipelineTypes').PlanData | undefined): void {
+    this.planData = plan;
+  }
+
+  /**
+   * Get content from plan data or fallback to git
+   */
+  private async getContent(sha: string, path: string, git: GitOperations): Promise<string> {
+    // Try plan data first (synchronous, no lookup overhead)
+    if (this.planData?.content.has(`${sha}:${path}`)) {
+      return this.planData.content.get(`${sha}:${path}`)!;
+    }
+    // Fallback to git
+    return git.safeGetFileContent(sha, path);
+  }
 
   /**
    * Extract dependency edges from file content with confidence scoring
@@ -495,7 +515,7 @@ export class DependencyExtractor {
           const parentPath =
             fileChange?.status === 'R' && fileChange.oldPath ? fileChange.oldPath : filePath;
 
-          const previousContent = await git.safeGetFileContent(commitInfo.parent, parentPath);
+          const previousContent = await this.getContent(commitInfo.parent, parentPath, git);
 
           const previousFileSymbols = symbols.modified
             .filter(m => m.symbol.id.startsWith(`${filePath}: `) && m.previousSymbol)

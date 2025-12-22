@@ -98,6 +98,15 @@ export function setupFileWatchers(
 
       factsRefreshTimeout = setTimeout(async () => {
         try {
+          // Check if we should ignore this update (set by pipeline when it writes facts)
+          const { getStore } = await import('../state/store');
+          const store = getStore();
+          const state = store.getState();
+          if (state.ignoreNextFactsUpdate) {
+            store.dispatch({ type: 'FACTS_UPDATE_IGNORED' });
+            return; // Skip this update - pipeline already updated Redux
+          }
+
           const currentGitRoot = getGitRoot();
           if (!currentGitRoot) {
             return;

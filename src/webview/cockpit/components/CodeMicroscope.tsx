@@ -73,10 +73,22 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
   }, [renderFrame.data?.symbolId, renderFrame.id]);
 
   // Unconditional hook call
+  const handleRequestFileDetails = React.useCallback(
+    (filePath: string) => {
+      if (vscode) {
+        vscode.postMessage({ type: 'requestFileDetails', payload: { filePath } });
+      }
+    },
+    [vscode]
+  );
+
   const analysisData = useFileAnalysisData(
     renderFrame.level === 'file' ? renderFrame.id : '',
     cockpitState?.bundleFacts,
-    cockpitState?.currentCommitIndex
+    cockpitState?.currentCommitIndex,
+    cockpitState?.bundleFactsSkeleton,
+    cockpitState?.fileEvidenceCache,
+    handleRequestFileDetails
   );
 
   const handleWheel = (e: React.WheelEvent) => {

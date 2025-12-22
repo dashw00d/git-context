@@ -270,7 +270,7 @@ export async function registerCoreFeatures(
   });
 
   shell.registerCommand('git-context.bundle.export', async _context => {
-    const state = orchestrator.getState();
+    const state = store.getState();
     if (!state.bundleFacts) {
       vscode.window.showWarningMessage('No active bundle to export');
       return;
@@ -385,7 +385,7 @@ export async function registerCoreFeatures(
 
   shell.registerCommand('git-context.superReport', async () => {
     try {
-      const state = orchestrator.getState();
+      const state = store.getState();
       let facts: any = state.bundleFacts;
 
       if (!facts) {

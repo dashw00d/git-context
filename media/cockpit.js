@@ -1043,7 +1043,7 @@
             }
             return false;
           }
-          function memo(type, compare) {
+          function memo2(type, compare) {
             {
               if (!isValidElementType(type)) {
                 error("memo: The first argument must be a component. Instead received: %s", type === null ? "null" : typeof type);
@@ -1107,7 +1107,7 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useRef(initialValue);
           }
-          function useEffect8(create, deps) {
+          function useEffect9(create, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useEffect(create, deps);
           }
@@ -1119,7 +1119,7 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useLayoutEffect(create, deps);
           }
-          function useCallback(callback, deps) {
+          function useCallback2(callback, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useCallback(callback, deps);
           }
@@ -1883,14 +1883,14 @@
           exports.forwardRef = forwardRef;
           exports.isValidElement = isValidElement;
           exports.lazy = lazy;
-          exports.memo = memo;
+          exports.memo = memo2;
           exports.startTransition = startTransition;
           exports.unstable_act = act;
-          exports.useCallback = useCallback;
+          exports.useCallback = useCallback2;
           exports.useContext = useContext;
           exports.useDebugValue = useDebugValue;
           exports.useDeferredValue = useDeferredValue;
-          exports.useEffect = useEffect8;
+          exports.useEffect = useEffect9;
           exports.useId = useId;
           exports.useImperativeHandle = useImperativeHandle;
           exports.useInsertionEffect = useInsertionEffect;
@@ -28657,9 +28657,19 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
 
   // src/webview/cockpit/hooks/useFileAnalysisData.ts
   var React5 = __toESM(require_react());
-  var useFileAnalysisData = (fileId, bundleFacts, commitIdx) => {
+  var useFileAnalysisData = (fileId, bundleFacts, commitIdx, bundleFactsSkeleton, fileEvidenceCache, onRequestFileDetails) => {
+    const skeleton = bundleFactsSkeleton || null;
+    const cache = fileEvidenceCache || {};
+    const requestFn = onRequestFileDetails;
+    React5.useEffect(() => {
+      if (fileId && skeleton && !bundleFacts && !cache[fileId] && requestFn) {
+        requestFn(fileId);
+      }
+    }, [fileId, skeleton, bundleFacts, cache, requestFn]);
     return React5.useMemo(() => {
-      if (!bundleFacts || !fileId) {
+      const facts = bundleFacts;
+      const fileEvidence = cache[fileId] || {};
+      if (!fileId) {
         return {
           deadSymbols: /* @__PURE__ */ new Set(),
           legacySymbols: /* @__PURE__ */ new Set(),
@@ -28693,76 +28703,67 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           }
         };
       }
+      const evidence = facts?.evidence || fileEvidence;
       const deadSymbols = /* @__PURE__ */ new Set();
-      const deadEvidence = bundleFacts.evidence?.["findings.legacyAudit"]?.dead || bundleFacts.evidence?.dead || [];
+      const deadEvidence = evidence?.["findings.legacyAudit"]?.dead || evidence?.dead || [];
       deadEvidence.forEach((item) => {
-        if (item.path === fileId && item.symbol_id) {
+        const itemPath = item.path || item.filePath;
+        if (itemPath === fileId && item.symbol_id) {
           deadSymbols.add(item.symbol_id);
         }
       });
       const legacySymbols = /* @__PURE__ */ new Set();
-      const legacyEvidence = bundleFacts.evidence?.["findings.legacyAudit"]?.legacyUsed || bundleFacts.evidence?.legacyUsed || [];
+      const legacyEvidence = evidence?.["findings.legacyAudit"]?.legacyUsed || evidence?.legacyUsed || [];
       legacyEvidence.forEach((item) => {
-        if (item.path === fileId && item.symbol_id) {
+        const itemPath = item.path || item.filePath;
+        if (itemPath === fileId && item.symbol_id) {
           legacySymbols.add(item.symbol_id);
         }
       });
-      const movedBlocks = bundleFacts.bundle?.movedLineage || [];
+      const movedBlocks = facts?.bundle?.movedLineage || (skeleton?.bundle?.shas ? [] : []);
       const driftIssues = [];
-      const conventionDrift = bundleFacts.findings?.patternDrift?.conventionDrift;
+      const conventionDrift = facts?.findings?.patternDrift?.conventionDrift || (skeleton?.findings?.patternDrift?.conventionDrift && fileEvidence?.["findings.patternDrift.conventionDrift"]?.driftSymbols ? {
+        driftSymbols: fileEvidence["findings.patternDrift.conventionDrift"].driftSymbols || []
+      } : void 0);
       if (conventionDrift?.driftSymbols) {
         conventionDrift.driftSymbols.forEach((ds) => {
           if (ds.path === fileId) {
-            driftIssues.push({
-              symbolId: ds.symbolId,
-              name: ds.name,
-              convention: ds.convention,
-              suggestedName: ds.suggestedName,
-              path: ds.path
-            });
+            driftIssues.push(ds);
           }
         });
       }
       const unresolvedCallers = [];
-      const unresolvedEvidence = bundleFacts.evidence?.["findings.unresolvedCallers"] || bundleFacts.findings?.unresolvedCallers || [];
+      const unresolvedEvidence = evidence?.["findings.unresolvedCallers"] || (facts?.findings?.unresolvedCallers ? [] : []);
       if (Array.isArray(unresolvedEvidence)) {
         unresolvedEvidence.forEach((item) => {
           const itemPath = item.path || item.filePath || item.caller_path;
           if (itemPath === fileId) {
-            unresolvedCallers.push({
-              symbolId: item.symbolId || item.caller_symbol_id,
-              name: item.name || item.caller_name,
-              callerCount: item.callerCount || item.count || item.occurrence_count || 1
-            });
+            unresolvedCallers.push(item);
           }
         });
       }
       const hotspots = [];
-      const hotspotEvidence = bundleFacts.evidence?.hotspots || [];
+      const hotspotEvidence = evidence?.hotspots || [];
       hotspotEvidence.forEach((hotspot) => {
         if (hotspot.path === fileId || hotspot.file_path === fileId) {
           hotspots.push({
-            path: hotspot.path || hotspot.file_path,
+            path: hotspot.path || hotspot.file_path || "",
             score: hotspot.score || hotspot.hotspot_score || 0,
             symbolId: hotspot.symbol_id
           });
         }
       });
       const importDriftIssues = [];
-      const importDriftEvidence = bundleFacts.evidence?.["findings.patternDrift.conventionDrift"]?.importDrift;
+      const importDriftEvidence = evidence?.["findings.patternDrift.conventionDrift"]?.importDrift;
       if (importDriftEvidence?.driftImports) {
         importDriftEvidence.driftImports.forEach((imp) => {
           if (imp.file === fileId) {
-            importDriftIssues.push({
-              line: imp.line,
-              importPath: imp.importPath,
-              style: imp.style
-            });
+            importDriftIssues.push(imp);
           }
         });
       }
       let fileNamingDrift = null;
-      const fnDriftEvidence = bundleFacts.evidence?.["findings.patternDrift.conventionDrift"]?.fileNamingDrift;
+      const fnDriftEvidence = evidence?.["findings.patternDrift.conventionDrift"]?.fileNamingDrift;
       if (fnDriftEvidence?.driftFiles) {
         const thisFile = fnDriftEvidence.driftFiles.find((f) => f.path === fileId);
         if (thisFile) {
@@ -28774,17 +28775,17 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       }
       const divergentSymbols = /* @__PURE__ */ new Set();
-      const divergentEvidence = bundleFacts.evidence?.["findings.incompleteness"]?.divergent || [];
+      const divergentEvidence = evidence?.["findings.incompleteness"]?.divergent || [];
       divergentEvidence.forEach((item) => {
         const itemPath = item.path || item.filePath;
         if (itemPath === fileId && (item.symbol_id || item.symbolId)) {
-          divergentSymbols.add(item.symbol_id || item.symbolId);
+          divergentSymbols.add(item.symbol_id || item.symbolId || "");
         }
       });
       let missingEdgesCount = 0;
       let zombieEdgesCount = 0;
-      const missingEdges = bundleFacts.evidence?.["findings.incompleteness"]?.missing_edges || [];
-      const zombieEdges = bundleFacts.evidence?.["findings.incompleteness"]?.zombie_edges || [];
+      const missingEdges = evidence?.["findings.incompleteness"]?.missing_edges || [];
+      const zombieEdges = evidence?.["findings.incompleteness"]?.zombie_edges || [];
       missingEdges.forEach((e) => {
         const fromPath = e.from?.split(":")[0] || e.from;
         const toPath = e.to?.split(":")[0] || e.to;
@@ -28800,7 +28801,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       });
       let mixedConventions = null;
-      const mixedFiles = bundleFacts.evidence?.["findings.patternDrift.mixedConventionFiles"] || [];
+      const mixedFiles = evidence?.["findings.patternDrift.mixedConventionFiles"] || [];
       if (Array.isArray(mixedFiles)) {
         const thisMixed = mixedFiles.find((f) => f.path === fileId);
         if (thisMixed) {
@@ -28810,25 +28811,47 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           };
         }
       }
-      const cd = bundleFacts.findings?.patternDrift?.conventionDrift;
+      const cd = facts?.findings?.patternDrift?.conventionDrift || (skeleton?.findings?.patternDrift?.conventionDrift ? {
+        dominantConvention: skeleton.findings.patternDrift.conventionDrift.dominantConvention,
+        dominantImportStyle: "unknown",
+        dominantFileNaming: "unknown"
+      } : void 0);
       const conventionInfo = cd ? {
         dominantNaming: cd.dominantConvention || "unknown",
-        dominantImportStyle: cd.importDrift?.dominantStyle || "unknown",
-        dominantFileNaming: cd.fileNamingDrift?.dominantStyle || "unknown"
+        dominantImportStyle: "importDrift" in cd && cd.importDrift ? cd.importDrift.dominantStyle : "unknown",
+        dominantFileNaming: "fileNamingDrift" in cd && cd.fileNamingDrift ? cd.fileNamingDrift.dominantStyle : "unknown"
       } : null;
       const analysisStatus = {
-        partial: bundleFacts.partial || false,
-        partialReasons: bundleFacts.partialReasons || []
+        partial: facts?.partial || skeleton?.partial || false,
+        partialReasons: facts?.partialReasons || skeleton?.partialReasons || []
       };
       const findings = {
-        missing: bundleFacts.findings?.incompleteness?.missing || 0,
-        zombies: bundleFacts.findings?.incompleteness?.zombies || 0,
-        dead: deadSymbols.size || bundleFacts.findings?.legacyAudit?.dead || 0,
-        legacyUsed: legacySymbols.size || bundleFacts.findings?.legacyAudit?.legacyUsed || 0,
-        unresolved: unresolvedCallers.length || bundleFacts.findings?.unresolvedCallers?.total || 0,
-        divergent: divergentSymbols.size,
-        missingEdges: missingEdgesCount,
-        zombieEdges: zombieEdgesCount,
+        missing: facts?.findings?.incompleteness?.missing || skeleton?.findings?.incompleteness?.missing || 0,
+        zombies: facts?.findings?.incompleteness?.zombies || skeleton?.findings?.incompleteness?.zombies || 0,
+        dead: deadSymbols.size || facts?.findings?.legacyAudit?.dead || skeleton?.findings?.legacyAudit?.dead || 0,
+        legacyUsed: legacySymbols.size || facts?.findings?.legacyAudit?.legacyUsed || skeleton?.findings?.legacyAudit?.legacyUsed || 0,
+        unresolved: unresolvedCallers.length || facts?.findings?.unresolvedCallers?.total || skeleton?.findings?.unresolvedCallers?.total || 0,
+        divergent: divergentSymbols.size || facts?.findings?.incompleteness?.divergent || skeleton?.findings?.incompleteness?.divergent || 0,
+        missingEdges: (() => {
+          if (missingEdgesCount) return missingEdgesCount;
+          if (facts?.findings?.incompleteness && "missing_edges" in facts.findings.incompleteness) {
+            return facts.findings.incompleteness.missing_edges || 0;
+          }
+          if (skeleton?.findings?.incompleteness && "missing_edges" in skeleton.findings.incompleteness) {
+            return skeleton.findings.incompleteness.missing_edges || 0;
+          }
+          return 0;
+        })(),
+        zombieEdges: (() => {
+          if (zombieEdgesCount) return zombieEdgesCount;
+          if (facts?.findings?.incompleteness && "zombie_edges" in facts.findings.incompleteness) {
+            return facts.findings.incompleteness.zombie_edges || 0;
+          }
+          if (skeleton?.findings?.incompleteness && "zombie_edges" in skeleton.findings.incompleteness) {
+            return skeleton.findings.incompleteness.zombie_edges || 0;
+          }
+          return 0;
+        })(),
         importDrift: importDriftIssues.length
       };
       return {
@@ -28850,7 +28873,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         conventionInfo,
         analysisStatus
       };
-    }, [fileId, bundleFacts, commitIdx]);
+    }, [fileId, bundleFacts, skeleton, cache, commitIdx]);
   };
 
   // src/webview/cockpit/components/stages/BlastRadiusStage.tsx
@@ -29753,26 +29776,6 @@ Churn: ${node.score.toFixed(1)}
           incoming.set(symbolId, (incoming.get(symbolId) || 0) + 1);
         }
       });
-      const blastIncoming = bundleFacts.evidence?.["scope.blastRadius"]?.incoming || [];
-      const blastOutgoing = bundleFacts.evidence?.["scope.blastRadius"]?.outgoing || [];
-      blastIncoming.forEach((ref) => {
-        const toPath = ref.to?.split(":")[0] || ref.to;
-        if (toPath === filePath) {
-          const symbolId = ref.to?.split(":").slice(1).join(":") || ref.to || "";
-          if (symbolId) {
-            incoming.set(symbolId, (incoming.get(symbolId) || 0) + 1);
-          }
-        }
-      });
-      blastOutgoing.forEach((ref) => {
-        const fromPath = ref.from?.split(":")[0] || ref.from;
-        if (fromPath === filePath) {
-          const symbolId = ref.from?.split(":").slice(1).join(":") || ref.from || "";
-          if (symbolId) {
-            outgoing.set(symbolId, (outgoing.get(symbolId) || 0) + 1);
-          }
-        }
-      });
       return { incoming, outgoing };
     }, [bundleFacts, filePath]);
   };
@@ -30037,119 +30040,121 @@ Churn: ${node.score.toFixed(1)}
     if (kindLower.includes("variable")) return "v";
     return "\u2022";
   };
-  var SymbolHeaderBar = ({
-    symbol,
-    incomingRefs,
-    outgoingRefs,
-    riskScore,
-    lastModified,
-    author,
-    isCollapsed,
-    isDead,
-    isLegacy,
-    hasDrift,
-    onToggle,
-    onRefsClick,
-    onFocus
-  }) => {
-    return /* @__PURE__ */ React18.createElement(
-      "div",
-      {
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          padding: "2px 8px",
-          backgroundColor: "var(--vscode-editor-lineHighlightBackground)",
-          borderRadius: "3px",
-          fontSize: "11px",
-          marginBottom: "2px",
-          cursor: onFocus ? "pointer" : "default"
-        },
-        onClick: onFocus,
-        onMouseEnter: (e) => {
-          if (onFocus) {
-            e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)";
+  var SymbolHeaderBar = React18.memo(
+    ({
+      symbol,
+      incomingRefs,
+      outgoingRefs,
+      riskScore,
+      lastModified,
+      author,
+      isCollapsed,
+      isDead,
+      isLegacy,
+      hasDrift,
+      onToggle,
+      onRefsClick,
+      onFocus
+    }) => {
+      return /* @__PURE__ */ React18.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "2px 8px",
+            backgroundColor: "var(--vscode-editor-lineHighlightBackground)",
+            borderRadius: "3px",
+            fontSize: "11px",
+            marginBottom: "2px",
+            cursor: onFocus ? "pointer" : "default"
+          },
+          onClick: onFocus,
+          onMouseEnter: (e) => {
+            if (onFocus) {
+              e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)";
+            }
+          },
+          onMouseLeave: (e) => {
+            if (onFocus) {
+              e.currentTarget.style.backgroundColor = "var(--vscode-editor-lineHighlightBackground)";
+            }
           }
         },
-        onMouseLeave: (e) => {
-          if (onFocus) {
-            e.currentTarget.style.backgroundColor = "var(--vscode-editor-lineHighlightBackground)";
-          }
-        }
-      },
-      /* @__PURE__ */ React18.createElement(
-        "span",
-        {
-          style: {
-            fontSize: "12px",
-            fontWeight: 600,
-            opacity: 0.8
+        /* @__PURE__ */ React18.createElement(
+          "span",
+          {
+            style: {
+              fontSize: "12px",
+              fontWeight: 600,
+              opacity: 0.8
+            },
+            title: symbol.kind
           },
-          title: symbol.kind
-        },
-        getKindIcon(symbol.kind)
-      ),
-      /* @__PURE__ */ React18.createElement("span", { style: { fontWeight: 600 } }, symbol.name),
-      /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.7, display: "flex", gap: "4px" } }, /* @__PURE__ */ React18.createElement(
-        "span",
-        {
-          onClick: (e) => {
-            e.stopPropagation();
-            onRefsClick?.("in");
+          getKindIcon(symbol.kind)
+        ),
+        /* @__PURE__ */ React18.createElement("span", { style: { fontWeight: 600 } }, symbol.name),
+        /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.7, display: "flex", gap: "4px" } }, /* @__PURE__ */ React18.createElement(
+          "span",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              onRefsClick?.("in");
+            },
+            style: {
+              cursor: onRefsClick ? "pointer" : "default",
+              color: onRefsClick ? "var(--vscode-textLink-foreground)" : "inherit"
+            },
+            title: "Incoming references"
           },
-          style: {
-            cursor: onRefsClick ? "pointer" : "default",
-            color: onRefsClick ? "var(--vscode-textLink-foreground)" : "inherit"
+          "\u2199",
+          incomingRefs
+        ), /* @__PURE__ */ React18.createElement(
+          "span",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              onRefsClick?.("out");
+            },
+            style: {
+              cursor: onRefsClick ? "pointer" : "default",
+              color: onRefsClick ? "var(--vscode-textLink-foreground)" : "inherit"
+            },
+            title: "Outgoing references"
           },
-          title: "Incoming references"
-        },
-        "\u2199",
-        incomingRefs
-      ), /* @__PURE__ */ React18.createElement(
-        "span",
-        {
-          onClick: (e) => {
-            e.stopPropagation();
-            onRefsClick?.("out");
+          "\u2197",
+          outgoingRefs
+        )),
+        riskScore !== void 0 && /* @__PURE__ */ React18.createElement(RiskDots, { score: riskScore }),
+        lastModified && /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.5, fontSize: "10px" }, title: `Last modified: ${lastModified}` }, lastModified),
+        author && /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.6, fontSize: "10px" }, title: author }, "@", author.charAt(0)),
+        isDead && /* @__PURE__ */ React18.createElement("span", { title: "Dead symbol", style: { fontSize: "12px" } }, "\u{1F47B}"),
+        isLegacy && /* @__PURE__ */ React18.createElement("span", { title: "Legacy symbol", style: { fontSize: "12px" } }, "\u26A0\uFE0F"),
+        hasDrift && /* @__PURE__ */ React18.createElement("span", { title: "Convention drift", style: { fontSize: "12px" } }, "\u{1F4DD}"),
+        /* @__PURE__ */ React18.createElement(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              onToggle();
+            },
+            style: {
+              marginLeft: "auto",
+              background: "transparent",
+              border: "none",
+              color: "var(--vscode-foreground)",
+              cursor: "pointer",
+              fontSize: "10px",
+              padding: "2px 4px"
+            },
+            title: isCollapsed ? "Expand" : "Collapse"
           },
-          style: {
-            cursor: onRefsClick ? "pointer" : "default",
-            color: onRefsClick ? "var(--vscode-textLink-foreground)" : "inherit"
-          },
-          title: "Outgoing references"
-        },
-        "\u2197",
-        outgoingRefs
-      )),
-      riskScore !== void 0 && /* @__PURE__ */ React18.createElement(RiskDots, { score: riskScore }),
-      lastModified && /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.5, fontSize: "10px" }, title: `Last modified: ${lastModified}` }, lastModified),
-      author && /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.6, fontSize: "10px" }, title: author }, "@", author.charAt(0)),
-      isDead && /* @__PURE__ */ React18.createElement("span", { title: "Dead symbol", style: { fontSize: "12px" } }, "\u{1F47B}"),
-      isLegacy && /* @__PURE__ */ React18.createElement("span", { title: "Legacy symbol", style: { fontSize: "12px" } }, "\u26A0\uFE0F"),
-      hasDrift && /* @__PURE__ */ React18.createElement("span", { title: "Convention drift", style: { fontSize: "12px" } }, "\u{1F4DD}"),
-      /* @__PURE__ */ React18.createElement(
-        "button",
-        {
-          onClick: (e) => {
-            e.stopPropagation();
-            onToggle();
-          },
-          style: {
-            marginLeft: "auto",
-            background: "transparent",
-            border: "none",
-            color: "var(--vscode-foreground)",
-            cursor: "pointer",
-            fontSize: "10px",
-            padding: "2px 4px"
-          },
-          title: isCollapsed ? "Expand" : "Collapse"
-        },
-        isCollapsed ? "\u25B6" : "\u25BC"
-      )
-    );
-  };
+          isCollapsed ? "\u25B6" : "\u25BC"
+        )
+      );
+    }
+  );
 
   // src/webview/cockpit/components/stages/CodeEditor.tsx
   var EditorContainer = {
@@ -32423,10 +32428,21 @@ ${hotspotText}` : hotspotText;
         setZoomLevel("focus");
       }
     }, [renderFrame.data?.symbolId, renderFrame.id]);
+    const handleRequestFileDetails = React32.useCallback(
+      (filePath) => {
+        if (vscode3) {
+          vscode3.postMessage({ type: "requestFileDetails", payload: { filePath } });
+        }
+      },
+      [vscode3]
+    );
     const analysisData = useFileAnalysisData(
       renderFrame.level === "file" ? renderFrame.id : "",
       cockpitState?.bundleFacts,
-      cockpitState?.currentCommitIndex
+      cockpitState?.currentCommitIndex,
+      cockpitState?.bundleFactsSkeleton,
+      cockpitState?.fileEvidenceCache,
+      handleRequestFileDetails
     );
     const handleWheel = (e) => {
       if (e.ctrlKey) {
@@ -33110,9 +33126,12 @@ ${hotspotText}` : hotspotText;
     workspaceScope: "workspace",
     bundleSummary: null,
     bundleFacts: null,
+    bundleFactsSkeleton: null,
     bundleReportId: null,
     bundleView: null,
     bundleViewVersion: 0,
+    fileEvidenceCache: {},
+    symbolEvidenceCache: {},
     symbols: [],
     symbolFilterText: "",
     symbolKindFilter: "all",
@@ -33195,6 +33214,22 @@ ${hotspotText}` : hotspotText;
             setState((prev) => ({
               ...prev,
               activeFrame: message.payload.frame
+            }));
+          } else if (message.type === "fileDetailsResponse") {
+            setState((prev) => ({
+              ...prev,
+              fileEvidenceCache: {
+                ...prev.fileEvidenceCache || {},
+                [message.payload.filePath]: message.payload.evidence
+              }
+            }));
+          } else if (message.type === "symbolDetailsResponse") {
+            setState((prev) => ({
+              ...prev,
+              symbolEvidenceCache: {
+                ...prev.symbolEvidenceCache || {},
+                [message.payload.symbolId]: message.payload.evidence
+              }
             }));
           }
         } catch (error) {

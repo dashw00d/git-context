@@ -48,31 +48,11 @@ export class CockpitOrchestrator extends EventEmitter {
     this.debounceMs = debounceMs;
     this.store = getStore();
 
-    this.store.subscribe((state, action) => {
-      let partial: Partial<CockpitState> = {};
-      const reason: string = action.type;
-
-      if (action.type === 'ANALYSIS_STARTED')
-        partial = { isAnalyzing: true, analysisStep: action.payload.step };
-      else if (action.type === 'ANALYSIS_COMPLETED')
-        partial = { isAnalyzing: false, bundleFacts: action.payload.facts };
-      else if (action.type === 'ANALYSIS_PROGRESS_UPDATED')
-        partial = {
-          isAnalyzing: action.payload.isAnalyzing,
-          analysisStep: action.payload.step,
-          analysisProgress: action.payload.progress,
-        };
-      else if (action.type === 'SELECTION_TOGGLED')
-        partial = { selectedCommitShas: state.selectedCommitShas };
-      else if (action.type === 'SECTION_CHANGED')
-        partial = { activeSection: action.payload.section };
-      else if (action.type === 'EXPLORER_UPDATED') partial = { explorerData: action.payload.nodes };
-      else if (action.type === 'BUNDLE_VIEW_UPDATED') partial = { bundleView: action.payload.view };
-      else if (action.type === 'LIVE_ANALYSIS_UPDATED')
-        partial = { liveAnalysis: { ...this.store.getState().liveAnalysis, ...action.payload } };
-
-      this.queueEmit(state, partial, reason);
-    });
+    // NOTE: Removed duplicate store subscription - CockpitProvider subscribes directly
+    // to the store in resolveWebviewView() and syncs state to the webview.
+    // The old subscription here was guessing which fields changed based on action type,
+    // which was fragile and often wrong. If you need reactive state updates,
+    // use store.subscribe() directly or add an effect in CockpitEffects.
   }
 
   static getInstance(): CockpitOrchestrator {

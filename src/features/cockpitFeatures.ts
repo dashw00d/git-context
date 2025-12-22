@@ -30,7 +30,7 @@ export async function registerCockpitFeatures(
     let lastSummaryKey: string | null = null;
 
     const pushCockpitUpdate = async () => {
-      const state = orchestrator.getState();
+      const state = store.getState();
       const facts = state.bundleFacts;
       const summary = state.bundleSummary;
 
@@ -76,7 +76,7 @@ export async function registerCockpitFeatures(
 
     // Sync live analysis state to cockpit provider
     const pushLiveAnalysisUpdate = () => {
-      const state = orchestrator.getState();
+      const state = store.getState();
       const liveAnalysis = state.liveAnalysis;
 
       if (!providers.cockpitProvider || !liveAnalysis) return;
@@ -111,7 +111,7 @@ export async function registerCockpitFeatures(
     let lastAnalysisKey: string | null = null;
 
     const pushReportUpdate = () => {
-      const state = orchestrator.getState();
+      const state = store.getState();
       const facts = state.bundleFacts as any;
       const analysis = (state.llmOutputs as any)?.llmAnalysis || (state.llmOutputs as any);
 

@@ -49,6 +49,80 @@ export interface BundleSummaryDTO {
 
 export type BundleFactsDTO = RefactorBundleFacts | null;
 
+/**
+ * Lightweight skeleton of bundle facts containing only counts and metadata.
+ * Used for initial payload to avoid sending megabytes of evidence data.
+ */
+export interface BundleFactsSkeleton {
+  version: '2.0';
+  generated_at: string;
+  confidence: number;
+  partial?: boolean;
+  partialReasons?: string[];
+  bundle: {
+    oldestSha: string;
+    newestSha?: string;
+    shas: string[];
+    totalCommits?: number;
+  };
+  scope: {
+    files: number;
+    blastRadius: number;
+  };
+  intended: {
+    present: number;
+    absent: number;
+    renamed: number;
+  };
+  working: {
+    symbols: number;
+    edges: number;
+  };
+  findings: {
+    incompleteness: {
+      missing: number;
+      zombies: number;
+      divergent: number;
+      missing_edges?: number;
+      zombie_edges?: number;
+    };
+    patternDrift: {
+      mixedTargets: number;
+      oldNamespaces: number;
+      conventionDrift?: {
+        dominantConvention: string;
+        driftPercent: number;
+        driftSymbolCount: number;
+      };
+      mixedConventionFiles?: number;
+    };
+    legacyAudit: {
+      dead: number;
+      legacyUsed: number;
+      replacedLeftovers: number;
+    };
+    unresolvedCallers?: {
+      total: number;
+    };
+  };
+  evidenceCounts: {
+    'scope.files': number;
+    'scope.blastRadius': number;
+    hotspots: number;
+    missing: number;
+    zombies: number;
+    divergent: number;
+    dead: number;
+    legacyUsed: number;
+    [key: string]: number | undefined;
+  };
+  hybridSummary?: {
+    totalFacts: number;
+    fileCount: number;
+    topFiles: Array<{ file: string; count: number }>;
+  };
+}
+
 export interface BundleView {
   tier?: 'structure' | 'hybrid' | 'semantics';
   summary?: {
@@ -200,9 +274,14 @@ export interface CockpitState {
   /* Active bundle section */
   bundleSummary?: BundleSummaryDTO | null;
   bundleFacts: BundleFactsDTO;
+  bundleFactsSkeleton?: BundleFactsSkeleton | null;
   bundleReportId: string | null;
   bundleView: BundleView | null;
   bundleViewVersion: number;
+
+  /* Lazy-loaded evidence cache */
+  fileEvidenceCache?: Record<string, Record<string, any>>;
+  symbolEvidenceCache?: Record<string, Record<string, any>>;
 
   /* Symbols section */
   symbols: SymbolDTO[];
@@ -251,6 +330,9 @@ export interface CockpitState {
   >;
 
   actionHistory?: Array<{ type: string; payload?: any; timestamp: string }>;
+
+  /* File watcher echo suppression */
+  ignoreNextFactsUpdate?: boolean;
 }
 
 export type ZoomLevel = 'bundle' | 'folder' | 'blast_radius' | 'file' | 'symbol';
@@ -290,6 +372,7 @@ export interface LiveAnalysisSummary {
 export interface CockpitPayload {
   // Core bundle data
   bundleFacts?: RefactorBundleFacts | null;
+  bundleFactsSkeleton?: BundleFactsSkeleton | null;
   bundleSummary?: BundleSummaryDTO | null;
   bundleView?: BundleView | null;
 
@@ -343,7 +426,9 @@ export type CockpitHostMessage =
   | { type: 'focusSection'; payload: { section: CockpitSectionKey } }
   | { type: 'assistantResponse'; payload: { text: string } }
   | { type: 'updateExplorerTree'; payload: ExplorerNode[] }
-  | { type: 'updateFrame'; payload: { frame: ContextFrame; data: any } };
+  | { type: 'updateFrame'; payload: { frame: ContextFrame; data: any } }
+  | { type: 'fileDetailsResponse'; payload: { filePath: string; evidence: Record<string, any> } }
+  | { type: 'symbolDetailsResponse'; payload: { symbolId: string; evidence: Record<string, any> } };
 
 export type CockpitClientMessage =
   | { type: 'ready' }
@@ -382,4 +467,6 @@ export type CockpitClientMessage =
   | { type: 'setLastNCommits'; value: number }
   | { type: 'updateCommitIndex'; value: number }
   | { type: 'clearError' }
-  | { type: 'getHeadInfo' };
+  | { type: 'getHeadInfo' }
+  | { type: 'requestFileDetails'; payload: { filePath: string } }
+  | { type: 'requestSymbolDetails'; payload: { symbolId: string } };

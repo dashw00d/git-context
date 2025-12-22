@@ -11,6 +11,10 @@ export function createWorkspaceOverlayStep(workspaceIndexer: WorkspaceIndexer): 
 
     async run(state: PipelineState) {
       logDebug('🟦 [WorkspaceStep] Starting run');
+
+      // Set plan data for direct content access
+      workspaceIndexer.setPlanData(state.plan);
+
       if (!state.includeWorkspace) {
         logDebug('🟦 [WorkspaceStep] No workspace, skipping');
         updateState(state, 'workspaceFacts', { staged: null, unstaged: null });

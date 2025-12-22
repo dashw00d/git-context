@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { getGitRoot } from '../utils/config';
 import type { CommitFacts } from '../analysis/commitIndexer';
 import type { PipelineState } from '../analysis/runner/pipelineTypes';
-import { getGitRoot } from '../utils/config';
 
 interface CodeSnippet {
   file: string;

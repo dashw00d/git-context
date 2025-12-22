@@ -100,8 +100,6 @@ export class AnalysisService {
         (facts.evidence['working.edges'].length === 0 && level === 'file')
       ) {
         logInfo(`[AnalysisService] Triggering targeted pipeline analysis for ${targetPath}`);
-        const { getRefactorPipeline } = await import('./pipelineFactory');
-        const pipeline = await getRefactorPipeline();
         const { GitOperations } = await import('../analysis/git');
         const git = new GitOperations();
 
@@ -110,18 +108,15 @@ export class AnalysisService {
         const shas = history.map((h: any) => h.hash).filter((h: string) => h);
 
         if (shas.length > 0) {
-          // Run pipeline for these commits + workspace
-          const result = await pipeline.analyzeBundle(shas, true);
+          // Use AnalysisCoordinator instead of calling pipeline directly
+          const { getAnalysisCoordinator } = await import('./analysisCoordinator');
+          const coordinator = getAnalysisCoordinator();
+          const result = await coordinator.requestFrameAnalysis(shas);
+
           // Update local facts reference from the pipeline result
-          // Note: We need to fetch the updated facts from the store or result
-          // analyzeBundle returns PipelineState which has bundleFacts
           if (result.bundleFacts) {
             facts = result.bundleFacts;
-            // Also update the global store so the UI gets the new graph
-            store.dispatch({
-              type: 'BUNDLE_FACTS_UPDATED',
-              payload: { facts: result.bundleFacts },
-            });
+            // AnalysisCoordinator already dispatched BUNDLE_FACTS_UPDATED
           }
         }
       }

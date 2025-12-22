@@ -83,7 +83,7 @@ export async function buildRefactorBundleFacts(
   } catch (error) {
     logError('BundleFactsSchema validation failed', error);
 
-    return facts as RefactorBundleFacts;
+    return facts as unknown as RefactorBundleFacts;
   }
 }
 
@@ -165,8 +165,6 @@ export async function assembleFacts(
         missing: drift.missing_symbols.length,
         zombies: drift.zombie_symbols.length,
         divergent: drift.divergent_symbols.length,
-        missing_edges: drift.missing_edges?.length || 0,
-        zombie_edges: drift.zombie_edges?.length || 0,
       },
       patternDrift: {
         mixedTargets: detectMixedTargets(drift, working),
@@ -344,7 +342,7 @@ export async function assembleFacts(
     hybridFacts: Object.keys(hybridFactsMap).length > 0 ? hybridFactsMap : undefined,
   };
 
-  return facts as RefactorBundleFacts;
+  return facts as unknown as RefactorBundleFacts;
 }
 
 export async function saveFacts(facts: RefactorBundleFacts): Promise<string> {

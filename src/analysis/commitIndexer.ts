@@ -17,7 +17,7 @@ import { MovedBlockDetectorV2 } from './movedBlockDetector';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
 import { getTreeSitterParser } from './tree-sitter';
-import type { SymbolInfo } from '../types';
+import type { FileChange, SymbolInfo } from '../types';
 
 export interface CommitFacts {
   sha: string;
@@ -68,6 +68,7 @@ export class CommitIndexer {
   private cacheMisses = 0;
   private cstTimelineManager = getCstTimelineManager();
   private parser = getTreeSitterParser();
+  private planData?: import('./runner/pipelineTypes').PlanData;
 
   constructor(
     private db: any,
@@ -80,6 +81,40 @@ export class CommitIndexer {
     private movedBlockDetector: MovedBlockDetectorV2
   ) {
     //empty
+  }
+
+  /**
+   * Set plan data for direct access (avoids cache lookups)
+   */
+  setPlanData(plan: import('./runner/pipelineTypes').PlanData | undefined): void {
+    this.planData = plan;
+    this.dependencyExtractor.setPlanData(plan);
+    this.movedBlockDetector.setPlanData(plan);
+  }
+
+  /**
+   * Get content from plan data or fallback to git
+   */
+  private async getContent(sha: string, path: string): Promise<string> {
+    // Try plan data first (synchronous, no lookup overhead)
+    if (this.planData?.content.has(`${sha}:${path}`)) {
+      return this.planData.content.get(`${sha}:${path}`)!;
+    }
+    // Fallback to git (will log warning)
+    return this.git.safeGetFileContent(sha, path);
+  }
+
+  /**
+   * Get blob SHA from plan data or fallback to git
+   */
+  private async getBlobSha(sha: string, path: string): Promise<string> {
+    // Try plan data first
+    const tree = this.planData?.trees.get(sha);
+    if (tree?.has(path)) {
+      return tree.get(path)!.sha;
+    }
+    // Fallback to git
+    return this.git.getBlobSha(sha, path);
   }
 
   /**
@@ -244,12 +279,23 @@ export class CommitIndexer {
         file: string;
         sha: string;
       }) => void;
+      plan?: import('./runner/pipelineTypes').PlanData;
     }
   ): Promise<CommitFacts> {
     logInfo(`[CommitIndexer] Indexing commit ${sha}`);
 
     const commitInfo = await this.git.getCommitInfo(sha);
-    const files = await this.git.getFileChanges(sha);
+
+    // Use plan data if available, otherwise fallback to cache service
+    let files: FileChange[];
+    if (opts?.plan?.fileChanges.has(sha)) {
+      files = opts.plan.fileChanges.get(sha)!;
+    } else {
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cacheService = getGitCacheService();
+      files = await cacheService.getCachedFileChanges(sha);
+    }
+
     const parentSha = commitInfo.parent || null;
 
     const CONCURRENCY = 8;
@@ -402,7 +448,7 @@ export class CommitIndexer {
   }
 
   private async processFile(
-    file: { path: string; status: string },
+    file: FileChange,
     sha: string,
     parentSha: string | null
   ): Promise<FileProcessingResult | null> {
@@ -425,8 +471,9 @@ export class CommitIndexer {
       path,
       {
         git: this.git,
-        status: status as any,
         commitSha: sha,
+        status: file.status,
+        plan: this.planData,
         skipSizeCheck: status === 'D',
       },
       'CommitIndexer'
@@ -438,8 +485,8 @@ export class CommitIndexer {
 
     if (status === 'D') {
       if (parentSha) {
-        const parentBlobSha = await this.git.getBlobSha(parentSha, path);
-        const parentContent = await this.git.safeGetFileContent(parentSha, path);
+        const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path));
+        const parentContent = await this.getContent(parentSha, path);
         const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
           path,
           parentBlobSha,
@@ -471,8 +518,8 @@ export class CommitIndexer {
       return result;
     }
 
-    const currentBlobSha = await this.git.getBlobSha(sha, path);
-    const currentContent = await this.git.safeGetFileContent(sha, path);
+    const currentBlobSha = file.newSha || (await this.getBlobSha(sha, path));
+    const currentContent = await this.getContent(sha, path);
     const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
       path,
       currentBlobSha,
@@ -506,14 +553,14 @@ export class CommitIndexer {
         });
       }
     } else if (status === 'M' && parentSha) {
-      const parentBlobSha = await this.git.getBlobSha(parentSha, path);
+      const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path));
 
       if (parentBlobSha === currentBlobSha) {
         await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
         return result;
       }
 
-      const parentContent = await this.git.safeGetFileContent(parentSha, path);
+      const parentContent = await this.getContent(parentSha, path);
       const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
         path,
         parentBlobSha,
@@ -971,6 +1018,7 @@ export class CommitIndexer {
           git: this.git,
           status: status as 'A' | 'M' | 'D' | 'R' | 'C' | 'U',
           commitSha: sha,
+          plan: this.planData,
           skipSizeCheck: status === 'D',
         },
         'CommitIndexer.storeEdges'
@@ -982,8 +1030,8 @@ export class CommitIndexer {
 
       if (status === 'D') {
         if (parentSha) {
-          const parentBlobSha = await this.git.getBlobSha(parentSha, path);
-          const parentContent = await this.git.safeGetFileContent(parentSha, path);
+          const parentBlobSha = await this.getBlobSha(parentSha, path);
+          const parentContent = await this.getContent(parentSha, path);
           const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
             path,
             parentBlobSha,
@@ -1005,8 +1053,8 @@ export class CommitIndexer {
         continue;
       }
 
-      const currentBlobSha = await this.git.getBlobSha(sha, path);
-      const currentContent = await this.git.safeGetFileContent(sha, path);
+      const currentBlobSha = await this.getBlobSha(sha, path);
+      const currentContent = await this.getContent(sha, path);
       const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
         path,
         currentBlobSha,
@@ -1026,8 +1074,8 @@ export class CommitIndexer {
           });
         }
       } else if (status === 'M' && parentSha) {
-        const parentBlobSha = await this.git.getBlobSha(parentSha, path);
-        const parentContent = await this.git.safeGetFileContent(parentSha, path);
+        const parentBlobSha = await this.getBlobSha(parentSha, path);
+        const parentContent = await this.getContent(parentSha, path);
         const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
           path,
           parentBlobSha,

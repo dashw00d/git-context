@@ -20,6 +20,7 @@ export { WorkspaceFacts };
 export class WorkspaceIndexer {
   private cstTimelineManager = getCstTimelineManager();
   private parser = getTreeSitterParser();
+  private planData?: import('./runner/pipelineTypes').PlanData;
 
   constructor(
     private db: Database,
@@ -28,6 +29,38 @@ export class WorkspaceIndexer {
     private structuralDiffManager: StructuralDiffManager
   ) {
     //empty
+  }
+
+  /**
+   * Set plan data for direct content access (avoids cache lookups)
+   */
+  setPlanData(plan: import('./runner/pipelineTypes').PlanData | undefined): void {
+    this.planData = plan;
+  }
+
+  /**
+   * Get content from plan data or fallback to git
+   */
+  private async getContent(sha: string, path: string): Promise<string> {
+    // Try plan data first (synchronous, no lookup overhead)
+    if (this.planData?.content.has(`${sha}:${path}`)) {
+      return this.planData.content.get(`${sha}:${path}`)!;
+    }
+    // Fallback to git
+    return this.git.safeGetFileContent(sha, path);
+  }
+
+  /**
+   * Get blob SHA from plan data or fallback to git
+   */
+  private async getBlobSha(sha: string, path: string): Promise<string> {
+    // Try plan data first
+    const tree = this.planData?.trees.get(sha);
+    if (tree?.has(path)) {
+      return tree.get(path)!.sha;
+    }
+    // Fallback to git
+    return this.git.getBlobSha(sha, path);
   }
 
   /**
@@ -47,6 +80,8 @@ export class WorkspaceIndexer {
           git: this.git,
           gitRoot,
           status: file.status,
+          commitSha: 'HEAD',
+          plan: this.planData,
           skipSizeCheck: file.status === 'D',
         })
       ) {
@@ -87,8 +122,8 @@ export class WorkspaceIndexer {
 
         try {
           if (status === 'D') {
-            const headBlobSha = await this.git.getBlobSha('HEAD', filePath);
-            const headContent = await this.git.safeGetFileContent('HEAD', filePath);
+            const headBlobSha = await this.getBlobSha('HEAD', filePath);
+            const headContent = await this.getContent('HEAD', filePath);
             const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
               filePath,
               headBlobSha,
@@ -165,8 +200,8 @@ export class WorkspaceIndexer {
               structuralChange: 0,
             };
           } else {
-            const headBlobSha = await this.git.getBlobSha('HEAD', filePath);
-            const headContent = await this.git.safeGetFileContent('HEAD', filePath);
+            const headBlobSha = await this.getBlobSha('HEAD', filePath);
+            const headContent = await this.getContent('HEAD', filePath);
             const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
               filePath,
               headBlobSha,
@@ -503,6 +538,7 @@ export class WorkspaceIndexer {
         await filterPath(file, {
           git: this.git,
           gitRoot,
+          plan: this.planData,
           status: 'M',
           skipSizeCheck: true,
           skipGitIgnore: true, // Skip redundant check since getAllFiles() already excluded ignored files

@@ -73,6 +73,7 @@ export interface CrossVersionSymbolLineage {
 
 export class MovedBlockDetector {
   private similarityThreshold: number = 0.6;
+  private planData?: import('./runner/pipelineTypes').PlanData;
 
   constructor(
     private dbManager = getDatabaseManager(),
@@ -82,6 +83,13 @@ export class MovedBlockDetector {
     if (!this.git) {
       this.git = new GitOperations();
     }
+  }
+
+  /**
+   * Set plan data for direct content access (avoids cache lookups)
+   */
+  setPlanData(plan: import('./runner/pipelineTypes').PlanData | undefined): void {
+    this.planData = plan;
   }
 
   /**
@@ -457,6 +465,11 @@ export class MovedBlockDetector {
    * Uses GitOperations to get historical file content
    */
   private async getFileContent(filePath: string, commitSha: string): Promise<string> {
+    // Try plan data first
+    if (this.planData?.content.has(`${commitSha}:${filePath}`)) {
+      return this.planData.content.get(`${commitSha}:${filePath}`)!;
+    }
+
     if (!this.git) {
       logDebug(`[MovedBlockDetector] GitOperations not available, returning empty content`);
       return '';
@@ -638,6 +651,10 @@ export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, 
       ...config,
     });
     this.legacyDetector = new MovedBlockDetector();
+  }
+
+  setPlanData(plan: import('./runner/pipelineTypes').PlanData | undefined): void {
+    this.legacyDetector.setPlanData(plan);
   }
 
   async detect(input: MovedBlockDetectorInput): Promise<MovedBlock[]> {

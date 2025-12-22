@@ -1,11 +1,11 @@
 import * as crypto from 'crypto';
-import type { CommitFacts } from '../analysis/commitIndexer';
 import { DatabaseService, getDatabaseService } from '../services/databaseService';
 import { getDatabaseManager } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
 import { BaseDetector, DetectorConfig } from './detectors/BaseDetector';
+import type { CommitFacts } from '../analysis/commitIndexer';
 
 export interface HotspotMetrics {
   commitFrequency: number;

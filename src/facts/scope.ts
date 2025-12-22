@@ -1,4 +1,5 @@
 import { GitOperations } from '../analysis/git';
+import { getGitCacheService } from '../services/gitCacheService';
 import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
@@ -173,8 +174,10 @@ export async function computeScope(
     allPaths: new Set(),
   };
 
+  const cacheService = getGitCacheService();
+
   for (const sha of commitShas) {
-    const commitFiles = await git.getFileChanges(sha);
+    const commitFiles = await cacheService.getCachedFileChanges(sha);
     commitFiles.forEach(f => scope.commitFiles.add(f.path));
   }
 
@@ -263,7 +266,7 @@ export async function computeScope(
       } else if (version === 'HEAD') {
         versionFiles = scope.commitFiles;
       } else {
-        const commitFiles = await git.getFileChanges(version);
+        const commitFiles = await cacheService.getCachedFileChanges(version);
         versionFiles = new Set(commitFiles.map(f => f.path));
       }
 

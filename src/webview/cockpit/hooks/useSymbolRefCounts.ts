@@ -59,29 +59,8 @@ export const useSymbolRefCounts = (
       }
     });
 
-    // Also check blastRadius for additional refs
-    const blastIncoming = bundleFacts.evidence?.['scope.blastRadius']?.incoming || [];
-    const blastOutgoing = bundleFacts.evidence?.['scope.blastRadius']?.outgoing || [];
-
-    blastIncoming.forEach((ref: any) => {
-      const toPath = ref.to?.split(':')[0] || ref.to;
-      if (toPath === filePath) {
-        const symbolId = ref.to?.split(':').slice(1).join(':') || ref.to || '';
-        if (symbolId) {
-          incoming.set(symbolId, (incoming.get(symbolId) || 0) + 1);
-        }
-      }
-    });
-
-    blastOutgoing.forEach((ref: any) => {
-      const fromPath = ref.from?.split(':')[0] || ref.from;
-      if (fromPath === filePath) {
-        const symbolId = ref.from?.split(':').slice(1).join(':') || ref.from || '';
-        if (symbolId) {
-          outgoing.set(symbolId, (outgoing.get(symbolId) || 0) + 1);
-        }
-      }
-    });
+    // Note: scope.blastRadius is just an array of file paths, not an object with incoming/outgoing
+    // Blast radius relationships are already captured in working.edges above
 
     return { incoming, outgoing };
   }, [bundleFacts, filePath]);

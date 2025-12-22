@@ -24,6 +24,9 @@ export function createIndexCommitsStep(
         return;
       }
 
+      // Set plan data on indexer for direct access (avoids cache lookups)
+      commitIndexer.setPlanData(state.plan);
+
       const startTime = Date.now();
 
       logDebug(

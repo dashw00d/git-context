@@ -12,6 +12,7 @@ export interface PathFilterOptions {
   commitSha?: string;
   skipSizeCheck?: boolean;
   skipGitIgnore?: boolean; // Skip git ignore check if files already came from ls-files --exclude-standard
+  plan?: import('../analysis/runner/pipelineTypes').PlanData;
 }
 
 export interface PathFilterResult {
@@ -66,24 +67,33 @@ export async function shouldProcessPath(
   }
 
   // Skip git ignore check if files already came from ls-files --exclude-standard
-  if (options.git && !options.skipGitIgnore) {
-    const cacheKey = `${filePath}:workspace:gitignore`;
-    let isIgnored: boolean;
-
-    const cached = filterCache.get(cacheKey);
-    if (cached !== undefined) {
-      isIgnored = cached;
-    } else {
-      isIgnored = await options.git.isIgnored(filePath);
-      filterCache.set(cacheKey, isIgnored);
+  if (!options.skipGitIgnore) {
+    // Try plan data first
+    if (options.plan?.ignoredPaths.has(normalized)) {
+      return { shouldProcess: false, reason: 'ignored by git (plan)' };
     }
 
-    if (isIgnored) {
-      return { shouldProcess: false, reason: 'ignored by git' };
+    if (options.git) {
+      const cacheKey = `${filePath}:workspace:gitignore`;
+      let isIgnored: boolean;
+
+      const cached = filterCache.get(cacheKey);
+      if (cached !== undefined) {
+        isIgnored = cached;
+      } else {
+        isIgnored = await options.git.isIgnored(filePath);
+        filterCache.set(cacheKey, isIgnored);
+      }
+
+      if (isIgnored) {
+        return { shouldProcess: false, reason: 'ignored by git' };
+      }
     }
   }
 
   if (options.git && options.commitSha) {
+    // Note: plan.ignoredPaths is already checked above in the !skipGitIgnore block.
+    // For historical commits, we fall back to git check-ignore if plan doesn't cover it.
     const cacheKey = `${filePath}:${options.commitSha}:gitignore-commit`;
     let isIgnored: boolean;
 
@@ -115,6 +125,15 @@ export async function shouldProcessPath(
   if (!options.skipSizeCheck && options.status !== 'D') {
     const maxFileSize = config.maxFileSize ?? 102400;
     let fileSize: number | null = null;
+
+    // Try plan data first
+    if (options.commitSha && options.plan?.sizes.has(`${options.commitSha}:${filePath}`)) {
+      fileSize = options.plan.sizes.get(`${options.commitSha}:${filePath}`)!;
+      if (fileSize > maxFileSize) {
+        return { shouldProcess: false, reason: `size ${fileSize} > ${maxFileSize} (plan)` };
+      }
+      return { shouldProcess: true };
+    }
 
     if (options.commitSha && options.git) {
       const cacheKey = `${filePath}:${options.commitSha}:size`;

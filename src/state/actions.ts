@@ -95,6 +95,7 @@ export type Action =
         facts?: any;
         pendingChanges?: number;
         totalEdits?: number;
+        isTracking?: boolean;
       };
     }
   | {
@@ -129,4 +130,6 @@ export type Action =
       type: 'FRAME_ANALYSIS_TIER_FAILED';
       payload: { frameId: string; tier: number; error: string };
     }
-  | { type: 'WEBVIEW_MESSAGE'; payload: { message: any; target: string } };
+  | { type: 'WEBVIEW_MESSAGE'; payload: { message: any; target: string } }
+  | { type: 'IGNORE_NEXT_FACTS_UPDATE' }
+  | { type: 'FACTS_UPDATE_IGNORED' };

@@ -174,8 +174,9 @@ export class GitOperations {
     try {
       let output: string;
       try {
+        // Use raw format to get blob SHAs
         output = await withTimeout(
-          this.git.raw(['diff-tree', '-r', '--no-commit-id', '--name-status', sha]),
+          this.git.raw(['diff-tree', '-r', '--no-commit-id', sha]),
           30000,
           'Git diff-tree'
         );
@@ -186,8 +187,7 @@ export class GitOperations {
               'diff-tree',
               '-r',
               '--no-commit-id',
-              '--name-status',
-              '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+              '4b825dc642cb6eb9a060e54bf8d69288fbee4904', // Empty tree SHA
               sha,
             ]),
             30000,
@@ -205,22 +205,45 @@ export class GitOperations {
       const lines = output.split('\n').filter(line => line.trim());
 
       for (const line of lines) {
+        // Format: :<old-mode> <new-mode> <old-sha> <new-sha> <status>\t<path>
+        // Or for rename: :<old-mode> <new-mode> <old-sha> <new-sha> <status>\t<old-path>\t<new-path>
+        if (!line.startsWith(':')) continue;
+
         const parts = line.split('\t');
-        if (parts.length >= 2) {
-          const status = parts[0];
-          const filePath = parts[1];
-          let oldPath: string | undefined;
+        const meta = parts[0].substring(1).split(' '); // Remove leading ':' and split by space
 
-          if (status.startsWith('R') || status.startsWith('C')) {
-            oldPath = parts[2];
-          }
+        if (meta.length < 5) continue;
 
-          changes.push({
-            path: filePath,
-            status: status.charAt(0) as FileChange['status'],
-            oldPath,
-          });
+        const oldSha = meta[2];
+        const newSha = meta[3];
+        const statusRaw = meta[4];
+        const statusChar = statusRaw.charAt(0);
+
+        const filePath = parts[1]; // This is the path (or old path for rename?)
+        // For rename/copy, parts[1] is old path, parts[2] is new path
+        // Wait, git diff-tree output for rename:
+        // :100644 100644 <old-sha> <new-sha> R100\told-path\tnew-path
+
+        let path = filePath;
+        let oldPath: string | undefined;
+        let status: FileChange['status'] = 'M';
+
+        if (statusChar === 'R' || statusChar === 'C') {
+          oldPath = parts[1];
+          path = parts[2];
+          status = statusChar as FileChange['status'];
+        } else if (['A', 'M', 'D', 'U'].includes(statusChar)) {
+          status = statusChar as FileChange['status'];
+          path = parts[1];
         }
+
+        changes.push({
+          path,
+          status,
+          oldPath,
+          newSha,
+          oldSha,
+        });
       }
 
       return changes;
@@ -316,21 +339,27 @@ export class GitOperations {
 
   /**
    * Safely get file content, returning empty string if file doesn't exist
+   * Uses cache if available, falls back to direct call
    */
   async safeGetFileContent(sha: string, filePath: string): Promise<string> {
+    // Check cache first
     try {
-      return await withTimeout(
-        this.git.show([`${sha}:${filePath}`]),
-        30000,
-        'Git show safe file content'
-      );
-    } catch (error: any) {
-      if (this.isGitPathMissing(error)) {
-        return '';
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cache = getGitCacheService();
+      const cached = cache.getContent(sha, filePath);
+      if (cached !== undefined) {
+        return cached;
       }
-      logError(`Failed to get file content for ${sha}:${filePath}: ${error.message}`);
-      return '';
+    } catch {
+      // Cache not available
     }
+
+    // If not in cache, this should not happen if cache was warmed properly
+    // But fail fast rather than timing out
+    logWarn(
+      `[GitOperations] File content not in cache: ${sha}:${filePath} - cache should have been warmed`
+    );
+    return '';
   }
 
   /**
@@ -387,6 +416,20 @@ export class GitOperations {
     const result = new Map<string, boolean>();
     if (filePaths.length === 0) return result;
 
+    // Check cache first
+    try {
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cache = getGitCacheService();
+      if (cache.isIgnoreCacheWarmed()) {
+        for (const path of filePaths) {
+          result.set(path, cache.isIgnored(path));
+        }
+        return result;
+      }
+    } catch {
+      // Cache not available
+    }
+
     // Initialize all as not ignored
     for (const path of filePaths) {
       result.set(path, false);
@@ -407,8 +450,21 @@ export class GitOperations {
 
   /**
    * Check if a file is ignored by git
+   * Uses cache if available, falls back to direct call
    */
   async isIgnored(filePath: string): Promise<boolean> {
+    // Check cache first (import dynamically to avoid circular deps)
+    try {
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cache = getGitCacheService();
+      if (cache.isIgnoreCacheWarmed()) {
+        return cache.isIgnored(filePath);
+      }
+    } catch {
+      // Cache not available, fall through to direct call
+    }
+
+    // Direct call (cold start only)
     try {
       const result = await withTimeout(this.git.checkIgnore([filePath]), 5000, 'Git check ignore');
       if (result.length > 0) {
@@ -474,6 +530,21 @@ export class GitOperations {
   }
 
   async getBlobSha(sha: string, filePath: string): Promise<string> {
+    // Check cache first
+    try {
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cache = getGitCacheService();
+      if (cache.isTreeCached(sha)) {
+        const cached = cache.getBlobSha(sha, filePath);
+        if (cached) return cached;
+        // File not in tree at this commit
+        return '';
+      }
+    } catch {
+      // Cache not available, fall through to direct call
+    }
+
+    // Direct call (cold start only)
     try {
       const output = await withTimeout(
         this.git.raw(['ls-tree', '-r', sha, '--', filePath]),
@@ -501,6 +572,18 @@ export class GitOperations {
   }
 
   async getBlobSize(sha: string, filePath: string): Promise<number> {
+    // Check cache first
+    try {
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cache = getGitCacheService();
+      const cachedSize = cache.getSize(sha, filePath);
+      if (cachedSize !== undefined) {
+        return cachedSize;
+      }
+    } catch {
+      // Cache not available
+    }
+
     try {
       const output = await withTimeout(
         this.git.raw(['cat-file', '-s', `${sha}:${filePath}`]),

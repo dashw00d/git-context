@@ -3,6 +3,8 @@ import { useFileAnalysisData } from '../../hooks/useFileAnalysisData';
 import { useSymbolRefCounts } from '../../hooks/useSymbolRefCounts';
 import { HoverInfoCard } from './HoverInfoCard';
 import { SymbolHeaderBar } from './SymbolHeaderBar';
+// Note: react-window installed but full virtualization deferred due to variable line heights
+// (symbol headers, collapsed symbols). Memoization provides immediate performance benefit.
 
 interface DriftIssue {
   type?: string;

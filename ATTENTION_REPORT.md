@@ -1,8 +1,8 @@
 # Code Attention Report
 
-*Generated: 2025-12-04T11:51:19.634Z*
+*Generated: 2025-12-04T12:52:01.050Z*
 
-**Analysis scope:** 2 commits, 199 files
+**Analysis scope:** 1 commits, 8 files
 
 ## Table of Contents
 
@@ -24,8 +24,8 @@
 
 | Severity | Count | Description |
 |----------|-------|-------------|
-| 🔴 **Critical** | 52 | Files/symbols requiring immediate attention |
-| 🟡 **High** | 44 | Important issues to address soon |
+| 🔴 **Critical** | 50 | Files/symbols requiring immediate attention |
+| 🟡 **High** | 1 | Important issues to address soon |
 | 🔵 **Medium** | 0 | Code quality improvements |
 
 ## Critical Issues
@@ -37,8 +37,7 @@ Files and symbols that change frequently are prone to bugs and hard to maintain.
 #### 📁 Top File Hotspots
 
 1. 🔴 **[src/webview/cockpit/services/MessageController.ts](src/webview/cockpit/services/MessageController.ts)** (Score: 85.1)
-   - Changed in 3/3 versions
-   - Churn: +821 / -745 lines
+   - Churn: +1158 / -745 lines
    <details><summary>Preview</summary>
 
    ```typescript
@@ -56,7 +55,6 @@ import { ExplorerController } from './ExplorerController';
    </details>
 
 2. 🔴 **[src/state/effects.ts](src/state/effects.ts)** (Score: 85.1)
-   - Changed in 3/3 versions
    <details><summary>Preview</summary>
 
    ```typescript
@@ -74,7 +72,6 @@ import { CockpitStore } from './store';
    </details>
 
 3. 🔴 **[src/services/metricsService.ts](src/services/metricsService.ts)** (Score: 85.1)
-   - Changed in 3/3 versions
    <details><summary>Preview</summary>
 
    ```typescript
@@ -92,8 +89,7 @@ export class MetricsService {
    </details>
 
 4. 🔴 **[src/analysis/git.ts](src/analysis/git.ts)** (Score: 85.1)
-   - Changed in 3/3 versions
-   - Churn: +1853 / -790 lines
+   - Churn: +1960 / -809 lines
    <details><summary>Preview</summary>
 
    ```typescript
@@ -111,8 +107,7 @@ export class GitOperations {
    </details>
 
 5. 🔴 **[src/webview/cockpit/services/AnalysisController.ts](src/webview/cockpit/services/AnalysisController.ts)** (Score: 85.1)
-   - Changed in 3/3 versions
-   - Churn: +781 / -799 lines
+   - Churn: +978 / -799 lines
    <details><summary>Preview</summary>
 
    ```typescript
@@ -130,7 +125,6 @@ import { withTimeout } from '../../../utils/async';
    </details>
 
 6. 🔴 **[src/analysis/symbols.ts](src/analysis/symbols.ts)** (Score: 85.1)
-   - Changed in 3/3 versions
    - Churn: +763 / -270 lines
    <details><summary>Preview</summary>
 
@@ -149,7 +143,6 @@ import { getTreeSitterParser } from './tree-sitter';
    </details>
 
 7. 🔴 **[src/analysis/symbolDna.ts](src/analysis/symbolDna.ts)** (Score: 85.1)
-   - Changed in 3/3 versions
    - Churn: +637 / -524 lines
    <details><summary>Preview</summary>
 
@@ -168,7 +161,6 @@ export interface DnaConfig {
    </details>
 
 8. 🔴 **[src/analysis/workspaceIndexer.ts](src/analysis/workspaceIndexer.ts)** (Score: 85.1)
-   - Changed in 3/3 versions
    - Churn: +1354 / -500 lines
    <details><summary>Preview</summary>
 
@@ -187,7 +179,6 @@ import { filterPath } from '../utils/pathFilter';
    </details>
 
 9. 🔴 **[src/analysis/cstTimeline.ts](src/analysis/cstTimeline.ts)** (Score: 85.1)
-   - Changed in 3/3 versions
    - Churn: +664 / -292 lines
    <details><summary>Preview</summary>
 
@@ -206,7 +197,6 @@ import type { ScopeSet } from '../facts/scope';
    </details>
 
 10. 🔴 **[src/utils/pipelineDebugger.ts](src/utils/pipelineDebugger.ts)** (Score: 85.1)
-   - Changed in 2/3 versions
    <details><summary>Preview</summary>
 
    ```typescript
@@ -249,158 +239,22 @@ interface TierTrace {
 
 Commits that affect many symbols can have unintended consequences across the codebase.
 
-1. 🔴 **Commit 75d3bdfd**
+1. 🟡 **Commit 8153f303**
 
-   - **Blast Radius:** 3835 symbols affected
-   - **Files Changed:** 108
-   - **Symbol Changes:** 185 added, 19 modified, 168 removed
+   - **Blast Radius:** 61 symbols affected
+   - **Files Changed:** 8
+   - **Symbol Changes:** 2 added, 0 modified, 2 removed
    - **Structural Change:** 0%
-   - **Risks:** schema-migration, refactor, security, performance, payment
-
-2. 🔴 **Commit 26bfd617**
-
-   - **Blast Radius:** 9511 symbols affected
-   - **Files Changed:** 164
-   - **Symbol Changes:** 482 added, 0 modified, 482 removed
-   - **Structural Change:** 0%
-   - **Risks:** schema-migration, refactor, security, performance, auth, payment
 
 ## High Priority Items
 
 ### Risky Changes
 
-Commits flagged with specific risk patterns that require careful review.
-
-#### 1. Commit 75d3bdfd
-
-**Risk Flags:**
-- 🗄️ `schema-migration`
-- ♻️ `refactor`
-- 🔒 `security`
-- ⚡ `performance`
-- 💳 `payment`
-
-**Impact:**
-- 108 files, 185A / 19M / 168D symbols
-- Structural change: 0%
-
-**Affected Hotspots:**
-- 2eb37755b768c4e1 (impact: 214)
-- 55222ed75af18c19 (impact: 198)
-- 2a20a5a36214fe41 (impact: 196)
-- ddd34238ce0e4523 (impact: 167)
-- daca2697a02e94dc (impact: 145)
-
-#### 2. Commit 26bfd617
-
-**Risk Flags:**
-- 🗄️ `schema-migration`
-- ♻️ `refactor`
-- 🔒 `security`
-- ⚡ `performance`
-- 🔐 `auth`
-- 💳 `payment`
-
-**Impact:**
-- 164 files, 482A / 0M / 482D symbols
-- Structural change: 0%
-
-**Affected Hotspots:**
-- 45434d58ce553a61 (impact: 214)
-- f413bc12b8b746d8 (impact: 214)
-- 610026479079c4e2 (impact: 199)
-- 3d2a82fc6040f6b2 (impact: 196)
-- 91b5771460cc5f33 (impact: 167)
+*No risky changes detected.*
 
 ### Missing Symbols
 
-Symbols that were expected to be present but are not found in the current codebase.
-
-1. 🟡 **isPublicSymbol** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `private isPublicSymbol(symbol: SymbolInfo): boolean`
-
-2. 🟡 **SymbolExtractor** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `class SymbolExtractor`
-
-3. 🟡 **extractCommitSymbols** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `async extractCommitSymbols(
-    sha: string,
-    files: FileChange[]
-  ): Promise<`
-
-4. 🟡 **extractFileSymbols** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `private async extractFileSymbols(
-    sha: string,
-    file: FileChange
-  ): Promise<`
-
-5. 🟡 **extractWorkingTreeSymbols** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `async extractWorkingTreeSymbols(
-    files: FileChange[],
-    options:`
-
-6. 🟡 **extractWorkingTreeFileSymbols** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `private async extractWorkingTreeFileSymbols(
-    file: FileChange,
-    options:`
-
-7. 🟡 **extractIncremental** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `public async extractIncremental(
-    prevSymbols: SymbolInfo[],
-    changes: vscode.TextDocumentContentChangeEvent[],
-    content: string,
-    path: string
-  ): Promise<`
-
-8. 🟡 **extractSymbolsFromContent** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `public async extractSymbolsFromContent(content: string, filePath: string): Promise<SymbolInfo[]>`
-
-9. 🟡 **extractSymbolsWithBodies** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `async extractSymbolsWithBodies(
-    content: string,
-    filePath: string,
-    _language: string
-  ): Promise<`
-
-10. 🟡 **extractBodyText** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `private extractBodyText(content: string, startLine: number, endLine: number): string`
-
-11. 🟡 **compareSymbolSets** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `private compareSymbolSets(
-    previous: SymbolInfo[],
-    current: SymbolInfo[],
-    _filePath: string
-  ):`
-
-12. 🟡 **shouldAnalyzeFile** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `private async shouldAnalyzeFile(filePath: string): Promise<boolean>`
-
-13. 🟡 **extractStagedSymbols** in `src/analysis/symbols.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `async extractStagedSymbols(): Promise<`
-
-14. 🟡 **MetricsService** in `src/services/metricsService.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `class MetricsService`
-
-15. 🟡 **getNodeMetrics** in `src/services/metricsService.ts`
-   - Missing since: 1 version ago (75d3bdf)
-   - Last signature: `public async getNodeMetrics(
-    filePaths: string[],
-    since?: number
-  ): Promise<Record<string, NodeMetrics>>`
+*No missing symbols detected.*
 
 ## Code Quality Issues
 
@@ -412,54 +266,47 @@ Code that has diverged from its expected state or naming conventions.
 
 Calls to functions that cannot be resolved:
 
-1. Call to `function_log` in unknown
-   - Occurrences: 55, Severity: 1/10
+1. Call to `get` in unknown
+   - Occurrences: 14, Severity: 1/10
 
-2. Call to `function_join` in unknown
-   - Occurrences: 22, Severity: 1/10
+2. Call to `has` in unknown
+   - Occurrences: 8, Severity: 1/10
 
-3. Call to `function_filter` in unknown
-   - Occurrences: 7, Severity: 1/10
-
-4. Call to `function_existsSync` in unknown
-   - Occurrences: 9, Severity: 1/10
-
-5. Call to `function_file` in unknown
-   - Occurrences: 5, Severity: 1/10
-
-6. Call to `function_warn` in unknown
+3. Call to `has` in unknown
    - Occurrences: 6, Severity: 1/10
 
-7. Call to `method_log` in unknown
-   - Occurrences: 55, Severity: 1/10
+4. Call to `get` in unknown
+   - Occurrences: 6, Severity: 1/10
 
-8. Call to `method_join` in unknown
-   - Occurrences: 22, Severity: 1/10
+5. Call to `from` in unknown
+   - Occurrences: 6, Severity: 1/10
 
-9. Call to `method_filter` in unknown
-   - Occurrences: 7, Severity: 1/10
+6. Call to `constructor` in unknown
+   - Occurrences: 5, Severity: 1/10
 
-10. Call to `method_existsSync` in unknown
-   - Occurrences: 9, Severity: 1/10
+7. Call to `now` in unknown
+   - Occurrences: 8, Severity: 1/10
+
+8. Call to `logDebug` in unknown
+   - Occurrences: 6, Severity: 1/10
+
+9. Call to `logInfo` in unknown
+   - Occurrences: 13, Severity: 1/10
+
+10. Call to `getCollectionName` in unknown
+   - Occurrences: 6, Severity: 1/10
 
 ### Legacy Code
+
+*No legacy code issues detected.*
 
 ## Appendix
 
 ### Analyzed Commits
 
-#### 75d3bdfd3c49fbcb476deb8de43ac193806bc796
-- Files changed: 108
-- Symbols: 185A / 19M / 168D
-- Edges: 8461A / 7404D
+#### 8153f303cdb616e40812be0522ce97fbc3aec674
+- Files changed: 8
+- Symbols: 2A / 0M / 2D
+- Edges: 149A / 83D
 - Structural change: 0%
-- Blast radius: 3835
-- Risks: schema-migration, refactor, security, performance, payment
-
-#### 26bfd6171667199783a886d7e10d2bf086301d13
-- Files changed: 164
-- Symbols: 482A / 0M / 482D
-- Edges: 18952A / 19698D
-- Structural change: 0%
-- Blast radius: 9511
-- Risks: schema-migration, refactor, security, performance, auth, payment
+- Blast radius: 61

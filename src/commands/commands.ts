@@ -118,7 +118,7 @@ export async function registerCommands(
       async () => {
         try {
           await commitsProvider.refresh();
-          const state = orchestrator.getState();
+          const state = store.getState();
           const stagedPaths = state.stagedFiles.map(f => f.path);
 
           if (stagedPaths.length === 0) {
@@ -144,7 +144,7 @@ export async function registerCommands(
       async () => {
         try {
           await commitsProvider.refresh();
-          const state = orchestrator.getState();
+          const state = store.getState();
           const unstagedPaths = state.unstagedFiles.map(f => f.path);
 
           if (unstagedPaths.length === 0) {
@@ -272,7 +272,7 @@ export async function registerCommands(
       'git-context.analyze',
       async (forceReanalyze = false) => {
         try {
-          const state = orchestrator.getState();
+          const state = store.getState();
           logDebug(`🔍 [AnalyzeCmd] State selectedCommitShas: ${state.selectedCommitShas.length}`);
           logDebug(
             `🔍 [AnalyzeCmd] State SHAs: ${state.selectedCommitShas.slice(0, 10).join(', ')}${state.selectedCommitShas.length > 10 ? '...' : ''}`
@@ -619,7 +619,7 @@ export async function registerCommands(
     const bundleExportCmd = vscode.commands.registerCommand(
       'git-context.bundle.export',
       async () => {
-        const state = orchestrator.getState();
+        const state = store.getState();
         if (!state.bundleFacts) {
           vscode.window.showWarningMessage('No active bundle to export');
           return;
@@ -643,7 +643,7 @@ export async function registerCommands(
     const exportContextCmd = vscode.commands.registerCommand(
       'git-context.exportContext',
       async () => {
-        const state = orchestrator.getState();
+        const state = store.getState();
         const shas = state.bundleFacts?.bundle.shas || state.selectedCommitShas;
 
         if (!shas || shas.length === 0) {
