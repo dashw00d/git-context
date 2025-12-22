@@ -66,6 +66,8 @@ export function createInitStep(git: GitOperations): PipelineStep {
       // 3. Get workspace changes
       const staged = await git.getStagedFiles();
       const unstaged = await git.getUnstagedFiles();
+      plan.stagedFiles = staged;
+      plan.unstagedFiles = unstaged;
       const workspacePaths = [...staged, ...unstaged].map(f => f.path);
 
       // 4. Warm ignore cache

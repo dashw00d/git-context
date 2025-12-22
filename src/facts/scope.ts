@@ -1,6 +1,7 @@
 import { GitOperations } from '../analysis/git';
 import { getGitCacheService } from '../services/gitCacheService';
 import { prepare } from '../storage/statement-wrapper';
+import { FileChange } from '../types';
 import { getGitRoot } from '../utils/config';
 import { logDebug } from '../utils/logger';
 import { normalizeToRelative } from '../utils/path';
@@ -185,14 +186,27 @@ export async function computeScope(
     commitFiles.forEach(f => scope.commitFiles.add(normalizeToRelative(f.path, gitRoot)));
   }
 
-  const workingChanges = await git.getWorkingDirectoryChanges();
+  // Use plan data if available (from initStep) to avoid redundant git calls
+  let stagedFiles: FileChange[];
+  let unstagedFiles: FileChange[];
+  let workingChanges: FileChange[];
+
+  if (plan?.stagedFiles && plan?.unstagedFiles) {
+    // Use cached data from init step - no git calls needed!
+    stagedFiles = plan.stagedFiles;
+    unstagedFiles = plan.unstagedFiles;
+    workingChanges = [...stagedFiles, ...unstagedFiles];
+    logDebug('[Scope] Using staged/unstaged files from plan (no git calls)');
+  } else {
+    // Fallback to git calls (should rarely happen in normal pipeline execution)
+    workingChanges = await git.getWorkingDirectoryChanges();
+    stagedFiles = await git.getStagedFiles();
+    unstagedFiles = await git.getUnstagedFiles();
+  }
 
   if (workspaceParts) {
     const includeStaged = workspaceParts.has('staged');
     const includeUnstaged = workspaceParts.has('unstaged');
-
-    const stagedFiles = await git.getStagedFiles();
-    const unstagedFiles = await git.getUnstagedFiles();
 
     if (includeStaged) {
       stagedFiles.forEach(f => {

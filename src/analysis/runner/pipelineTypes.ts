@@ -39,6 +39,12 @@ export interface PlanData {
 
   /** Ignored paths */
   ignoredPaths: Set<string>;
+
+  /** Staged files (from init step) */
+  stagedFiles?: FileChange[];
+
+  /** Unstaged files (from init step) */
+  unstagedFiles?: FileChange[];
 }
 
 export interface PipelineState {

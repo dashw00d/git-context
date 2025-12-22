@@ -10,9 +10,13 @@ export class GitOperations {
   private gitRoot: string;
   private git: SimpleGit;
   private static hotspotCache: Map<string, { expires: number; data: HotspotStat[] }> = new Map();
-  private headShaCache?: { value: string; expires: number };
-  private statusCache?: { output: string; expires: number };
-  private untrackedCache?: { files: string[]; expires: number };
+  private static headShaCache?: { value: string; expires: number };
+  private static statusCache?: { output: string; expires: number };
+  private static untrackedCache?: { files: string[]; expires: number };
+  // Pending promise caches to deduplicate concurrent requests
+  private static pendingStatusPromise?: Promise<string>;
+  private static pendingUntrackedPromise?: Promise<string[]>;
+  private static pendingHeadShaPromise?: Promise<string>;
   private commitInfoCache = new Map<string, CommitInfo>();
   private static sharedCommitInfoCache = new Map<string, CommitInfo>();
 
@@ -154,35 +158,67 @@ export class GitOperations {
 
   private async getSharedStatus(ttlMs = 2000): Promise<string> {
     const now = Date.now();
-    if (this.statusCache && this.statusCache.expires > now) {
-      return this.statusCache.output;
+    // Check cache first
+    if (GitOperations.statusCache && GitOperations.statusCache.expires > now) {
+      return GitOperations.statusCache.output;
     }
 
-    const output = await withTimeout(
-      this.git.raw(['status', '--porcelain']),
-      30000,
-      'Git status porcelain'
-    );
+    // If there's already a pending request, wait for it instead of making a new one
+    if (GitOperations.pendingStatusPromise) {
+      return GitOperations.pendingStatusPromise;
+    }
 
-    this.statusCache = { output, expires: now + ttlMs };
-    this.untrackedCache = undefined;
-    return output;
+    // Create new request and cache the promise
+    GitOperations.pendingStatusPromise = (async () => {
+      try {
+        const output = await withTimeout(
+          this.git.raw(['status', '--porcelain']),
+          30000,
+          'Git status porcelain'
+        );
+
+        GitOperations.statusCache = { output, expires: now + ttlMs };
+        GitOperations.untrackedCache = undefined;
+        return output;
+      } finally {
+        // Clear pending promise when done (success or failure)
+        GitOperations.pendingStatusPromise = undefined;
+      }
+    })();
+
+    return GitOperations.pendingStatusPromise;
   }
 
   private async getSharedUntracked(ttlMs = 2000): Promise<string[]> {
     const now = Date.now();
-    if (this.untrackedCache && this.untrackedCache.expires > now) {
-      return this.untrackedCache.files;
+    // Check cache first
+    if (GitOperations.untrackedCache && GitOperations.untrackedCache.expires > now) {
+      return GitOperations.untrackedCache.files;
     }
 
-    const output = await withTimeout(
-      this.git.raw(['ls-files', '--others', '--exclude-standard']),
-      30000,
-      'Git ls-files untracked'
-    );
-    const files = this.parseFileList(output);
-    this.untrackedCache = { files, expires: now + ttlMs };
-    return files;
+    // If there's already a pending request, wait for it instead of making a new one
+    if (GitOperations.pendingUntrackedPromise) {
+      return GitOperations.pendingUntrackedPromise;
+    }
+
+    // Create new request and cache the promise
+    GitOperations.pendingUntrackedPromise = (async () => {
+      try {
+        const output = await withTimeout(
+          this.git.raw(['ls-files', '--others', '--exclude-standard']),
+          30000,
+          'Git ls-files untracked'
+        );
+        const files = this.parseFileList(output);
+        GitOperations.untrackedCache = { files, expires: now + ttlMs };
+        return files;
+      } finally {
+        // Clear pending promise when done (success or failure)
+        GitOperations.pendingUntrackedPromise = undefined;
+      }
+    })();
+
+    return GitOperations.pendingUntrackedPromise;
   }
 
   /**
@@ -501,14 +537,29 @@ export class GitOperations {
   async getHeadSha(): Promise<string> {
     try {
       const now = Date.now();
-      if (this.headShaCache && this.headShaCache.expires > now) {
-        return this.headShaCache.value;
+      // Check cache first
+      if (GitOperations.headShaCache && GitOperations.headShaCache.expires > now) {
+        return GitOperations.headShaCache.value;
       }
 
-      const result = await withTimeout(this.git.revparse(['HEAD']), 5000, 'Git revparse HEAD');
+      // If there's already a pending request, wait for it instead of making a new one
+      if (GitOperations.pendingHeadShaPromise) {
+        return GitOperations.pendingHeadShaPromise;
+      }
 
-      this.headShaCache = { value: result, expires: now + 5000 };
-      return result;
+      // Create new request and cache the promise
+      GitOperations.pendingHeadShaPromise = (async () => {
+        try {
+          const result = await withTimeout(this.git.revparse(['HEAD']), 5000, 'Git revparse HEAD');
+          GitOperations.headShaCache = { value: result, expires: now + 5000 };
+          return result;
+        } finally {
+          // Clear pending promise when done (success or failure)
+          GitOperations.pendingHeadShaPromise = undefined;
+        }
+      })();
+
+      return GitOperations.pendingHeadShaPromise;
     } catch (error: any) {
       logError(`Failed to get HEAD SHA: ${error.message}`);
       return '';
