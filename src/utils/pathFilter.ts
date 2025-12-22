@@ -92,29 +92,34 @@ export async function shouldProcessPath(
   }
 
   if (options.git && options.commitSha) {
-    // Note: plan.ignoredPaths is already checked above in the !skipGitIgnore block.
-    // For historical commits, we fall back to git check-ignore if plan doesn't cover it.
-    const cacheKey = `${filePath}:${options.commitSha}:gitignore-commit`;
-    let isIgnored: boolean;
+    // If plan data has ignoredPaths populated, trust it completely.
+    // The plan was populated by initStep which already did a batch check-ignore.
+    // If we reach here, the file is NOT in ignoredPaths, so it's not ignored.
+    if (options.plan?.ignoredPaths === undefined) {
+      // No plan data available - fall back to git check-ignore
+      const cacheKey = `${filePath}:${options.commitSha}:gitignore-commit`;
+      let isIgnored: boolean;
 
-    const cached = filterCache.get(cacheKey);
-    if (cached !== undefined) {
-      isIgnored = cached;
-    } else {
-      if (typeof (options.git as any).isIgnoredAtCommit === 'function') {
-        isIgnored = await (options.git as any).isIgnoredAtCommit(options.commitSha, filePath);
+      const cached = filterCache.get(cacheKey);
+      if (cached !== undefined) {
+        isIgnored = cached;
       } else {
-        isIgnored = await options.git.isIgnored(filePath);
+        if (typeof (options.git as any).isIgnoredAtCommit === 'function') {
+          isIgnored = await (options.git as any).isIgnoredAtCommit(options.commitSha, filePath);
+        } else {
+          isIgnored = await options.git.isIgnored(filePath);
+        }
+        filterCache.set(cacheKey, isIgnored);
       }
-      filterCache.set(cacheKey, isIgnored);
-    }
 
-    if (isIgnored) {
-      return {
-        shouldProcess: false,
-        reason: `ignored by git at commit ${options.commitSha.substring(0, 8)}`,
-      };
+      if (isIgnored) {
+        return {
+          shouldProcess: false,
+          reason: `ignored by git at commit ${options.commitSha.substring(0, 8)}`,
+        };
+      }
     }
+    // else: plan.ignoredPaths exists and file is not in it, so proceed
   }
 
   const ignoreMatcher = createCustomIgnoreMatcher(config.customIgnorePaths);

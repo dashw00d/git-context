@@ -1,6 +1,5 @@
 import { computeScope } from '../../../facts/scope';
-import { getGitCacheService } from '../../../services/gitCacheService';
-import { logDebug, logInfo } from '../../../utils/logger';
+import { logDebug } from '../../../utils/logger';
 import { GitOperations } from '../../git';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 import { updateState } from './utils';
@@ -23,7 +22,8 @@ export function createScopeStep(git?: GitOperations): PipelineStep {
         workspaceParts,
         state.explicitTimeline,
         state.liveOverrides?.keys(),
-        git
+        git,
+        state.plan
       );
 
       logDebug('🟩 [ScopeStep] computeScope returned, updating state');

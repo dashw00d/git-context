@@ -1,8 +1,6 @@
-import * as path from 'path';
 import { GitOperations } from '../analysis/git';
 import { getGitCacheService } from '../services/gitCacheService';
 import { prepare } from '../storage/statement-wrapper';
-import { FileChange } from '../types';
 import { getGitRoot } from '../utils/config';
 import { logDebug } from '../utils/logger';
 import { normalizeToRelative } from '../utils/path';
@@ -162,7 +160,8 @@ export async function computeScope(
   workspaceParts?: Set<'staged' | 'unstaged'>,
   explicitTimeline?: string[],
   liveOverridePaths?: Iterable<string>,
-  gitInstance?: GitOperations
+  gitInstance?: GitOperations,
+  plan?: import('../analysis/runner/pipelineTypes').PlanData
 ): Promise<ScopeSet> {
   const { ensureDatabaseInitialized } = await import('../storage/database');
 
@@ -239,10 +238,17 @@ export async function computeScope(
 
   const filteredPaths = new Set<string>();
 
-  // Batch git check-ignore to avoid 196 individual calls (each taking ~113ms)
+  // Use plan's ignore data if available (already populated by initStep)
   const pathsArray = Array.from(allPaths);
-  logDebug(`[Scope] Batch checking ${pathsArray.length} paths for git-ignore...`);
-  const ignoreMap = await git.areIgnored(pathsArray);
+  let ignoreMap: Map<string, boolean>;
+  if (plan?.ignoredPaths) {
+    ignoreMap = new Map(pathsArray.map(p => [p, plan.ignoredPaths.has(p)]));
+    logDebug(`[Scope] Using plan ignoreData for ${pathsArray.length} paths`);
+  } else {
+    // Fallback to git call (should rarely happen in normal pipeline execution)
+    logDebug(`[Scope] Batch checking ${pathsArray.length} paths for git-ignore...`);
+    ignoreMap = await git.areIgnored(pathsArray);
+  }
   logDebug(`[Scope] Found ${Array.from(ignoreMap.values()).filter(v => v).length} ignored paths`);
 
   // Now filter paths with cached ignore results

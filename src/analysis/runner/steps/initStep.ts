@@ -64,6 +64,9 @@ export function createInitStep(git: GitOperations): PipelineStep {
       const allPaths = [...new Set([...allTrackedFiles, ...workspacePaths])];
       await warmIgnoreCache(git, allPaths, plan.ignoredPaths);
 
+      // Also warm the GitCacheService singleton so other code paths can use it
+      await cacheService.warmIgnoreCache(allPaths);
+
       // 5. Get tree for HEAD (needed for workspace file lookups)
       const headTree = await getFullTree(git, 'HEAD');
       plan.trees.set('HEAD', headTree);
