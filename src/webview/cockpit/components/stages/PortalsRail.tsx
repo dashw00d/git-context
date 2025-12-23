@@ -130,7 +130,8 @@ function groupByFolder(references: any[]): Map<string, number> {
     // Extract path from reference (could be "from" or "to" depending on direction)
     const refPath = ref.from || ref.to || '';
     if (refPath) {
-      const filePath = refPath.split(':')[0]; // Remove symbol part if present
+      const lastColon = refPath.lastIndexOf(':');
+      const filePath = lastColon !== -1 ? refPath.substring(0, lastColon) : refPath;
       const folder = extractFolderName(filePath);
       groups.set(folder, (groups.get(folder) || 0) + 1);
     }
@@ -160,16 +161,24 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
   let filteredOutgoing = blastRadius?.outgoing || [];
 
   if (focusedSymbolId && currentFilePath) {
+    const normalizedTarget = currentFilePath.replace(/\\/g, '/');
+    // Ensure we handle both local and fully qualified IDs
+    const baseSymbolId = focusedSymbolId.includes(':')
+      ? focusedSymbolId.substring(focusedSymbolId.lastIndexOf(':') + 1)
+      : focusedSymbolId;
+
     // Filter to only references involving the focused symbol
     filteredIncoming = (blastRadius?.incoming || []).filter(ref => {
       // Parse "to" path and symbol from reference
-      // Format: "filePath:symbolId -> otherPath:otherSymbol (type)"
-      const toMatch = ref.to?.match(/^(.+):(.+)$/);
-      if (toMatch) {
-        const [, toPath, toSymbol] = toMatch;
+      const lastColon = ref.to?.lastIndexOf(':');
+      if (lastColon !== undefined && lastColon !== -1) {
+        const toPath = ref.to.substring(0, lastColon);
+        const toSymbol = ref.to.substring(lastColon + 1);
+        const normalizedPath = toPath.replace(/\\/g, '/');
+
         return (
-          toPath === currentFilePath &&
-          (toSymbol === focusedSymbolId || toSymbol.includes(focusedSymbolId))
+          normalizedPath === normalizedTarget &&
+          (toSymbol === baseSymbolId || toSymbol === focusedSymbolId)
         );
       }
       return false;
@@ -177,12 +186,15 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
 
     filteredOutgoing = (blastRadius?.outgoing || []).filter(ref => {
       // Parse "from" path and symbol from reference
-      const fromMatch = ref.from?.match(/^(.+):(.+)$/);
-      if (fromMatch) {
-        const [, fromPath, fromSymbol] = fromMatch;
+      const lastColon = ref.from?.lastIndexOf(':');
+      if (lastColon !== undefined && lastColon !== -1) {
+        const fromPath = ref.from.substring(0, lastColon);
+        const fromSymbol = ref.from.substring(lastColon + 1);
+        const normalizedPath = fromPath.replace(/\\/g, '/');
+
         return (
-          fromPath === currentFilePath &&
-          (fromSymbol === focusedSymbolId || fromSymbol.includes(focusedSymbolId))
+          normalizedPath === normalizedTarget &&
+          (fromSymbol === baseSymbolId || fromSymbol === focusedSymbolId)
         );
       }
       return false;

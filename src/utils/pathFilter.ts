@@ -13,6 +13,7 @@ export interface PathFilterOptions {
   skipSizeCheck?: boolean;
   skipGitIgnore?: boolean; // Skip git ignore check if files already came from ls-files --exclude-standard
   plan?: import('../analysis/runner/pipelineTypes').PlanData;
+  excludedPrefixes?: string[];
 }
 
 export interface PathFilterResult {
@@ -52,7 +53,24 @@ export async function shouldProcessPath(
   const normalized = filePath.replace(/\\/g, '/');
 
   const config = getExtensionConfig();
-  const excludedPrefixes = config.excludedPrefixes || DEFAULT_EXCLUDED_PREFIXES;
+  const baseExclusions = [
+    'node_modules/',
+    '.git/',
+    'dist/',
+    'out/',
+    'build/',
+    'public/',
+    'vendor/',
+    'storage/',
+  ];
+
+  const excludedPrefixes = [
+    ...new Set([
+      ...baseExclusions,
+      ...(config.excludedPrefixes || []),
+      ...(options.excludedPrefixes || []),
+    ]),
+  ];
 
   for (const prefix of excludedPrefixes) {
     if (normalized.startsWith(prefix) || normalized.includes('/' + prefix)) {

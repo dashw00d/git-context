@@ -29757,6 +29757,7 @@ Churn: ${node.score.toFixed(1)}
         return { incoming, outgoing };
       }
       const edges = bundleFacts.evidence?.["working.edges"] || [];
+      const normalizedTarget = filePath.replace(/\\/g, "/");
       edges.forEach((edge) => {
         let fromId;
         let toId;
@@ -29771,14 +29772,18 @@ Churn: ${node.score.toFixed(1)}
           return;
         }
         if (!fromId || !toId) return;
-        const fromFile = fromId.split(":")[0];
-        const toFile = toId.split(":")[0];
-        if (fromFile === filePath) {
-          const symbolId = fromId.split(":").slice(1).join(":") || fromId;
+        const lastColonFrom = fromId.lastIndexOf(":");
+        const lastColonTo = toId.lastIndexOf(":");
+        const fromPath = lastColonFrom !== -1 ? fromId.substring(0, lastColonFrom) : fromId;
+        const toPath = lastColonTo !== -1 ? toId.substring(0, lastColonTo) : toId;
+        const normalizedFrom = fromPath.replace(/\\/g, "/");
+        const normalizedTo = toPath.replace(/\\/g, "/");
+        if (normalizedFrom === normalizedTarget) {
+          const symbolId = lastColonFrom !== -1 ? fromId.substring(lastColonFrom + 1) : fromId;
           outgoing.set(symbolId, (outgoing.get(symbolId) || 0) + 1);
         }
-        if (toFile === filePath) {
-          const symbolId = toId.split(":").slice(1).join(":") || toId;
+        if (normalizedTo === normalizedTarget) {
+          const symbolId = lastColonTo !== -1 ? toId.substring(lastColonTo + 1) : toId;
           incoming.set(symbolId, (incoming.get(symbolId) || 0) + 1);
         }
       });
@@ -30566,8 +30571,8 @@ ${hotspotText}` : hotspotText;
                 isLegacy: isLegacySymbol || false,
                 hasDrift: !!driftIssue,
                 onToggle: () => toggleSymbolCollapse(symbolId),
-                onRefsClick: onSymbolClick ? () => onSymbolClick(symbolId) : void 0,
-                onFocus: onSymbolClick ? () => onSymbolClick(symbolId) : void 0
+                onRefsClick: () => onSymbolClick?.(symbolId),
+                onFocus: () => onSymbolClick?.(symbolId)
               }
             )
           ),
@@ -31341,7 +31346,8 @@ ${hotspotText}` : hotspotText;
     references.forEach((ref) => {
       const refPath = ref.from || ref.to || "";
       if (refPath) {
-        const filePath = refPath.split(":")[0];
+        const lastColon = refPath.lastIndexOf(":");
+        const filePath = lastColon !== -1 ? refPath.substring(0, lastColon) : refPath;
         const folder = extractFolderName(filePath);
         groups.set(folder, (groups.get(folder) || 0) + 1);
       }
@@ -31366,19 +31372,25 @@ ${hotspotText}` : hotspotText;
     let filteredIncoming = blastRadius?.incoming || [];
     let filteredOutgoing = blastRadius?.outgoing || [];
     if (focusedSymbolId && currentFilePath) {
+      const normalizedTarget = currentFilePath.replace(/\\/g, "/");
+      const baseSymbolId = focusedSymbolId.includes(":") ? focusedSymbolId.substring(focusedSymbolId.lastIndexOf(":") + 1) : focusedSymbolId;
       filteredIncoming = (blastRadius?.incoming || []).filter((ref) => {
-        const toMatch = ref.to?.match(/^(.+):(.+)$/);
-        if (toMatch) {
-          const [, toPath, toSymbol] = toMatch;
-          return toPath === currentFilePath && (toSymbol === focusedSymbolId || toSymbol.includes(focusedSymbolId));
+        const lastColon = ref.to?.lastIndexOf(":");
+        if (lastColon !== void 0 && lastColon !== -1) {
+          const toPath = ref.to.substring(0, lastColon);
+          const toSymbol = ref.to.substring(lastColon + 1);
+          const normalizedPath = toPath.replace(/\\/g, "/");
+          return normalizedPath === normalizedTarget && (toSymbol === baseSymbolId || toSymbol === focusedSymbolId);
         }
         return false;
       });
       filteredOutgoing = (blastRadius?.outgoing || []).filter((ref) => {
-        const fromMatch = ref.from?.match(/^(.+):(.+)$/);
-        if (fromMatch) {
-          const [, fromPath, fromSymbol] = fromMatch;
-          return fromPath === currentFilePath && (fromSymbol === focusedSymbolId || fromSymbol.includes(focusedSymbolId));
+        const lastColon = ref.from?.lastIndexOf(":");
+        if (lastColon !== void 0 && lastColon !== -1) {
+          const fromPath = ref.from.substring(0, lastColon);
+          const fromSymbol = ref.from.substring(lastColon + 1);
+          const normalizedPath = fromPath.replace(/\\/g, "/");
+          return normalizedPath === normalizedTarget && (fromSymbol === baseSymbolId || fromSymbol === focusedSymbolId);
         }
         return false;
       });
@@ -32436,11 +32448,17 @@ ${hotspotText}` : hotspotText;
       renderFrame.data?.symbolId || null
     );
     React32.useEffect(() => {
-      if (renderFrame.data?.symbolId) {
+      if (renderFrame.level === "symbol" && renderFrame.id.includes("::")) {
+        const symbolId = renderFrame.id.split("::")[1];
+        if (symbolId && symbolId !== focusedSymbolId) {
+          setFocusedSymbolId(symbolId);
+          setZoomLevel("focus");
+        }
+      } else if (renderFrame.data?.symbolId && renderFrame.data.symbolId !== focusedSymbolId) {
         setFocusedSymbolId(renderFrame.data.symbolId);
         setZoomLevel("focus");
       }
-    }, [renderFrame.data?.symbolId, renderFrame.id]);
+    }, [renderFrame.id, renderFrame.level, renderFrame.data?.symbolId]);
     const handleRequestFileDetails = React32.useCallback(
       (filePath) => {
         if (vscode3) {

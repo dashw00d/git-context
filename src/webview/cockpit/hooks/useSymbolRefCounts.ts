@@ -22,6 +22,9 @@ export const useSymbolRefCounts = (
     // Format can be: "from_symbol_id -> to_symbol_id (edge_type)" or object with from/to
     const edges = bundleFacts.evidence?.['working.edges'] || [];
 
+    // Normalize the base filePath for comparison
+    const normalizedTarget = filePath.replace(/\\/g, '/');
+
     // Process edges array
     edges.forEach((edge: any) => {
       let fromId: string | undefined;
@@ -42,19 +45,25 @@ export const useSymbolRefCounts = (
 
       if (!fromId || !toId) return;
 
-      // Extract file path from symbol ID (format: "filePath:symbolName" or "filePath:symbolName:hash")
-      const fromFile = fromId.split(':')[0];
-      const toFile = toId.split(':')[0];
+      // Use lastIndexOf(':') to safely handle Windows paths and composite IDs
+      const lastColonFrom = fromId.lastIndexOf(':');
+      const lastColonTo = toId.lastIndexOf(':');
+
+      const fromPath = lastColonFrom !== -1 ? fromId.substring(0, lastColonFrom) : fromId;
+      const toPath = lastColonTo !== -1 ? toId.substring(0, lastColonTo) : toId;
+
+      const normalizedFrom = fromPath.replace(/\\/g, '/');
+      const normalizedTo = toPath.replace(/\\/g, '/');
 
       // Count outgoing refs FROM this file's symbols
-      if (fromFile === filePath) {
-        const symbolId = fromId.split(':').slice(1).join(':') || fromId;
+      if (normalizedFrom === normalizedTarget) {
+        const symbolId = lastColonFrom !== -1 ? fromId.substring(lastColonFrom + 1) : fromId;
         outgoing.set(symbolId, (outgoing.get(symbolId) || 0) + 1);
       }
 
       // Count incoming refs TO this file's symbols
-      if (toFile === filePath) {
-        const symbolId = toId.split(':').slice(1).join(':') || toId;
+      if (normalizedTo === normalizedTarget) {
+        const symbolId = lastColonTo !== -1 ? toId.substring(lastColonTo + 1) : toId;
         incoming.set(symbolId, (incoming.get(symbolId) || 0) + 1);
       }
     });

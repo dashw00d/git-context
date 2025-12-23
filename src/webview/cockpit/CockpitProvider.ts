@@ -271,8 +271,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         }
 
         // Sync bundle facts if changed (e.g. from background analysis)
-        // Note: This might be heavy, so be careful.
-        // But we need to update local _bundleFacts if Redux updates it.
+        // Only sync if Redux has actual facts, to avoid wiping out hydrated data with initial null
         if (state.bundleFacts && state.bundleFacts !== this._bundleFacts) {
           this._bundleFacts = state.bundleFacts;
           this._bundleSummary = state.bundleSummary; // Sync summary too
@@ -297,11 +296,21 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
 
     // Initial update if we have data
     const initSequence = async () => {
+      const { getStore } = await import('../../state/store');
+      const store = getStore();
+
       if (!this._bundleFacts) {
         const hydrated = await this.analysisController.hydrateFromPersistedFacts();
         if (hydrated) {
           this._bundleFacts = hydrated.facts;
           this._bundleSummary = hydrated.summary;
+
+          // Push hydrated facts into Redux store so other components can see them
+          store.dispatch({
+            type: 'BUNDLE_FACTS_UPDATED',
+            payload: { facts: hydrated.facts, summary: hydrated.summary },
+          });
+
           await this._buildAndUpdateBundleView();
           if (this.explorerController) {
             await this.explorerController.updateExplorerTree(
@@ -387,11 +396,12 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       this._lastNCommits ??
       vscode.workspace.getConfiguration('git-context').get<number>('defaultCommitCount', 20);
 
-    // Send skeleton instead of full bundleFacts to reduce payload size
+    // Send skeleton instead of full bundleFacts to reduce payload size,
+    // but include full facts if they contain the dependency graph needed for refs
     const bundleFactsSkeleton = createBundleFactsSkeleton(this._bundleFacts || null);
 
     const payload: CockpitPayload = {
-      bundleFacts: null, // Don't send full facts in initial payload
+      bundleFacts: (this._bundleFacts as any) || null,
       bundleFactsSkeleton,
       bundleSummary: this._bundleSummary || null,
       bundleView: this._bundleView || null,

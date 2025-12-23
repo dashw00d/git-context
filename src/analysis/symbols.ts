@@ -470,7 +470,7 @@ export class SymbolExtractor {
       return false;
     }
 
-    const skipPatterns = [/vendor/, /\.min\./, getTestFilePattern()];
+    const skipPatterns = [/vendor/, /public\/.*\.js$/, /public\/.*\.css$/, /\.min\./, getTestFilePattern()];
 
     return !skipPatterns.some(pattern => pattern.test(filePath));
   }

@@ -70,9 +70,6 @@ export class DependencyExtractor {
     return edges;
   }
 
-  /**
-   * Extract import/require edges from file content with confidence
-   */
   private extractImports(
     content: string,
     filePath: string,
@@ -90,12 +87,15 @@ export class DependencyExtractor {
         const useMatch = line.match(/^use\s+([^;]+);/);
         if (useMatch) {
           const imported = useMatch[1].split('\\').pop() || useMatch[1];
+          const targetId = `class_${imported}`;
+          const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
+
           edges.push({
             from: `${filePath}:file`,
-            to: `class_${imported}`,
+            to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
             type: 'imports',
-            confidence: this.isSymbolKnown(`class_${imported}`, knownSymbols) ? 0.9 : 0.6,
-            isResolved: this.isSymbolKnown(`class_${imported}`, knownSymbols),
+            confidence: localSymbol ? 0.9 : 0.6,
+            isResolved: !!localSymbol,
           });
         }
 
@@ -103,8 +103,8 @@ export class DependencyExtractor {
         if (requireMatch) {
           const requiredFile = requireMatch[3];
           edges.push({
-            from: `${filePath}: file`,
-            to: `${requiredFile}: file`,
+            from: `${filePath}:file`,
+            to: `${requiredFile}:file`,
             type: 'imports',
             confidence: 0.8,
             isResolved: true,
@@ -117,8 +117,8 @@ export class DependencyExtractor {
         if (importMatch) {
           const importedModule = importMatch[1];
           edges.push({
-            from: `${filePath}: file`,
-            to: `${importedModule}: module`,
+            from: `${filePath}:file`,
+            to: `${importedModule}:module`,
             type: 'imports',
             confidence: 0.9,
             isResolved: true,
@@ -129,8 +129,8 @@ export class DependencyExtractor {
         if (requireMatch) {
           const requiredModule = requireMatch[1];
           edges.push({
-            from: `${filePath}: file`,
-            to: `${requiredModule}: module`,
+            from: `${filePath}:file`,
+            to: `${requiredModule}:module`,
             type: 'imports',
             confidence: 0.8,
             isResolved: true,
@@ -179,13 +179,13 @@ export class DependencyExtractor {
           )
         ) {
           const targetId = `function_${calledFunction}`;
-          const isLocal = this.isSymbolKnown(targetId, knownSymbols);
+          const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
           edges.push({
             from: `${filePath}:${symbol.id}`,
-            to: isLocal ? `${filePath}:${targetId}` : targetId,
+            to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
             type: 'calls',
-            confidence: isLocal ? 0.8 : 0.4,
-            isResolved: isLocal,
+            confidence: localSymbol ? 0.8 : 0.4,
+            isResolved: !!localSymbol,
           });
         }
       }
@@ -196,19 +196,19 @@ export class DependencyExtractor {
         const method = match[2];
 
         const targetId = `method_${method}`;
-        const isLocal = this.isSymbolKnown(targetId, knownSymbols);
+        const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
         edges.push({
           from: `${filePath}:${symbol.id}`,
-          to: isLocal ? `${filePath}:${targetId}` : targetId,
+          to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
           type: 'calls',
         });
 
         if (variable && variable.length > 0) {
           const varId = `variable_${variable}`;
-          const isVarLocal = this.isSymbolKnown(varId, knownSymbols);
+          const localSymbol = this.findKnownSymbol(varId, knownSymbols);
           edges.push({
             from: `${filePath}:${symbol.id}`,
-            to: isVarLocal ? `${filePath}:${varId}` : varId,
+            to: localSymbol ? `${filePath}:${localSymbol.id}` : varId,
             type: 'uses',
           });
         }
@@ -370,10 +370,10 @@ export class DependencyExtractor {
 
         if (!allBuiltIns.has(calledFunction)) {
           const targetId = `function_${calledFunction}`;
-          const isLocal = this.isSymbolKnown(targetId, knownSymbols);
+          const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
           edges.push({
             from: `${filePath}:${symbol.id}`,
-            to: isLocal ? `${filePath}:${targetId}` : targetId,
+            to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
             type: 'calls',
           });
         }
@@ -398,10 +398,10 @@ export class DependencyExtractor {
 
         if (!isBuiltInMethod) {
           const targetId = `method_${method}`;
-          const isLocal = this.isSymbolKnown(targetId, knownSymbols);
+          const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
           edges.push({
             from: `${filePath}:${symbol.id}`,
-            to: isLocal ? `${filePath}:${targetId}` : targetId,
+            to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
             type: 'calls',
           });
         }
@@ -412,10 +412,10 @@ export class DependencyExtractor {
           !['this', 'self', 'super'].includes(object.toLowerCase())
         ) {
           const targetId = `object_${object}`;
-          const isLocal = this.isSymbolKnown(targetId, knownSymbols);
+          const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
           edges.push({
             from: `${filePath}:${symbol.id}`,
-            to: isLocal ? `${filePath}:${targetId}` : targetId,
+            to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
             type: 'uses',
           });
         }
@@ -520,11 +520,11 @@ export class DependencyExtractor {
     const previousEdges: EdgeInfo[] = [];
 
     for (const [filePath, content] of fileContents) {
-      const fileSymbols = symbols.added.filter(s => s.id.startsWith(`${filePath}: `));
+      const fileSymbols = symbols.added.filter(s => s.filePath === filePath);
 
       const modifiedSymbols = symbols.modified
         .map(m => m.symbol)
-        .filter(s => s.id.startsWith(`${filePath}: `));
+        .filter(s => s.filePath === filePath);
       const allFileSymbols = [...fileSymbols, ...modifiedSymbols];
 
       const edges = this.extractDependencies(content, filePath, allFileSymbols);
@@ -544,7 +544,7 @@ export class DependencyExtractor {
           const previousContent = await this.getContent(commitInfo.parent, parentPath, git, plan);
 
           const previousFileSymbols = symbols.modified
-            .filter(m => m.symbol.id.startsWith(`${filePath}: `) && m.previousSymbol)
+            .filter(m => m.symbol.filePath === filePath && m.previousSymbol)
             .map(m => m.previousSymbol!);
 
           const edges = this.extractDependencies(previousContent, filePath, previousFileSymbols);
@@ -647,8 +647,12 @@ export class DependencyExtractor {
     return { downstreamCallers, upstreamDependencies, impactScore };
   }
 
+  private findKnownSymbol(symbolId: string, knownSymbols: SymbolInfo[]): SymbolInfo | undefined {
+    return knownSymbols.find(s => s.id === symbolId || s.semanticId === symbolId);
+  }
+
   private isSymbolKnown(symbolId: string, knownSymbols: SymbolInfo[]): boolean {
-    return knownSymbols.some(s => s.id === symbolId || s.semanticId === symbolId);
+    return !!this.findKnownSymbol(symbolId, knownSymbols);
   }
 
   private isEdgeResolved(edge: EdgeInfo): boolean {

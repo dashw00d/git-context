@@ -78,6 +78,10 @@ export interface BundleFactsSkeleton {
     symbols: number;
     edges: number;
   };
+  evidence?: {
+    'working.edges'?: string[];
+    [key: string]: any;
+  };
   findings: {
     incompleteness: {
       missing: number;

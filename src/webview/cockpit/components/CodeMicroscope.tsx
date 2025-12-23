@@ -65,13 +65,19 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     renderFrame.data?.symbolId || null
   );
 
-  // Effect to sync focusedSymbolId when frame changes (e.g. navigation to symbol)
+  // Handle symbol navigation from sidebar/explorer
   React.useEffect(() => {
-    if (renderFrame.data?.symbolId) {
+    if (renderFrame.level === 'symbol' && renderFrame.id.includes('::')) {
+      const symbolId = renderFrame.id.split('::')[1];
+      if (symbolId && symbolId !== focusedSymbolId) {
+        setFocusedSymbolId(symbolId);
+        setZoomLevel('focus');
+      }
+    } else if (renderFrame.data?.symbolId && renderFrame.data.symbolId !== focusedSymbolId) {
       setFocusedSymbolId(renderFrame.data.symbolId);
       setZoomLevel('focus');
     }
-  }, [renderFrame.data?.symbolId, renderFrame.id]);
+  }, [renderFrame.id, renderFrame.level, renderFrame.data?.symbolId]);
 
   // Unconditional hook call
   const handleRequestFileDetails = React.useCallback(

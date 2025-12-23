@@ -235,6 +235,9 @@ export class FrameAnalyzer {
     // If facts are missing, we can still return git history/blame/diff
     // We just won't have graph edges or cross-file metrics
 
+    // Ensure targetPath is normalized for matching
+    const normalizedTarget = normalizeToRelative(targetPath, ''); // Basic slash normalization
+
     try {
       if (facts) {
         const edgeStrings = (facts.evidence?.['working.edges'] as string[]) || [];
@@ -242,20 +245,28 @@ export class FrameAnalyzer {
         const incoming: any[] = [];
 
         edgeStrings.forEach(es => {
-          const match = es.match(/^(.*) -> (.*) \((.*)\)$/);
+          const match = es.match(/^(.+) -> (.+) \((.+)\)$/);
           if (!match) return;
 
           const from = match[1];
           const to = match[2];
           const type = match[3];
 
-          const fromPath = from.split(':')[0];
-          const toPath = to.split(':')[0];
+          // Use lastIndexOf(':') to safely handle Windows paths and composite IDs
+          const lastColonFrom = from.lastIndexOf(':');
+          const lastColonTo = to.lastIndexOf(':');
 
-          if (fromPath === targetPath) {
+          const fromPath =
+            lastColonFrom !== -1 ? from.substring(0, lastColonFrom) : from;
+          const toPath = lastColonTo !== -1 ? to.substring(0, lastColonTo) : to;
+
+          const normalizedFrom = normalizeToRelative(fromPath, '');
+          const normalizedTo = normalizeToRelative(toPath, '');
+
+          if (normalizedFrom === normalizedTarget) {
             outgoing.push({ from, to, type });
           }
-          if (toPath === targetPath) {
+          if (normalizedTo === normalizedTarget) {
             incoming.push({ from, to, type });
           }
         });

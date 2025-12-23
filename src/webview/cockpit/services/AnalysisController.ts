@@ -145,6 +145,7 @@ export class AnalysisController {
       evidence: {
         'scope.files': skeleton.files,
         'working.symbols': quickSymbols,
+        'working.edges': [],
       },
     };
 

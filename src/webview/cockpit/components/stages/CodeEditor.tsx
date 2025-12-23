@@ -626,8 +626,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
                     isLegacy={isLegacySymbol || false}
                     hasDrift={!!driftIssue}
                     onToggle={() => toggleSymbolCollapse(symbolId)}
-                    onRefsClick={onSymbolClick ? () => onSymbolClick(symbolId) : undefined}
-                    onFocus={onSymbolClick ? () => onSymbolClick(symbolId) : undefined}
+                    onRefsClick={() => onSymbolClick?.(symbolId)}
+                    onFocus={() => onSymbolClick?.(symbolId)}
                   />
                 </div>
                 <div style={RefIndicatorStyle}>

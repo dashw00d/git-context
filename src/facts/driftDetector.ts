@@ -335,6 +335,23 @@ export function detectDrift(
         edge_type: string;
       }>;
 
+      // Build maps for readable symbol identification
+      const idToSymbol = new Map<string, SymbolContext>();
+      for (const [id, symbol] of working.symbolsById) {
+        idToSymbol.set(id, symbol);
+      }
+
+      const getReadableId = (id: string) => {
+        const dna = extractDnaHash(id);
+        const symbol = idToSymbol.get(dna);
+        if (symbol) {
+          const path = extractPathFromSymbol(symbol, working);
+          return `${path}:${symbol.name}`;
+        }
+        return id;
+      };
+
+      const missingEdgesSet = new Set<string>();
       for (const intendedEdge of intendedEdges) {
         // Extract DNA hashes from intended edge IDs (database may not have file path prefix)
         const intendedFromDna = extractDnaHash(intendedEdge.from_symbol_id);
@@ -358,20 +375,28 @@ export function detectDrift(
           const toIntended = intended.has(intendedToDna);
 
           if (fromIntended || toIntended) {
-            findings.missing_edges.push({
-              from: intendedEdge.from_symbol_id,
-              to: intendedEdge.to_symbol_id,
-              type: intendedEdge.edge_type,
-              expected: intended.get(intendedFromDna) ||
-                intended.get(intendedToDna) || {
-                  expect: 'present',
-                  lastSha: commitShas[commitShas.length - 1],
-                },
-            });
+            const fromReadable = getReadableId(intendedEdge.from_symbol_id);
+            const toReadable = getReadableId(intendedEdge.to_symbol_id);
+            const edgeKey = `${fromReadable}->${toReadable}:${intendedEdge.edge_type}`;
+
+            if (!missingEdgesSet.has(edgeKey)) {
+              missingEdgesSet.add(edgeKey);
+              findings.missing_edges.push({
+                from: fromReadable,
+                to: toReadable,
+                type: intendedEdge.edge_type,
+                expected: intended.get(intendedFromDna) ||
+                  intended.get(intendedToDna) || {
+                    expect: 'present',
+                    lastSha: commitShas[commitShas.length - 1],
+                  },
+              });
+            }
           }
         }
       }
 
+      const zombieEdgesSet = new Set<string>();
       for (const workingEdge of working.edges) {
         // Extract DNA hashes from working edge IDs (intended map uses DNA hash as key)
         const workingFromDna = extractDnaHash(workingEdge.from_symbol_id);
@@ -404,12 +429,19 @@ export function detectDrift(
           (fromState && fromState.expect === 'absent') ||
           (toState && toState.expect === 'absent')
         ) {
-          findings.zombie_edges.push({
-            from: workingEdge.from_symbol_id,
-            to: workingEdge.to_symbol_id,
-            type: workingEdge.edge_type,
-            found: workingEdge,
-          });
+          const fromReadable = getReadableId(workingEdge.from_symbol_id);
+          const toReadable = getReadableId(workingEdge.to_symbol_id);
+          const edgeKey = `${fromReadable}->${toReadable}:${workingEdge.edge_type}`;
+
+          if (!zombieEdgesSet.has(edgeKey)) {
+            zombieEdgesSet.add(edgeKey);
+            findings.zombie_edges.push({
+              from: fromReadable,
+              to: toReadable,
+              type: workingEdge.edge_type,
+              found: workingEdge,
+            });
+          }
         }
       }
     } catch (error) {

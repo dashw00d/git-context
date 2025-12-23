@@ -831,6 +831,12 @@ export class WorkspaceIndexer {
       files.map(filePath =>
         limit(async () => {
           try {
+            // Use centralized path filter
+            if (!(await filterPath(filePath, { git: this.git, gitRoot, skipSizeCheck: true }))) {
+              filesSkipped++;
+              return;
+            }
+
             const fullPath = path.join(gitRoot, filePath);
             const content = fs.readFileSync(fullPath, 'utf8');
             const language = detectLanguage(filePath);

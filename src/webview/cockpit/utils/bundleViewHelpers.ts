@@ -262,6 +262,9 @@ export function createBundleFactsSkeleton(
     scope: facts.scope,
     intended: facts.intended,
     working: facts.working,
+    evidence: {
+      'working.edges': (facts.evidence as any)?.['working.edges'] || [],
+    },
     findings: {
       incompleteness: {
         missing: incompleteness.missing || 0,

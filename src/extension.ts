@@ -218,6 +218,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
       } else {
         logInfo(`[Cockpit] Database already has ${commitCount} commits, skipping initial load`);
+        await commitsProvider.refresh();
       }
     } catch (error) {
       logError('[Cockpit] Failed to auto-load initial commits', error);

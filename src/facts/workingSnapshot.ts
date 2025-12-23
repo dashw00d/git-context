@@ -329,7 +329,7 @@ export async function getWorkingSnapshot(
         const fileEdges = dependencyExtractor.extractDependencies(
           content,
           filePath,
-          symbols,
+          symbolsWithDNA,
           0,
           contentLines
         );

@@ -59,15 +59,16 @@ export class AnalysisService {
       }
     }
 
-    // Normalize targetPath: if absolute, make it relative to gitRoot
-    if (path.isAbsolute(targetPath)) {
-      const relative = path.relative(gitRoot, targetPath);
+    // Normalize targetPath: ensure it is relative to gitRoot with forward slashes
+    const { normalizeToRelative } = await import('../utils/path');
+    const normalizedPath = normalizeToRelative(targetPath, gitRoot);
+    if (normalizedPath !== targetPath) {
       logInfo(
-        `[AnalysisService] Normalized absolute targetPath: ${targetPath} -> ${relative} (gitRoot: ${gitRoot})`
+        `[AnalysisService] Normalized targetPath: ${targetPath} -> ${normalizedPath} (gitRoot: ${gitRoot})`
       );
-      targetPath = relative;
+      targetPath = normalizedPath;
     } else {
-      logDebug(`[AnalysisService] Using relative targetPath: ${targetPath}`);
+      logDebug(`[AnalysisService] Using normalized targetPath: ${targetPath}`);
     }
 
     let tier1Data: any;
