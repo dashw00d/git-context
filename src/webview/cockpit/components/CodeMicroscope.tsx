@@ -82,10 +82,68 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     [vscode]
   );
 
+  // Calculate values at top level for useFileAnalysisData and useEffect
+  const totalCommits = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
+  const headInfo = cockpitState?.headInfo;
+  const fileDataHistory = renderFrame.data?.history;
+  const selectedCommitShas = cockpitState?.selectedCommitShas || [];
+
+  // Get ordered commits from state (for commit index calculation)
+  // We want OLDEST to NEWEST for the scrubber (index 0 = oldest)
+  const orderedCommits = React.useMemo(() => {
+    if (selectedCommitShas.length > 0) {
+      return [...selectedCommitShas].reverse();
+    }
+    if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
+      return [...renderFrame.data.history].reverse().map((c: any) => c.hash || c.sha);
+    }
+    if (headInfo) {
+      return [headInfo.sha];
+    }
+    return [];
+  }, [selectedCommitShas, renderFrame.data?.history, headInfo]);
+
+  const commits = React.useMemo(() => {
+    if (selectedCommitShas.length > 0) {
+      return (cockpitState?.commits || [])
+        .filter(c => selectedCommitShas.includes(c.sha))
+        .sort((a, b) => {
+          const aIndex = orderedCommits.indexOf(a.sha);
+          const bIndex = orderedCommits.indexOf(b.sha);
+          return aIndex - bIndex;
+        })
+        .map(c => ({
+          sha: c.sha,
+          date: c.authoredAt,
+          message: c.message,
+          author: c.author,
+        }));
+    }
+    if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
+      return [...renderFrame.data.history].reverse().map((c: any) => ({
+        sha: c.hash || c.sha,
+        date: c.date,
+        message: c.message,
+        author: c.author_name || c.author,
+      }));
+    }
+    if (headInfo) {
+      return [headInfo];
+    }
+    return [];
+  }, [
+    selectedCommitShas,
+    cockpitState?.commits,
+    orderedCommits,
+    renderFrame.data?.history,
+    headInfo,
+  ]);
+
   const analysisData = useFileAnalysisData(
     renderFrame.level === 'file' ? renderFrame.id : '',
     cockpitState?.bundleFacts,
     cockpitState?.currentCommitIndex,
+    orderedCommits,
     cockpitState?.bundleFactsSkeleton,
     cockpitState?.fileEvidenceCache,
     handleRequestFileDetails
@@ -106,12 +164,6 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
       }
     }
   };
-
-  // Calculate values at top level for useEffect
-  const totalCommits = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
-  const headInfo = cockpitState?.headInfo;
-  const fileDataHistory = renderFrame.data?.history;
-  const selectedCommitShas = cockpitState?.selectedCommitShas || [];
 
   React.useEffect(() => {
     if (
@@ -140,44 +192,6 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     const lineCommits = renderFrame.data?.lineCommits || [];
     const blastRadius = renderFrame.data?.blastRadius;
     const driftIssues = renderFrame.data?.drift || [];
-
-    // Get ordered commits from state (for commit index calculation)
-    let orderedCommits = cockpitState?.selectedCommitShas || [];
-    let commits: any[] = [];
-
-    const optimisticHead = cockpitState?.headInfo || null;
-
-    if (orderedCommits.length > 0) {
-      // Use global selection
-      commits = (cockpitState?.commits || [])
-        .filter(c => orderedCommits.includes(c.sha))
-        .sort((a, b) => {
-          const aIndex = orderedCommits.indexOf(a.sha);
-          const bIndex = orderedCommits.indexOf(b.sha);
-          return aIndex - bIndex;
-        })
-        .map(c => ({
-          sha: c.sha,
-          date: c.authoredAt,
-          message: c.message,
-          author: c.author,
-        }));
-    } else if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
-      // Fallback to file history
-      // History is usually newest to oldest, so we reverse for the timeline (oldest to newest)
-      const fileHistory = [...renderFrame.data.history].reverse();
-      orderedCommits = fileHistory.map((c: any) => c.hash || c.sha);
-      commits = fileHistory.map((c: any) => ({
-        sha: c.hash || c.sha,
-        date: c.date,
-        message: c.message,
-        author: c.author_name || c.author,
-      }));
-    } else if (optimisticHead) {
-      // Optimistic: Use HEAD commit for time travel
-      orderedCommits = [optimisticHead.sha];
-      commits = [optimisticHead];
-    }
 
     // Default to latest commit if index is undefined
     const currentCommitIndex =

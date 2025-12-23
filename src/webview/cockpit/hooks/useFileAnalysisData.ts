@@ -78,6 +78,7 @@ export const useFileAnalysisData = (
   fileId: string,
   bundleFacts: RefactorBundleFacts | null | undefined,
   commitIdx?: number,
+  orderedCommits: string[] = [],
   bundleFactsSkeleton?: BundleFactsSkeleton | null,
   fileEvidenceCache?: Record<string, Record<string, any>>,
   onRequestFileDetails?: (filePath: string) => void
@@ -98,6 +99,13 @@ export const useFileAnalysisData = (
     const facts = bundleFacts;
     // Otherwise, merge skeleton with cached evidence
     const fileEvidence = cache[fileId] || {};
+
+    const isItemFuture = (itemSha?: string): boolean => {
+      if (commitIdx === undefined || !itemSha || orderedCommits.length === 0) return false;
+      const itemIdx = orderedCommits.indexOf(itemSha);
+      if (itemIdx === -1) return false; // Assume old if not in our current timeline
+      return itemIdx > commitIdx;
+    };
 
     if (!fileId) {
       return {
@@ -144,6 +152,9 @@ export const useFileAnalysisData = (
       (evidence?.dead as DeadSymbolEvidence[] | undefined) ||
       [];
     deadEvidence.forEach((item: DeadSymbolEvidence) => {
+      // Filter by time if commit metadata is available
+      if (isItemFuture((item as any).sha)) return;
+
       const itemPath = item.path || item.filePath;
       if (itemPath === fileId && item.symbol_id) {
         deadSymbols.add(item.symbol_id);
@@ -157,6 +168,8 @@ export const useFileAnalysisData = (
       (evidence?.legacyUsed as LegacyUsedSymbolEvidence[] | undefined) ||
       [];
     legacyEvidence.forEach((item: LegacyUsedSymbolEvidence) => {
+      if (isItemFuture((item as any).sha)) return;
+
       const itemPath = item.path || item.filePath;
       if (itemPath === fileId && item.symbol_id) {
         legacySymbols.add(item.symbol_id);
@@ -164,8 +177,10 @@ export const useFileAnalysisData = (
     });
 
     // Extract moved blocks for this file
-    // Note: movedLineage contains cross-version moves, we'll filter by file in the component
-    const movedBlocks = facts?.bundle?.movedLineage || (skeleton?.bundle?.shas ? [] : []);
+    const movedBlocks = (facts?.bundle?.movedLineage || []).filter(block => {
+      // For lineage, we generally show it all or filter by destination version
+      return !isItemFuture((block as any).destVersion || (block as any).sha);
+    });
 
     // Extract convention drift issues for this file
     const driftIssues: ConventionDriftSymbol[] = [];
@@ -181,7 +196,7 @@ export const useFileAnalysisData = (
         : undefined);
     if (conventionDrift?.driftSymbols) {
       conventionDrift.driftSymbols.forEach((ds: ConventionDriftSymbol) => {
-        if (ds.path === fileId) {
+        if (ds.path === fileId && !isItemFuture((ds as any).sha)) {
           driftIssues.push(ds);
         }
       });
@@ -194,7 +209,8 @@ export const useFileAnalysisData = (
       (facts?.findings?.unresolvedCallers ? [] : []);
     if (Array.isArray(unresolvedEvidence)) {
       unresolvedEvidence.forEach((item: UnresolvedCallerEvidence) => {
-        // UnresolvedCallerFact has caller_path, caller_name, callee_name, occurrence_count
+        if (isItemFuture((item as any).sha)) return;
+
         const itemPath = item.path || item.filePath || item.caller_path;
         if (itemPath === fileId) {
           unresolvedCallers.push(item);
@@ -206,6 +222,8 @@ export const useFileAnalysisData = (
     const hotspots: Array<{ path: string; score: number; symbolId?: string }> = [];
     const hotspotEvidence = (evidence?.hotspots as HotspotEvidence[] | undefined) || [];
     hotspotEvidence.forEach((hotspot: HotspotEvidence) => {
+      if (isItemFuture((hotspot as any).sha)) return;
+
       if (hotspot.path === fileId || hotspot.file_path === fileId) {
         hotspots.push({
           path: hotspot.path || hotspot.file_path || '',
@@ -220,7 +238,7 @@ export const useFileAnalysisData = (
     const importDriftEvidence = evidence?.['findings.patternDrift.conventionDrift']?.importDrift;
     if (importDriftEvidence?.driftImports) {
       importDriftEvidence.driftImports.forEach((imp: ImportDriftIssue) => {
-        if (imp.file === fileId) {
+        if (imp.file === fileId && !isItemFuture((imp as any).sha)) {
           importDriftIssues.push(imp);
         }
       });
@@ -230,7 +248,9 @@ export const useFileAnalysisData = (
     let fileNamingDrift: FileAnalysisData['fileNamingDrift'] = null;
     const fnDriftEvidence = evidence?.['findings.patternDrift.conventionDrift']?.fileNamingDrift;
     if (fnDriftEvidence?.driftFiles) {
-      const thisFile = fnDriftEvidence.driftFiles.find((f: any) => f.path === fileId);
+      const thisFile = fnDriftEvidence.driftFiles.find(
+        (f: any) => f.path === fileId && !isItemFuture((f as any).sha)
+      );
       if (thisFile) {
         fileNamingDrift = {
           hasDrift: true,
@@ -246,6 +266,8 @@ export const useFileAnalysisData = (
       (evidence?.['findings.incompleteness']?.divergent as DivergentSymbolEvidence[] | undefined) ||
       [];
     divergentEvidence.forEach((item: DivergentSymbolEvidence) => {
+      if (isItemFuture((item as any).sha)) return;
+
       const itemPath = item.path || item.filePath;
       if (itemPath === fileId && (item.symbol_id || item.symbolId)) {
         divergentSymbols.add(item.symbol_id || item.symbolId || '');
@@ -262,6 +284,8 @@ export const useFileAnalysisData = (
       (evidence?.['findings.incompleteness']?.zombie_edges as ZombieEdgeEvidence[] | undefined) ||
       [];
     missingEdges.forEach((e: MissingEdgeEvidence) => {
+      if (isItemFuture((e as any).sha)) return;
+
       const fromPath = e.from?.split(':')[0] || e.from;
       const toPath = e.to?.split(':')[0] || e.to;
       if (fromPath === fileId || toPath === fileId) {
@@ -269,6 +293,8 @@ export const useFileAnalysisData = (
       }
     });
     zombieEdges.forEach((e: ZombieEdgeEvidence) => {
+      if (isItemFuture((e as any).sha)) return;
+
       const fromPath = e.from?.split(':')[0] || e.from;
       const toPath = e.to?.split(':')[0] || e.to;
       if (fromPath === fileId || toPath === fileId) {
@@ -280,7 +306,9 @@ export const useFileAnalysisData = (
     let mixedConventions: FileAnalysisData['mixedConventions'] = null;
     const mixedFiles = evidence?.['findings.patternDrift.mixedConventionFiles'] || [];
     if (Array.isArray(mixedFiles)) {
-      const thisMixed = mixedFiles.find((f: any) => f.path === fileId);
+      const thisMixed = mixedFiles.find(
+        (f: any) => f.path === fileId && !isItemFuture((f as any).sha)
+      );
       if (thisMixed) {
         mixedConventions = {
           conventions: thisMixed.conventions || [],
@@ -317,64 +345,24 @@ export const useFileAnalysisData = (
       partialReasons: facts?.partialReasons || skeleton?.partialReasons || [],
     };
 
-    // Extract findings counts (use skeleton if full facts not available)
+    // Extract findings counts (use filtered lists where possible)
     const findings = {
-      missing:
-        facts?.findings?.incompleteness?.missing ||
-        skeleton?.findings?.incompleteness?.missing ||
-        0,
-      zombies:
-        facts?.findings?.incompleteness?.zombies ||
-        skeleton?.findings?.incompleteness?.zombies ||
-        0,
-      dead:
-        deadSymbols.size ||
-        facts?.findings?.legacyAudit?.dead ||
-        skeleton?.findings?.legacyAudit?.dead ||
-        0,
-      legacyUsed:
-        legacySymbols.size ||
-        facts?.findings?.legacyAudit?.legacyUsed ||
-        skeleton?.findings?.legacyAudit?.legacyUsed ||
-        0,
-      unresolved:
-        unresolvedCallers.length ||
-        facts?.findings?.unresolvedCallers?.total ||
-        skeleton?.findings?.unresolvedCallers?.total ||
-        0,
-      divergent:
-        divergentSymbols.size ||
-        facts?.findings?.incompleteness?.divergent ||
-        skeleton?.findings?.incompleteness?.divergent ||
-        0,
-      missingEdges: (() => {
-        if (missingEdgesCount) return missingEdgesCount;
-        if (facts?.findings?.incompleteness && 'missing_edges' in facts.findings.incompleteness) {
-          return (facts.findings.incompleteness.missing_edges as number | undefined) || 0;
-        }
-        if (
-          skeleton?.findings?.incompleteness &&
-          'missing_edges' in skeleton.findings.incompleteness
-        ) {
-          return (skeleton.findings.incompleteness.missing_edges as number | undefined) || 0;
-        }
-        return 0;
-      })(),
-      zombieEdges: (() => {
-        if (zombieEdgesCount) return zombieEdgesCount;
-        if (facts?.findings?.incompleteness && 'zombie_edges' in facts.findings.incompleteness) {
-          return (facts.findings.incompleteness.zombie_edges as number | undefined) || 0;
-        }
-        if (
-          skeleton?.findings?.incompleteness &&
-          'zombie_edges' in skeleton.findings.incompleteness
-        ) {
-          return (skeleton.findings.incompleteness.zombie_edges as number | undefined) || 0;
-        }
-        return 0;
-      })(),
+      missing: driftIssues.filter(d => (d as any).type === 'missing_symbols').length || 0, // Heuristic: filter from driftIssues
+      zombies: driftIssues.filter(d => (d as any).type === 'zombie_symbols').length || 0,
+      dead: deadSymbols.size || 0,
+      legacyUsed: legacySymbols.size || 0,
+      unresolved: unresolvedCallers.length || 0,
+      divergent: divergentSymbols.size || 0,
+      missingEdges: missingEdgesCount,
+      zombieEdges: zombieEdgesCount,
       importDrift: importDriftIssues.length,
     };
+
+    // Fallback counts from facts if we didn't extract everything (respecting time travel ideally)
+    if (commitIdx === undefined || commitIdx === orderedCommits.length - 1) {
+      if (findings.missing === 0) findings.missing = facts?.findings?.incompleteness?.missing || 0;
+      if (findings.zombies === 0) findings.zombies = facts?.findings?.incompleteness?.zombies || 0;
+    }
 
     return {
       deadSymbols,
@@ -395,5 +383,5 @@ export const useFileAnalysisData = (
       conventionInfo,
       analysisStatus,
     };
-  }, [fileId, bundleFacts, skeleton, cache, commitIdx]);
+  }, [fileId, bundleFacts, skeleton, cache, commitIdx, orderedCommits]);
 };

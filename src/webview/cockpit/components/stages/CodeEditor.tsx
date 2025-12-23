@@ -152,7 +152,12 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const lines = content.split('\n');
 
   // Get analysis data for this file
-  const analysisData = useFileAnalysisData(filePath || '', bundleFacts, currentCommitIndex);
+  const analysisData = useFileAnalysisData(
+    filePath || '',
+    bundleFacts,
+    currentCommitIndex,
+    orderedCommits
+  );
   const refCounts = useSymbolRefCounts(bundleFacts, filePath || '');
 
   // Symbol collapse state
@@ -268,7 +273,15 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const lineToCommitIndex = new Map<number, number>();
   if (lineCommits.length > 0 && orderedCommits.length > 0) {
     lineCommits.forEach(({ line, commitSha }) => {
-      const commitIndex = orderedCommits.indexOf(commitSha);
+      // Robust matching: Try exact match first, then prefix match
+      let commitIndex = orderedCommits.indexOf(commitSha);
+
+      if (commitIndex === -1) {
+        commitIndex = orderedCommits.findIndex(
+          sha => sha.startsWith(commitSha) || commitSha.startsWith(sha)
+        );
+      }
+
       if (commitIndex >= 0) {
         lineToCommitIndex.set(line, commitIndex);
       }

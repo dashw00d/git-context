@@ -1136,7 +1136,7 @@ export class GitOperations {
       const { stdout } = await this.spawnGit([
         'log',
         `-${limit}`,
-        '--format=%h|%an|%aI|%s',
+        '--format=%H|%an|%aI|%s',
         '--',
         filePath,
       ]);

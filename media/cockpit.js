@@ -1123,7 +1123,7 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useCallback(callback, deps);
           }
-          function useMemo8(create, deps) {
+          function useMemo9(create, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useMemo(create, deps);
           }
@@ -1895,7 +1895,7 @@
           exports.useImperativeHandle = useImperativeHandle;
           exports.useInsertionEffect = useInsertionEffect;
           exports.useLayoutEffect = useLayoutEffect;
-          exports.useMemo = useMemo8;
+          exports.useMemo = useMemo9;
           exports.useReducer = useReducer;
           exports.useRef = useRef3;
           exports.useState = useState12;
@@ -28657,7 +28657,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
 
   // src/webview/cockpit/hooks/useFileAnalysisData.ts
   var React5 = __toESM(require_react());
-  var useFileAnalysisData = (fileId, bundleFacts, commitIdx, bundleFactsSkeleton, fileEvidenceCache, onRequestFileDetails) => {
+  var useFileAnalysisData = (fileId, bundleFacts, commitIdx, orderedCommits = [], bundleFactsSkeleton, fileEvidenceCache, onRequestFileDetails) => {
     const skeleton = bundleFactsSkeleton || null;
     const cache = fileEvidenceCache || {};
     const requestFn = onRequestFileDetails;
@@ -28669,6 +28669,12 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
     return React5.useMemo(() => {
       const facts = bundleFacts;
       const fileEvidence = cache[fileId] || {};
+      const isItemFuture = (itemSha) => {
+        if (commitIdx === void 0 || !itemSha || orderedCommits.length === 0) return false;
+        const itemIdx = orderedCommits.indexOf(itemSha);
+        if (itemIdx === -1) return false;
+        return itemIdx > commitIdx;
+      };
       if (!fileId) {
         return {
           deadSymbols: /* @__PURE__ */ new Set(),
@@ -28707,6 +28713,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       const deadSymbols = /* @__PURE__ */ new Set();
       const deadEvidence = evidence?.["findings.legacyAudit"]?.dead || evidence?.dead || [];
       deadEvidence.forEach((item) => {
+        if (isItemFuture(item.sha)) return;
         const itemPath = item.path || item.filePath;
         if (itemPath === fileId && item.symbol_id) {
           deadSymbols.add(item.symbol_id);
@@ -28715,19 +28722,22 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       const legacySymbols = /* @__PURE__ */ new Set();
       const legacyEvidence = evidence?.["findings.legacyAudit"]?.legacyUsed || evidence?.legacyUsed || [];
       legacyEvidence.forEach((item) => {
+        if (isItemFuture(item.sha)) return;
         const itemPath = item.path || item.filePath;
         if (itemPath === fileId && item.symbol_id) {
           legacySymbols.add(item.symbol_id);
         }
       });
-      const movedBlocks = facts?.bundle?.movedLineage || (skeleton?.bundle?.shas ? [] : []);
+      const movedBlocks = (facts?.bundle?.movedLineage || []).filter((block) => {
+        return !isItemFuture(block.destVersion || block.sha);
+      });
       const driftIssues = [];
       const conventionDrift = facts?.findings?.patternDrift?.conventionDrift || (skeleton?.findings?.patternDrift?.conventionDrift && fileEvidence?.["findings.patternDrift.conventionDrift"]?.driftSymbols ? {
         driftSymbols: fileEvidence["findings.patternDrift.conventionDrift"].driftSymbols || []
       } : void 0);
       if (conventionDrift?.driftSymbols) {
         conventionDrift.driftSymbols.forEach((ds) => {
-          if (ds.path === fileId) {
+          if (ds.path === fileId && !isItemFuture(ds.sha)) {
             driftIssues.push(ds);
           }
         });
@@ -28736,6 +28746,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       const unresolvedEvidence = evidence?.["findings.unresolvedCallers"] || (facts?.findings?.unresolvedCallers ? [] : []);
       if (Array.isArray(unresolvedEvidence)) {
         unresolvedEvidence.forEach((item) => {
+          if (isItemFuture(item.sha)) return;
           const itemPath = item.path || item.filePath || item.caller_path;
           if (itemPath === fileId) {
             unresolvedCallers.push(item);
@@ -28745,6 +28756,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       const hotspots = [];
       const hotspotEvidence = evidence?.hotspots || [];
       hotspotEvidence.forEach((hotspot) => {
+        if (isItemFuture(hotspot.sha)) return;
         if (hotspot.path === fileId || hotspot.file_path === fileId) {
           hotspots.push({
             path: hotspot.path || hotspot.file_path || "",
@@ -28757,7 +28769,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       const importDriftEvidence = evidence?.["findings.patternDrift.conventionDrift"]?.importDrift;
       if (importDriftEvidence?.driftImports) {
         importDriftEvidence.driftImports.forEach((imp) => {
-          if (imp.file === fileId) {
+          if (imp.file === fileId && !isItemFuture(imp.sha)) {
             importDriftIssues.push(imp);
           }
         });
@@ -28765,7 +28777,9 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       let fileNamingDrift = null;
       const fnDriftEvidence = evidence?.["findings.patternDrift.conventionDrift"]?.fileNamingDrift;
       if (fnDriftEvidence?.driftFiles) {
-        const thisFile = fnDriftEvidence.driftFiles.find((f) => f.path === fileId);
+        const thisFile = fnDriftEvidence.driftFiles.find(
+          (f) => f.path === fileId && !isItemFuture(f.sha)
+        );
         if (thisFile) {
           fileNamingDrift = {
             hasDrift: true,
@@ -28777,6 +28791,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       const divergentSymbols = /* @__PURE__ */ new Set();
       const divergentEvidence = evidence?.["findings.incompleteness"]?.divergent || [];
       divergentEvidence.forEach((item) => {
+        if (isItemFuture(item.sha)) return;
         const itemPath = item.path || item.filePath;
         if (itemPath === fileId && (item.symbol_id || item.symbolId)) {
           divergentSymbols.add(item.symbol_id || item.symbolId || "");
@@ -28787,6 +28802,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       const missingEdges = evidence?.["findings.incompleteness"]?.missing_edges || [];
       const zombieEdges = evidence?.["findings.incompleteness"]?.zombie_edges || [];
       missingEdges.forEach((e) => {
+        if (isItemFuture(e.sha)) return;
         const fromPath = e.from?.split(":")[0] || e.from;
         const toPath = e.to?.split(":")[0] || e.to;
         if (fromPath === fileId || toPath === fileId) {
@@ -28794,6 +28810,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       });
       zombieEdges.forEach((e) => {
+        if (isItemFuture(e.sha)) return;
         const fromPath = e.from?.split(":")[0] || e.from;
         const toPath = e.to?.split(":")[0] || e.to;
         if (fromPath === fileId || toPath === fileId) {
@@ -28803,7 +28820,9 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
       let mixedConventions = null;
       const mixedFiles = evidence?.["findings.patternDrift.mixedConventionFiles"] || [];
       if (Array.isArray(mixedFiles)) {
-        const thisMixed = mixedFiles.find((f) => f.path === fileId);
+        const thisMixed = mixedFiles.find(
+          (f) => f.path === fileId && !isItemFuture(f.sha)
+        );
         if (thisMixed) {
           mixedConventions = {
             conventions: thisMixed.conventions || [],
@@ -28826,34 +28845,21 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         partialReasons: facts?.partialReasons || skeleton?.partialReasons || []
       };
       const findings = {
-        missing: facts?.findings?.incompleteness?.missing || skeleton?.findings?.incompleteness?.missing || 0,
-        zombies: facts?.findings?.incompleteness?.zombies || skeleton?.findings?.incompleteness?.zombies || 0,
-        dead: deadSymbols.size || facts?.findings?.legacyAudit?.dead || skeleton?.findings?.legacyAudit?.dead || 0,
-        legacyUsed: legacySymbols.size || facts?.findings?.legacyAudit?.legacyUsed || skeleton?.findings?.legacyAudit?.legacyUsed || 0,
-        unresolved: unresolvedCallers.length || facts?.findings?.unresolvedCallers?.total || skeleton?.findings?.unresolvedCallers?.total || 0,
-        divergent: divergentSymbols.size || facts?.findings?.incompleteness?.divergent || skeleton?.findings?.incompleteness?.divergent || 0,
-        missingEdges: (() => {
-          if (missingEdgesCount) return missingEdgesCount;
-          if (facts?.findings?.incompleteness && "missing_edges" in facts.findings.incompleteness) {
-            return facts.findings.incompleteness.missing_edges || 0;
-          }
-          if (skeleton?.findings?.incompleteness && "missing_edges" in skeleton.findings.incompleteness) {
-            return skeleton.findings.incompleteness.missing_edges || 0;
-          }
-          return 0;
-        })(),
-        zombieEdges: (() => {
-          if (zombieEdgesCount) return zombieEdgesCount;
-          if (facts?.findings?.incompleteness && "zombie_edges" in facts.findings.incompleteness) {
-            return facts.findings.incompleteness.zombie_edges || 0;
-          }
-          if (skeleton?.findings?.incompleteness && "zombie_edges" in skeleton.findings.incompleteness) {
-            return skeleton.findings.incompleteness.zombie_edges || 0;
-          }
-          return 0;
-        })(),
+        missing: driftIssues.filter((d) => d.type === "missing_symbols").length || 0,
+        // Heuristic: filter from driftIssues
+        zombies: driftIssues.filter((d) => d.type === "zombie_symbols").length || 0,
+        dead: deadSymbols.size || 0,
+        legacyUsed: legacySymbols.size || 0,
+        unresolved: unresolvedCallers.length || 0,
+        divergent: divergentSymbols.size || 0,
+        missingEdges: missingEdgesCount,
+        zombieEdges: zombieEdgesCount,
         importDrift: importDriftIssues.length
       };
+      if (commitIdx === void 0 || commitIdx === orderedCommits.length - 1) {
+        if (findings.missing === 0) findings.missing = facts?.findings?.incompleteness?.missing || 0;
+        if (findings.zombies === 0) findings.zombies = facts?.findings?.incompleteness?.zombies || 0;
+      }
       return {
         deadSymbols,
         legacySymbols,
@@ -28873,7 +28879,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         conventionInfo,
         analysisStatus
       };
-    }, [fileId, bundleFacts, skeleton, cache, commitIdx]);
+    }, [fileId, bundleFacts, skeleton, cache, commitIdx, orderedCommits]);
   };
 
   // src/webview/cockpit/components/stages/BlastRadiusStage.tsx
@@ -30237,7 +30243,12 @@ Churn: ${node.score.toFixed(1)}
     metrics
   }) => {
     const lines = content.split("\n");
-    const analysisData = useFileAnalysisData(filePath || "", bundleFacts, currentCommitIndex);
+    const analysisData = useFileAnalysisData(
+      filePath || "",
+      bundleFacts,
+      currentCommitIndex,
+      orderedCommits
+    );
     const refCounts = useSymbolRefCounts(bundleFacts, filePath || "");
     const [collapsedSymbols, setCollapsedSymbols] = React19.useState(/* @__PURE__ */ new Set());
     const toggleSymbolCollapse = (symbolId) => {
@@ -30299,7 +30310,12 @@ Churn: ${node.score.toFixed(1)}
     const lineToCommitIndex = /* @__PURE__ */ new Map();
     if (lineCommits.length > 0 && orderedCommits.length > 0) {
       lineCommits.forEach(({ line, commitSha }) => {
-        const commitIndex = orderedCommits.indexOf(commitSha);
+        let commitIndex = orderedCommits.indexOf(commitSha);
+        if (commitIndex === -1) {
+          commitIndex = orderedCommits.findIndex(
+            (sha) => sha.startsWith(commitSha) || commitSha.startsWith(sha)
+          );
+        }
         if (commitIndex >= 0) {
           lineToCommitIndex.set(line, commitIndex);
         }
@@ -32231,18 +32247,19 @@ ${hotspotText}` : hotspotText;
   }) => {
     const [isPlaying, setIsPlaying] = React31.useState(false);
     const maxIndex = commits.length > 0 ? commits.length - 1 : 0;
-    const effectiveIndex = currentCommitIndex !== void 0 ? currentCommitIndex : maxIndex;
-    const [currentIndex, setCurrentIndex] = React31.useState(effectiveIndex);
+    const [localIndex, setLocalIndex] = React31.useState(
+      currentCommitIndex !== void 0 ? currentCommitIndex : maxIndex
+    );
     React31.useEffect(() => {
-      if (currentCommitIndex !== void 0) {
-        setCurrentIndex(currentCommitIndex);
+      if (currentCommitIndex !== void 0 && currentCommitIndex !== localIndex) {
+        setLocalIndex(currentCommitIndex);
       }
     }, [currentCommitIndex]);
     React31.useEffect(() => {
       let interval;
       if (isPlaying && commits.length > 0) {
         interval = setInterval(() => {
-          setCurrentIndex((prev) => {
+          setLocalIndex((prev) => {
             if (prev >= maxIndex) {
               setIsPlaying(false);
               return maxIndex;
@@ -32251,19 +32268,23 @@ ${hotspotText}` : hotspotText;
             onCommitIndexChange(next);
             return next;
           });
-        }, 500);
+        }, 800);
       }
-      return () => clearInterval(interval);
+      return () => {
+        if (interval) clearInterval(interval);
+      };
     }, [isPlaying, maxIndex, commits.length, onCommitIndexChange]);
-    React31.useEffect(() => {
-      if (currentIndex !== effectiveIndex) {
-        onCommitIndexChange(currentIndex);
-      }
-    }, [currentIndex]);
     const handleChange = (e) => {
       const val = parseInt(e.target.value, 10);
-      setCurrentIndex(val);
-      onCommitIndexChange(val);
+      if (!isNaN(val)) {
+        setLocalIndex(val);
+        onCommitIndexChange(val);
+      }
+    };
+    const handleReset = () => {
+      setLocalIndex(maxIndex);
+      onCommitIndexChange(maxIndex);
+      setIsPlaying(false);
     };
     const formatCommit = (index) => {
       if (commits.length === 0 || index < 0 || index >= commits.length) {
@@ -32277,15 +32298,21 @@ ${hotspotText}` : hotspotText;
       return `${shortSha} - ${shortMessage}${date ? ` (${date})` : ""}`;
     };
     const driftCommitIndices = React31.useMemo(() => {
-      if (!bundleFacts?.findings?.patternDrift?.conventionDrift?.driftSymbols) {
+      const driftSymbols = bundleFacts?.findings?.patternDrift?.conventionDrift?.driftSymbols || [];
+      if (driftSymbols.length === 0) {
         return /* @__PURE__ */ new Set();
       }
       const indices = /* @__PURE__ */ new Set();
       if (lineCommits.length > 0 && commits.length > 0) {
         lineCommits.forEach((lc) => {
-          const commitIndex = commits.findIndex((c) => c.sha === lc.commitSha);
-          if (commitIndex >= 0) {
-            indices.add(commitIndex);
+          const hasDrift = driftSymbols.some(
+            (ds) => ds.name === lc.symbolName || ds.path === lc.path
+          );
+          if (hasDrift) {
+            const commitIndex = commits.findIndex((c) => c.sha === lc.commitSha);
+            if (commitIndex >= 0) {
+              indices.add(commitIndex);
+            }
           }
         });
       }
@@ -32303,10 +32330,13 @@ ${hotspotText}` : hotspotText;
           border: "none",
           color: "var(--vscode-button-foreground)",
           cursor: "pointer",
-          fontSize: "16px"
+          fontSize: "16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "24px"
         },
-        title: isPlaying ? "Pause" : "Play History",
-        disabled: commits.length === 0
+        title: isPlaying ? "Pause" : "Play History"
       },
       isPlaying ? "\u23F8" : "\u25B6"
     ), /* @__PURE__ */ React31.createElement(
@@ -32318,20 +32348,20 @@ ${hotspotText}` : hotspotText;
           minWidth: "200px",
           maxWidth: "300px",
           overflow: "hidden",
-          textOverflow: "ellipsis"
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
         }
       },
-      formatCommit(currentIndex)
-    ), /* @__PURE__ */ React31.createElement("div", { style: { position: "relative", flex: 1, display: "flex", alignItems: "center" } }, /* @__PURE__ */ React31.createElement("div", { style: { position: "relative", flex: 1, display: "flex", alignItems: "center" } }, /* @__PURE__ */ React31.createElement(
+      formatCommit(localIndex)
+    ), /* @__PURE__ */ React31.createElement("div", { style: { position: "relative", flex: 1, display: "flex", alignItems: "center" } }, /* @__PURE__ */ React31.createElement(
       "input",
       {
         type: "range",
         min: 0,
         max: maxIndex,
-        value: currentIndex,
+        value: localIndex,
         onChange: handleChange,
-        style: SliderStyle,
-        disabled: commits.length === 0
+        style: SliderStyle
       }
     ), Array.from(driftCommitIndices).map((driftIndex) => /* @__PURE__ */ React31.createElement(
       "div",
@@ -32341,45 +32371,27 @@ ${hotspotText}` : hotspotText;
           position: "absolute",
           left: `${driftIndex / maxIndex * 100}%`,
           width: "2px",
-          height: "20px",
-          backgroundColor: "var(--vscode-inputValidation-errorBorder)",
+          height: "12px",
+          backgroundColor: "var(--vscode-charts-orange)",
           pointerEvents: "none",
-          zIndex: 5
+          zIndex: 5,
+          opacity: 0.8
         },
-        title: "Convention drift introduced here"
+        title: "Convention drift potentially introduced here"
       }
-    ))), Array.from(driftCommitIndices).map((driftIndex) => /* @__PURE__ */ React31.createElement(
-      "div",
-      {
-        key: driftIndex,
-        style: {
-          position: "absolute",
-          left: `${driftIndex / maxIndex * 100}%`,
-          width: "2px",
-          height: "20px",
-          backgroundColor: "var(--vscode-inputValidation-errorBorder)",
-          pointerEvents: "none",
-          zIndex: 5
-        },
-        title: "Convention drift introduced here"
-      }
-    ))), /* @__PURE__ */ React31.createElement("span", { style: { fontSize: "11px", opacity: 0.7, minWidth: "50px", textAlign: "right" } }, currentIndex + 1, " / ", commits.length), /* @__PURE__ */ React31.createElement(
+    ))), /* @__PURE__ */ React31.createElement("span", { style: { fontSize: "11px", opacity: 0.7, minWidth: "50px", textAlign: "right" } }, localIndex + 1, " / ", commits.length), /* @__PURE__ */ React31.createElement(
       "button",
       {
-        onClick: () => {
-          setCurrentIndex(maxIndex);
-          onCommitIndexChange(maxIndex);
-        },
+        onClick: handleReset,
         style: {
           fontSize: "11px",
           background: "none",
           border: "1px solid var(--vscode-button-border)",
           borderRadius: "4px",
-          padding: "2px 6px",
+          padding: "2px 8px",
           color: "var(--vscode-foreground)",
           cursor: "pointer"
-        },
-        disabled: commits.length === 0
+        }
       },
       "Reset"
     ));
@@ -32436,10 +32448,59 @@ ${hotspotText}` : hotspotText;
       },
       [vscode3]
     );
+    const totalCommits = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
+    const headInfo = cockpitState?.headInfo;
+    const fileDataHistory = renderFrame.data?.history;
+    const selectedCommitShas = cockpitState?.selectedCommitShas || [];
+    const orderedCommits = React32.useMemo(() => {
+      if (selectedCommitShas.length > 0) {
+        return [...selectedCommitShas].reverse();
+      }
+      if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
+        return [...renderFrame.data.history].reverse().map((c) => c.hash || c.sha);
+      }
+      if (headInfo) {
+        return [headInfo.sha];
+      }
+      return [];
+    }, [selectedCommitShas, renderFrame.data?.history, headInfo]);
+    const commits = React32.useMemo(() => {
+      if (selectedCommitShas.length > 0) {
+        return (cockpitState?.commits || []).filter((c) => selectedCommitShas.includes(c.sha)).sort((a, b) => {
+          const aIndex = orderedCommits.indexOf(a.sha);
+          const bIndex = orderedCommits.indexOf(b.sha);
+          return aIndex - bIndex;
+        }).map((c) => ({
+          sha: c.sha,
+          date: c.authoredAt,
+          message: c.message,
+          author: c.author
+        }));
+      }
+      if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
+        return [...renderFrame.data.history].reverse().map((c) => ({
+          sha: c.hash || c.sha,
+          date: c.date,
+          message: c.message,
+          author: c.author_name || c.author
+        }));
+      }
+      if (headInfo) {
+        return [headInfo];
+      }
+      return [];
+    }, [
+      selectedCommitShas,
+      cockpitState?.commits,
+      orderedCommits,
+      renderFrame.data?.history,
+      headInfo
+    ]);
     const analysisData = useFileAnalysisData(
       renderFrame.level === "file" ? renderFrame.id : "",
       cockpitState?.bundleFacts,
       cockpitState?.currentCommitIndex,
+      orderedCommits,
       cockpitState?.bundleFactsSkeleton,
       cockpitState?.fileEvidenceCache,
       handleRequestFileDetails
@@ -32459,10 +32520,6 @@ ${hotspotText}` : hotspotText;
         }
       }
     };
-    const totalCommits = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
-    const headInfo = cockpitState?.headInfo;
-    const fileDataHistory = renderFrame.data?.history;
-    const selectedCommitShas = cockpitState?.selectedCommitShas || [];
     React32.useEffect(() => {
       if (renderFrame.level === "file" && selectedCommitShas.length === 0 && !fileDataHistory && totalCommits > 0 && !headInfo) {
         vscode3.postMessage({ type: "getHeadInfo" });
@@ -32482,33 +32539,6 @@ ${hotspotText}` : hotspotText;
       const lineCommits = renderFrame.data?.lineCommits || [];
       const blastRadius = renderFrame.data?.blastRadius;
       const driftIssues = renderFrame.data?.drift || [];
-      let orderedCommits = cockpitState?.selectedCommitShas || [];
-      let commits = [];
-      const optimisticHead = cockpitState?.headInfo || null;
-      if (orderedCommits.length > 0) {
-        commits = (cockpitState?.commits || []).filter((c) => orderedCommits.includes(c.sha)).sort((a, b) => {
-          const aIndex = orderedCommits.indexOf(a.sha);
-          const bIndex = orderedCommits.indexOf(b.sha);
-          return aIndex - bIndex;
-        }).map((c) => ({
-          sha: c.sha,
-          date: c.authoredAt,
-          message: c.message,
-          author: c.author
-        }));
-      } else if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
-        const fileHistory = [...renderFrame.data.history].reverse();
-        orderedCommits = fileHistory.map((c) => c.hash || c.sha);
-        commits = fileHistory.map((c) => ({
-          sha: c.hash || c.sha,
-          date: c.date,
-          message: c.message,
-          author: c.author_name || c.author
-        }));
-      } else if (optimisticHead) {
-        orderedCommits = [optimisticHead.sha];
-        commits = [optimisticHead];
-      }
       const currentCommitIndex = cockpitState?.currentCommitIndex !== void 0 ? cockpitState.currentCommitIndex : orderedCommits.length > 0 ? orderedCommits.length - 1 : void 0;
       const handleNeighborClick = (filePath) => {
         if (vscode3) {
