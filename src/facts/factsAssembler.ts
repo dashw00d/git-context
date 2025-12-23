@@ -99,8 +99,8 @@ export async function assembleFacts(
 ): Promise<RefactorBundleFacts> {
   const intendedCounts = calculateIntendedCounts(intended);
   const intendedLists = getIntendedLists(intended);
-  const workingLists = getWorkingLists(working);
   const newestSha = commitShas.length > 0 ? commitShas[0] : 'unknown';
+  const workingLists = getWorkingLists(working, newestSha);
   const oldestSha = commitShas.length > 0 ? commitShas[commitShas.length - 1] : 'unknown';
 
   const hybridFactsMap: Record<string, HybridFact[]> = {};
@@ -410,7 +410,7 @@ function getIntendedLists(intended: Map<string, IntendedState>): {
   return { present, absent, renamed };
 }
 
-function getWorkingLists(working: WorkingSnapshot): {
+function getWorkingLists(working: WorkingSnapshot, newestSha: string): {
   symbols: any[]; // Full symbol objects for FrameAnalyzer compatibility
   edges: string[];
 } {
@@ -425,6 +425,8 @@ function getWorkingLists(working: WorkingSnapshot): {
         signature: s.signature || '',
         location: s.loc_post || s.loc_pre || null,
         filePath: s.filePath || filePath || '',
+        sha: newestSha,  // Add SHA (from commit context)
+        complete: true,  // Mark full pipeline as complete
       });
     }
   }

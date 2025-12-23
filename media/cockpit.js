@@ -29749,12 +29749,6 @@ Churn: ${node.score.toFixed(1)}
 
   // src/webview/cockpit/hooks/useSymbolRefCounts.ts
   var React14 = __toESM(require_react());
-  function normalizePathForBrowser(p) {
-    if (!p) return "";
-    let normalized = p.replace(/\\/g, "/");
-    normalized = normalized.replace(/^\/+/, "");
-    return normalized;
-  }
   function extractBaseName(symbolId) {
     const match = symbolId.match(/^(function|method|class|variable|object|property)_(.+)$/);
     return match ? match[2] : null;
@@ -29769,19 +29763,23 @@ Churn: ${node.score.toFixed(1)}
       const edges = bundleFacts.evidence?.["working.edges"] || [];
       const nameToHash = /* @__PURE__ */ new Map();
       const rawSymbols = bundleFacts.evidence?.["working.symbols"] || [];
-      const normalizedTarget = normalizePathForBrowser(filePath);
+      const normalizedTarget = filePath;
       rawSymbols.forEach((s) => {
         if (typeof s === "object" && s.filePath && s.id && s.name) {
-          const symPath = normalizePathForBrowser(s.filePath || "");
+          const symPath = s.filePath || "";
           if (symPath === normalizedTarget) {
             nameToHash.set(s.name, s.id);
           }
         }
       });
       if (edges.length === 0) {
-        logDebug(`[useSymbolRefCounts] No edges found in bundleFacts for ${filePath} (normalized: ${normalizedTarget})`);
+        logDebug(
+          `[useSymbolRefCounts] No edges found in bundleFacts for ${filePath} (normalized: ${normalizedTarget})`
+        );
       } else {
-        logDebug(`[useSymbolRefCounts] Found ${edges.length} edges, ${nameToHash.size} symbols mapped for ${normalizedTarget}`);
+        logDebug(
+          `[useSymbolRefCounts] Found ${edges.length} edges, ${nameToHash.size} symbols mapped for ${normalizedTarget}`
+        );
       }
       let matchCount = 0;
       let incomingMatches = 0;
@@ -29817,8 +29815,8 @@ Churn: ${node.score.toFixed(1)}
         const lastColonTo = toId.lastIndexOf(":");
         const fromPath = lastColonFrom !== -1 ? fromId.substring(0, lastColonFrom) : fromId;
         const toPath = lastColonTo !== -1 ? toId.substring(0, lastColonTo) : toId;
-        const normalizedFrom = normalizePathForBrowser(fromPath);
-        const normalizedTo = normalizePathForBrowser(toPath);
+        const normalizedFrom = fromPath;
+        const normalizedTo = toPath;
         if (normalizedFrom === normalizedTarget) {
           const rawSymbolId = lastColonFrom !== -1 ? fromId.substring(lastColonFrom + 1) : fromId;
           const symbolId = resolveToHash(rawSymbolId);
@@ -29850,7 +29848,7 @@ Churn: ${node.score.toFixed(1)}
                     const to = match[2];
                     const fromPath = from.lastIndexOf(":") !== -1 ? from.substring(0, from.lastIndexOf(":")) : from;
                     const toPath = to.lastIndexOf(":") !== -1 ? to.substring(0, to.lastIndexOf(":")) : to;
-                    return { from: normalizePathForBrowser(fromPath), to: normalizePathForBrowser(toPath) };
+                    return { from: fromPath, to: toPath };
                   }
                 }
                 return e;
@@ -30601,7 +30599,9 @@ ${hotspotText}` : hotspotText;
         const incomingRefs = symbolId ? refCounts.incoming.get(symbolId) || 0 : 0;
         const outgoingRefs = symbolId ? refCounts.outgoing.get(symbolId) || 0 : 0;
         if (symbolId && (incomingRefs > 0 || outgoingRefs > 0)) {
-          logDebug(`[CodeEditor] Symbol ${symbolAtLine?.name} (${symbolId}): ${incomingRefs} incoming, ${outgoingRefs} outgoing refs`);
+          logDebug(
+            `[CodeEditor] Symbol ${symbolAtLine?.name} (${symbolId}): ${incomingRefs} incoming, ${outgoingRefs} outgoing refs`
+          );
         }
         const lineCommit = lineCommits.find((lc) => lc.line === lineNumber);
         const lineCommitIndex = lineToCommitIndex.get(lineNumber);
@@ -31336,7 +31336,7 @@ ${hotspotText}` : hotspotText;
 
   // src/webview/cockpit/components/stages/PortalsRail.tsx
   function dirname(filePath) {
-    const normalized = filePath.replace(/\\/g, "/");
+    const normalized = filePath;
     const lastSlash = normalized.lastIndexOf("/");
     return lastSlash === -1 ? "" : normalized.substring(0, lastSlash);
   }
@@ -31450,14 +31450,14 @@ ${hotspotText}` : hotspotText;
     let filteredIncoming = blastRadius?.incoming || [];
     let filteredOutgoing = blastRadius?.outgoing || [];
     if (focusedSymbolId && currentFilePath) {
-      const normalizedTarget = currentFilePath.replace(/\\/g, "/");
+      const normalizedTarget = currentFilePath;
       const baseSymbolId = focusedSymbolId.includes(":") ? focusedSymbolId.substring(focusedSymbolId.lastIndexOf(":") + 1) : focusedSymbolId;
       filteredIncoming = (blastRadius?.incoming || []).filter((ref) => {
         const lastColon = ref.to?.lastIndexOf(":");
         if (lastColon !== void 0 && lastColon !== -1) {
           const toPath = ref.to.substring(0, lastColon);
           const toSymbol = ref.to.substring(lastColon + 1);
-          const normalizedPath = toPath.replace(/\\/g, "/");
+          const normalizedPath = toPath;
           return normalizedPath === normalizedTarget && (toSymbol === baseSymbolId || toSymbol === focusedSymbolId);
         }
         return false;
@@ -31467,7 +31467,7 @@ ${hotspotText}` : hotspotText;
         if (lastColon !== void 0 && lastColon !== -1) {
           const fromPath = ref.from.substring(0, lastColon);
           const fromSymbol = ref.from.substring(lastColon + 1);
-          const normalizedPath = fromPath.replace(/\\/g, "/");
+          const normalizedPath = fromPath;
           return normalizedPath === normalizedTarget && (fromSymbol === baseSymbolId || fromSymbol === focusedSymbolId);
         }
         return false;
@@ -31775,12 +31775,12 @@ ${hotspotText}` : hotspotText;
   // src/webview/cockpit/components/stages/StageHeader.tsx
   var React28 = __toESM(require_react());
   function dirname2(filePath) {
-    const normalized = filePath.replace(/\\/g, "/");
+    const normalized = filePath;
     const lastSlash = normalized.lastIndexOf("/");
     return lastSlash === -1 ? "" : normalized.substring(0, lastSlash);
   }
   function basename(filePath) {
-    const normalized = filePath.replace(/\\/g, "/");
+    const normalized = filePath;
     const lastSlash = normalized.lastIndexOf("/");
     return lastSlash === -1 ? normalized : normalized.substring(lastSlash + 1);
   }
@@ -32488,12 +32488,6 @@ ${hotspotText}` : hotspotText;
   };
 
   // src/webview/cockpit/components/CodeMicroscope.tsx
-  function normalizePathForBrowser2(p) {
-    if (!p) return "";
-    let normalized = p.replace(/\\/g, "/");
-    normalized = normalized.replace(/^\/+/, "");
-    return normalized;
-  }
   var MicroscopeContainer = {
     flex: 1,
     display: "flex",
@@ -32692,7 +32686,7 @@ ${hotspotText}` : hotspotText;
       const lineCommits = lineCommitsData;
       const blastRadius = renderFrame.data?.blastRadius;
       const driftIssues = renderFrame.data?.drift || [];
-      const normalizedFilePath = normalizePathForBrowser2(renderFrame.id);
+      const normalizedFilePath = renderFrame.id;
       const currentCommitIndex = cockpitState?.currentCommitIndex !== void 0 ? cockpitState.currentCommitIndex : effectiveOrderedCommits.length > 0 ? effectiveOrderedCommits.length - 1 : void 0;
       const handleNeighborClick = (filePath) => {
         if (vscode3) {

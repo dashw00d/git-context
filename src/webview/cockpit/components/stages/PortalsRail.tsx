@@ -4,7 +4,7 @@ import { LineagePanel } from './LineagePanel';
 
 // Browser-compatible path utilities
 function dirname(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/');
+  const normalized = filePath;
   const lastSlash = normalized.lastIndexOf('/');
   return lastSlash === -1 ? '' : normalized.substring(0, lastSlash);
 }
@@ -161,7 +161,7 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
   let filteredOutgoing = blastRadius?.outgoing || [];
 
   if (focusedSymbolId && currentFilePath) {
-    const normalizedTarget = currentFilePath.replace(/\\/g, '/');
+    const normalizedTarget = currentFilePath;
     // Ensure we handle both local and fully qualified IDs
     const baseSymbolId = focusedSymbolId.includes(':')
       ? focusedSymbolId.substring(focusedSymbolId.lastIndexOf(':') + 1)
@@ -174,7 +174,7 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
       if (lastColon !== undefined && lastColon !== -1) {
         const toPath = ref.to.substring(0, lastColon);
         const toSymbol = ref.to.substring(lastColon + 1);
-        const normalizedPath = toPath.replace(/\\/g, '/');
+        const normalizedPath = toPath;
 
         return (
           normalizedPath === normalizedTarget &&
@@ -190,7 +190,7 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
       if (lastColon !== undefined && lastColon !== -1) {
         const fromPath = ref.from.substring(0, lastColon);
         const fromSymbol = ref.from.substring(lastColon + 1);
-        const normalizedPath = fromPath.replace(/\\/g, '/');
+        const normalizedPath = fromPath;
 
         return (
           normalizedPath === normalizedTarget &&

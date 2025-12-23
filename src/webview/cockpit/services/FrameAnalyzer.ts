@@ -58,7 +58,7 @@ export class FrameAnalyzer {
     bundleFacts?: BundleFactsDTO
   ): Promise<Tier1Data & { symbolId?: string }> {
     const fullPath = normalizeToAbsolute(targetPath, workspaceRoot);
-    const normalizedTargetPath = normalizeToRelative(targetPath, workspaceRoot);
+    const normalizedTargetPath = GitOperations.normalizePath(targetPath);
 
     logDebug(
       `[FrameAnalyzer] Analyzing Tier 1: frameId=${frameId}, targetPath=${targetPath}, workspaceRoot=${workspaceRoot} -> fullPath=${fullPath}`
@@ -81,9 +81,7 @@ export class FrameAnalyzer {
 
       // Use consistent path normalization matching the main pipeline
       const normalizePathForMatch = (p: string) => {
-        if (!p) return '';
-        // Use the same normalization as normalizeToRelative for consistency
-        return normalizeToRelative(p, workspaceRoot);
+        return GitOperations.normalizePath(p);
       };
 
       // First, try to use quick scan symbols from bundleFacts
@@ -123,27 +121,28 @@ export class FrameAnalyzer {
           (s: any) => s?.filePath && normalizePathForMatch(s.filePath) === normalizedTarget
         );
 
-        // Debug: Log what we're matching
         if (fileSymbols.length === 0 && quickSymbols.length > 0) {
           const samplePaths = quickSymbols.slice(0, 5).map((s: any) => s?.filePath);
-          logDebug(
+          logWarn(
             `FrameAnalyzer: No symbols matched for "${normalizedTarget}". ` +
               `Total quickSymbols: ${quickSymbols.length}. Sample paths: ${JSON.stringify(samplePaths)}`
           );
         }
 
-        // Only use symbols if they have location/signature (object format from quick scan)
+        // Separate symbols into complete (usable) and incomplete (string format)
         const usableSymbols = fileSymbols.filter((s: any) => s.location && s.signature);
+        const incompleteSymbols = fileSymbols.filter((s: any) => !s.location || !s.signature);
 
         if (usableSymbols.length > 0) {
           symbols = usableSymbols;
           logDebug(
             `FrameAnalyzer: Using ${symbols.length} complete symbols from bundleFacts for ${frameId}`
           );
-        } else if (fileSymbols.length > 0) {
-          // Found symbols but they're incomplete (string format) - log and parse fresh
+        } else if (incompleteSymbols.length > 0) {
+          // Use incomplete symbols as temporary fallback
+          symbols = incompleteSymbols;
           logDebug(
-            `FrameAnalyzer: Found ${fileSymbols.length} symbols in bundleFacts but they lack location/signature. Parsing fresh with priority.`
+            `FrameAnalyzer: Using ${symbols.length} incomplete symbols from bundleFacts as fallback for ${frameId}`
           );
         }
       }
@@ -173,6 +172,45 @@ export class FrameAnalyzer {
             'type_alias',
           ]);
           symbols = hybridFacts.filter((f: any) => symbolKinds.has(f.kind));
+
+          // Persist to DB via shared queue
+          const { DatabaseWriteQueue } = await import('../../../storage/databaseWriteQueue');
+          const { computeHybridDna } = await import('../../../analysis/symbolDna');
+          const writeQueue = DatabaseWriteQueue.getInstance();
+          const headSha = await this.gitOps.getHeadSha();
+
+          for (const s of symbols) {
+            // Compute DNA for stable ID
+            const dnaId = await computeHybridDna(s, undefined, language);
+            s.id = dnaId;
+
+            // Queue symbol_dna insert
+            writeQueue.queue({
+              type: 'symbol',
+              data: {
+                sha: headSha,
+                path: normalizedTargetPath,
+                symbol: s,
+                changeType: 'priority_click',
+                isDna: true,
+              },
+            });
+
+            // Queue symbols insert
+            writeQueue.queue({
+              type: 'symbol',
+              data: {
+                sha: headSha,
+                path: normalizedTargetPath,
+                symbol: s,
+                changeType: 'priority_click',
+                isDna: false,
+              },
+            });
+          }
+
+          // Flush immediately for click-triggered analysis
+          await writeQueue.flushAll();
         } catch (error) {
           logDebug(`FrameAnalyzer: Failed to extract symbols for ${frameId}: ${error}`);
         }
@@ -236,7 +274,7 @@ export class FrameAnalyzer {
     // We just won't have graph edges or cross-file metrics
 
     // Ensure targetPath is normalized for matching
-    const normalizedTarget = normalizeToRelative(targetPath, ''); // Basic slash normalization
+    const normalizedTarget = GitOperations.normalizePath(targetPath);
 
     try {
       if (facts) {
@@ -256,18 +294,25 @@ export class FrameAnalyzer {
           const lastColonFrom = from.lastIndexOf(':');
           const lastColonTo = to.lastIndexOf(':');
 
-          const fromPath =
-            lastColonFrom !== -1 ? from.substring(0, lastColonFrom) : from;
+          const fromPath = lastColonFrom !== -1 ? from.substring(0, lastColonFrom) : from;
           const toPath = lastColonTo !== -1 ? to.substring(0, lastColonTo) : to;
 
-          const normalizedFrom = normalizeToRelative(fromPath, '');
-          const normalizedTo = normalizeToRelative(toPath, '');
+          const normalizedFrom = GitOperations.normalizePath(fromPath);
+          const normalizedTo = GitOperations.normalizePath(toPath);
 
           if (normalizedFrom === normalizedTarget) {
             outgoing.push({ from, to, type });
+          } else {
+            logWarn(
+              `[FrameAnalyzer] Tier 2 mismatch (outgoing): ${normalizedFrom} !== ${normalizedTarget}`
+            );
           }
           if (normalizedTo === normalizedTarget) {
             incoming.push({ from, to, type });
+          } else {
+            logWarn(
+              `[FrameAnalyzer] Tier 2 mismatch (incoming): ${normalizedTo} !== ${normalizedTarget}`
+            );
           }
         });
 

@@ -5,17 +5,23 @@ import * as path from 'path';
  * Handles absolute paths and ensures forward slashes.
  */
 export function normalizeToRelative(p: string | undefined, gitRoot: string | undefined): string {
-  if (!p || !gitRoot) return p || '';
+  if (!p) return '';
   let normalized = p.replace(/\\/g, '/');
-  if (path.isAbsolute(normalized)) {
+
+  // If gitRoot provided, try to strip it
+  if (gitRoot) {
     const root = gitRoot.replace(/\\/g, '/');
     if (normalized.startsWith(root)) {
       normalized = normalized.substring(root.length);
-      if (normalized.startsWith('/')) {
-        normalized = normalized.substring(1);
-      }
+    } else if (path.isAbsolute(normalized)) {
+      // If it's absolute but doesn't start with root, we can't really make it relative safely
+      // but we should at least clean it up
     }
   }
+
+  // Always ensure no leading slash or ./ prefix
+  normalized = normalized.replace(/^\.\//, '').replace(/^\/+/, '');
+
   return normalized;
 }
 

@@ -3,18 +3,6 @@ import { CockpitState, ContextFrame } from '../../../types/cockpit';
 import { useFileAnalysisData } from '../hooks/useFileAnalysisData';
 import { BlastRadiusStage } from './stages/BlastRadiusStage';
 
-/**
- * Browser-compatible path normalization (webview can't use Node.js modules)
- * Normalizes paths to match edge storage format: forward slashes, no leading slash
- */
-function normalizePathForBrowser(p: string): string {
-  if (!p) return '';
-  // Convert backslashes to forward slashes
-  let normalized = p.replace(/\\/g, '/');
-  // Remove leading slash (paths in edges are relative to git root)
-  normalized = normalized.replace(/^\/+/, '');
-  return normalized;
-}
 import { BundleStage } from './stages/BundleStage';
 import { CodeEditor } from './stages/CodeEditor';
 import { DriftBrowserPanel } from './stages/DriftBrowserPanel';
@@ -298,7 +286,7 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     const driftIssues = renderFrame.data?.drift || [];
 
     // Normalize filePath to match edge path format (browser-compatible)
-    const normalizedFilePath = normalizePathForBrowser(renderFrame.id);
+    const normalizedFilePath = renderFrame.id;
 
     // Default to latest commit if index is undefined
     const currentCommitIndex =

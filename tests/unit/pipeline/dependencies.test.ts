@@ -19,15 +19,15 @@ describe('DependencyExtractor', () => {
       expect(edges).toHaveLength(2);
       expect(edges).toContainEqual(
         expect.objectContaining({
-          from: 'src/test.ts: file',
-          to: './utils: module',
+          from: 'src/test.ts:file',
+          to: './utils:module',
           type: 'imports',
         })
       );
       expect(edges).toContainEqual(
         expect.objectContaining({
-          from: 'src/test.ts: file',
-          to: './bar: module',
+          from: 'src/test.ts:file',
+          to: './bar:module',
           type: 'imports',
         })
       );
@@ -43,8 +43,8 @@ describe('DependencyExtractor', () => {
       const filePath = 'src/test.ts';
       const symbols: SymbolInfo[] = [
         {
-          id: 'src/test.ts: main',
-          dnaId: '',
+          id: 'main',
+          filePath: 'src/test.ts',
           name: 'main',
           kind: 'function',
           signature: '()',
@@ -56,14 +56,14 @@ describe('DependencyExtractor', () => {
 
       expect(edges).toContainEqual(
         expect.objectContaining({
-          from: 'src/test.ts: main',
+          from: 'src/test.ts:main',
           to: 'function_helper',
           type: 'calls',
         })
       );
       expect(edges).toContainEqual(
         expect.objectContaining({
-          from: 'src/test.ts: main',
+          from: 'src/test.ts:main',
           to: 'function_calculate',
           type: 'calls',
         })
@@ -76,7 +76,7 @@ describe('DependencyExtractor', () => {
       const changedSymbols: SymbolInfo[] = [
         {
           id: 'func_A',
-          dnaId: '',
+          filePath: 'src/test.ts',
           name: 'A',
           kind: 'function',
           location: { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } },

@@ -575,7 +575,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 
         // Debug logging for successful lookups
         if (symbolId && (incomingRefs > 0 || outgoingRefs > 0)) {
-          logDebug(`[CodeEditor] Symbol ${symbolAtLine?.name} (${symbolId}): ${incomingRefs} incoming, ${outgoingRefs} outgoing refs`);
+          logDebug(
+            `[CodeEditor] Symbol ${symbolAtLine?.name} (${symbolId}): ${incomingRefs} incoming, ${outgoingRefs} outgoing refs`
+          );
         }
 
         // Get line commit info for age display

@@ -3,19 +3,6 @@ import { RefactorBundleFacts } from '../../../facts/types';
 import { logDebug } from '../../../utils/logger';
 
 /**
- * Browser-compatible path normalization (webview can't use Node.js modules)
- * Normalizes paths to match edge storage format: forward slashes, no leading slash
- */
-function normalizePathForBrowser(p: string): string {
-  if (!p) return '';
-  // Convert backslashes to forward slashes
-  let normalized = p.replace(/\\/g, '/');
-  // Remove leading slash (paths in edges are relative to git root)
-  normalized = normalized.replace(/^\/+/, '');
-  return normalized;
-}
-
-/**
  * Extract base name from a kind_name format (e.g., "function_handleClick" -> "handleClick")
  */
 function extractBaseName(symbolId: string): string | null {
@@ -48,12 +35,12 @@ export const useSymbolRefCounts = (
     // Maps name -> DNA hash for symbols in this file
     const nameToHash = new Map<string, string>();
     const rawSymbols = (bundleFacts.evidence?.['working.symbols'] as any[]) || [];
-    const normalizedTarget = normalizePathForBrowser(filePath);
+    const normalizedTarget = filePath;
 
     // Parse working.symbols to build name -> hash mapping
     rawSymbols.forEach((s: any) => {
       if (typeof s === 'object' && s.filePath && s.id && s.name) {
-        const symPath = normalizePathForBrowser(s.filePath || '');
+        const symPath = s.filePath || '';
         if (symPath === normalizedTarget) {
           // Map name to DNA hash for symbols in this file
           nameToHash.set(s.name, s.id);
@@ -63,9 +50,13 @@ export const useSymbolRefCounts = (
 
     // Debug logging
     if (edges.length === 0) {
-      logDebug(`[useSymbolRefCounts] No edges found in bundleFacts for ${filePath} (normalized: ${normalizedTarget})`);
+      logDebug(
+        `[useSymbolRefCounts] No edges found in bundleFacts for ${filePath} (normalized: ${normalizedTarget})`
+      );
     } else {
-      logDebug(`[useSymbolRefCounts] Found ${edges.length} edges, ${nameToHash.size} symbols mapped for ${normalizedTarget}`);
+      logDebug(
+        `[useSymbolRefCounts] Found ${edges.length} edges, ${nameToHash.size} symbols mapped for ${normalizedTarget}`
+      );
     }
 
     let matchCount = 0;
@@ -117,8 +108,8 @@ export const useSymbolRefCounts = (
       const toPath = lastColonTo !== -1 ? toId.substring(0, lastColonTo) : toId;
 
       // Normalize edge paths using the same method as target path (browser-compatible)
-      const normalizedFrom = normalizePathForBrowser(fromPath);
-      const normalizedTo = normalizePathForBrowser(toPath);
+      const normalizedFrom = fromPath;
+      const normalizedTo = toPath;
 
       // Count outgoing refs FROM this file's symbols
       if (normalizedFrom === normalizedTarget) {
@@ -155,9 +146,11 @@ export const useSymbolRefCounts = (
                 if (match) {
                   const from = match[1];
                   const to = match[2];
-                  const fromPath = from.lastIndexOf(':') !== -1 ? from.substring(0, from.lastIndexOf(':')) : from;
-                  const toPath = to.lastIndexOf(':') !== -1 ? to.substring(0, to.lastIndexOf(':')) : to;
-                  return { from: normalizePathForBrowser(fromPath), to: normalizePathForBrowser(toPath) };
+                  const fromPath =
+                    from.lastIndexOf(':') !== -1 ? from.substring(0, from.lastIndexOf(':')) : from;
+                  const toPath =
+                    to.lastIndexOf(':') !== -1 ? to.substring(0, to.lastIndexOf(':')) : to;
+                  return { from: fromPath, to: toPath };
                 }
               }
               return e;

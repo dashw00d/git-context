@@ -4,7 +4,6 @@ import { prepare } from '../storage/statement-wrapper';
 import { FileChange } from '../types';
 import { getGitRoot } from '../utils/config';
 import { logDebug } from '../utils/logger';
-import { normalizeToRelative } from '../utils/path';
 import { filterPath } from '../utils/pathFilter';
 
 export interface ScopeSet {
@@ -85,7 +84,7 @@ async function computeBlastRadiusNeighbors(
   `);
   const symbolVersions = symbolVersionsStmt.all() as Array<{ dna_id: string; path: string }>;
   for (const row of symbolVersions) {
-    dnaToPathCache.set(row.dna_id, normalizeToRelative(row.path, getGitRoot()));
+    dnaToPathCache.set(row.dna_id, GitOperations.normalizePath(row.path));
   }
   logDebug(`🟩 [computeBlastRadius] Built DNA->path cache with ${dnaToPathCache.size} entries`);
 
@@ -183,7 +182,7 @@ export async function computeScope(
 
   for (const sha of commitShas) {
     const commitFiles = await cacheService.getCachedFileChanges(sha);
-    commitFiles.forEach(f => scope.commitFiles.add(normalizeToRelative(f.path, gitRoot)));
+    commitFiles.forEach(f => scope.commitFiles.add(f.path));
   }
 
   // Use plan data if available (from initStep) to avoid redundant git calls
@@ -210,26 +209,24 @@ export async function computeScope(
 
     if (includeStaged) {
       stagedFiles.forEach(f => {
-        const normalized = normalizeToRelative(f.path, gitRoot);
-        scope.workingChanged.add(normalized);
-        scope.stagedFiles.add(normalized);
+        scope.workingChanged.add(f.path);
+        scope.stagedFiles.add(f.path);
       });
     }
 
     if (includeUnstaged) {
       unstagedFiles.forEach(f => {
-        const normalized = normalizeToRelative(f.path, gitRoot);
-        scope.workingChanged.add(normalized);
-        scope.unstagedFiles.add(normalized);
+        scope.workingChanged.add(f.path);
+        scope.unstagedFiles.add(f.path);
       });
     }
   } else {
-    workingChanges.forEach(f => scope.workingChanged.add(normalizeToRelative(f.path, gitRoot)));
+    workingChanges.forEach(f => scope.workingChanged.add(f.path));
   }
 
   if (liveOverridePaths) {
     for (const p of liveOverridePaths) {
-      const normalized = normalizeToRelative(p, gitRoot);
+      const normalized = GitOperations.normalizePath(p);
       scope.workingChanged.add(normalized);
 
       if (!workspaceParts || workspaceParts.has('unstaged')) {

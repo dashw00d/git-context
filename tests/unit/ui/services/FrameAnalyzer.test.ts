@@ -17,12 +17,17 @@ vi.mock('../../../../src/analysis/tree-sitter', () => ({
 vi.mock('../../../../src/analysis/git', () => ({
   GitOperations: class {
     getHistory = vi.fn().mockResolvedValue([]);
+    static normalizePath(p: string) {
+      if (!p) return '';
+      return p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
+    }
   },
 }));
 vi.mock('../../../../src/utils/logger', () => ({
   logDebug: vi.fn(),
-  logError: vi.fn(),
+  logError: (...args: any[]) => console.error(...args),
   logInfo: vi.fn(),
+  logWarn: (...args: any[]) => console.warn(...args),
 }));
 vi.mock('../../../../src/utils/supportedLanguages', () => ({
   detectLanguage: vi.fn().mockReturnValue('typescript'),
@@ -38,6 +43,7 @@ describe('FrameAnalyzer', () => {
 
     (path.join as any).mockImplementation((...args: string[]) => args.join('/'));
     (path.extname as any).mockReturnValue('.ts');
+    (path.isAbsolute as any).mockImplementation((p: string) => p.startsWith('/'));
   });
 
   describe('analyzeTier1', () => {

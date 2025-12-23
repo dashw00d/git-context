@@ -5,6 +5,7 @@ import { getReportService } from './reportService';
 import type { RefactorPipeline } from '../analysis/refactorPipeline';
 import type { PipelineState } from '../analysis/runner/pipelineTypes';
 import type { CancellationToken } from 'vscode';
+import type { FileChange } from '../types';
 
 /**
  * AnalysisCoordinator - Single entry point for all analysis requests
@@ -169,6 +170,54 @@ export class AnalysisCoordinator {
     logDebug('[AnalysisCoordinator] Live analysis should be triggered via LiveAnalysisEngine');
     // LiveAnalysisEngine.analyze() already dispatches the right actions
     // This is just here for API completeness
+  }
+
+  /**
+   * Request single-file analysis with priority (for click-triggered analysis)
+   *
+   * This uses reserved on-demand workers and persists results to DB
+   * via the same shared persistence layer as quick/full scans.
+   *
+   * @param filePath - Relative file path to analyze
+   * @param sha - Commit SHA (defaults to HEAD)
+   */
+  async requestFileAnalysis(filePath: string, sha?: string): Promise<void> {
+    const { logInfo, logDebug } = await import('../utils/logger');
+    const { GitOperations } = await import('../analysis/git');
+    const { DatabaseWriteQueue } = await import('../storage/databaseWriteQueue');
+
+    logInfo(`[AnalysisCoordinator] Requesting priority file analysis for ${filePath}`);
+
+    const pipeline = await this.getPipeline();
+    const git = new GitOperations();
+
+    // Resolve SHA if not provided
+    const targetSha = sha || (await git.getHeadSha());
+
+    // Get file content
+    const content = await git.safeGetFileContent(targetSha, filePath);
+
+    // Create FileChange object for processFile
+    const fileChange: FileChange = {
+      path: filePath,
+      status: 'M', // Assume modified for click analysis
+      newSha: await git.getBlobSha(targetSha, filePath),
+      oldSha: undefined,
+    };
+
+    // Process with priority flag
+    await pipeline.commitIndexer.processFile(
+      fileChange,
+      targetSha,
+      null, // parentSha
+      undefined, // plan
+      true // priority: true - uses reserved workers
+    );
+
+    // Flush writes to ensure persistence
+    await DatabaseWriteQueue.getInstance().flushAll();
+
+    logDebug(`[AnalysisCoordinator] Priority file analysis complete for ${filePath}`);
   }
 }
 

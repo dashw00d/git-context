@@ -231,6 +231,7 @@ export class CommitIndexer {
       modules?: string[];
       token?: vscode.CancellationToken;
       plan?: import('./runner/pipelineTypes').PlanData;
+      priority?: boolean;
     },
     onProgress?: (event: {
       type: 'file_start' | 'file_complete';
@@ -293,6 +294,7 @@ export class CommitIndexer {
         sha: string;
       }) => void;
       plan?: import('./runner/pipelineTypes').PlanData;
+      priority?: boolean;
     }
   ): Promise<CommitFacts> {
     logInfo(`[CommitIndexer] Indexing commit ${sha}`);
@@ -325,7 +327,7 @@ export class CommitIndexer {
           throw new vscode.CancellationError();
         }
         opts?.onProgress?.({ type: 'file_start', file: file.path, sha });
-        const result = await this.processFile(file, sha, parentSha, opts?.plan);
+        const result = await this.processFile(file, sha, parentSha, opts?.plan, opts?.priority);
         opts?.onProgress?.({ type: 'file_complete', file: file.path, sha });
         const fileDuration = Date.now() - fileStartTime;
         logInfo(
@@ -471,11 +473,12 @@ export class CommitIndexer {
     return facts;
   }
 
-  private async processFile(
+  async processFile(
     file: FileChange,
     sha: string,
     parentSha: string | null,
-    plan?: import('./runner/pipelineTypes').PlanData
+    plan?: import('./runner/pipelineTypes').PlanData,
+    priority: boolean = false
   ): Promise<FileProcessingResult | null> {
     const { path, status } = file;
     const result: FileProcessingResult = {
@@ -564,7 +567,7 @@ export class CommitIndexer {
     logDebug(`[CommitIndexer] 🕐 Snapshot creation for ${path}: ${Date.now() - snapshotTime}ms`);
 
     const hybridFactsTime = Date.now();
-    await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
+    await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols, undefined, priority);
     logDebug(
       `[CommitIndexer] 🕐 extractAndSaveHybridFacts for ${path}: ${Date.now() - hybridFactsTime}ms`
     );
@@ -597,7 +600,7 @@ export class CommitIndexer {
       const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path, plan));
 
       if (parentBlobSha === currentBlobSha) {
-        await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
+        await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols, undefined, priority);
         return result;
       }
 
@@ -717,7 +720,8 @@ export class CommitIndexer {
         sha,
         currentContent,
         currentSnapshot.symbols,
-        parentFileHash
+        parentFileHash,
+        priority
       );
     }
 
@@ -836,7 +840,8 @@ export class CommitIndexer {
     commitSha: string,
     content: string,
     existingSymbols: any[],
-    prevHash?: string
+    prevHash?: string,
+    priority: boolean = false
   ): Promise<void> {
     const config = getExtensionConfig();
     const enableCst = config.enableCstTracking ?? true;
@@ -860,7 +865,8 @@ export class CommitIndexer {
         content,
         filePath,
         language,
-        existingSymbols
+        existingSymbols,
+        priority
       );
       logDebug(
         `[CommitIndexer] 🕐 parser.extractHybridFacts for ${filePath}: ${Date.now() - parseStart}ms (${hybridFacts.length} facts)`

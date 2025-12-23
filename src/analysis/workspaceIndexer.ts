@@ -13,6 +13,7 @@ import { getCstTimelineManager } from './cstTimeline';
 import { GitOperations } from './git';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
+import { computeHybridDna } from './symbolDna';
 import { getTreeSitterParser } from './tree-sitter';
 import type { HybridFact } from '../types/cstFacts';
 
@@ -812,13 +813,26 @@ export class WorkspaceIndexer {
    * Quick scan for symbols in a list of files (for initial explorer population)
    * Returns full symbol objects with id, name, kind, signature, location, and filePath
    */
-  async quickScanSymbols(files: string[]): Promise<any[]> {
+  async quickScanSymbols(
+    files: string[],
+    options?: { persist?: boolean; priority?: boolean }
+  ): Promise<any[]> {
     const limit = pLimit(50); // Concurrent processing
     const gitRoot = this.git.getRoot();
     const results: any[] = [];
     let filesProcessed = 0;
     let filesWithSymbols = 0;
     let filesSkipped = 0;
+
+    // Resolve HEAD SHA once if persisting
+    let headSha = 'HEAD';
+    if (options?.persist) {
+      try {
+        headSha = await this.git.getHeadSha();
+      } catch (e) {
+        logDebug(`[WorkspaceIndexer] Failed to resolve HEAD SHA for quick scan persistence: ${e}`);
+      }
+    }
 
     // Log input file stats
     const phpFiles = files.filter(f => f.endsWith('.php'));
@@ -844,7 +858,13 @@ export class WorkspaceIndexer {
             filesProcessed++;
 
             if (language) {
-              const symbols = await this.parser.extractHybridFacts(content, filePath, language);
+              const symbols = await this.parser.extractHybridFacts(
+                content,
+                filePath,
+                language,
+                undefined,
+                options?.priority
+              );
               // Filter to only symbol kinds (functions, classes, etc.)
               const symbolKinds = new Set([
                 'function',
@@ -863,7 +883,28 @@ export class WorkspaceIndexer {
               if (filteredSymbols.length > 0) {
                 filesWithSymbols++;
                 // Store full symbol objects with filePath
-                filteredSymbols.forEach((s: any) => {
+                // And compute DNA if persisting
+                for (const s of filteredSymbols) {
+                  let dnaId = s.id;
+
+                  if (options?.persist) {
+                    try {
+                      // Extract body text if location is available
+                      let bodyText = undefined;
+                      if (s.location && s.location.start && s.location.end) {
+                        const lines = content.split('\n');
+                        const startLine = Math.max(0, s.location.start.line - 1);
+                        const endLine = Math.min(lines.length, s.location.end.line);
+                        bodyText = lines.slice(startLine, endLine).join('\n');
+                      }
+
+                      dnaId = await computeHybridDna(s as any, bodyText, language);
+                      s.id = dnaId; // Update symbol ID to stable DNA
+                    } catch (err) {
+                      // Fallback to original ID on error
+                    }
+                  }
+
                   results.push({
                     id: s.id,
                     name: s.name,
@@ -871,8 +912,38 @@ export class WorkspaceIndexer {
                     signature: s.signature,
                     location: s.location,
                     filePath: filePath,
+                    sha: headSha,  // Add SHA for path+sha ID
+                    complete: false,  // Mark quick scan as incomplete
                   });
-                });
+
+                  // Persist if requested
+                  if (options?.persist) {
+                    const writeQueue = DatabaseWriteQueue.getInstance();
+                    // Queue symbol_dna insert (using 'isDna' flag)
+                    writeQueue.queue({
+                      type: 'symbol',
+                      data: {
+                        sha: headSha,
+                        path: filePath,
+                        symbol: s as any,
+                        changeType: 'quick_scan', // Marker for quick scan
+                        isDna: true
+                      },
+                    });
+
+                    // Queue symbols insert
+                    writeQueue.queue({
+                      type: 'symbol',
+                      data: {
+                        sha: headSha,
+                        path: filePath,
+                        symbol: s as any,
+                        changeType: 'quick_scan',
+                        isDna: false
+                      },
+                    });
+                  }
+                }
               }
             } else {
               filesSkipped++;
@@ -894,6 +965,12 @@ export class WorkspaceIndexer {
       `[WorkspaceIndexer] Quick scan complete. Processed ${filesProcessed}/${files.length} files, ` +
         `${filesWithSymbols} with symbols, ${filesSkipped} skipped. Total symbols: ${results.length}`
     );
+
+    // Force flush if we persisted data
+    if (options?.persist) {
+      DatabaseWriteQueue.getInstance().flushAll();
+    }
+
     return results;
   }
 

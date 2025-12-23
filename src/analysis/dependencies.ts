@@ -92,7 +92,7 @@ export class DependencyExtractor {
 
           edges.push({
             from: `${filePath}:file`,
-            to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
+            to: localSymbol ? `${localSymbol.filePath || filePath}:${localSymbol.id}` : targetId,
             type: 'imports',
             confidence: localSymbol ? 0.9 : 0.6,
             isResolved: !!localSymbol,
@@ -182,7 +182,7 @@ export class DependencyExtractor {
           const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
           edges.push({
             from: `${filePath}:${symbol.id}`,
-            to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
+            to: localSymbol ? `${localSymbol.filePath || filePath}:${localSymbol.id}` : targetId,
             type: 'calls',
             confidence: localSymbol ? 0.8 : 0.4,
             isResolved: !!localSymbol,
@@ -199,7 +199,7 @@ export class DependencyExtractor {
         const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
         edges.push({
           from: `${filePath}:${symbol.id}`,
-          to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
+          to: localSymbol ? `${localSymbol.filePath || filePath}:${localSymbol.id}` : targetId,
           type: 'calls',
         });
 
@@ -208,7 +208,7 @@ export class DependencyExtractor {
           const localSymbol = this.findKnownSymbol(varId, knownSymbols);
           edges.push({
             from: `${filePath}:${symbol.id}`,
-            to: localSymbol ? `${filePath}:${localSymbol.id}` : varId,
+            to: localSymbol ? `${localSymbol.filePath || filePath}:${localSymbol.id}` : varId,
             type: 'uses',
           });
         }
@@ -373,7 +373,7 @@ export class DependencyExtractor {
           const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
           edges.push({
             from: `${filePath}:${symbol.id}`,
-            to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
+            to: localSymbol ? `${localSymbol.filePath || filePath}:${localSymbol.id}` : targetId,
             type: 'calls',
           });
         }
@@ -401,7 +401,7 @@ export class DependencyExtractor {
           const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
           edges.push({
             from: `${filePath}:${symbol.id}`,
-            to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
+            to: localSymbol ? `${localSymbol.filePath || filePath}:${localSymbol.id}` : targetId,
             type: 'calls',
           });
         }
@@ -415,7 +415,7 @@ export class DependencyExtractor {
           const localSymbol = this.findKnownSymbol(targetId, knownSymbols);
           edges.push({
             from: `${filePath}:${symbol.id}`,
-            to: localSymbol ? `${filePath}:${localSymbol.id}` : targetId,
+            to: localSymbol ? `${localSymbol.filePath || filePath}:${localSymbol.id}` : targetId,
             type: 'uses',
           });
         }
@@ -438,18 +438,18 @@ export class DependencyExtractor {
     const added: EdgeInfo[] = [];
     const removed: EdgeInfo[] = [];
 
-    const previousMap = new Map(previous.map(e => [`${e.from}:${e.to}:${e.type} `, e]));
-    const currentMap = new Map(current.map(e => [`${e.from}:${e.to}:${e.type} `, e]));
+    const previousMap = new Map(previous.map(e => [`${e.from}:${e.to}:${e.type}`, e]));
+    const currentMap = new Map(current.map(e => [`${e.from}:${e.to}:${e.type}`, e]));
 
     for (const edge of current) {
-      const key = `${edge.from}:${edge.to}:${edge.type} `;
+      const key = `${edge.from}:${edge.to}:${edge.type}`;
       if (!previousMap.has(key)) {
         added.push(edge);
       }
     }
 
     for (const edge of previous) {
-      const key = `${edge.from}:${edge.to}:${edge.type} `;
+      const key = `${edge.from}:${edge.to}:${edge.type}`;
       if (!currentMap.has(key)) {
         removed.push(edge);
       }

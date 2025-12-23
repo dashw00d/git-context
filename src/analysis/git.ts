@@ -5,6 +5,7 @@ import { CommitInfo, FileChange } from '../types';
 import { withTimeout } from '../utils/async';
 import { getGitRoot } from '../utils/config';
 import { logDebug, logError, logWarn } from '../utils/logger';
+import { normalizeToRelative } from '../utils/path';
 
 export class GitOperations {
   private gitRoot: string;
@@ -13,6 +14,13 @@ export class GitOperations {
   private static headShaCache?: { value: string; expires: number };
   private static statusCache?: { output: string; expires: number };
   private static untrackedCache?: { files: string[]; expires: number };
+
+  /**
+   * Normalizes a path to be relative, forward-slashed, and without leading slashes.
+   */
+  public static normalizePath(p: string | undefined): string {
+    return normalizeToRelative(p, getGitRoot());
+  }
   // Pending promise caches to deduplicate concurrent requests
   private static pendingStatusPromise?: Promise<string>;
   private static pendingUntrackedPromise?: Promise<string[]>;
@@ -379,21 +387,41 @@ export class GitOperations {
           'Git diff-tree'
         );
       } catch (e) {
+        // Check if this is a merge commit by getting commit info
+        const commitInfo = await this.getCommitInfo(sha);
+        const parents = commitInfo.parent ? commitInfo.parent.split(' ') : [];
+
         try {
-          output = await withTimeout(
-            this.git.raw([
-              'diff-tree',
-              '-r',
-              '--no-commit-id',
-              '4b825dc642cb6eb9a060e54bf8d69288fbee4904', // Empty tree SHA
-              sha,
-            ]),
-            30000,
-            'Git diff-tree empty fallback'
-          );
+          if (parents.length > 1) {
+            // Merge commit: compare against first parent
+            output = await withTimeout(
+              this.git.raw([
+                'diff-tree',
+                '-r',
+                '--no-commit-id',
+                `${sha}^1`, // First parent
+                sha,
+              ]),
+              30000,
+              'Git diff-tree merge commit'
+            );
+          } else {
+            // Single-parent commit: fallback to empty tree (initial commit case)
+            output = await withTimeout(
+              this.git.raw([
+                'diff-tree',
+                '-r',
+                '--no-commit-id',
+                '4b825dc642cb6eb9a060e54bf8d69288fbee4904', // Empty tree SHA
+                sha,
+              ]),
+              30000,
+              'Git diff-tree empty fallback'
+            );
+          }
         } catch (innerError) {
           logWarn(
-            `Failed to get file changes for ${sha} (even with empty tree fallback): ${innerError}`
+            `Failed to get file changes for ${sha} (${parents.length > 1 ? 'merge commit' : 'single commit'}): ${innerError}`
           );
           return [];
         }
@@ -436,9 +464,9 @@ export class GitOperations {
         }
 
         changes.push({
-          path,
+          path: GitOperations.normalizePath(path),
           status,
-          oldPath,
+          oldPath: oldPath ? GitOperations.normalizePath(oldPath) : undefined,
           newSha,
           oldSha,
         });
@@ -940,7 +968,7 @@ export class GitOperations {
         }
 
         changes.push({
-          path: filePath,
+          path: GitOperations.normalizePath(filePath),
           status: changeStatus,
         });
       }
@@ -953,14 +981,12 @@ export class GitOperations {
   }
 
   private parseGitPath(rawPath: string): string {
-    if (rawPath.startsWith('"') && rawPath.endsWith('"')) {
-      const unquoted = rawPath.slice(1, -1);
-
-      return unquoted
-        .replace(/\\(\d{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
-        .replace(/\\\\/g, '\\');
+    let p = rawPath;
+    if (p.startsWith('"') && p.endsWith('"')) {
+      p = p.slice(1, -1);
+      // Basic unescaping if needed, though simple-git might have handled it
     }
-    return rawPath;
+    return GitOperations.normalizePath(p);
   }
 
   private parseLsTreeLine(
@@ -975,7 +1001,12 @@ export class GitOperations {
 
     if (preParts.length < 3) return null;
 
-    return { mode: preParts[0], type: preParts[1], sha: preParts[2], path };
+    return {
+      mode: preParts[0],
+      type: preParts[1],
+      sha: preParts[2],
+      path: GitOperations.normalizePath(path),
+    };
   }
 
   private isGitPathMissing(error: any): boolean {
@@ -1022,7 +1053,7 @@ export class GitOperations {
           }
 
           staged.push({
-            path: filePath,
+            path: GitOperations.normalizePath(filePath),
             status: changeStatus,
           });
         }
@@ -1074,7 +1105,7 @@ export class GitOperations {
         for (const filePath of untrackedFiles) {
           if (!unstaged.some(f => f.path === filePath)) {
             unstaged.push({
-              path: filePath,
+              path: GitOperations.normalizePath(filePath),
               status: 'U',
             });
           }
@@ -1124,7 +1155,7 @@ export class GitOperations {
         30000,
         'Git ls-files all'
       );
-      return this.parseFileList(output);
+      return this.parseFileList(output).map(f => GitOperations.normalizePath(f));
     } catch (error: any) {
       logError(`Failed to get all files: ${error.message}`);
       return [];
@@ -1133,8 +1164,8 @@ export class GitOperations {
 
   async getFileHistory(filePath: string, limit: number = 10): Promise<any[]> {
     try {
-      // Ensure filePath is relative to git root (remove leading slash if present)
-      const normalizedPath = filePath.replace(/^\/+/, '');
+      // Normalize targetPath: ensure it is relative to gitRoot with forward slashes
+      const normalizedPath = GitOperations.normalizePath(filePath);
 
       // Use simple-git's log() method instead of raw() for better argument handling
       // The issue with raw() is that it might not handle the -- separator correctly
@@ -1332,7 +1363,7 @@ export class GitOperations {
 
         const data: HotspotStat[] = Array.from(fileCounts.entries())
           .map(([path, stats]) => ({
-            path,
+            path: GitOperations.normalizePath(path),
             count: stats.count,
             added: stats.added,
             removed: stats.removed,
@@ -1376,7 +1407,7 @@ export class GitOperations {
 
       const data: HotspotStat[] = Array.from(fileCounts.entries())
         .map(([path, stats]) => ({
-          path,
+          path: GitOperations.normalizePath(path),
           count: stats.count,
           added: stats.added,
           removed: stats.removed,

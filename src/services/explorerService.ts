@@ -1,7 +1,7 @@
+import { GitOperations } from '../analysis/git';
 import { BundleFactsDTO, ExplorerNode } from '../types/cockpit';
 import { getGitRoot } from '../utils/config';
 import { logInfo } from '../utils/logger';
-import { normalizeToRelative } from '../utils/path';
 
 export class ExplorerService {
   private static instance: ExplorerService;
@@ -47,13 +47,10 @@ export class ExplorerService {
       children: [],
     };
 
-    // TODO: We need to know WHICH bundle is active to populate it.
-
     let fileNodes: ExplorerNode[] = [];
 
     if (skeleton && skeleton.files.length > 0) {
       fileNodes = this.buildFileTree(skeleton.files, 'scanning');
-      // Hydrate symbols if facts are available (e.g. from Quick Scan)
       if (bundleFacts) {
         this.hydrateSymbols(fileNodes, bundleFacts);
       }
@@ -90,9 +87,6 @@ export class ExplorerService {
 
   private buildFileTree(files: string[], defaultStatus: 'scanning' | 'ready'): ExplorerNode[] {
     logInfo(`Building tree for ${files.length} files (status=${defaultStatus})`);
-    if (files.length > 0) {
-      logInfo(`Sample files: ${files.slice(0, 3).join(', ')}`);
-    }
     const root: ExplorerNode = {
       id: 'root',
       name: 'src',
@@ -104,7 +98,7 @@ export class ExplorerService {
     map.set('', root);
 
     for (const file of files) {
-      const parts = file.split('/');
+      const parts = GitOperations.normalizePath(file).split('/');
       let currentPath = '';
 
       for (let i = 0; i < parts.length; i++) {
@@ -139,25 +133,18 @@ export class ExplorerService {
     const fileSymbols = new Map<string, any[]>();
     const workingSymbols = (bundleFacts?.evidence as any)?.['working.symbols'] || [];
 
-    // Normalize path helper using shared logic
-    const gitRoot = getGitRoot();
-    const normalize = (p: string) => normalizeToRelative(p, gitRoot);
-
     for (const symbol of workingSymbols) {
-      // Handle both old string format and new object format
       let filePath: string;
       let symbolId: string;
       let symbolName: string;
 
       if (typeof symbol === 'string') {
-        // Legacy format: "filePath:symbolName:symbolId"
         const parts = symbol.split(':');
         if (parts.length < 3) continue;
-        symbolId = parts.pop()!; // Last part is ID
-        symbolName = parts.pop()!; // Second to last is name
-        filePath = parts.join(':'); // Rest is path
+        symbolId = parts.pop()!;
+        symbolName = parts.pop()!;
+        filePath = parts.join(':');
       } else if (symbol && typeof symbol === 'object') {
-        // New format: { id, name, kind, filePath, ... }
         filePath = symbol.filePath;
         symbolId = symbol.id;
         symbolName = symbol.name;
@@ -167,7 +154,7 @@ export class ExplorerService {
 
       if (!filePath || !symbolId || !symbolName) continue;
 
-      const normalizedPath = normalize(filePath);
+      const normalizedPath = GitOperations.normalizePath(filePath);
       if (!fileSymbols.has(normalizedPath)) {
         fileSymbols.set(normalizedPath, []);
       }
@@ -178,7 +165,7 @@ export class ExplorerService {
 
     const visit = (node: ExplorerNode) => {
       if (node.type === 'file') {
-        const normalizedId = normalize(node.id);
+        const normalizedId = GitOperations.normalizePath(node.id);
         const symbols = fileSymbols.get(normalizedId);
         if (symbols && symbols.length > 0) {
           node.children = symbols.map(s => ({
@@ -195,4 +182,8 @@ export class ExplorerService {
 
     nodes.forEach(visit);
   }
+}
+
+export function getExplorerService(): ExplorerService {
+  return ExplorerService.getInstance();
 }

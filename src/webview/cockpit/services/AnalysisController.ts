@@ -91,7 +91,12 @@ export class AnalysisController {
     let quickSymbols: any[] = [];
     try {
       logInfo(`[AnalysisController] Starting Quick Scan for ${skeleton.files.length} files...`);
-      quickSymbols = await pipeline.workspaceIndexer.quickScanSymbols(skeleton.files);
+      // Enable persistence for quick scan to populate DB immediately
+      // Use low priority (background workers) for the massive initial scan
+      quickSymbols = await pipeline.workspaceIndexer.quickScanSymbols(skeleton.files, {
+        persist: true,
+        priority: false,
+      });
       logInfo(`[AnalysisController] Quick Scan complete. Found ${quickSymbols.length} symbols.`);
     } catch (e) {
       logWarn(`[AnalysisController] Quick Scan failed: ${e}`);
