@@ -151,7 +151,7 @@ function extractSymbols(tree: any, filePath: string, language: string): SymbolIn
   // Increased limit for large files (e.g., bundled/minified JS)
   // For very large files, we may still hit this, but it's better than crashing
   const MAX_ITERATIONS = 500000; // Increased from 100k to 500k for large files
-  const MAX_SYMBOLS = 500; // Stop early if we find too many symbols (likely minified/bundled)
+  const MAX_SYMBOLS = 1000; // Stop early if we find too many symbols (likely minified/bundled)
   let iterations = 0;
 
   try {
@@ -245,7 +245,7 @@ async function initialize(wasmDir: string, languages: string[]) {
 
 // Maximum reasonable symbol count for a source file
 // Files with more symbols are likely minified/bundled and should be skipped
-const MAX_REASONABLE_SYMBOLS = 500;
+const MAX_REASONABLE_SYMBOLS = 1000;
 
 parentPort?.on('message', async (msg: WorkerMessage) => {
   if (msg.type === 'init') {
@@ -320,7 +320,7 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
         const extractSymbolsEndTime = Date.now();
 
         // If file has too many symbols, it's likely minified/bundled - skip it
-        if (symbols.length >= MAX_REASONABLE_SYMBOLS) {
+        if (symbols.length > MAX_REASONABLE_SYMBOLS) {
           logWarn(
             `[ParserWorker] File ${msg.filePath} has ${symbols.length} symbols (exceeds ${MAX_REASONABLE_SYMBOLS}), likely minified/bundled. Skipping.`
           );
@@ -370,7 +370,7 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
         const extractSymbolsEndTime = Date.now();
 
         // If file has too many symbols, it's likely minified/bundled - skip it
-        if (symbols.length >= MAX_REASONABLE_SYMBOLS) {
+        if (symbols.length > MAX_REASONABLE_SYMBOLS) {
           logWarn(
             `[ParserWorker] File ${msg.filePath} has ${symbols.length} symbols (exceeds ${MAX_REASONABLE_SYMBOLS}), likely minified/bundled. Skipping.`
           );

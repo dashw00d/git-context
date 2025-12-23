@@ -340,6 +340,8 @@ export class SymbolExtractor {
       'interface',
       'enum',
       'module',
+      'type',
+      'type_alias',
     ]);
     const symbols = facts.filter(f => symbolKinds.has(f.kind)) as SymbolInfo[];
 

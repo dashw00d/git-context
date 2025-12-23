@@ -345,9 +345,11 @@ export function detectDrift(
           const workingFromDna = extractDnaHash(e.from_symbol_id);
           const workingToDna = extractDnaHash(e.to_symbol_id);
 
-          return workingFromDna === intendedFromDna &&
-                 workingToDna === intendedToDna &&
-                 e.edge_type === intendedEdge.edge_type;
+          return (
+            workingFromDna === intendedFromDna &&
+            workingToDna === intendedToDna &&
+            e.edge_type === intendedEdge.edge_type
+          );
         });
 
         if (!found) {
@@ -390,9 +392,11 @@ export function detectDrift(
           const intendedFromDna = extractDnaHash(intendedEdge.from_symbol_id);
           const intendedToDna = extractDnaHash(intendedEdge.to_symbol_id);
 
-          return intendedFromDna === workingFromDna &&
-                 intendedToDna === workingToDna &&
-                 intendedEdge.edge_type === workingEdge.edge_type;
+          return (
+            intendedFromDna === workingFromDna &&
+            intendedToDna === workingToDna &&
+            intendedEdge.edge_type === workingEdge.edge_type
+          );
         });
 
         if (

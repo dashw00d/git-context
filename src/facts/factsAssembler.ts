@@ -414,17 +414,23 @@ function getWorkingLists(working: WorkingSnapshot): {
   symbols: any[]; // Full symbol objects for FrameAnalyzer compatibility
   edges: string[];
 } {
+  // Collect all symbols from all files to avoid DNA collisions in the UI
+  const allSymbols: any[] = [];
+  for (const [filePath, symbols] of working.symbolsByFile.entries()) {
+    for (const s of symbols) {
+      allSymbols.push({
+        id: s.symbol_id,
+        name: s.name,
+        kind: s.kind,
+        signature: s.signature || '',
+        location: s.loc_post || s.loc_pre || null,
+        filePath: s.filePath || filePath || '',
+      });
+    }
+  }
+
   return {
-    // Return full symbol objects so FrameAnalyzer can use them directly
-    // Previously returned strings which couldn't be used for symbol display
-    symbols: Array.from(working.symbolsById.values()).map(s => ({
-      id: s.symbol_id,
-      name: s.name,
-      kind: s.kind,
-      signature: s.signature || '',
-      location: s.loc_post || s.loc_pre || null,
-      filePath: s.filePath || '',
-    })),
+    symbols: allSymbols,
     edges: working.edges.map(e => `${e.from_symbol_id} -> ${e.to_symbol_id} (${e.edge_type})`),
   };
 }
@@ -436,19 +442,20 @@ export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapsho
 
   const fileConventions = new Map<string, Set<string>>();
 
-  for (const [symbolId, symbol] of working.symbolsById) {
-    const filePath = symbolId.split(':')[0];
+  for (const [filePath, symbols] of working.symbolsByFile.entries()) {
     if (!fileConventions.has(filePath)) {
       fileConventions.set(filePath, new Set());
     }
 
-    const name = symbol.name;
-    if (/^[a-z]/.test(name)) {
-      fileConventions.get(filePath)!.add('camelCase');
-    } else if (/^[A-Z]/.test(name) && /[A-Z]/.test(name.slice(1))) {
-      fileConventions.get(filePath)!.add('PascalCase');
-    } else if (/_/.test(name)) {
-      fileConventions.get(filePath)!.add('snake_case');
+    for (const symbol of symbols) {
+      const name = symbol.name;
+      if (/^[a-z]/.test(name)) {
+        fileConventions.get(filePath)!.add('camelCase');
+      } else if (/^[A-Z]/.test(name) && /[A-Z]/.test(name.slice(1))) {
+        fileConventions.get(filePath)!.add('PascalCase');
+      } else if (/_/.test(name)) {
+        fileConventions.get(filePath)!.add('snake_case');
+      }
     }
   }
 
@@ -479,21 +486,23 @@ export function detectOldNamespaces(
 
   let oldNamespaceCount = 0;
 
-  for (const [symbolId, symbol] of working.symbolsById) {
-    const filePath = symbolId.split(':')[0];
-    const symbolName = symbol.name;
+  for (const [filePath, symbols] of working.symbolsByFile.entries()) {
+    for (const symbol of symbols) {
+      const symbolName = symbol.name;
+      const symbolId = symbol.symbol_id;
 
-    const matchesOldPattern = oldNamespacePatterns.some(
-      pattern => pattern.test(filePath) || pattern.test(symbolName)
-    );
+      const matchesOldPattern = oldNamespacePatterns.some(
+        pattern => pattern.test(filePath) || pattern.test(symbolName)
+      );
 
-    if (matchesOldPattern) {
-      const intendedState = intended.get(symbolId);
-      if (intendedState || !intended.has(symbolId)) {
-        if (intendedState?.expect === 'absent') {
-          oldNamespaceCount++;
-        } else if (!intended.has(symbolId)) {
-          oldNamespaceCount++;
+      if (matchesOldPattern) {
+        const intendedState = intended.get(symbolId);
+        if (intendedState || !intended.has(symbolId)) {
+          if (intendedState?.expect === 'absent') {
+            oldNamespaceCount++;
+          } else if (!intended.has(symbolId)) {
+            oldNamespaceCount++;
+          }
         }
       }
     }

@@ -5,7 +5,7 @@ import { GitOperations } from '../analysis/git';
 import { assignDNAIds } from '../analysis/symbolDna';
 import { SymbolExtractor } from '../analysis/symbols';
 import { EdgeContext, SymbolContext } from '../contracts/llmContext';
-import { getGitRoot } from '../utils/config';
+import { getGitRoot, detectLanguage } from '../utils/config';
 import { logError, logInfo, logWarn, logDebug } from '../utils/logger';
 
 export interface WorkingSnapshot {
@@ -34,9 +34,7 @@ export function extractDnaHash(edgeId: string): string {
  * Build a symbolsByName index for fuzzy matching
  * Maps base name (without prefixes like function_, method_) to all matching symbols
  */
-function buildSymbolsByName(
-  symbolsById: Map<string, SymbolContext>
-): Map<string, SymbolContext[]> {
+function buildSymbolsByName(symbolsById: Map<string, SymbolContext>): Map<string, SymbolContext[]> {
   const result = new Map<string, SymbolContext[]>();
 
   for (const symbol of symbolsById.values()) {
@@ -285,11 +283,18 @@ export async function getWorkingSnapshot(
             const bodyText = contentLines
               .slice(symbol.location.start.line - 1, symbol.location.end.line)
               .join('\n');
-            bodyTexts.set(symbol.filePath || filePath, bodyText);
+            // Use a unique key for each symbol's body text within the file
+            // Format: filePath:temporaryId
+            const key = `${symbol.filePath || filePath}:${symbol.id}`;
+            bodyTexts.set(key, bodyText);
           }
         }
 
-        const symbolsWithDNA = await assignDNAIds(symbols, bodyTexts, undefined);
+        const symbolsWithDNA = await assignDNAIds(
+          symbols,
+          bodyTexts,
+          detectLanguage(filePath) || undefined
+        );
 
         for (const symbol of symbolsWithDNA) {
           if (!symbol.id) {
