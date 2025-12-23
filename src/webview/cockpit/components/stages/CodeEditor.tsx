@@ -3,6 +3,7 @@ import { FileAnalysisData } from '../../hooks/useFileAnalysisData';
 import { useSymbolRefCounts } from '../../hooks/useSymbolRefCounts';
 import { HoverInfoCard } from './HoverInfoCard';
 import { SymbolHeaderBar } from './SymbolHeaderBar';
+import { logDebug } from '../../../../utils/logger';
 
 interface DriftIssue {
   type?: string;
@@ -563,10 +564,19 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         const lineIsAfterTime = isLineAfterTime(lineNumber);
         const lineShouldHide = lineIsAfterTime && currentCommitIndex !== undefined;
 
-        // Get symbol ref counts
-        const symbolId = symbolAtLine?.id || symbolAtLine?.name || '';
+        // Get symbol ref counts - MUST use DNA hash (id), not name
+        // refCounts Map keys are DNA hashes, so we can't fall back to name
+        const symbolId = symbolAtLine?.id || '';
+        if (!symbolId && symbolAtLine) {
+          logDebug(`[CodeEditor] Symbol ${symbolAtLine.name} missing ID, cannot lookup refs`);
+        }
         const incomingRefs = symbolId ? refCounts.incoming.get(symbolId) || 0 : 0;
         const outgoingRefs = symbolId ? refCounts.outgoing.get(symbolId) || 0 : 0;
+
+        // Debug logging for successful lookups
+        if (symbolId && (incomingRefs > 0 || outgoingRefs > 0)) {
+          logDebug(`[CodeEditor] Symbol ${symbolAtLine?.name} (${symbolId}): ${incomingRefs} incoming, ${outgoingRefs} outgoing refs`);
+        }
 
         // Get line commit info for age display
         const lineCommit = lineCommits.find(lc => lc.line === lineNumber);

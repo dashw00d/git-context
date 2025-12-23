@@ -648,7 +648,29 @@ export class DependencyExtractor {
   }
 
   private findKnownSymbol(symbolId: string, knownSymbols: SymbolInfo[]): SymbolInfo | undefined {
-    return knownSymbols.find(s => s.id === symbolId || s.semanticId === symbolId);
+    // First try direct match by id or semanticId
+    const directMatch = knownSymbols.find(s => s.id === symbolId || s.semanticId === symbolId);
+    if (directMatch) return directMatch;
+
+    // If symbolId is in format "kind_name" (e.g., "function_handleClick"), extract name and match
+    const prefixMatch = symbolId.match(/^(function|method|class|variable|object|property)_(.+)$/);
+    if (prefixMatch) {
+      const [, kind, name] = prefixMatch;
+      // Find symbol by name, and optionally filter by kind if there are multiple matches
+      const nameMatches = knownSymbols.filter(s => s.name === name);
+      if (nameMatches.length === 1) {
+        return nameMatches[0];
+      }
+      if (nameMatches.length > 1) {
+        // Try to narrow by kind
+        const kindMatch = nameMatches.find(s => s.kind === kind);
+        if (kindMatch) return kindMatch;
+        // Fall back to first name match
+        return nameMatches[0];
+      }
+    }
+
+    return undefined;
   }
 
   private isSymbolKnown(symbolId: string, knownSymbols: SymbolInfo[]): boolean {

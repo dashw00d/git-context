@@ -29749,6 +29749,16 @@ Churn: ${node.score.toFixed(1)}
 
   // src/webview/cockpit/hooks/useSymbolRefCounts.ts
   var React14 = __toESM(require_react());
+  function normalizePathForBrowser(p) {
+    if (!p) return "";
+    let normalized = p.replace(/\\/g, "/");
+    normalized = normalized.replace(/^\/+/, "");
+    return normalized;
+  }
+  function extractBaseName(symbolId) {
+    const match = symbolId.match(/^(function|method|class|variable|object|property)_(.+)$/);
+    return match ? match[2] : null;
+  }
   var useSymbolRefCounts = (bundleFacts, filePath) => {
     return React14.useMemo(() => {
       const incoming = /* @__PURE__ */ new Map();
@@ -29757,7 +29767,38 @@ Churn: ${node.score.toFixed(1)}
         return { incoming, outgoing };
       }
       const edges = bundleFacts.evidence?.["working.edges"] || [];
-      const normalizedTarget = filePath.replace(/\\/g, "/");
+      const nameToHash = /* @__PURE__ */ new Map();
+      const rawSymbols = bundleFacts.evidence?.["working.symbols"] || [];
+      const normalizedTarget = normalizePathForBrowser(filePath);
+      rawSymbols.forEach((s) => {
+        if (typeof s === "object" && s.filePath && s.id && s.name) {
+          const symPath = normalizePathForBrowser(s.filePath || "");
+          if (symPath === normalizedTarget) {
+            nameToHash.set(s.name, s.id);
+          }
+        }
+      });
+      if (edges.length === 0) {
+        logDebug(`[useSymbolRefCounts] No edges found in bundleFacts for ${filePath} (normalized: ${normalizedTarget})`);
+      } else {
+        logDebug(`[useSymbolRefCounts] Found ${edges.length} edges, ${nameToHash.size} symbols mapped for ${normalizedTarget}`);
+      }
+      let matchCount = 0;
+      let incomingMatches = 0;
+      let outgoingMatches = 0;
+      let resolvedByName = 0;
+      const resolveToHash = (rawSymbolId) => {
+        const baseName = extractBaseName(rawSymbolId);
+        if (!baseName) {
+          return rawSymbolId;
+        }
+        const hash = nameToHash.get(baseName);
+        if (hash) {
+          resolvedByName++;
+          return hash;
+        }
+        return rawSymbolId;
+      };
       edges.forEach((edge) => {
         let fromId;
         let toId;
@@ -29776,17 +29817,48 @@ Churn: ${node.score.toFixed(1)}
         const lastColonTo = toId.lastIndexOf(":");
         const fromPath = lastColonFrom !== -1 ? fromId.substring(0, lastColonFrom) : fromId;
         const toPath = lastColonTo !== -1 ? toId.substring(0, lastColonTo) : toId;
-        const normalizedFrom = fromPath.replace(/\\/g, "/");
-        const normalizedTo = toPath.replace(/\\/g, "/");
+        const normalizedFrom = normalizePathForBrowser(fromPath);
+        const normalizedTo = normalizePathForBrowser(toPath);
         if (normalizedFrom === normalizedTarget) {
-          const symbolId = lastColonFrom !== -1 ? fromId.substring(lastColonFrom + 1) : fromId;
+          const rawSymbolId = lastColonFrom !== -1 ? fromId.substring(lastColonFrom + 1) : fromId;
+          const symbolId = resolveToHash(rawSymbolId);
           outgoing.set(symbolId, (outgoing.get(symbolId) || 0) + 1);
+          outgoingMatches++;
+          matchCount++;
         }
         if (normalizedTo === normalizedTarget) {
-          const symbolId = lastColonTo !== -1 ? toId.substring(lastColonTo + 1) : toId;
+          const rawSymbolId = lastColonTo !== -1 ? toId.substring(lastColonTo + 1) : toId;
+          const symbolId = resolveToHash(rawSymbolId);
           incoming.set(symbolId, (incoming.get(symbolId) || 0) + 1);
+          incomingMatches++;
+          matchCount++;
         }
       });
+      if (edges.length > 0) {
+        logDebug(
+          `[useSymbolRefCounts] Matched ${matchCount} edges (${incomingMatches} incoming, ${outgoingMatches} outgoing, ${resolvedByName} resolved by name) for ${normalizedTarget}`
+        );
+        if (matchCount === 0 && edges.length > 0) {
+          const sampleEdges = edges.slice(0, 3);
+          logDebug(
+            `[useSymbolRefCounts] No matches found. Sample edge paths: ${JSON.stringify(
+              sampleEdges.map((e) => {
+                if (typeof e === "string") {
+                  const match = e.match(/^(.+?)\s*->\s*(.+?)\s*\(/);
+                  if (match) {
+                    const from = match[1];
+                    const to = match[2];
+                    const fromPath = from.lastIndexOf(":") !== -1 ? from.substring(0, from.lastIndexOf(":")) : from;
+                    const toPath = to.lastIndexOf(":") !== -1 ? to.substring(0, to.lastIndexOf(":")) : to;
+                    return { from: normalizePathForBrowser(fromPath), to: normalizePathForBrowser(toPath) };
+                  }
+                }
+                return e;
+              })
+            )} vs target: ${normalizedTarget}`
+          );
+        }
+      }
       return { incoming, outgoing };
     }, [bundleFacts, filePath]);
   };
@@ -30522,9 +30594,15 @@ ${hotspotText}` : hotspotText;
         const ageColor = getAgeColor(lineNumber);
         const lineIsAfterTime = isLineAfterTime(lineNumber);
         const lineShouldHide = lineIsAfterTime && currentCommitIndex !== void 0;
-        const symbolId = symbolAtLine?.id || symbolAtLine?.name || "";
+        const symbolId = symbolAtLine?.id || "";
+        if (!symbolId && symbolAtLine) {
+          logDebug(`[CodeEditor] Symbol ${symbolAtLine.name} missing ID, cannot lookup refs`);
+        }
         const incomingRefs = symbolId ? refCounts.incoming.get(symbolId) || 0 : 0;
         const outgoingRefs = symbolId ? refCounts.outgoing.get(symbolId) || 0 : 0;
+        if (symbolId && (incomingRefs > 0 || outgoingRefs > 0)) {
+          logDebug(`[CodeEditor] Symbol ${symbolAtLine?.name} (${symbolId}): ${incomingRefs} incoming, ${outgoingRefs} outgoing refs`);
+        }
         const lineCommit = lineCommits.find((lc) => lc.line === lineNumber);
         const lineCommitIndex = lineToCommitIndex.get(lineNumber);
         const commitsAgo = lineCommitIndex !== void 0 && currentCommitIndex !== void 0 ? currentCommitIndex - lineCommitIndex : null;
@@ -32410,6 +32488,12 @@ ${hotspotText}` : hotspotText;
   };
 
   // src/webview/cockpit/components/CodeMicroscope.tsx
+  function normalizePathForBrowser2(p) {
+    if (!p) return "";
+    let normalized = p.replace(/\\/g, "/");
+    normalized = normalized.replace(/^\/+/, "");
+    return normalized;
+  }
   var MicroscopeContainer = {
     flex: 1,
     display: "flex",
@@ -32608,6 +32692,7 @@ ${hotspotText}` : hotspotText;
       const lineCommits = lineCommitsData;
       const blastRadius = renderFrame.data?.blastRadius;
       const driftIssues = renderFrame.data?.drift || [];
+      const normalizedFilePath = normalizePathForBrowser2(renderFrame.id);
       const currentCommitIndex = cockpitState?.currentCommitIndex !== void 0 ? cockpitState.currentCommitIndex : effectiveOrderedCommits.length > 0 ? effectiveOrderedCommits.length - 1 : void 0;
       const handleNeighborClick = (filePath) => {
         if (vscode3) {
@@ -32682,7 +32767,7 @@ ${hotspotText}` : hotspotText;
           lineCommits,
           orderedCommits: effectiveOrderedCommits,
           currentCommitIndex,
-          filePath: renderFrame.id,
+          filePath: normalizedFilePath,
           bundleFacts: cockpitState?.bundleFacts,
           movedBlocks: analysisData.movedBlocks,
           showLineNumbers: true,

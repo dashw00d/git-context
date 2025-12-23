@@ -1,9 +1,31 @@
 import * as React from 'react';
 import { RefactorBundleFacts } from '../../../facts/types';
+import { logDebug } from '../../../utils/logger';
+
+/**
+ * Browser-compatible path normalization (webview can't use Node.js modules)
+ * Normalizes paths to match edge storage format: forward slashes, no leading slash
+ */
+function normalizePathForBrowser(p: string): string {
+  if (!p) return '';
+  // Convert backslashes to forward slashes
+  let normalized = p.replace(/\\/g, '/');
+  // Remove leading slash (paths in edges are relative to git root)
+  normalized = normalized.replace(/^\/+/, '');
+  return normalized;
+}
+
+/**
+ * Extract base name from a kind_name format (e.g., "function_handleClick" -> "handleClick")
+ */
+function extractBaseName(symbolId: string): string | null {
+  const match = symbolId.match(/^(function|method|class|variable|object|property)_(.+)$/);
+  return match ? match[2] : null;
+}
 
 interface SymbolRefCounts {
-  incoming: Map<string, number>; // symbolId → count of incoming refs
-  outgoing: Map<string, number>; // symbolId → count of outgoing refs
+  incoming: Map<string, number>; // symbolId (DNA hash) → count of incoming refs
+  outgoing: Map<string, number>; // symbolId (DNA hash) → count of outgoing refs
 }
 
 export const useSymbolRefCounts = (
@@ -22,8 +44,50 @@ export const useSymbolRefCounts = (
     // Format can be: "from_symbol_id -> to_symbol_id (edge_type)" or object with from/to
     const edges = bundleFacts.evidence?.['working.edges'] || [];
 
-    // Normalize the base filePath for comparison
-    const normalizedTarget = filePath.replace(/\\/g, '/');
+    // Build symbol lookup maps for this file
+    // Maps name -> DNA hash for symbols in this file
+    const nameToHash = new Map<string, string>();
+    const rawSymbols = (bundleFacts.evidence?.['working.symbols'] as any[]) || [];
+    const normalizedTarget = normalizePathForBrowser(filePath);
+
+    // Parse working.symbols to build name -> hash mapping
+    rawSymbols.forEach((s: any) => {
+      if (typeof s === 'object' && s.filePath && s.id && s.name) {
+        const symPath = normalizePathForBrowser(s.filePath || '');
+        if (symPath === normalizedTarget) {
+          // Map name to DNA hash for symbols in this file
+          nameToHash.set(s.name, s.id);
+        }
+      }
+    });
+
+    // Debug logging
+    if (edges.length === 0) {
+      logDebug(`[useSymbolRefCounts] No edges found in bundleFacts for ${filePath} (normalized: ${normalizedTarget})`);
+    } else {
+      logDebug(`[useSymbolRefCounts] Found ${edges.length} edges, ${nameToHash.size} symbols mapped for ${normalizedTarget}`);
+    }
+
+    let matchCount = 0;
+    let incomingMatches = 0;
+    let outgoingMatches = 0;
+    let resolvedByName = 0;
+
+    // Helper to resolve a symbol ID from edge to DNA hash
+    const resolveToHash = (rawSymbolId: string): string => {
+      // If it's already a hash (no kind_ prefix), return as-is
+      const baseName = extractBaseName(rawSymbolId);
+      if (!baseName) {
+        return rawSymbolId; // Already a hash or unknown format
+      }
+      // Try to resolve name to hash
+      const hash = nameToHash.get(baseName);
+      if (hash) {
+        resolvedByName++;
+        return hash;
+      }
+      return rawSymbolId; // Return original if can't resolve
+    };
 
     // Process edges array
     edges.forEach((edge: any) => {
@@ -52,21 +116,56 @@ export const useSymbolRefCounts = (
       const fromPath = lastColonFrom !== -1 ? fromId.substring(0, lastColonFrom) : fromId;
       const toPath = lastColonTo !== -1 ? toId.substring(0, lastColonTo) : toId;
 
-      const normalizedFrom = fromPath.replace(/\\/g, '/');
-      const normalizedTo = toPath.replace(/\\/g, '/');
+      // Normalize edge paths using the same method as target path (browser-compatible)
+      const normalizedFrom = normalizePathForBrowser(fromPath);
+      const normalizedTo = normalizePathForBrowser(toPath);
 
       // Count outgoing refs FROM this file's symbols
       if (normalizedFrom === normalizedTarget) {
-        const symbolId = lastColonFrom !== -1 ? fromId.substring(lastColonFrom + 1) : fromId;
+        const rawSymbolId = lastColonFrom !== -1 ? fromId.substring(lastColonFrom + 1) : fromId;
+        const symbolId = resolveToHash(rawSymbolId);
         outgoing.set(symbolId, (outgoing.get(symbolId) || 0) + 1);
+        outgoingMatches++;
+        matchCount++;
       }
 
       // Count incoming refs TO this file's symbols
       if (normalizedTo === normalizedTarget) {
-        const symbolId = lastColonTo !== -1 ? toId.substring(lastColonTo + 1) : toId;
+        const rawSymbolId = lastColonTo !== -1 ? toId.substring(lastColonTo + 1) : toId;
+        const symbolId = resolveToHash(rawSymbolId);
         incoming.set(symbolId, (incoming.get(symbolId) || 0) + 1);
+        incomingMatches++;
+        matchCount++;
       }
     });
+
+    // Debug logging for match results
+    if (edges.length > 0) {
+      logDebug(
+        `[useSymbolRefCounts] Matched ${matchCount} edges (${incomingMatches} incoming, ${outgoingMatches} outgoing, ${resolvedByName} resolved by name) for ${normalizedTarget}`
+      );
+      if (matchCount === 0 && edges.length > 0) {
+        // Log sample edge paths for debugging mismatches
+        const sampleEdges = edges.slice(0, 3);
+        logDebug(
+          `[useSymbolRefCounts] No matches found. Sample edge paths: ${JSON.stringify(
+            sampleEdges.map((e: any) => {
+              if (typeof e === 'string') {
+                const match = e.match(/^(.+?)\s*->\s*(.+?)\s*\(/);
+                if (match) {
+                  const from = match[1];
+                  const to = match[2];
+                  const fromPath = from.lastIndexOf(':') !== -1 ? from.substring(0, from.lastIndexOf(':')) : from;
+                  const toPath = to.lastIndexOf(':') !== -1 ? to.substring(0, to.lastIndexOf(':')) : to;
+                  return { from: normalizePathForBrowser(fromPath), to: normalizePathForBrowser(toPath) };
+                }
+              }
+              return e;
+            })
+          )} vs target: ${normalizedTarget}`
+        );
+      }
+    }
 
     // Note: scope.blastRadius is just an array of file paths, not an object with incoming/outgoing
     // Blast radius relationships are already captured in working.edges above
