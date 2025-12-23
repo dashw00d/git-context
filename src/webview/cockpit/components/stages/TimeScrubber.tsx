@@ -13,6 +13,11 @@ interface TimeScrubberProps {
   onCommitIndexChange: (index: number) => void;
   bundleFacts?: any;
   lineCommits?: Array<{ line: number; commitSha: string; author: string; date: string }>;
+  symbols?: Array<{
+    id?: string;
+    name: string;
+    location?: { start: { line: number }; end: { line: number } };
+  }>;
 }
 
 const ScrubberContainer: React.CSSProperties = {
@@ -37,6 +42,7 @@ export const TimeScrubber: React.FC<TimeScrubberProps> = ({
   onCommitIndexChange,
   bundleFacts,
   lineCommits = [],
+  symbols = [],
 }) => {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const maxIndex = commits.length > 0 ? commits.length - 1 : 0;
@@ -111,24 +117,29 @@ export const TimeScrubber: React.FC<TimeScrubberProps> = ({
 
     const indices = new Set<number>();
 
-    // Map drift symbols to commit indices via lineCommits
-    if (lineCommits.length > 0 && commits.length > 0) {
-      lineCommits.forEach((lc: any) => {
-        // Only if this line is associated with a drift symbol
-        const hasDrift = driftSymbols.some(
-          (ds: any) => ds.name === lc.symbolName || ds.path === lc.path
-        );
-        if (hasDrift) {
-          const commitIndex = commits.findIndex(c => c.sha === lc.commitSha);
-          if (commitIndex >= 0) {
-            indices.add(commitIndex);
-          }
+    // Map drift symbols to commit indices via lineCommits and symbol locations
+    if (lineCommits.length > 0 && commits.length > 0 && symbols.length > 0) {
+      driftSymbols.forEach((ds: any) => {
+        // Find the symbol in our current symbols list
+        const symbol = symbols.find(s => s.name === ds.name);
+        if (symbol?.location) {
+          const start = symbol.location.start.line;
+          const end = symbol.location.end.line;
+
+          // Find commits that touched these lines
+          const relevantLineCommits = lineCommits.filter(lc => lc.line >= start && lc.line <= end);
+          relevantLineCommits.forEach(lc => {
+            const commitIndex = commits.findIndex(c => c.sha === lc.commitSha);
+            if (commitIndex >= 0) {
+              indices.add(commitIndex);
+            }
+          });
         }
       });
     }
 
     return indices;
-  }, [bundleFacts, lineCommits, commits]);
+  }, [bundleFacts, lineCommits, commits, symbols]);
 
   if (commits.length === 0) {
     return (

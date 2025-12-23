@@ -116,7 +116,7 @@ export class AnalysisService {
         const git = new GitOperations();
 
         // Fetch recent commits for this file to build a mini-bundle
-        const history = await git.getFileHistory(targetPath, 5);
+        const history = await git.getFileHistory(targetPath, 20);
         const shas = history.map((h: any) => h.hash).filter((h: string) => h);
 
         if (shas.length > 0) {
@@ -135,13 +135,25 @@ export class AnalysisService {
 
       const tier2Data = await withTimeout(
         analyzer.analyzeTier2(frameId, targetPath, facts),
+
         120000,
+
         'Tier 2 analysis'
       );
+
       const currentState = store.getState();
+
+      // DEBUG: Log frame ID matching and lineCommits presence
+      logInfo(`[AnalysisService] Tier 2 complete for frameId=${frameId}`);
+      logInfo(`[AnalysisService] Active frame ID=${currentState.activeFrame.id}`);
+      logInfo(`[AnalysisService] Frame IDs match: ${frameId === currentState.activeFrame.id}`);
+      logInfo(`[AnalysisService] lineCommits count: ${tier2Data?.lineCommits?.length || 0}`);
+
       this.pipelineDebugger.completeTier(frameId, 2, tier2Data, currentState.activeFrame.id);
+
       store.dispatch({
         type: 'FRAME_ANALYSIS_TIER_2_COMPLETE',
+
         payload: { frameId, data: tier2Data },
       });
       if (onTierComplete) {

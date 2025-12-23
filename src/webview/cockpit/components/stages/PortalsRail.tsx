@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { FileAnalysisData } from '../../hooks/useFileAnalysisData';
 import { LineagePanel } from './LineagePanel';
 
 // Browser-compatible path utilities
@@ -19,6 +20,7 @@ interface PortalsRailProps {
   bundleFacts?: any;
   vscode?: any;
   commits?: Array<{ sha: string; date?: string; message?: string }>;
+  analysisData?: FileAnalysisData;
 }
 
 const RailContainer: React.CSSProperties = {
@@ -147,6 +149,7 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
   bundleFacts,
   vscode,
   commits = [],
+  analysisData,
 }) => {
   const [activeTab, setActiveTab] = React.useState<'connections' | 'lineage'>('connections');
   const isTimeTravelActive = currentCommitIndex !== undefined && orderedCommits.length > 0;

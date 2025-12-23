@@ -179,12 +179,13 @@ export class DependencyExtractor {
           )
         ) {
           const targetId = `function_${calledFunction}`;
+          const isLocal = this.isSymbolKnown(targetId, knownSymbols);
           edges.push({
-            from: symbol.id,
-            to: targetId,
+            from: `${filePath}:${symbol.id}`,
+            to: isLocal ? `${filePath}:${targetId}` : targetId,
             type: 'calls',
-            confidence: this.isSymbolKnown(targetId, knownSymbols) ? 0.8 : 0.4,
-            isResolved: this.isSymbolKnown(targetId, knownSymbols),
+            confidence: isLocal ? 0.8 : 0.4,
+            isResolved: isLocal,
           });
         }
       }
@@ -194,16 +195,20 @@ export class DependencyExtractor {
         const variable = match[1];
         const method = match[2];
 
+        const targetId = `method_${method}`;
+        const isLocal = this.isSymbolKnown(targetId, knownSymbols);
         edges.push({
-          from: symbol.id,
-          to: `method_${method}`,
+          from: `${filePath}:${symbol.id}`,
+          to: isLocal ? `${filePath}:${targetId}` : targetId,
           type: 'calls',
         });
 
         if (variable && variable.length > 0) {
+          const varId = `variable_${variable}`;
+          const isVarLocal = this.isSymbolKnown(varId, knownSymbols);
           edges.push({
-            from: symbol.id,
-            to: `variable_${variable}`,
+            from: `${filePath}:${symbol.id}`,
+            to: isVarLocal ? `${filePath}:${varId}` : varId,
             type: 'uses',
           });
         }
@@ -364,9 +369,11 @@ export class DependencyExtractor {
         const calledFunction = match[1];
 
         if (!allBuiltIns.has(calledFunction)) {
+          const targetId = `function_${calledFunction}`;
+          const isLocal = this.isSymbolKnown(targetId, knownSymbols);
           edges.push({
-            from: symbol.id,
-            to: `function_${calledFunction}`,
+            from: `${filePath}:${symbol.id}`,
+            to: isLocal ? `${filePath}:${targetId}` : targetId,
             type: 'calls',
           });
         }
@@ -390,9 +397,11 @@ export class DependencyExtractor {
           builtInObjectMethods.has(method);
 
         if (!isBuiltInMethod) {
+          const targetId = `method_${method}`;
+          const isLocal = this.isSymbolKnown(targetId, knownSymbols);
           edges.push({
-            from: symbol.id,
-            to: `method_${method}`,
+            from: `${filePath}:${symbol.id}`,
+            to: isLocal ? `${filePath}:${targetId}` : targetId,
             type: 'calls',
           });
         }
@@ -402,9 +411,11 @@ export class DependencyExtractor {
           object.length > 0 &&
           !['this', 'self', 'super'].includes(object.toLowerCase())
         ) {
+          const targetId = `object_${object}`;
+          const isLocal = this.isSymbolKnown(targetId, knownSymbols);
           edges.push({
-            from: symbol.id,
-            to: `object_${object}`,
+            from: `${filePath}:${symbol.id}`,
+            to: isLocal ? `${filePath}:${targetId}` : targetId,
             type: 'uses',
           });
         }

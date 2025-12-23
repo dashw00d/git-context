@@ -30240,15 +30240,10 @@ Churn: ${node.score.toFixed(1)}
     showLineNumbers = true,
     showAgeGutter = true,
     showMovedGutter = true,
-    metrics
+    metrics,
+    analysisData
   }) => {
     const lines = content.split("\n");
-    const analysisData = useFileAnalysisData(
-      filePath || "",
-      bundleFacts,
-      currentCommitIndex,
-      orderedCommits
-    );
     const refCounts = useSymbolRefCounts(bundleFacts, filePath || "");
     const [collapsedSymbols, setCollapsedSymbols] = React19.useState(/* @__PURE__ */ new Set());
     const toggleSymbolCollapse = (symbolId) => {
@@ -30420,7 +30415,7 @@ Churn: ${node.score.toFixed(1)}
     const editorRef = React19.useRef(null);
     React19.useEffect(() => {
       if (focusedSymbolId && focusedStartLine > 0 && editorRef.current) {
-        const lineElement = editorRef.current.querySelector(`[data-line="${focusedStartLine}"]`);
+        const lineElement = editorRef.current.querySelector(`[data-line="${focusedStartLine}-header"]`) || editorRef.current.querySelector(`[data-line="${focusedStartLine}"]`);
         if (lineElement) {
           lineElement.scrollIntoView({ behavior: "smooth", block: "center" });
         }
@@ -30618,7 +30613,7 @@ ${hotspotText}` : hotspotText;
             onClick: symbolAtLine && onSymbolClick && !lineShouldHide ? () => onSymbolClick(symbolAtLine.id || symbolAtLine.name) : void 0,
             title: lineShouldHide ? `Line added after selected commit (hidden)` : importDriftOnLine ? `Import style: ${importDriftOnLine.style} (expected: ${analysisData.conventionInfo?.dominantImportStyle || "unknown"})` : isDivergent ? "Symbol diverged from expected state" : symbolTooltip || (symbolAtLine ? `Click to focus on ${symbolAtLine.name}` : isFocused ? "Focused symbol" : void 0)
           },
-          showLineNumbers && /* @__PURE__ */ React19.createElement("div", { style: LineNumberStyle, title: `Line ${lineNumber}` }, lineNumber),
+          showLineNumbers && /* @__PURE__ */ React19.createElement("div", { style: LineNumberStyle, title: `Line ${lineNumber}` }, " ", lineNumber, " "),
           showAgeGutter && /* @__PURE__ */ React19.createElement(
             "div",
             {
@@ -31363,7 +31358,8 @@ ${hotspotText}` : hotspotText;
     orderedCommits = [],
     bundleFacts,
     vscode: vscode3,
-    commits = []
+    commits = [],
+    analysisData
   }) => {
     const [activeTab, setActiveTab] = React24.useState("connections");
     const isTimeTravelActive = currentCommitIndex !== void 0 && orderedCommits.length > 0;
@@ -32243,7 +32239,8 @@ ${hotspotText}` : hotspotText;
     currentCommitIndex,
     onCommitIndexChange,
     bundleFacts,
-    lineCommits = []
+    lineCommits = [],
+    symbols = []
   }) => {
     const [isPlaying, setIsPlaying] = React31.useState(false);
     const maxIndex = commits.length > 0 ? commits.length - 1 : 0;
@@ -32303,21 +32300,24 @@ ${hotspotText}` : hotspotText;
         return /* @__PURE__ */ new Set();
       }
       const indices = /* @__PURE__ */ new Set();
-      if (lineCommits.length > 0 && commits.length > 0) {
-        lineCommits.forEach((lc) => {
-          const hasDrift = driftSymbols.some(
-            (ds) => ds.name === lc.symbolName || ds.path === lc.path
-          );
-          if (hasDrift) {
-            const commitIndex = commits.findIndex((c) => c.sha === lc.commitSha);
-            if (commitIndex >= 0) {
-              indices.add(commitIndex);
-            }
+      if (lineCommits.length > 0 && commits.length > 0 && symbols.length > 0) {
+        driftSymbols.forEach((ds) => {
+          const symbol = symbols.find((s) => s.name === ds.name);
+          if (symbol?.location) {
+            const start = symbol.location.start.line;
+            const end = symbol.location.end.line;
+            const relevantLineCommits = lineCommits.filter((lc) => lc.line >= start && lc.line <= end);
+            relevantLineCommits.forEach((lc) => {
+              const commitIndex = commits.findIndex((c) => c.sha === lc.commitSha);
+              if (commitIndex >= 0) {
+                indices.add(commitIndex);
+              }
+            });
           }
         });
       }
       return indices;
-    }, [bundleFacts, lineCommits, commits]);
+    }, [bundleFacts, lineCommits, commits, symbols]);
     if (commits.length === 0) {
       return /* @__PURE__ */ React31.createElement("div", { style: ScrubberContainer }, /* @__PURE__ */ React31.createElement("span", { style: { fontSize: "11px", opacity: 0.7 } }, "No commits available"));
     }
@@ -32426,7 +32426,8 @@ ${hotspotText}` : hotspotText;
       });
     };
     const handleCommitIndexChange = (index) => {
-      vscode3.postMessage({ type: "updateCommitIndex", value: index });
+      const sha = orderedCommits[index];
+      vscode3.postMessage({ type: "updateCommitIndex", value: index, sha });
     };
     const frameData = frame.level === "bundle" ? cockpitState?.bundleView || frame.data : frame.data;
     const renderFrame = frame.level === "bundle" ? { ...frame, data: frameData } : frame;
@@ -32453,7 +32454,11 @@ ${hotspotText}` : hotspotText;
     const fileDataHistory = renderFrame.data?.history;
     const selectedCommitShas = cockpitState?.selectedCommitShas || [];
     const orderedCommits = React32.useMemo(() => {
-      if (selectedCommitShas.length > 0) {
+      if (selectedCommitShas.length > 0 && cockpitState?.commits) {
+        const selectedCommits = cockpitState.commits.filter((c) => selectedCommitShas.includes(c.sha)).sort((a, b) => new Date(a.authoredAt).getTime() - new Date(b.authoredAt).getTime());
+        if (selectedCommits.length > 0) {
+          return selectedCommits.map((c) => c.sha);
+        }
         return [...selectedCommitShas].reverse();
       }
       if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
@@ -32463,7 +32468,7 @@ ${hotspotText}` : hotspotText;
         return [headInfo.sha];
       }
       return [];
-    }, [selectedCommitShas, renderFrame.data?.history, headInfo]);
+    }, [selectedCommitShas, cockpitState?.commits, renderFrame.data?.history, headInfo]);
     const commits = React32.useMemo(() => {
       if (selectedCommitShas.length > 0) {
         return (cockpitState?.commits || []).filter((c) => selectedCommitShas.includes(c.sha)).sort((a, b) => {
@@ -32532,14 +32537,46 @@ ${hotspotText}` : hotspotText;
       headInfo,
       vscode3
     ]);
+    const lineCommitsData = renderFrame.level === "file" ? renderFrame.data?.lineCommits || [] : [];
+    const effectiveOrderedCommits = React32.useMemo(() => {
+      if (lineCommitsData.length > 0) {
+        const commitMap = /* @__PURE__ */ new Map();
+        lineCommitsData.forEach((lc) => {
+          if (!commitMap.has(lc.commitSha)) {
+            commitMap.set(lc.commitSha, lc.date);
+          }
+        });
+        const sorted = Array.from(commitMap.entries()).sort((a, b) => new Date(a[1]).getTime() - new Date(b[1]).getTime()).map(([sha]) => sha);
+        return sorted;
+      }
+      return orderedCommits;
+    }, [lineCommitsData, orderedCommits]);
+    const fileCommits = React32.useMemo(() => {
+      if (lineCommitsData.length > 0) {
+        const commitMap = /* @__PURE__ */ new Map();
+        lineCommitsData.forEach((lc) => {
+          if (!commitMap.has(lc.commitSha)) {
+            commitMap.set(lc.commitSha, {
+              sha: lc.commitSha,
+              date: lc.date,
+              author: lc.author,
+              message: ""
+              // Blame doesn't include message, leave empty
+            });
+          }
+        });
+        return Array.from(commitMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      }
+      return commits;
+    }, [lineCommitsData, commits]);
     if (renderFrame.level === "file") {
       const metrics = cockpitState?.nodeMetrics?.[renderFrame.id] || renderFrame.data?.metrics;
       const content = renderFrame.data?.content || "";
       const symbols = renderFrame.data?.symbols || [];
-      const lineCommits = renderFrame.data?.lineCommits || [];
+      const lineCommits = lineCommitsData;
       const blastRadius = renderFrame.data?.blastRadius;
       const driftIssues = renderFrame.data?.drift || [];
-      const currentCommitIndex = cockpitState?.currentCommitIndex !== void 0 ? cockpitState.currentCommitIndex : orderedCommits.length > 0 ? orderedCommits.length - 1 : void 0;
+      const currentCommitIndex = cockpitState?.currentCommitIndex !== void 0 ? cockpitState.currentCommitIndex : effectiveOrderedCommits.length > 0 ? effectiveOrderedCommits.length - 1 : void 0;
       const handleNeighborClick = (filePath) => {
         if (vscode3) {
           const neighborFrame = {
@@ -32611,7 +32648,7 @@ ${hotspotText}` : hotspotText;
           onSymbolClick: (symbolId) => setFocusedSymbolId(symbolId),
           onClearFocus: () => setFocusedSymbolId(null),
           lineCommits,
-          orderedCommits,
+          orderedCommits: effectiveOrderedCommits,
           currentCommitIndex,
           filePath: renderFrame.id,
           bundleFacts: cockpitState?.bundleFacts,
@@ -32619,7 +32656,8 @@ ${hotspotText}` : hotspotText;
           showLineNumbers: true,
           showAgeGutter: true,
           showMovedGutter: true,
-          metrics
+          metrics,
+          analysisData
         }
       ) : zoomLevel === "overview" ? /* @__PURE__ */ React32.createElement("div", { style: { flex: 1, overflow: "auto", padding: "12px" } }, symbols.length > 0 ? symbols.map((sym) => {
         const symbolDriftIssues = driftIssues.filter(
@@ -32666,19 +32704,21 @@ ${hotspotText}` : hotspotText;
           focusedSymbolId,
           currentFilePath: renderFrame.id,
           currentCommitIndex,
-          orderedCommits,
+          orderedCommits: effectiveOrderedCommits,
           bundleFacts: cockpitState?.bundleFacts,
           vscode: vscode3,
-          commits
+          commits,
+          analysisData
         }
       )), /* @__PURE__ */ React32.createElement(
         TimeScrubber,
         {
-          commits,
+          commits: fileCommits,
           currentCommitIndex,
           onCommitIndexChange: handleCommitIndexChange,
           bundleFacts: cockpitState?.bundleFacts,
-          lineCommits
+          lineCommits,
+          symbols
         }
       ), /* @__PURE__ */ React32.createElement(
         DriftBrowserPanel,

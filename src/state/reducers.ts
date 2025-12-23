@@ -370,6 +370,11 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         };
       }
 
+      // DEBUG: Log successful merge including lineCommits
+      logDebug(
+        `[Reducer] Merging tier ${tierNum} data for ${action.payload.frameId}. lineCommits: ${action.payload.data?.lineCommits?.length || 0}`
+      );
+
       return {
         ...state,
         activeFrame: {

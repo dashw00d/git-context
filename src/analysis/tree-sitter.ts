@@ -184,12 +184,15 @@ export class TreeSitterParser {
   }
 
   private dispatch() {
-    // Dispatch high priority to on-demand workers
+    // Process high priority tasks first (they jump the queue)
+    // Try to use all available on-demand workers for parallel processing
     if (this.highPriorityQueue.length > 0 && this.onDemandWorkers.length > 0) {
+      // Process one high priority task per dispatch
+      // When workers finish, they'll automatically process the next task via processQueue callback
       const worker = this.onDemandWorkers[Math.floor(Math.random() * this.onDemandWorkers.length)];
       this.processQueue(worker, true);
     }
-    // Dispatch low priority to background workers
+    // Dispatch low priority to background workers (only one per dispatch)
     if (this.lowPriorityQueue.length > 0 && this.backgroundWorkers.length > 0) {
       const worker =
         this.backgroundWorkers[Math.floor(Math.random() * this.backgroundWorkers.length)];

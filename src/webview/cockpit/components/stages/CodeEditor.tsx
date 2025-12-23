@@ -1,10 +1,8 @@
 import * as React from 'react';
-import { useFileAnalysisData } from '../../hooks/useFileAnalysisData';
+import { FileAnalysisData } from '../../hooks/useFileAnalysisData';
 import { useSymbolRefCounts } from '../../hooks/useSymbolRefCounts';
 import { HoverInfoCard } from './HoverInfoCard';
 import { SymbolHeaderBar } from './SymbolHeaderBar';
-// Note: react-window installed but full virtualization deferred due to variable line heights
-// (symbol headers, collapsed symbols). Memoization provides immediate performance benefit.
 
 interface DriftIssue {
   type?: string;
@@ -60,6 +58,7 @@ interface CodeEditorProps {
     lastModified?: number;
     authors?: string[];
   };
+  analysisData: FileAnalysisData;
 }
 
 const EditorContainer: React.CSSProperties = {
@@ -148,16 +147,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   showAgeGutter = true,
   showMovedGutter = true,
   metrics,
+  analysisData,
 }) => {
   const lines = content.split('\n');
 
-  // Get analysis data for this file
-  const analysisData = useFileAnalysisData(
-    filePath || '',
-    bundleFacts,
-    currentCommitIndex,
-    orderedCommits
-  );
   const refCounts = useSymbolRefCounts(bundleFacts, filePath || '');
 
   // Symbol collapse state
@@ -422,7 +415,11 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const editorRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (focusedSymbolId && focusedStartLine > 0 && editorRef.current) {
-      const lineElement = editorRef.current.querySelector(`[data-line="${focusedStartLine}"]`);
+      // Try to find the header row first, then fall back to the line row
+      const lineElement =
+        editorRef.current.querySelector(`[data-line="${focusedStartLine}-header"]`) ||
+        editorRef.current.querySelector(`[data-line="${focusedStartLine}"]`);
+
       if (lineElement) {
         lineElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
@@ -730,7 +727,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
                 {/* Line Number Column */}
                 {showLineNumbers && (
                   <div style={LineNumberStyle} title={`Line ${lineNumber}`}>
-                    {lineNumber}
+                    {' '}
+                    {lineNumber}{' '}
                   </div>
                 )}
 

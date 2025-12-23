@@ -690,4 +690,12 @@ export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, 
   setSimilarityThreshold(threshold: number): void {
     this.legacyDetector.setSimilarityThreshold(threshold);
   }
+
+  async getFileMoves(filePath: string): Promise<MovedBlock[]> {
+    return this.legacyDetector.getFileMoves(filePath);
+  }
+
+  async getSymbolLineage(symbolId: string): Promise<SymbolLineage[]> {
+    return this.legacyDetector.getSymbolLineage(symbolId);
+  }
 }

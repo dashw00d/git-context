@@ -79,39 +79,67 @@ export class FrameAnalyzer {
       // Extract symbols if language is supported
       let symbols: any[] = [];
 
-      const normalizePath = (p: string) => p?.replace(/^\.\//, '').replace(/\\/g, '/') || '';
+      // Use consistent path normalization matching the main pipeline
+      const normalizePathForMatch = (p: string) => {
+        if (!p) return '';
+        // Use the same normalization as normalizeToRelative for consistency
+        return normalizeToRelative(p, workspaceRoot);
+      };
 
       // First, try to use quick scan symbols from bundleFacts
       if (bundleFacts?.evidence?.['working.symbols']) {
         const rawSymbols = bundleFacts.evidence['working.symbols'] as any[];
 
         // Handle both string format "path:name:id" and object format
-        const quickSymbols = rawSymbols.map(s => {
-          if (typeof s === 'string') {
-            const parts = s.split(':');
+        const quickSymbols = rawSymbols
+          .map(s => {
+            if (typeof s === 'string') {
+              // String format: "filePath:name:symbolId"
+              const parts = s.split(':');
+              if (parts.length >= 3) {
+                const symbolId = parts.pop()!;
+                const name = parts.pop()!;
+                const filePath = parts.join(':');
+                return {
+                  filePath: normalizePathForMatch(filePath), // Normalize when parsing
+                  name,
+                  symbolId,
+                  // String format lacks location/signature - can't use directly
+                };
+              }
+              return null;
+            }
+            // Object format - normalize the filePath
             return {
-              filePath: parts[0],
-              name: parts[1],
-              symbolId: parts[2],
+              ...s,
+              filePath: normalizePathForMatch(s.filePath || ''),
             };
-          }
-          return s;
-        });
+          })
+          .filter(Boolean);
 
-        // Filter symbols for this file
+        // Filter symbols for this file - use normalized paths
+        const normalizedTarget = normalizePathForMatch(normalizedTargetPath);
         const fileSymbols = quickSymbols.filter(
-          (s: any) =>
-            s?.filePath && normalizePath(s.filePath) === normalizePath(normalizedTargetPath)
+          (s: any) => s?.filePath && normalizePathForMatch(s.filePath) === normalizedTarget
         );
 
-        if (fileSymbols.length > 0) {
-          // Quick scan symbols already have location/signature, use them directly
-          symbols = fileSymbols;
-          logDebug(`FrameAnalyzer: Using ${symbols.length} quick scan symbols for ${frameId}`);
+        // Only use symbols if they have location/signature (object format from quick scan)
+        const usableSymbols = fileSymbols.filter((s: any) => s.location && s.signature);
+
+        if (usableSymbols.length > 0) {
+          symbols = usableSymbols;
+          logDebug(
+            `FrameAnalyzer: Using ${symbols.length} complete symbols from bundleFacts for ${frameId}`
+          );
+        } else if (fileSymbols.length > 0) {
+          // Found symbols but they're incomplete (string format) - log and parse fresh
+          logDebug(
+            `FrameAnalyzer: Found ${fileSymbols.length} symbols in bundleFacts but they lack location/signature. Parsing fresh with priority.`
+          );
         }
       }
 
-      // If no quick scan symbols, extract fresh
+      // Always parse if we don't have complete symbols, using priority queue
       if (symbols.length === 0 && language && language !== 'unknown') {
         try {
           const parser = getTreeSitterParser();
@@ -120,7 +148,7 @@ export class FrameAnalyzer {
             normalizedTargetPath,
             language,
             undefined,
-            true // High priority
+            true // High priority - should jump the queue
           );
           // Filter to only symbol kinds (functions, classes, etc.)
           const symbolKinds = new Set([
@@ -269,7 +297,7 @@ export class FrameAnalyzer {
       }
 
       try {
-        const history = await this.gitOps.getFileHistory(targetPath, 5);
+        const history = await this.gitOps.getFileHistory(targetPath, 20);
         data.history = history;
       } catch (e) {
         logDebug(`FrameAnalyzer: Failed to get git history for ${frameId}: ${e}`);
@@ -284,8 +312,10 @@ export class FrameAnalyzer {
       }
 
       // Fetch line-by-line commit information (blame)
+
       try {
         const lineCommits = await this.gitOps.getFileBlame(targetPath);
+
         data.lineCommits = lineCommits;
       } catch (e) {
         logDebug(`FrameAnalyzer: Failed to get blame for ${frameId}: ${e}`);

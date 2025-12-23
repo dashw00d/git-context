@@ -296,12 +296,38 @@ export class MessageController {
           // The message type definition might have changed, handle both value and payload
           const commitIndex =
             'value' in msg && typeof msg.value === 'number' ? msg.value : undefined;
+          const sha = 'sha' in msg ? (msg as any).sha : undefined;
 
           if (typeof commitIndex === 'number') {
             store.dispatch({
               type: 'COMMIT_INDEX_UPDATED',
               payload: { index: commitIndex },
             });
+
+            // If we have a SHA and the active frame is a file, fetch historical content
+            const state = store.getState();
+            if (sha && state.activeFrame?.level === 'file') {
+              const filePath = state.activeFrame.id;
+              const { GitOperations } = await import('../../../analysis/git');
+              const git = new GitOperations();
+
+              try {
+                logInfo(
+                  `[MessageController] Fetching historical content for ${filePath} at ${sha}`
+                );
+                const content = await git.getFileContent(sha, filePath);
+
+                store.dispatch({
+                  type: 'FRAME_DATA_UPDATED',
+                  payload: {
+                    frameId: filePath,
+                    data: { content, historicalSha: sha },
+                  },
+                });
+              } catch (e) {
+                logError(`[MessageController] Failed to fetch historical content: ${e}`);
+              }
+            }
           }
           break;
         }
