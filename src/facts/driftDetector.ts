@@ -14,7 +14,7 @@ import { DriftFindings, IntendedState, UnresolvedCallerFact } from '../types/dri
 import { NamingConvention } from '../types/naming';
 import { detectLanguage, getGitRoot } from '../utils/config';
 import { logWarn } from '../utils/logger';
-import { WorkingSnapshot } from './workingSnapshot';
+import { WorkingSnapshot, extractDnaHash } from './workingSnapshot';
 
 export { DriftFindings, UnresolvedCallerFact };
 
@@ -246,10 +246,18 @@ function findReachableSymbols(
   while (queue.length > 0) {
     const currentSymbolId = queue.shift()!;
 
-    const outgoingEdges = working.edges.filter(edge => edge.from_symbol_id === currentSymbolId);
+    // Extract DNA hash from currentSymbolId (may be filePath:symbolId or just symbolId)
+    const currentDnaHash = extractDnaHash(currentSymbolId);
+
+    const outgoingEdges = working.edges.filter(edge => {
+      // Extract DNA hash from edge.from_symbol_id for comparison
+      const edgeFromDna = extractDnaHash(edge.from_symbol_id);
+      return edgeFromDna === currentDnaHash;
+    });
 
     for (const edge of outgoingEdges) {
-      const targetSymbolId = edge.to_symbol_id;
+      // Extract DNA hash from edge.to_symbol_id
+      const targetSymbolId = extractDnaHash(edge.to_symbol_id);
 
       if (!reachable.has(targetSymbolId)) {
         reachable.add(targetSymbolId);
@@ -328,24 +336,32 @@ export function detectDrift(
       }>;
 
       for (const intendedEdge of intendedEdges) {
-        const found = working.edges.find(
-          e =>
-            e.from_symbol_id === intendedEdge.from_symbol_id &&
-            e.to_symbol_id === intendedEdge.to_symbol_id &&
-            e.edge_type === intendedEdge.edge_type
-        );
+        // Extract DNA hashes from intended edge IDs (database may not have file path prefix)
+        const intendedFromDna = extractDnaHash(intendedEdge.from_symbol_id);
+        const intendedToDna = extractDnaHash(intendedEdge.to_symbol_id);
+
+        const found = working.edges.find(e => {
+          // Extract DNA hashes from working edge IDs for comparison
+          const workingFromDna = extractDnaHash(e.from_symbol_id);
+          const workingToDna = extractDnaHash(e.to_symbol_id);
+
+          return workingFromDna === intendedFromDna &&
+                 workingToDna === intendedToDna &&
+                 e.edge_type === intendedEdge.edge_type;
+        });
 
         if (!found) {
-          const fromIntended = intended.has(intendedEdge.from_symbol_id);
-          const toIntended = intended.has(intendedEdge.to_symbol_id);
+          // intended map uses DNA hash as key, not full edge ID
+          const fromIntended = intended.has(intendedFromDna);
+          const toIntended = intended.has(intendedToDna);
 
           if (fromIntended || toIntended) {
             findings.missing_edges.push({
               from: intendedEdge.from_symbol_id,
               to: intendedEdge.to_symbol_id,
               type: intendedEdge.edge_type,
-              expected: intended.get(intendedEdge.from_symbol_id) ||
-                intended.get(intendedEdge.to_symbol_id) || {
+              expected: intended.get(intendedFromDna) ||
+                intended.get(intendedToDna) || {
                   expect: 'present',
                   lastSha: commitShas[commitShas.length - 1],
                 },
@@ -355,22 +371,29 @@ export function detectDrift(
       }
 
       for (const workingEdge of working.edges) {
-        const fromIntended = intended.has(workingEdge.from_symbol_id);
-        const toIntended = intended.has(workingEdge.to_symbol_id);
+        // Extract DNA hashes from working edge IDs (intended map uses DNA hash as key)
+        const workingFromDna = extractDnaHash(workingEdge.from_symbol_id);
+        const workingToDna = extractDnaHash(workingEdge.to_symbol_id);
+
+        const fromIntended = intended.has(workingFromDna);
+        const toIntended = intended.has(workingToDna);
 
         if (!fromIntended && !toIntended) {
           continue;
         }
 
-        const fromState = intended.get(workingEdge.from_symbol_id);
-        const toState = intended.get(workingEdge.to_symbol_id);
+        const fromState = intended.get(workingFromDna);
+        const toState = intended.get(workingToDna);
 
-        const edgeInIntended = intendedEdges.some(
-          intendedEdge =>
-            intendedEdge.from_symbol_id === workingEdge.from_symbol_id &&
-            intendedEdge.to_symbol_id === workingEdge.to_symbol_id &&
-            intendedEdge.edge_type === workingEdge.edge_type
-        );
+        const edgeInIntended = intendedEdges.some(intendedEdge => {
+          // Extract DNA hashes for comparison
+          const intendedFromDna = extractDnaHash(intendedEdge.from_symbol_id);
+          const intendedToDna = extractDnaHash(intendedEdge.to_symbol_id);
+
+          return intendedFromDna === workingFromDna &&
+                 intendedToDna === workingToDna &&
+                 intendedEdge.edge_type === workingEdge.edge_type;
+        });
 
         if (
           !edgeInIntended ||
@@ -449,9 +472,15 @@ function detectUnresolvedCallers(
   for (const edge of working.edges) {
     if (edge.edge_type !== 'calls') continue;
 
-    if (edge.to_symbol_id && working.symbolsById.has(edge.to_symbol_id)) continue;
+    // Extract DNA hash from edge.to_symbol_id for lookup
+    const toDnaHash = extractDnaHash(edge.to_symbol_id);
 
-    const caller = edge.from_symbol_id ? working.symbolsById.get(edge.from_symbol_id) : undefined;
+    if (toDnaHash && working.symbolsById.has(toDnaHash)) continue;
+
+    // Extract DNA hash from edge.from_symbol_id for lookup
+    const fromDnaHash = extractDnaHash(edge.from_symbol_id);
+
+    const caller = fromDnaHash ? working.symbolsById.get(fromDnaHash) : undefined;
     const calleeRaw = edge.to_symbol_id || '';
     const calleeName = extractCalleeName(calleeRaw);
 

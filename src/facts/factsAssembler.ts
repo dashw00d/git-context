@@ -411,13 +411,20 @@ function getIntendedLists(intended: Map<string, IntendedState>): {
 }
 
 function getWorkingLists(working: WorkingSnapshot): {
-  symbols: string[];
+  symbols: any[]; // Full symbol objects for FrameAnalyzer compatibility
   edges: string[];
 } {
   return {
-    symbols: Array.from(working.symbolsById.values()).map(
-      s => `${s.filePath}:${s.name}:${s.symbol_id}`
-    ),
+    // Return full symbol objects so FrameAnalyzer can use them directly
+    // Previously returned strings which couldn't be used for symbol display
+    symbols: Array.from(working.symbolsById.values()).map(s => ({
+      id: s.symbol_id,
+      name: s.name,
+      kind: s.kind,
+      signature: s.signature || '',
+      location: s.loc_post || s.loc_pre || null,
+      filePath: s.filePath || '',
+    })),
     edges: working.edges.map(e => `${e.from_symbol_id} -> ${e.to_symbol_id} (${e.edge_type})`),
   };
 }

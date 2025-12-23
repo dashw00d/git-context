@@ -91,7 +91,7 @@ export class DependencyExtractor {
         if (useMatch) {
           const imported = useMatch[1].split('\\').pop() || useMatch[1];
           edges.push({
-            from: `${filePath}: file`,
+            from: `${filePath}:file`,
             to: `class_${imported}`,
             type: 'imports',
             confidence: this.isSymbolKnown(`class_${imported}`, knownSymbols) ? 0.9 : 0.6,

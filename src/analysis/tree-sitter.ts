@@ -73,6 +73,8 @@ export class TreeSitterParser {
               this.initialized = true;
               logInfo(`All ${this.totalWorkers} workers initialized.`);
               resolve();
+              // Kickstart queue processing for any tasks that were queued during init
+              this.dispatchAll();
             }
           } else if (msg.type === 'result') {
             const task = this.activeTasks.get(msg.id);
@@ -197,6 +199,24 @@ export class TreeSitterParser {
       const worker =
         this.backgroundWorkers[Math.floor(Math.random() * this.backgroundWorkers.length)];
       this.processQueue(worker, false);
+    }
+  }
+
+  /**
+   * Dispatch tasks to ALL available workers - called after init to kickstart processing
+   */
+  private dispatchAll() {
+    // Dispatch to all on-demand workers if high priority tasks exist
+    for (const worker of this.onDemandWorkers) {
+      if (this.highPriorityQueue.length > 0) {
+        this.processQueue(worker, true);
+      }
+    }
+    // Dispatch to all background workers if low priority tasks exist
+    for (const worker of this.backgroundWorkers) {
+      if (this.lowPriorityQueue.length > 0) {
+        this.processQueue(worker, false);
+      }
     }
   }
 

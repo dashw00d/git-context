@@ -123,6 +123,15 @@ export class FrameAnalyzer {
           (s: any) => s?.filePath && normalizePathForMatch(s.filePath) === normalizedTarget
         );
 
+        // Debug: Log what we're matching
+        if (fileSymbols.length === 0 && quickSymbols.length > 0) {
+          const samplePaths = quickSymbols.slice(0, 5).map((s: any) => s?.filePath);
+          logDebug(
+            `FrameAnalyzer: No symbols matched for "${normalizedTarget}". ` +
+              `Total quickSymbols: ${quickSymbols.length}. Sample paths: ${JSON.stringify(samplePaths)}`
+          );
+        }
+
         // Only use symbols if they have location/signature (object format from quick scan)
         const usableSymbols = fileSymbols.filter((s: any) => s.location && s.signature);
 

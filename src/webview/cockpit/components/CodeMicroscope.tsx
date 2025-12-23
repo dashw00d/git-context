@@ -195,7 +195,7 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
   ]);
 
   // Extract lineCommits outside conditional for hook usage
-  const lineCommitsData = renderFrame.level === 'file' ? (renderFrame.data?.lineCommits || []) : [];
+  const lineCommitsData = renderFrame.level === 'file' ? renderFrame.data?.lineCommits || [] : [];
 
   // Build file-specific ordered commits from lineCommits (sorted by date, oldest first)
   // This is more complete than orderedCommits which only has selected/history commits
@@ -220,25 +220,16 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     return orderedCommits;
   }, [lineCommitsData, orderedCommits]);
 
-  // Build commits for TimeScrubber - prioritize full history over blame data
-  // This ensures we show the full commit timeline (e.g., "1/20") instead of just blame commits
+  // Build commits for TimeScrubber - use blame data if history is incomplete
+  // This ensures we show the full commit timeline (e.g., "1/20") instead of just "1/1"
   const fileCommits = React.useMemo(() => {
-    // First, try to use full file history (20 commits from getFileHistory)
-    // This gives us the complete timeline for the file
-    if (renderFrame.data?.history && Array.isArray(renderFrame.data.history) && renderFrame.data.history.length > 0) {
-      return [...renderFrame.data.history].reverse().map((c: any) => ({
-        sha: c.hash || c.sha,
-        date: c.date,
-        message: c.message || '',
-        author: c.author_name || c.author || 'Unknown',
-      }));
-    }
-
-    // Second, try to use lineCommitsData (blame) - might have fewer unique commits
-    // Only use this if history isn't available
+    // Extract unique commits from lineCommitsData (blame) - this has all commits that touched the file
+    let blameCommits: Array<{ sha: string; date: string; author: string; message: string }> = [];
     if (lineCommitsData.length > 0) {
-      // Get unique commits with their metadata
-      const commitMap = new Map<string, { sha: string; date: string; author: string; message: string }>();
+      const commitMap = new Map<
+        string,
+        { sha: string; date: string; author: string; message: string }
+      >();
       lineCommitsData.forEach((lc: { commitSha: string; date: string; author: string }) => {
         if (!commitMap.has(lc.commitSha)) {
           commitMap.set(lc.commitSha, {
@@ -249,10 +240,30 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
           });
         }
       });
+      blameCommits = Array.from(commitMap.values()).sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+    }
 
-      // Sort by date (oldest first) to match effectiveOrderedCommits order
-      return Array.from(commitMap.values())
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Use history if it has a reasonable number of commits (5+), otherwise use blame data
+    // History might only have 1 commit if getFileHistory failed or file is new
+    // But blame data will have all commits that actually touched lines in the file
+    if (
+      renderFrame.data?.history &&
+      Array.isArray(renderFrame.data.history) &&
+      renderFrame.data.history.length >= 5
+    ) {
+      return [...renderFrame.data.history].reverse().map((c: any) => ({
+        sha: c.hash || c.sha,
+        date: c.date,
+        message: c.message || '',
+        author: c.author_name || c.author || 'Unknown',
+      }));
+    }
+
+    // Use blame commits if we have them (they're more complete than incomplete history)
+    if (blameCommits.length > 0) {
+      return blameCommits;
     }
 
     // Fall back to commits (which includes selectedCommitShas or headInfo)

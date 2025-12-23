@@ -32552,6 +32552,7 @@ ${hotspotText}` : hotspotText;
       return orderedCommits;
     }, [lineCommitsData, orderedCommits]);
     const fileCommits = React32.useMemo(() => {
+      let blameCommits = [];
       if (lineCommitsData.length > 0) {
         const commitMap = /* @__PURE__ */ new Map();
         lineCommitsData.forEach((lc) => {
@@ -32565,10 +32566,23 @@ ${hotspotText}` : hotspotText;
             });
           }
         });
-        return Array.from(commitMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        blameCommits = Array.from(commitMap.values()).sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
+      }
+      if (renderFrame.data?.history && Array.isArray(renderFrame.data.history) && renderFrame.data.history.length >= 5) {
+        return [...renderFrame.data.history].reverse().map((c) => ({
+          sha: c.hash || c.sha,
+          date: c.date,
+          message: c.message || "",
+          author: c.author_name || c.author || "Unknown"
+        }));
+      }
+      if (blameCommits.length > 0) {
+        return blameCommits;
       }
       return commits;
-    }, [lineCommitsData, commits]);
+    }, [lineCommitsData, commits, renderFrame.data?.history]);
     if (renderFrame.level === "file") {
       const metrics = cockpitState?.nodeMetrics?.[renderFrame.id] || renderFrame.data?.metrics;
       const content = renderFrame.data?.content || "";

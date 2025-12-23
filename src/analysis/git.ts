@@ -1133,22 +1133,46 @@ export class GitOperations {
 
   async getFileHistory(filePath: string, limit: number = 10): Promise<any[]> {
     try {
-      const { stdout } = await this.spawnGit([
-        'log',
-        `-${limit}`,
-        '--format=%H|%an|%aI|%s',
-        '--',
-        filePath,
-      ]);
+      // Ensure filePath is relative to git root (remove leading slash if present)
+      const normalizedPath = filePath.replace(/^\/+/, '');
 
-      return stdout
-        .trim()
-        .split('\n')
-        .filter(Boolean)
-        .map(line => {
-          const [hash, author, date, message] = line.split('|');
-          return { hash, author, date, message, virtual: false };
-        });
+      // Use simple-git's log() method instead of raw() for better argument handling
+      // The issue with raw() is that it might not handle the -- separator correctly
+      const logResult = await withTimeout(
+        this.git.log({
+          maxCount: limit,
+          file: normalizedPath,
+          format: {
+            hash: '%H',
+            author_name: '%an',
+            date: '%aI',
+            message: '%s',
+          },
+        }),
+        30000,
+        'Git log file history'
+      );
+
+      const result = logResult.all.map(commit => ({
+        hash: commit.hash,
+        author: commit.author_name || 'Unknown',
+        date: commit.date || '',
+        message: commit.message || '',
+        virtual: false,
+      }));
+
+      // Debug logging
+      if (result.length === 1 && limit > 1) {
+        logWarn(
+          `[GitOperations] getFileHistory returned only 1 commit for ${filePath} (normalized: ${normalizedPath}, requested ${limit}). This might mean the file only has 1 commit in history.`
+        );
+      } else if (result.length > 0) {
+        logDebug(
+          `[GitOperations] getFileHistory returned ${result.length} commits for ${filePath} (requested ${limit})`
+        );
+      }
+
+      return result;
     } catch (error: any) {
       logError(`Failed to get file history for ${filePath}: ${error.message}`);
       return [];

@@ -816,8 +816,16 @@ export class WorkspaceIndexer {
     const limit = pLimit(50); // Concurrent processing
     const gitRoot = this.git.getRoot();
     const results: any[] = [];
+    let filesProcessed = 0;
+    let filesWithSymbols = 0;
+    let filesSkipped = 0;
 
-    logInfo(`[WorkspaceIndexer] Quick scanning ${files.length} files...`);
+    // Log input file stats
+    const phpFiles = files.filter(f => f.endsWith('.php'));
+    const jsFiles = files.filter(f => f.endsWith('.js') || f.endsWith('.ts') || f.endsWith('.tsx'));
+    logInfo(
+      `[WorkspaceIndexer] Quick scanning ${files.length} files (${phpFiles.length} PHP, ${jsFiles.length} JS/TS)...`
+    );
 
     await Promise.all(
       files.map(filePath =>
@@ -826,6 +834,8 @@ export class WorkspaceIndexer {
             const fullPath = path.join(gitRoot, filePath);
             const content = fs.readFileSync(fullPath, 'utf8');
             const language = detectLanguage(filePath);
+
+            filesProcessed++;
 
             if (language) {
               const symbols = await this.parser.extractHybridFacts(content, filePath, language);
@@ -845,22 +855,28 @@ export class WorkspaceIndexer {
               const filteredSymbols = symbols.filter((s: any) => symbolKinds.has(s.kind));
 
               if (filteredSymbols.length > 0) {
-                // logDebug(`[WorkspaceIndexer] Found ${filteredSymbols.length} symbols in ${filePath}`);
-              }
-
-              // Store full symbol objects with filePath
-              filteredSymbols.forEach((s: any) => {
-                results.push({
-                  id: s.id,
-                  name: s.name,
-                  kind: s.kind,
-                  signature: s.signature,
-                  location: s.location,
-                  filePath: filePath,
+                filesWithSymbols++;
+                // Store full symbol objects with filePath
+                filteredSymbols.forEach((s: any) => {
+                  results.push({
+                    id: s.id,
+                    name: s.name,
+                    kind: s.kind,
+                    signature: s.signature,
+                    location: s.location,
+                    filePath: filePath,
+                  });
                 });
-              });
+              }
+            } else {
+              filesSkipped++;
+              // Log files without language detection to debug
+              if (filePath.endsWith('.php')) {
+                logDebug(`[WorkspaceIndexer] PHP file has no language detected: ${filePath}`);
+              }
             }
           } catch (e) {
+            filesSkipped++;
             // Ignore errors during quick scan
             logDebug(`[WorkspaceIndexer] Quick scan error for ${filePath}: ${e}`);
           }
@@ -868,7 +884,10 @@ export class WorkspaceIndexer {
       )
     );
 
-    logInfo(`[WorkspaceIndexer] Quick scan complete. Found ${results.length} symbols total.`);
+    logInfo(
+      `[WorkspaceIndexer] Quick scan complete. Processed ${filesProcessed}/${files.length} files, ` +
+        `${filesWithSymbols} with symbols, ${filesSkipped} skipped. Total symbols: ${results.length}`
+    );
     return results;
   }
 

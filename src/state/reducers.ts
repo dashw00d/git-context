@@ -106,12 +106,20 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         state.currentCommitIndex === undefined && newShas.length > 0
           ? newShas.length - 1
           : state.currentCommitIndex;
+
+      // Merge with existing bundleFacts if present (e.g., from quick scan)
+      // This ensures quick scan symbols are preserved when background analysis completes
+      const mergedFacts =
+        state.bundleFacts && action.payload.facts
+          ? mergeFacts(state.bundleFacts, action.payload.facts)
+          : action.payload.facts;
+
       return {
         ...state,
         isAnalyzing: false,
         analysisStep: undefined,
-        bundleFacts: action.payload.facts,
-        bundleSummary: action.payload.summary,
+        bundleFacts: mergedFacts,
+        bundleSummary: action.payload.summary ?? state.bundleSummary,
         bundleReportId: action.payload.reportId,
         retrievedHistory: action.payload.history,
         pipelineErrors: [],
