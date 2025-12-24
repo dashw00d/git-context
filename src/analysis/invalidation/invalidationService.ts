@@ -142,44 +142,34 @@ async function deleteFileSymbols(
   filePath: string
 ): Promise<{ symbols: number; edges: number }> {
   try {
-    // First get symbol IDs for edge deletion
-    const symbolStmt = prepare(`
-      SELECT dna_id FROM symbols WHERE sha = ? AND path = ?
-    `);
-    const symbols = symbolStmt.all(sha, filePath) as Array<{ dna_id: string }>;
-    symbolStmt.free?.();
-
     let edgesDeleted = 0;
 
-    // Delete edges that reference these symbols
-    if (symbols.length > 0) {
-      const dnaIds = symbols.map(s => s.dna_id);
-
-      for (const dnaId of dnaIds) {
-        const edgeStmt = prepare(`
-          DELETE FROM edges
-          WHERE sha = ?
-          AND (from_symbol_id = ? OR to_symbol_id = ?)
-        `);
-        const result = edgeStmt.run(sha, dnaId, dnaId);
-        edgeStmt.free?.();
-        if (typeof result === 'object' && 'changes' in result) {
-          edgesDeleted += (result as { changes: number }).changes;
-        }
-      }
+    // Delete edges that reference symbols in this file using a single set-based operation
+    const edgeStmt = prepare(`
+      DELETE FROM edges
+      WHERE sha = ?
+      AND (
+        from_symbol_id IN (SELECT dna_id FROM symbols WHERE sha = ? AND path = ?)
+        OR to_symbol_id IN (SELECT dna_id FROM symbols WHERE sha = ? AND path = ?)
+      )
+    `);
+    const result = edgeStmt.run(sha, sha, filePath, sha, filePath);
+    edgeStmt.free?.();
+    if (typeof result === 'object' && 'changes' in result) {
+      edgesDeleted = (result as { changes: number }).changes;
     }
 
     // Delete symbols
     const deleteStmt = prepare(`
       DELETE FROM symbols WHERE sha = ? AND path = ?
     `);
-    const result = deleteStmt.run(sha, filePath);
+    const symResult = deleteStmt.run(sha, filePath);
     deleteStmt.free?.();
 
     const symbolsDeleted =
-      typeof result === 'object' && 'changes' in result
-        ? (result as { changes: number }).changes
-        : symbols.length;
+      typeof symResult === 'object' && 'changes' in symResult
+        ? (symResult as { changes: number }).changes
+        : 0;
 
     return { symbols: symbolsDeleted, edges: edgesDeleted };
   } catch (error) {

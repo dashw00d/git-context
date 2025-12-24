@@ -73,15 +73,38 @@ export function bulkUpdateSymbolCompleteness(
   try {
     const db = getDatabaseManager().getDatabase();
 
-    // Use transaction for efficiency
+    // Strategy: Fetch all current flags for these dnaIds, merge with new flags,
+    // and then update in batches. This avoids the N+1 SELECT/UPDATE pattern.
+    // However, since we usually update the same dimensions for all symbols in a batch,
+    // we can optimize if we assume the initial state is similar or if we don't mind
+    // fetching current state first.
+
     db.run('BEGIN TRANSACTION');
     try {
-      for (const dnaId of dnaIds) {
-        updateSymbolCompleteness(sha, dnaId, flags);
+      // Fetch current flags for all symbols in this batch
+      const placeholders = dnaIds.map(() => '?').join(',');
+      const selectStmt = prepare(
+        `SELECT dna_id, completeness_flags FROM symbols WHERE sha = ? AND dna_id IN (${placeholders})`
+      );
+      const rows = selectStmt.all(sha, ...dnaIds) as Array<{
+        dna_id: string;
+        completeness_flags: string;
+      }>;
+      selectStmt.free?.();
+
+      const updateStmt = prepare(
+        'UPDATE symbols SET completeness_flags = ? WHERE sha = ? AND dna_id = ?'
+      );
+      for (const row of rows) {
+        const current = parseCompletenessFlags(row.completeness_flags);
+        const updated = serializeCompletenessFlags({ ...current, ...flags });
+        updateStmt.run(updated, sha, row.dna_id);
       }
+      updateStmt.free?.();
       db.run('COMMIT');
-    } catch {
+    } catch (err) {
       db.run('ROLLBACK');
+      throw err;
     }
 
     logDebug(

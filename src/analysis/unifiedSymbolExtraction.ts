@@ -94,11 +94,13 @@ function extractSimpleEdges(
     nameToId.set(symbol.name, symbol.id);
   }
 
+  // Split content into lines once for all symbols
+  const lines = content.split('\n');
+
   // For each symbol, look for references to other symbols in its body
   for (const symbol of symbols) {
     const startLine = symbol.location.start.line - 1;
     const endLine = symbol.location.end.line;
-    const lines = content.split('\n');
     const body = lines.slice(startLine, endLine).join('\n');
 
     for (const [name, targetId] of nameToId) {

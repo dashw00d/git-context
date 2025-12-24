@@ -38,10 +38,8 @@ export function verifyPreconditions(
     for (let i = 0; i < preconditions.typeGuards.length; i++) {
       const guard = preconditions.typeGuards[i];
       if (!guard(state)) {
-        const failedProperty = preconditions.requiredState?.[i];
-        errors.push(
-          `Type guard failed for ${failedProperty ? `state.${String(failedProperty)}` : 'unknown property'}`
-        );
+        const guardName = guard.name || `guard_${i}`;
+        errors.push(`Type guard '${guardName}' failed`);
       }
     }
   }
