@@ -329,7 +329,26 @@ export class SymbolExtractor {
       return [];
     }
 
+    // TEMP: Skip TypeScript files to test if JS/PHP parsing works
+    // if (language === 'typescript') {
+    //   console.log(`[SymbolExtractor] Skipping TypeScript file ${filePath}`);
+    //   return [];
+    // }
+
+    // Debug: Log for TypeScript files
+    if (filePath.includes('math.ts')) {
+      console.log(`[SymbolExtractor] Extracting symbols from ${filePath} (${language}), content length: ${content.length}`);
+    }
+
     const facts = await this.parser.extractHybridFacts(content, filePath, language);
+
+    // Debug: Log results
+    if (filePath.includes('math.ts')) {
+      console.log(`[SymbolExtractor] Extracted ${facts.length} facts from ${filePath}`);
+      facts.forEach((f: any, i: number) => {
+        if (i < 5) console.log(`[SymbolExtractor]   Fact ${i}: ${f.name} (${f.kind})`);
+      });
+    }
 
     const symbolKinds = new Set([
       'function',

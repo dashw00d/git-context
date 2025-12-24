@@ -232,6 +232,9 @@ export async function shouldProcessPathWithLog(
   context?: string
 ): Promise<PathFilterResult> {
   const result = await shouldProcessPath(filePath, options);
+  if (filePath.includes('math.ts')) {
+    console.log(`[PathFilter] ${filePath}: shouldProcess=${result.shouldProcess}, reason=${result.reason}`);
+  }
   if (!result.shouldProcess && result.reason) {
     logDebug(`[${context || 'PathFilter'}] Skipping ${filePath}: ${result.reason}`);
   }

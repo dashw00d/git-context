@@ -70,6 +70,11 @@ function isInterestingNode(type: string): boolean {
 }
 
 function extractSymbolFromNode(node: any, filePath: string, language: string): SymbolInfo | null {
+  // Debug: Log what we're processing
+  if (filePath.includes('math.ts')) {
+    console.log(`[ParserWorker] Processing ${node.type} in ${filePath} (${language})`);
+  }
+
   if (language === LANGUAGES.PHP) {
     if (node.type === 'function_definition' || node.type === 'method_declaration') {
       const nameNode = node.childForFieldName('name');
@@ -183,6 +188,11 @@ function extractSymbols(tree: any, filePath: string, language: string): ExtractS
   let iterations = 0;
   let completedSuccessfully = false;
 
+  // Debug: Log for TypeScript files
+  if (filePath.includes('math.ts')) {
+    console.log(`[ParserWorker] Starting symbol extraction for ${filePath} (${language}), tree type: ${tree.rootNode?.type}`);
+  }
+
   try {
     while (iterations < MAX_ITERATIONS) {
       iterations++;
@@ -190,6 +200,10 @@ function extractSymbols(tree: any, filePath: string, language: string): ExtractS
       const symbol = extractSymbolFromNode(node, filePath, language);
       if (symbol) {
         symbols.push(symbol);
+        // Debug: Log found symbols for TypeScript files
+        if (filePath.includes('math.ts')) {
+          console.log(`[ParserWorker] Found symbol: ${symbol.name} (${symbol.kind}) at line ${symbol.location.start.line}`);
+        }
         // Stop early if we've found too many symbols (likely minified/bundled file)
         if (symbols.length >= MAX_REASONABLE_SYMBOLS) {
           logWarn(
@@ -340,6 +354,11 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
     const endTime = Date.now();
     logDebug(`[ParserWorker] Initialization completed in ${endTime - startTime}ms`);
   } else if (msg.type === 'parse') {
+    // Debug: Log parse requests
+    if (msg.filePath?.includes('math.ts')) {
+      console.log(`[ParserWorker] Received parse request for ${msg.filePath} (${msg.languageId})`);
+    }
+
     // Validate message structure
     if (!validateParseMessage(msg)) {
       parentPort?.postMessage({
@@ -358,6 +377,7 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
 
     const parser = parsers.get(msg.languageId);
     if (!parser) {
+      console.log(`[ParserWorker] No parser for ${msg.languageId}. Available parsers: ${Array.from(parsers.keys()).join(', ')}`);
       parentPort?.postMessage({
         type: 'result',
         id: msg.id,
@@ -366,15 +386,43 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
       return;
     }
 
+    // Debug: Log successful parser lookup
+    if (msg.filePath?.includes('math.ts')) {
+      console.log(`[ParserWorker] Found parser for ${msg.languageId}`);
+    }
+
     let tree: any = null;
     try {
       const parseTreeStartTime = Date.now();
       try {
-        tree = parser.parse(msg.content);
+        // Add timeout for TypeScript parsing to prevent hanging
+        if (msg.languageId === 'typescript') {
+          tree = await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              console.log(`[ParserWorker] TypeScript parsing timeout for ${msg.filePath}`);
+              reject(new Error('TypeScript parsing timeout'));
+            }, 2000); // 2 second timeout
+
+            try {
+              const result = parser.parse(msg.content);
+              clearTimeout(timeout);
+              resolve(result);
+            } catch (error) {
+              clearTimeout(timeout);
+              reject(error);
+            }
+          });
+        } else {
+          tree = parser.parse(msg.content);
+        }
         const parseTreeEndTime = Date.now();
         logDebug(
           `[ParserWorker] parser.parse() for ${msg.filePath}: ${parseTreeEndTime - parseTreeStartTime}ms (${msg.content.length} bytes)`
         );
+        // Debug: Log tree info for TypeScript files
+        if (msg.filePath?.includes('math.ts')) {
+          console.log(`[ParserWorker] Tree created for ${msg.filePath}, root type: ${tree?.rootNode?.type}, children: ${tree?.rootNode?.childCount}`);
+        }
       } catch (parseError) {
         const parseTreeEndTime = Date.now();
         const parseErrorMsg = parseError instanceof Error ? parseError.message : String(parseError);

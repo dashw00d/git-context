@@ -109,16 +109,20 @@ export class SnapshotManager {
 
     logDebug(`[Snapshot] Creating snapshot for ${filePath}@${blobSha.substring(0, 8)}`);
     const language = this.detectLanguage(filePath);
+    logDebug(`[Snapshot] Detected language: ${language} for ${filePath}`);
 
     const { symbols, bodyTexts } = await this.symbolExtractor.extractSymbolsWithBodies(
       content,
       filePath,
       language
     );
+    logDebug(`[Snapshot] Extracted ${symbols.length} symbols and ${bodyTexts.length} body texts for ${filePath}`);
 
     const symbolsWithDNA = await assignDNAIds(symbols, bodyTexts, language);
+    logDebug(`[Snapshot] Assigned DNA IDs to ${symbolsWithDNA.length} symbols for ${filePath}`);
 
     const edges = this.dependencyExtractor.extractDependencies(content, filePath, symbolsWithDNA);
+    logDebug(`[Snapshot] Extracted ${edges.length} edges for ${filePath}`);
 
     const shapeHash = this.computeShapeHash(symbolsWithDNA);
     const bodyHash = this.computeAggregateBodyHash(symbolsWithDNA);

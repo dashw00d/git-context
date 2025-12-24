@@ -1,6 +1,7 @@
 import { logDebug, logInfo, logWarn } from '../utils/logger';
 import { getDatabase } from './database';
 import { ANALYSIS_VERSION } from './schema';
+import { normalizeEdgeIdForStorage } from '../utils/edgeNormalization';
 import type { CommitFacts } from '../analysis/commitIndexer';
 import type { MovedBlock } from '../analysis/movedBlockDetector';
 import type { FileSnapshot } from '../analysis/snapshotManager';
@@ -556,7 +557,6 @@ export class DatabaseWriteQueue {
       (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    const { normalizeEdgeIdForStorage } = require('../utils/edgeNormalization');
     let edgesInserted = 0;
     for (const op of ops) {
       try {

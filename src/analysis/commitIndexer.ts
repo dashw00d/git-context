@@ -518,6 +518,14 @@ export class CommitIndexer {
     priority: boolean = false
   ): Promise<FileProcessingResult | null> {
     const { path, status } = file;
+
+    // Debug: Log for TypeScript files
+    if (path.includes('math.ts')) {
+      const fs = require('fs');
+      const path = require('path');
+      const debugFile = path.join(process.cwd(), 'tests/fixtures/sandbox-repo/debug.log');
+      fs.appendFileSync(debugFile, `[CommitIndexer] processFile called for ${path} (${status}) in ${sha.substring(0,8)}\n`);
+    }
     const result: FileProcessingResult = {
       symbolsAdded: 0,
       symbolsModified: 0,
@@ -545,8 +553,11 @@ export class CommitIndexer {
     );
 
     if (!filterResult.shouldProcess) {
+      logDebug(`[CommitIndexer] Filtered out ${path}: ${filterResult.reason}`);
       return null;
     }
+
+    logDebug(`[CommitIndexer] Processing ${path} (${status}) in ${sha.substring(0,8)}`);
 
     if (status === 'D') {
       if (parentSha) {
@@ -601,7 +612,7 @@ export class CommitIndexer {
       currentBlobSha,
       currentContent
     );
-    logDebug(`[CommitIndexer] 🕐 Snapshot creation for ${path}: ${Date.now() - snapshotTime}ms`);
+    logDebug(`[CommitIndexer] 🕐 Snapshot creation for ${path}: ${Date.now() - snapshotTime}ms (${currentSnapshot.symbols.length} symbols, ${currentSnapshot.edges.length} edges)`);
 
     const hybridFactsTime = Date.now();
     await this.extractAndSaveHybridFacts(

@@ -13,6 +13,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
 import { setupSandboxRepo, SANDBOX_DIR } from '../fixtures/setupSandbox';
+
+// Debug helper
+function debugLog(message: string) {
+  const debugFile = path.join(SANDBOX_DIR, 'debug.log');
+  fs.appendFileSync(debugFile, `[${new Date().toISOString()}] ${message}\n`);
+}
 import { DatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
 import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
 import { GitOperations } from '../../src/analysis/git';
@@ -171,15 +177,46 @@ describe('Invalidation Integration', () => {
       // Use fixture file from sandbox repo
       const testFile = 'src/ts/math.ts';
 
+      debugLog(`Analyzing bundle with commit ${commits[0]}`);
       // Use commit 0 which contains src/ts/math.ts
+
+      // Debug: Check what files are in this commit
+      const git = new (await import('../../src/analysis/git')).GitOperations();
+      const filesInCommit = await git.getFileChanges(commits[0]);
+      debugLog(`Files in commit ${commits[0].substring(0,8)}: ${filesInCommit.length}`);
+      filesInCommit.forEach(f => debugLog(`  ${f.path} (${f.status})`));
+
       await pipeline.analyzeBundle([commits[0]]);
       await DatabaseWriteQueue.getInstance().flushAll();
 
       const db = dbManager.getDatabase();
+
+      // Debug: Check what's in the database
+      debugLog('Checking database contents...');
+      const allSymbols = db.prepare('SELECT sha, path, symbol_id, dna_id, name, change_type FROM symbols LIMIT 10').all();
+      debugLog(`Total symbols in DB: ${allSymbols.length}`);
+      allSymbols.forEach(s => debugLog(`  ${s.sha?.substring(0,8)} | ${s.path} | ${s.name} | ${s.change_type}`));
+
+      const commitsAnalysis = db.prepare('SELECT sha, status FROM commits_analysis').all();
+      debugLog(`Commits analysis: ${commitsAnalysis.length}`);
+      commitsAnalysis.forEach(c => debugLog(`  ${c.sha?.substring(0,8)} | ${c.status}`));
+
       // Check symbols for this file in commit 0
+      debugLog(`Querying symbols for ${testFile} @ ${commits[0]}`);
       const beforeSymbols = db
         .prepare('SELECT * FROM symbols WHERE path = ? AND sha = ?')
         .all([testFile, commits[0]]) as Array<{ completeness_flags: string | null }>;
+
+      debugLog(`Found ${beforeSymbols.length} symbols for ${testFile} @ ${commits[0]}`);
+      beforeSymbols.forEach(s => debugLog(`  Symbol: ${s.name} (${s.symbol_id?.substring(0,16)}...)`));
+
+      // Also check symbols with any SHA for this path
+      const anyShaSymbols = db
+        .prepare('SELECT sha, path, symbol_id, dna_id, name, change_type FROM symbols WHERE path = ?')
+        .all([testFile]) as Array<{ sha: string; path: string; symbol_id: string; dna_id: string; name: string; change_type: string }>;
+
+      debugLog(`Found ${anyShaSymbols.length} symbols for ${testFile} (any SHA)`);
+      anyShaSymbols.forEach(s => debugLog(`  ${s.sha?.substring(0,8)} | ${s.name} | ${s.change_type} | ${s.dna_id?.substring(0,16)}...`));
 
       expect(beforeSymbols.length).toBeGreaterThan(0);
 

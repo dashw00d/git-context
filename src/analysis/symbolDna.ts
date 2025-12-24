@@ -34,6 +34,11 @@ export async function computeSymbolDNA(
   bodyText?: string,
   language?: string
 ): Promise<string> {
+  // Debug: Log for TypeScript symbols
+  if (symbol.filePath?.includes('math.ts')) {
+    console.log(`[SymbolDNA] computeSymbolDNA for ${symbol.name} (${symbol.kind}) in ${symbol.filePath}, bodyText length: ${bodyText?.length}, language: ${language}`);
+  }
+
   const parts = [symbol.kind, normalizeSignature(symbol.signature)];
 
   if (bodyText && language) {
@@ -145,6 +150,11 @@ export async function assignDNAIds(
   language?: string
 ): Promise<SymbolInfo[]> {
   const results: SymbolInfo[] = [];
+
+  // Debug: Log for TypeScript files
+  if (symbols.length > 0 && symbols[0].filePath?.includes('math.ts')) {
+    console.log(`[SymbolDNA] assignDNAIds called for ${symbols.length} symbols from ${symbols[0].filePath} (${language})`);
+  }
 
   for (const symbol of symbols) {
     // Try to get bodyText using filePath first, then fall back to id
