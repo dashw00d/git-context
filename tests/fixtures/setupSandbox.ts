@@ -885,6 +885,37 @@ function writeFiles(files: Record<string, string>, baseDir: string): void {
   }
 }
 
+/**
+ * Clean up old sandbox repos to prevent disk bloat.
+ * Keeps only the 10 most recent directories.
+ */
+function cleanupOldSandboxRepos(): void {
+  try {
+    if (!fs.existsSync(SANDBOX_DIR)) return;
+
+    const entries = fs.readdirSync(SANDBOX_DIR, { withFileTypes: true });
+    const repoDirs = entries
+      .filter(e => e.isDirectory() && e.name.startsWith('repo-'))
+      .map(e => ({
+        name: e.name,
+        path: path.join(SANDBOX_DIR, e.name),
+        mtime: fs.statSync(path.join(SANDBOX_DIR, e.name)).mtime.getTime(),
+      }))
+      .sort((a, b) => b.mtime - a.mtime); // newest first
+
+    // Keep only 10 most recent
+    const MAX_REPOS = 10;
+    if (repoDirs.length > MAX_REPOS) {
+      const toDelete = repoDirs.slice(MAX_REPOS);
+      for (const dir of toDelete) {
+        fs.rmSync(dir.path, { recursive: true, force: true });
+      }
+    }
+  } catch {
+    // Ignore cleanup errors - not critical
+  }
+}
+
 export function setupSandboxRepo(): { repoPath: string; commits: string[] } {
   // Use a unique directory for each run to avoid race conditions in parallel tests
   const uniqueId = Math.random().toString(36).substring(2, 10);
@@ -894,6 +925,9 @@ export function setupSandboxRepo(): { repoPath: string; commits: string[] } {
   if (!fs.existsSync(SANDBOX_DIR)) {
     fs.mkdirSync(SANDBOX_DIR, { recursive: true });
   }
+
+  // Cleanup old sandbox repos (keep only recent ones to avoid disk bloat)
+  cleanupOldSandboxRepos();
 
   // Create unique repo dir
   fs.mkdirSync(repoPath, { recursive: true });
