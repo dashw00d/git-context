@@ -14,7 +14,7 @@
 - [x] Task: Update hotspot and drift detection assertions 59b416c
     - [x] Write failing tests (update metrics expectations)
     - [x] Implement fixes (ensure detector logic is correctly exercised)
-- [ ] Task: Conductor - User Manual Verification 'Update Sandbox Test Assertions' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Update Sandbox Test Assertions' (Protocol in workflow.md)
 
 ## Phase 3: Refine Test Execution Logic
 - [ ] Task: Align test pipeline invocation with current `AnalysisCoordinator` patterns

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS files (
   path TEXT NOT NULL,
   status TEXT NOT NULL,
   lang TEXT,
+  completeness_flags TEXT DEFAULT '{}',
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
   UNIQUE(sha, path)
 );
@@ -76,6 +77,7 @@ CREATE TABLE IF NOT EXISTS symbols (
   confidence REAL DEFAULT 1.0,
   naming_convention TEXT,
   convention_confidence REAL,
+  completeness_flags TEXT DEFAULT '{}',
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
   FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE,
   UNIQUE(sha, dna_id)

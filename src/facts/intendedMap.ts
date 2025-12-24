@@ -35,7 +35,8 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
     const renames = renamesStmt.all(sha) as any[];
 
     for (const symbol of symbols) {
-      const key = symbol.dna_id || symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
+      const key =
+        symbol.dna_id || symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
 
       if (symbol.change_type === 'added') {
         intended.set(key, {
@@ -88,7 +89,8 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
 
     for (const symbol of symbols) {
       if (symbol.change_type === 'removed') {
-        const key = symbol.dna_id || symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
+        const key =
+          symbol.dna_id || symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
 
         if (renamedOldIds.has(key)) {
           continue;

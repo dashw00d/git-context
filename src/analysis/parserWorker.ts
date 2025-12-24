@@ -88,12 +88,20 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
         };
       }
     }
-    if (node.type === 'class_declaration' || node.type === 'interface_declaration' || node.type === 'trait_declaration') {
+    if (
+      node.type === 'class_declaration' ||
+      node.type === 'interface_declaration' ||
+      node.type === 'trait_declaration'
+    ) {
       const nameNode = node.childForFieldName('name');
       if (nameNode) {
         const name = nameNode.text;
-        const kind: SymbolInfo['kind'] = node.type === 'class_declaration' ? 'class' : 
-                   node.type === 'interface_declaration' ? 'interface' : 'trait';
+        const kind: SymbolInfo['kind'] =
+          node.type === 'class_declaration'
+            ? 'class'
+            : node.type === 'interface_declaration'
+              ? 'interface'
+              : 'trait';
         return {
           id: `${kind}_${name}`, // Temporary ID, will be replaced by DNA
           filePath,
@@ -125,10 +133,12 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
         };
       }
     }
-    if (node.type === 'class_declaration' || 
-        node.type === 'interface_declaration' || 
-        node.type === 'type_alias_declaration' || 
-        node.type === 'enum_declaration') {
+    if (
+      node.type === 'class_declaration' ||
+      node.type === 'interface_declaration' ||
+      node.type === 'type_alias_declaration' ||
+      node.type === 'enum_declaration'
+    ) {
       const nameNode = node.childForFieldName('name');
       if (nameNode) {
         const name = nameNode.text;

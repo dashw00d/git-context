@@ -321,15 +321,17 @@ export function detectDrift(
   // Check for symbols present in working but entirely missing from intended (also zombies)
   for (const [symbolId, found] of working.symbolsById) {
     // Check if this symbol is already tracked in intended map (by ID or name+path)
-    const isTracked = intended.has(symbolId) || Array.from(intended.values()).some(
-      exp => exp.lastName === found.name && exp.lastPath === found.filePath
-    );
+    const isTracked =
+      intended.has(symbolId) ||
+      Array.from(intended.values()).some(
+        exp => exp.lastName === found.name && exp.lastPath === found.filePath
+      );
 
     if (!isTracked) {
       findings.zombie_symbols.push({
         symbol_id: symbolId,
         expected: { expect: 'absent', lastSha: 'HEAD' },
-        found
+        found,
       });
     }
   }
