@@ -2,7 +2,7 @@ import pLimit = require('p-limit');
 import { LegacyDetector } from '../../../facts/legacyAudit';
 import { isCstFact } from '../../../types/cstFacts';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../../../utils/config';
-import { logDebug } from '../../../utils/logger';
+import { logDebug, logInfo } from '../../../utils/logger';
 import { getCstTimelineManager } from '../../cstTimeline';
 import { PipelineState, PipelineStep } from '../pipelineTypes';
 
@@ -24,6 +24,10 @@ export function createLegacyStep(): PipelineStep {
         working: state.working,
         scope: state.scope,
       });
+
+      logDebug(
+        `[LegacyStep] Legacy detection complete: ${legacy.dead.length} dead, ${legacy.legacyUsed.length} legacy used, ${legacy.replacedLeftovers.length} replaced leftovers`
+      );
 
       if (state.drift && state.explicitTimeline && legacy.dead.length > 0) {
         for (const deadSym of legacy.dead) {
@@ -67,10 +71,11 @@ export function createLegacyStep(): PipelineStep {
           );
         }
 
-        const limit = pLimit(16);
+        const limit = pLimit(1); // DEBUG: Sequential processing
         await Promise.all(
-          scopeFiles.map(filePath =>
+          scopeFiles.map((filePath, idx) =>
             limit(async () => {
+              const fileStartTime = Date.now();
               const language = detectLanguage(filePath);
               if (!language) return;
 
@@ -99,6 +104,10 @@ export function createLegacyStep(): PipelineStep {
                     );
                   }
                 }
+                const fileDuration = Date.now() - fileStartTime;
+                logInfo(
+                  `[LegacyStep] 🕐 File ${idx + 1}/${scopeFiles.length} ${filePath}: ${fileDuration}ms`
+                );
               } catch (error) {
                 logDebug(`[LegacyStep] Error checking CST legacy for ${filePath}: ${error}`);
               }

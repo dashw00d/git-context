@@ -15,7 +15,7 @@ import { AnalysisController } from './services/AnalysisController';
 import { BundleManager } from './services/BundleManager';
 import { ExplorerController } from './services/ExplorerController';
 import { MessageController } from './services/MessageController';
-import { buildBundleView } from './utils/bundleViewHelpers';
+import { buildBundleView, createBundleFactsSkeleton } from './utils/bundleViewHelpers';
 
 export class CockpitProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -32,7 +32,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     status: 'ready',
   };
   private _history: ContextFrame[] = [];
-  private _nodeMetrics: Record<string, any> = {};
+  private _nodeMetrics: Record<string, import('../../types/cockpit').NodeMetrics> = {};
   private _isAnalyzing: boolean = false;
   private _analysisStep?: string;
   private _analysisProgress?: number;
@@ -42,8 +42,8 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     pendingChanges: number;
     totalEdits: number;
     status: 'idle' | 'analyzing' | 'ready' | 'error';
-    summary: any;
-    facts: any;
+    summary: import('../../types/cockpit').LiveAnalysisSummary | null;
+    facts: RefactorBundleFacts | null;
   } = {
     isTracking: false,
     pendingChanges: 0,
@@ -54,8 +54,8 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
   };
   private _repoName: string | null = null;
   private _branchName: string | null = null;
-  private _llmOutputs?: any;
-  private _retrievedHistory?: any;
+  private _llmOutputs?: unknown;
+  private _retrievedHistory?: unknown;
   private _lastNCommits?: number;
   private _debugMode = false;
   private _currentCommitIndex?: number;
@@ -84,8 +84,8 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     facts: RefactorBundleFacts,
     summary: BundleSummaryDTO,
     extras?: {
-      llmOutputs?: any;
-      retrievedHistory?: any;
+      llmOutputs?: unknown;
+      retrievedHistory?: unknown;
       repoName?: string | null;
       branchName?: string | null;
     }
@@ -174,8 +174,8 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
     pendingChanges: number;
     totalEdits: number;
     status: 'idle' | 'analyzing' | 'ready' | 'error';
-    summary: any;
-    facts: any;
+    summary: import('../../types/cockpit').LiveAnalysisSummary | null;
+    facts: RefactorBundleFacts | null;
   }): void {
     this._liveAnalysis = liveAnalysis;
     this._update();
@@ -199,6 +199,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       {
         postMessage: msg => this._postMessage(msg),
         getBundleView: () => this._bundleView || null,
+        getBundleFacts: () => this._bundleFacts || null,
         update: () => this._update(),
       }
     );
@@ -270,8 +271,7 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
         }
 
         // Sync bundle facts if changed (e.g. from background analysis)
-        // Note: This might be heavy, so be careful.
-        // But we need to update local _bundleFacts if Redux updates it.
+        // Only sync if Redux has actual facts, to avoid wiping out hydrated data with initial null
         if (state.bundleFacts && state.bundleFacts !== this._bundleFacts) {
           this._bundleFacts = state.bundleFacts;
           this._bundleSummary = state.bundleSummary; // Sync summary too
@@ -296,11 +296,21 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
 
     // Initial update if we have data
     const initSequence = async () => {
+      const { getStore } = await import('../../state/store');
+      const store = getStore();
+
       if (!this._bundleFacts) {
         const hydrated = await this.analysisController.hydrateFromPersistedFacts();
         if (hydrated) {
           this._bundleFacts = hydrated.facts;
           this._bundleSummary = hydrated.summary;
+
+          // Push hydrated facts into Redux store so other components can see them
+          store.dispatch({
+            type: 'BUNDLE_FACTS_UPDATED',
+            payload: { facts: hydrated.facts, summary: hydrated.summary },
+          });
+
           await this._buildAndUpdateBundleView();
           if (this.explorerController) {
             await this.explorerController.updateExplorerTree(
@@ -386,8 +396,13 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       this._lastNCommits ??
       vscode.workspace.getConfiguration('git-context').get<number>('defaultCommitCount', 20);
 
+    // Send skeleton instead of full bundleFacts to reduce payload size,
+    // but include full facts if they contain the dependency graph needed for refs
+    const bundleFactsSkeleton = createBundleFactsSkeleton(this._bundleFacts || null);
+
     const payload: CockpitPayload = {
-      bundleFacts: this._bundleFacts || null,
+      bundleFacts: (this._bundleFacts as any) || null,
+      bundleFactsSkeleton,
       bundleSummary: this._bundleSummary || null,
       bundleView: this._bundleView || null,
       activeFrame: this._activeFrame,
@@ -426,19 +441,22 @@ export class CockpitProvider implements vscode.WebviewViewProvider {
       this._validatePayload(message.payload);
     }
 
-    const parsed = CockpitHostMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      logError('[CockpitProvider] Validation failed, refusing to send message', {
-        messageType: message.type,
-        errors: parsed.error.issues,
-        payload: message.payload,
-      });
-      return;
+    // Only validate in debug mode for performance - Zod parsing on every message blocks the host
+    if (this._debugMode) {
+      const parsed = CockpitHostMessageSchema.safeParse(message);
+      if (!parsed.success) {
+        logError('[CockpitProvider] Validation failed, refusing to send message', {
+          messageType: message.type,
+          errors: parsed.error.issues,
+          payload: message.payload,
+        });
+        return;
+      }
     }
 
     try {
       // eslint-disable-next-line no-restricted-syntax
-      this.view.webview.postMessage(parsed.data);
+      this.view.webview.postMessage(message);
       logDebug(`[CockpitProvider] Posted message: ${message.type}`);
     } catch (error) {
       logError('[CockpitProvider] postMessage failed', {

@@ -119,9 +119,8 @@ export async function registerCoreFeatures(
         const { GitOperations } = await import('../analysis/git');
         try {
           const git = new GitOperations();
-          const simpleGit = require('simple-git');
           const gitRoot = git.getRoot();
-          const gitInstance = simpleGit(gitRoot);
+          const gitInstance = GitOperations.getSimpleGit(gitRoot);
           sha = await gitInstance.revparse([shaOrRef]);
         } catch {
           vscode.window.showErrorMessage(`Could not resolve ref: ${shaOrRef}`);
@@ -270,7 +269,7 @@ export async function registerCoreFeatures(
   });
 
   shell.registerCommand('git-context.bundle.export', async _context => {
-    const state = orchestrator.getState();
+    const state = store.getState();
     if (!state.bundleFacts) {
       vscode.window.showWarningMessage('No active bundle to export');
       return;
@@ -385,7 +384,7 @@ export async function registerCoreFeatures(
 
   shell.registerCommand('git-context.superReport', async () => {
     try {
-      const state = orchestrator.getState();
+      const state = store.getState();
       let facts: any = state.bundleFacts;
 
       if (!facts) {

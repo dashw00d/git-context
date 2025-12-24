@@ -1,10 +1,14 @@
 import * as vscode from 'vscode';
 import { normalizeBundleConfig } from '../../../state/bundleConfig';
 import { getStore } from '../../../state/store';
-import { CockpitClientMessage, CockpitHostMessage, BundleView } from '../../../types/cockpit';
+import { BundleView, CockpitClientMessage, CockpitHostMessage } from '../../../types/cockpit';
 import { withTimeout } from '../../../utils/async';
-import { logError, logInfo, logWarn } from '../../../utils/logger';
-import { extractSnippet } from '../utils/bundleViewHelpers';
+import { logError, logInfo } from '../../../utils/logger';
+import {
+  extractFileEvidence,
+  extractSnippet,
+  extractSymbolEvidence,
+} from '../utils/bundleViewHelpers';
 import { AnalysisController } from './AnalysisController';
 import { BundleManager } from './BundleManager';
 import { ExplorerController } from './ExplorerController';
@@ -12,6 +16,7 @@ import { ExplorerController } from './ExplorerController';
 export interface MessageControllerCallbacks {
   postMessage: (msg: CockpitHostMessage) => void;
   getBundleView: () => BundleView | null;
+  getBundleFacts: () => import('../../../facts/types').RefactorBundleFacts | null;
   update: () => void;
 }
 
@@ -132,7 +137,7 @@ export class MessageController {
           }
 
           // Sync with Redux store
-          getStore().dispatch({ type: 'NAVIGATE_TO', payload: { frame: frame as any } });
+          getStore().dispatch({ type: 'NAVIGATE_TO', payload: { frame } });
 
           // On-demand analysis
           if (frame.level === 'file' || frame.level === 'symbol') {
@@ -170,7 +175,7 @@ export class MessageController {
                   this.analysisController.startBackgroundAnalysis(
                     bundle.config,
                     skeleton.files,
-                    (_event: any) => {
+                    () => {
                       /* handle progress */
                     }
                   );
@@ -210,14 +215,14 @@ export class MessageController {
               filePath: msg.payload?.filePath,
             };
 
-            const messages = [
+            const messages: Array<{ role: 'system' | 'user'; content: string }> = [
               {
-                role: 'system',
+                role: 'system' as const,
                 content:
                   'You are a refactor assistant. Use only provided context. Respond concisely with actions and risks. Do not fabricate code.',
               },
               {
-                role: 'user',
+                role: 'user' as const,
                 content: `Context: ${JSON.stringify(context, null, 2)}\n\nQuestion: ${text}`,
               },
             ];
@@ -225,7 +230,7 @@ export class MessageController {
             const { getLLMClient } = await import('../../../llm/openrouter');
             const client = getLLMClient();
             const reply = await withTimeout(
-              client.complete(messages as any, {
+              client.complete(messages, {
                 maxTokens: 600,
                 temperature: 0.2,
               }),
@@ -289,15 +294,40 @@ export class MessageController {
         case 'updateCommitIndex': {
           const store = getStore();
           // The message type definition might have changed, handle both value and payload
-          const rawMsg = msg as any;
           const commitIndex =
-            typeof rawMsg.value === 'number' ? rawMsg.value : rawMsg.payload?.commitIndex;
+            'value' in msg && typeof msg.value === 'number' ? msg.value : undefined;
+          const sha = 'sha' in msg ? (msg as any).sha : undefined;
 
           if (typeof commitIndex === 'number') {
             store.dispatch({
               type: 'COMMIT_INDEX_UPDATED',
               payload: { index: commitIndex },
             });
+
+            // If we have a SHA and the active frame is a file, fetch historical content
+            const state = store.getState();
+            if (sha && state.activeFrame?.level === 'file') {
+              const filePath = state.activeFrame.id;
+              const { GitOperations } = await import('../../../analysis/git');
+              const git = new GitOperations();
+
+              try {
+                logInfo(
+                  `[MessageController] Fetching historical content for ${filePath} at ${sha}`
+                );
+                const content = await git.getFileContent(sha, filePath);
+
+                store.dispatch({
+                  type: 'FRAME_DATA_UPDATED',
+                  payload: {
+                    frameId: filePath,
+                    data: { content, historicalSha: sha },
+                  },
+                });
+              } catch (e) {
+                logError(`[MessageController] Failed to fetch historical content: ${e}`);
+              }
+            }
           }
           break;
         }
@@ -326,6 +356,58 @@ export class MessageController {
             });
           } catch (err) {
             logError('[MessageController] Failed to get HEAD info', err);
+          }
+          break;
+        }
+
+        case 'requestFileDetails': {
+          if (msg.payload?.filePath) {
+            try {
+              const bundleFacts = this.callbacks.getBundleFacts();
+              const evidence = extractFileEvidence(bundleFacts, msg.payload.filePath);
+              this.callbacks.postMessage({
+                type: 'fileDetailsResponse',
+                payload: {
+                  filePath: msg.payload.filePath,
+                  evidence,
+                },
+              });
+            } catch (err) {
+              logError('[MessageController] Failed to extract file evidence', err);
+              this.callbacks.postMessage({
+                type: 'fileDetailsResponse',
+                payload: {
+                  filePath: msg.payload.filePath,
+                  evidence: {},
+                },
+              });
+            }
+          }
+          break;
+        }
+
+        case 'requestSymbolDetails': {
+          if (msg.payload?.symbolId) {
+            try {
+              const bundleFacts = this.callbacks.getBundleFacts();
+              const evidence = extractSymbolEvidence(bundleFacts, msg.payload.symbolId);
+              this.callbacks.postMessage({
+                type: 'symbolDetailsResponse',
+                payload: {
+                  symbolId: msg.payload.symbolId,
+                  evidence,
+                },
+              });
+            } catch (err) {
+              logError('[MessageController] Failed to extract symbol evidence', err);
+              this.callbacks.postMessage({
+                type: 'symbolDetailsResponse',
+                payload: {
+                  symbolId: msg.payload.symbolId,
+                  evidence: {},
+                },
+              });
+            }
           }
           break;
         }

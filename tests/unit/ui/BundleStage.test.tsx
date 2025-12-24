@@ -50,7 +50,7 @@ describe('BundleStage', () => {
     const rootsInput = screen.getByPlaceholderText('src/auth, utils.ts');
     fireEvent.change(rootsInput, { target: { value: 'src/test' } });
 
-    const applyButton = screen.getByText('Apply & Analyze');
+    const applyButton = screen.getByText('Apply Scope');
     fireEvent.click(applyButton);
 
     expect(mockVscode.postMessage).toHaveBeenCalledWith({
@@ -61,9 +61,8 @@ describe('BundleStage', () => {
       }),
     });
     expect(mockVscode.postMessage).toHaveBeenCalledWith({
-      type: 'generateReport',
-      mode: 'selection',
-      force: true,
+      type: 'setLastNCommits',
+      value: 20,
     });
   });
 

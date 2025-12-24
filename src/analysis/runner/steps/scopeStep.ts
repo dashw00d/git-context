@@ -22,8 +22,10 @@ export function createScopeStep(git?: GitOperations): PipelineStep {
         workspaceParts,
         state.explicitTimeline,
         state.liveOverrides?.keys(),
-        git
+        git,
+        state.plan
       );
+
       logDebug('🟩 [ScopeStep] computeScope returned, updating state');
       updateState(state, 'scope', scope);
       logDebug('🟩 [ScopeStep] Completed successfully');

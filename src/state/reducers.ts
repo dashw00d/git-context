@@ -79,6 +79,7 @@ export const initialState: CockpitState = {
   pipelineStepTimings: {},
   nodeMetrics: {},
   currentCommitIndex: undefined,
+  ignoreNextFactsUpdate: false,
 };
 
 export function cockpitReducer(state: CockpitState = initialState, action: Action): CockpitState {
@@ -105,12 +106,20 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         state.currentCommitIndex === undefined && newShas.length > 0
           ? newShas.length - 1
           : state.currentCommitIndex;
+
+      // Merge with existing bundleFacts if present (e.g., from quick scan)
+      // This ensures quick scan symbols are preserved when background analysis completes
+      const mergedFacts =
+        state.bundleFacts && action.payload.facts
+          ? mergeFacts(state.bundleFacts, action.payload.facts)
+          : action.payload.facts;
+
       return {
         ...state,
         isAnalyzing: false,
         analysisStep: undefined,
-        bundleFacts: action.payload.facts,
-        bundleSummary: action.payload.summary,
+        bundleFacts: mergedFacts,
+        bundleSummary: action.payload.summary ?? state.bundleSummary,
         bundleReportId: action.payload.reportId,
         retrievedHistory: action.payload.history,
         pipelineErrors: [],
@@ -369,6 +378,11 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
         };
       }
 
+      // DEBUG: Log successful merge including lineCommits
+      logDebug(
+        `[Reducer] Merging tier ${tierNum} data for ${action.payload.frameId}. lineCommits: ${action.payload.data?.lineCommits?.length || 0}`
+      );
+
       return {
         ...state,
         activeFrame: {
@@ -433,6 +447,7 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
             action.payload.facts !== undefined ? action.payload.facts : state.liveAnalysis.facts,
           pendingChanges: action.payload.pendingChanges ?? state.liveAnalysis.pendingChanges,
           totalEdits: action.payload.totalEdits ?? state.liveAnalysis.totalEdits,
+          isTracking: action.payload.isTracking ?? state.liveAnalysis.isTracking,
         },
       };
 
@@ -455,6 +470,11 @@ export function cockpitReducer(state: CockpitState = initialState, action: Actio
       return { ...state, nodeMetrics: action.payload.metrics };
     case 'COMMIT_INDEX_UPDATED':
       return { ...state, currentCommitIndex: action.payload.index };
+
+    case 'IGNORE_NEXT_FACTS_UPDATE':
+      return { ...state, ignoreNextFactsUpdate: true };
+    case 'FACTS_UPDATE_IGNORED':
+      return { ...state, ignoreNextFactsUpdate: false };
 
     default:
       return state;

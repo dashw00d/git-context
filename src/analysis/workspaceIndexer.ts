@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import pLimit = require('p-limit');
 import { Database } from 'sql.js';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { WorkspaceFacts } from '../types/workspace';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
@@ -12,6 +13,7 @@ import { getCstTimelineManager } from './cstTimeline';
 import { GitOperations } from './git';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
+import { computeHybridDna } from './symbolDna';
 import { getTreeSitterParser } from './tree-sitter';
 import type { HybridFact } from '../types/cstFacts';
 
@@ -31,9 +33,45 @@ export class WorkspaceIndexer {
   }
 
   /**
+   * Get content from plan data or fallback to git
+   */
+  private async getContent(
+    sha: string,
+    path: string,
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<string> {
+    // Try plan data first (synchronous, no lookup overhead)
+    if (plan?.content.has(`${sha}:${path}`)) {
+      return plan.content.get(`${sha}:${path}`)!;
+    }
+    // Fallback to git
+    return this.git.safeGetFileContent(sha, path);
+  }
+
+  /**
+   * Get blob SHA from plan data or fallback to git
+   */
+  private async getBlobSha(
+    sha: string,
+    path: string,
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<string> {
+    // Try plan data first
+    const tree = plan?.trees.get(sha);
+    if (tree?.has(path)) {
+      return tree.get(path)!.sha;
+    }
+    // Fallback to git
+    return this.git.getBlobSha(sha, path);
+  }
+
+  /**
    * Analyze workspace overlay (staged or unstaged changes)
    */
-  async analyzeWorkspace(mode: 'staged' | 'unstaged'): Promise<WorkspaceFacts | null> {
+  async analyzeWorkspace(
+    mode: 'staged' | 'unstaged',
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<WorkspaceFacts | null> {
     const headSha = await this.git.getHeadSha();
     const changedFiles =
       mode === 'staged' ? await this.git.getStagedFiles() : await this.git.getUnstagedFiles();
@@ -47,6 +85,8 @@ export class WorkspaceIndexer {
           git: this.git,
           gitRoot,
           status: file.status,
+          commitSha: 'HEAD',
+          plan,
           skipSizeCheck: file.status === 'D',
         })
       ) {
@@ -84,18 +124,19 @@ export class WorkspaceIndexer {
     const filePromises = filteredFiles.map(file =>
       limit(async () => {
         const { path: filePath, status } = file;
+        const fileStartTime = Date.now(); // DEBUG timing
 
         try {
           if (status === 'D') {
-            const headBlobSha = await this.git.getBlobSha('HEAD', filePath);
-            const headContent = await this.git.safeGetFileContent('HEAD', filePath);
+            const headBlobSha = await this.getBlobSha('HEAD', filePath, plan);
+            const headContent = await this.getContent('HEAD', filePath, plan);
             const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
               filePath,
               headBlobSha,
               headContent
             );
 
-            return {
+            const result = {
               added: 0,
               modified: 0,
               removed: headSnapshot.symbols.length,
@@ -106,6 +147,8 @@ export class WorkspaceIndexer {
               risks: ['deletion'],
               structuralChange: 0,
             };
+            logInfo(`[WorkspaceIndexer] 🕐 ${filePath} (D): ${Date.now() - fileStartTime}ms`);
+            return result;
           }
 
           const fullPath = path.join(gitRoot, filePath);
@@ -153,7 +196,7 @@ export class WorkspaceIndexer {
           );
 
           if (status === 'A' || status === 'U') {
-            return {
+            const result = {
               added: workspaceSnapshot.symbols.length,
               modified: 0,
               removed: 0,
@@ -164,9 +207,13 @@ export class WorkspaceIndexer {
               risks: [],
               structuralChange: 0,
             };
+            logInfo(
+              `[WorkspaceIndexer] 🕐 ${filePath} (${status}): ${Date.now() - fileStartTime}ms`
+            );
+            return result;
           } else {
-            const headBlobSha = await this.git.getBlobSha('HEAD', filePath);
-            const headContent = await this.git.safeGetFileContent('HEAD', filePath);
+            const headBlobSha = await this.getBlobSha('HEAD', filePath, plan);
+            const headContent = await this.getContent('HEAD', filePath, plan);
             const headSnapshot = await this.snapshotManager.getOrCreateSnapshot(
               filePath,
               headBlobSha,
@@ -205,7 +252,7 @@ export class WorkspaceIndexer {
             if (structDiff.interfaceChanged) risks.push('breaking-api');
             if (structDiff.controlFlowChanged) risks.push('refactor');
 
-            return {
+            const result = {
               added: diff.added.length,
               modified: diff.modified.length,
               removed: diff.removed.length,
@@ -216,9 +263,12 @@ export class WorkspaceIndexer {
               risks,
               structuralChange: structDiff.structuralChangeScore,
             };
+            logInfo(`[WorkspaceIndexer] 🕐 ${filePath} (M): ${Date.now() - fileStartTime}ms`);
+            return result;
           }
         } catch (error: any) {
           logDebug(`[WorkspaceIndexer] Error processing ${filePath}: ${error.message}`);
+          logInfo(`[WorkspaceIndexer] 🕐 ${filePath} (ERR): ${Date.now() - fileStartTime}ms`);
 
           return {
             added: 0,
@@ -250,9 +300,9 @@ export class WorkspaceIndexer {
       totalRemoved += result.removed;
       totalEdgesAdded += result.edgesAdded;
       totalEdgesRemoved += result.edgesRemoved;
-      changedSymbols.push(...result.symbols);
-      allEdges.push(...result.edges);
-      allRisks.push(...result.risks);
+      for (const s of result.symbols) changedSymbols.push(s);
+      for (const e of result.edges) allEdges.push(e);
+      for (const r of result.risks) allRisks.push(r);
       maxStructuralChange = Math.max(maxStructuralChange, result.structuralChange);
     }
 
@@ -392,27 +442,11 @@ export class WorkspaceIndexer {
   }
 
   private cacheWorkspace(facts: WorkspaceFacts): void {
-    const stmt = prepare(`
-      INSERT OR REPLACE INTO workspace_analysis
-      (head_sha, workspace_hash, symbols_added, symbols_modified, symbols_removed,
-       edges_added, edges_removed, risks, files_changed, structural_change_score,
-       blast_radius, analyzed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run([
-      facts.headSha,
-      facts.workspaceHash,
-      facts.symbolsAdded,
-      facts.symbolsModified,
-      facts.symbolsRemoved,
-      facts.edgesAdded,
-      facts.edgesRemoved,
-      JSON.stringify(facts.risks),
-      facts.filesChanged,
-      facts.structuralChangeScore,
-      facts.blastRadius,
-      new Date().toISOString(),
-    ]);
+    const writeQueue = DatabaseWriteQueue.getInstance();
+    writeQueue.queue({
+      type: 'workspace_analysis',
+      data: facts,
+    });
   }
 
   /**
@@ -493,7 +527,7 @@ export class WorkspaceIndexer {
   /**
    * Get the workspace file tree for the Explorer
    */
-  async getWorkspaceTree(): Promise<any[]> {
+  async getWorkspaceTree(plan?: import('./runner/pipelineTypes').PlanData): Promise<any[]> {
     const allFiles = await this.git.getAllFiles(); // Already excludes ignored files via --exclude-standard
     const gitRoot = this.git.getRoot();
 
@@ -503,6 +537,7 @@ export class WorkspaceIndexer {
         await filterPath(file, {
           git: this.git,
           gitRoot,
+          plan,
           status: 'M',
           skipSizeCheck: true,
           skipGitIgnore: true, // Skip redundant check since getAllFiles() already excluded ignored files
@@ -778,23 +813,58 @@ export class WorkspaceIndexer {
    * Quick scan for symbols in a list of files (for initial explorer population)
    * Returns full symbol objects with id, name, kind, signature, location, and filePath
    */
-  async quickScanSymbols(files: string[]): Promise<any[]> {
+  async quickScanSymbols(
+    files: string[],
+    options?: { persist?: boolean; priority?: boolean }
+  ): Promise<any[]> {
     const limit = pLimit(50); // Concurrent processing
     const gitRoot = this.git.getRoot();
     const results: any[] = [];
+    let filesProcessed = 0;
+    let filesWithSymbols = 0;
+    let filesSkipped = 0;
 
-    logInfo(`[WorkspaceIndexer] Quick scanning ${files.length} files...`);
+    // Resolve HEAD SHA once if persisting
+    let headSha = 'HEAD';
+    if (options?.persist) {
+      try {
+        headSha = await this.git.getHeadSha();
+      } catch (e) {
+        logDebug(`[WorkspaceIndexer] Failed to resolve HEAD SHA for quick scan persistence: ${e}`);
+      }
+    }
+
+    // Log input file stats
+    const phpFiles = files.filter(f => f.endsWith('.php'));
+    const jsFiles = files.filter(f => f.endsWith('.js') || f.endsWith('.ts') || f.endsWith('.tsx'));
+    logInfo(
+      `[WorkspaceIndexer] Quick scanning ${files.length} files (${phpFiles.length} PHP, ${jsFiles.length} JS/TS)...`
+    );
 
     await Promise.all(
       files.map(filePath =>
         limit(async () => {
           try {
+            // Use centralized path filter
+            if (!(await filterPath(filePath, { git: this.git, gitRoot, skipSizeCheck: true }))) {
+              filesSkipped++;
+              return;
+            }
+
             const fullPath = path.join(gitRoot, filePath);
             const content = fs.readFileSync(fullPath, 'utf8');
             const language = detectLanguage(filePath);
 
+            filesProcessed++;
+
             if (language) {
-              const symbols = await this.parser.extractHybridFacts(content, filePath, language);
+              const symbols = await this.parser.extractHybridFacts(
+                content,
+                filePath,
+                language,
+                undefined,
+                options?.priority
+              );
               // Filter to only symbol kinds (functions, classes, etc.)
               const symbolKinds = new Set([
                 'function',
@@ -811,22 +881,79 @@ export class WorkspaceIndexer {
               const filteredSymbols = symbols.filter((s: any) => symbolKinds.has(s.kind));
 
               if (filteredSymbols.length > 0) {
-                // logDebug(`[WorkspaceIndexer] Found ${filteredSymbols.length} symbols in ${filePath}`);
-              }
+                filesWithSymbols++;
+                // Store full symbol objects with filePath
+                // And compute DNA if persisting
+                for (const s of filteredSymbols) {
+                  let dnaId = s.id;
 
-              // Store full symbol objects with filePath
-              filteredSymbols.forEach((s: any) => {
-                results.push({
-                  id: s.id,
-                  name: s.name,
-                  kind: s.kind,
-                  signature: s.signature,
-                  location: s.location,
-                  filePath: filePath,
-                });
-              });
+                  if (options?.persist) {
+                    try {
+                      // Extract body text if location is available
+                      let bodyText = undefined;
+                      if (s.location && s.location.start && s.location.end) {
+                        const lines = content.split('\n');
+                        const startLine = Math.max(0, s.location.start.line - 1);
+                        const endLine = Math.min(lines.length, s.location.end.line);
+                        bodyText = lines.slice(startLine, endLine).join('\n');
+                      }
+
+                      dnaId = await computeHybridDna(s as any, bodyText, language);
+                      s.id = dnaId; // Update symbol ID to stable DNA
+                    } catch (err) {
+                      // Fallback to original ID on error
+                    }
+                  }
+
+                  results.push({
+                    id: s.id,
+                    name: s.name,
+                    kind: s.kind,
+                    signature: s.signature,
+                    location: s.location,
+                    filePath: filePath,
+                    sha: headSha, // Add SHA for path+sha ID
+                    complete: false, // Mark quick scan as incomplete
+                  });
+
+                  // Persist if requested
+                  if (options?.persist) {
+                    const writeQueue = DatabaseWriteQueue.getInstance();
+                    // Queue symbol_dna insert (using 'isDna' flag)
+                    writeQueue.queue({
+                      type: 'symbol',
+                      data: {
+                        sha: headSha,
+                        path: filePath,
+                        symbol: s as any,
+                        changeType: 'quick_scan', // Marker for quick scan
+                        isDna: true,
+                      },
+                    });
+
+                    // Queue symbols insert
+                    writeQueue.queue({
+                      type: 'symbol',
+                      data: {
+                        sha: headSha,
+                        path: filePath,
+                        symbol: s as any,
+                        changeType: 'quick_scan',
+                        isDna: false,
+                      },
+                    });
+                  }
+                }
+              }
+            } else {
+              filesSkipped++;
+              // Log files without language detection to debug
+              if (filePath.endsWith('.php')) {
+                logDebug(`[WorkspaceIndexer] PHP file has no language detected: ${filePath}`);
+              }
             }
           } catch (e) {
+            filesSkipped++;
             // Ignore errors during quick scan
             logDebug(`[WorkspaceIndexer] Quick scan error for ${filePath}: ${e}`);
           }
@@ -834,7 +961,16 @@ export class WorkspaceIndexer {
       )
     );
 
-    logInfo(`[WorkspaceIndexer] Quick scan complete. Found ${results.length} symbols total.`);
+    logInfo(
+      `[WorkspaceIndexer] Quick scan complete. Processed ${filesProcessed}/${files.length} files, ` +
+        `${filesWithSymbols} with symbols, ${filesSkipped} skipped. Total symbols: ${results.length}`
+    );
+
+    // Force flush if we persisted data
+    if (options?.persist) {
+      DatabaseWriteQueue.getInstance().flushAll();
+    }
+
     return results;
   }
 

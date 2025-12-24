@@ -5,15 +5,28 @@ import { CommitInfo, FileChange } from '../types';
 import { withTimeout } from '../utils/async';
 import { getGitRoot } from '../utils/config';
 import { logDebug, logError, logWarn } from '../utils/logger';
+import { normalizeToRelative } from '../utils/path';
 
 export class GitOperations {
   private gitRoot: string;
   private git: SimpleGit;
   private static hotspotCache: Map<string, { expires: number; data: HotspotStat[] }> = new Map();
-  private headShaCache?: { value: string; expires: number };
-  private statusCache?: { output: string; expires: number };
-  private untrackedCache?: { files: string[]; expires: number };
+  private static headShaCache?: { value: string; expires: number };
+  private static statusCache?: { output: string; expires: number };
+  private static untrackedCache?: { files: string[]; expires: number };
+
+  /**
+   * Normalizes a path to be relative, forward-slashed, and without leading slashes.
+   */
+  public static normalizePath(p: string | undefined): string {
+    return normalizeToRelative(p, getGitRoot());
+  }
+  // Pending promise caches to deduplicate concurrent requests
+  private static pendingStatusPromise?: Promise<string>;
+  private static pendingUntrackedPromise?: Promise<string[]>;
+  private static pendingHeadShaPromise?: Promise<string>;
   private commitInfoCache = new Map<string, CommitInfo>();
+  private static sharedCommitInfoCache = new Map<string, CommitInfo>();
 
   private static gitInstances: Map<string, SimpleGit> = new Map();
 
@@ -23,14 +36,14 @@ export class GitOperations {
       logError('GitOperations: Not in a git repository');
       this.gitRoot = '';
       if (!GitOperations.gitInstances.has('')) {
-        GitOperations.gitInstances.set('', simpleGit('', { maxConcurrentProcesses: 10 }));
+        GitOperations.gitInstances.set('', simpleGit(''));
       }
       this.git = GitOperations.gitInstances.get('')!;
       return;
     }
     this.gitRoot = root;
     if (!GitOperations.gitInstances.has(root)) {
-      GitOperations.gitInstances.set(root, simpleGit(root, { maxConcurrentProcesses: 10 }));
+      GitOperations.gitInstances.set(root, simpleGit(root));
     }
     this.git = GitOperations.gitInstances.get(root)!;
   }
@@ -40,10 +53,26 @@ export class GitOperations {
   }
 
   /**
+   * Get the shared SimpleGit instance for a given root.
+   * Use this instead of creating new simpleGit() instances to avoid queue contention.
+   */
+  public static getSimpleGit(root?: string): SimpleGit {
+    const actualRoot = root || getGitRoot() || '';
+    if (!GitOperations.gitInstances.has(actualRoot)) {
+      GitOperations.gitInstances.set(actualRoot, simpleGit(actualRoot));
+    }
+    return GitOperations.gitInstances.get(actualRoot)!;
+  }
+
+  /**
    * Get basic commit information
    */
   async getCommitInfo(sha: string): Promise<CommitInfo> {
-    // Check cache first
+    // Check shared static cache first (survives across instances)
+    if (GitOperations.sharedCommitInfoCache.has(sha)) {
+      return GitOperations.sharedCommitInfoCache.get(sha)!;
+    }
+    // Check instance cache
     if (this.commitInfoCache.has(sha)) {
       return this.commitInfoCache.get(sha)!;
     }
@@ -71,8 +100,9 @@ export class GitOperations {
         parent: lines[4] || undefined,
       };
 
-      // Cache the result
+      // Cache the result in both instance and shared cache
       this.commitInfoCache.set(sha, info);
+      GitOperations.sharedCommitInfoCache.set(sha, info);
       return info;
     } catch (error: any) {
       logError(`Failed to get commit info for ${sha}: ${error.message}`);
@@ -134,37 +164,213 @@ export class GitOperations {
     return commits;
   }
 
-  private async getSharedStatus(ttlMs = 2000): Promise<string> {
+  private async getSharedStatus(ttlMs = 10000): Promise<string> {
     const now = Date.now();
-    if (this.statusCache && this.statusCache.expires > now) {
-      return this.statusCache.output;
+    // Check cache first
+    if (GitOperations.statusCache && GitOperations.statusCache.expires > now) {
+      return GitOperations.statusCache.output;
     }
 
-    const output = await withTimeout(
-      this.git.raw(['status', '--porcelain']),
-      30000,
-      'Git status porcelain'
-    );
+    // If there's already a pending request, wait for it instead of making a new one
+    if (GitOperations.pendingStatusPromise) {
+      return GitOperations.pendingStatusPromise;
+    }
 
-    this.statusCache = { output, expires: now + ttlMs };
-    this.untrackedCache = undefined;
-    return output;
+    // Create new request using spawn directly (bypasses simple-git queue)
+    GitOperations.pendingStatusPromise = (async () => {
+      try {
+        const { spawn } = await import('child_process');
+        const startTime = Date.now();
+        logDebug(`[GitOperations] Starting git status --porcelain in ${this.gitRoot}`);
+
+        const output = await new Promise<string>((resolve, reject) => {
+          // Use GIT_OPTIONS to skip hooks and optional locks for faster execution
+          // This helps avoid hangs from slow hooks or lock contention
+          const env = {
+            ...process.env,
+            GIT_OPTIONS: '--no-optional-locks',
+          };
+
+          const proc = spawn('git', ['status', '--porcelain'], {
+            cwd: this.gitRoot,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env,
+          });
+
+          let stdout = '';
+          let stderr = '';
+          let hasOutput = false;
+
+          proc.stdout.on('data', (data: Buffer) => {
+            stdout += data.toString();
+            hasOutput = true;
+            const elapsed = Date.now() - startTime;
+            if (elapsed > 5000 && elapsed % 10000 < 100) {
+              // Log progress every 10 seconds after 5 seconds
+              logDebug(
+                `[GitOperations] git status still running, ${elapsed}ms elapsed, ${stdout.length} bytes received`
+              );
+            }
+          });
+
+          proc.stderr.on('data', (data: Buffer) => {
+            stderr += data.toString();
+            logWarn(`[GitOperations] git status stderr: ${data.toString().trim()}`);
+          });
+
+          // Set timeout - increased from 30s to 120s for large repos
+          const timeout = setTimeout(() => {
+            const elapsed = Date.now() - startTime;
+            logWarn(
+              `[GitOperations] git status --porcelain timed out after ${elapsed}ms. stdout length: ${stdout.length}, hasOutput: ${hasOutput}, stderr: ${stderr || '(none)'}`
+            );
+            proc.kill('SIGKILL'); // Force kill if SIGTERM doesn't work
+            const errorMsg = stderr
+              ? `git status --porcelain timed out after ${elapsed}ms. stderr: ${stderr}`
+              : `git status --porcelain timed out after ${elapsed}ms`;
+            reject(new Error(errorMsg));
+          }, 120000); // 120 seconds
+
+          proc.on('close', code => {
+            clearTimeout(timeout);
+            const elapsed = Date.now() - startTime;
+            if (code === 0) {
+              logDebug(
+                `[GitOperations] git status --porcelain completed in ${elapsed}ms, ${stdout.length} bytes`
+              );
+              resolve(stdout);
+            } else {
+              const errorMsg = stderr
+                ? `git status --porcelain exited with code ${code} after ${elapsed}ms. stderr: ${stderr}`
+                : `git status --porcelain exited with code ${code} after ${elapsed}ms`;
+              logWarn(`[GitOperations] ${errorMsg}`);
+              reject(new Error(errorMsg));
+            }
+          });
+
+          proc.on('error', err => {
+            clearTimeout(timeout);
+            logError(`[GitOperations] git status --porcelain spawn error:`, err);
+            reject(err);
+          });
+        });
+
+        // Calculate expiration AFTER operation completes, not before
+        const expiresAt = Date.now() + ttlMs;
+        GitOperations.statusCache = { output, expires: expiresAt };
+        GitOperations.untrackedCache = undefined;
+        return output;
+      } finally {
+        // Clear pending promise when done (success or failure)
+        GitOperations.pendingStatusPromise = undefined;
+      }
+    })();
+
+    return GitOperations.pendingStatusPromise;
   }
 
-  private async getSharedUntracked(ttlMs = 2000): Promise<string[]> {
+  private async getSharedUntracked(ttlMs = 10000): Promise<string[]> {
     const now = Date.now();
-    if (this.untrackedCache && this.untrackedCache.expires > now) {
-      return this.untrackedCache.files;
+    // Check cache first
+    if (GitOperations.untrackedCache && GitOperations.untrackedCache.expires > now) {
+      return GitOperations.untrackedCache.files;
     }
 
-    const output = await withTimeout(
-      this.git.raw(['ls-files', '--others', '--exclude-standard']),
-      30000,
-      'Git ls-files untracked'
-    );
-    const files = this.parseFileList(output);
-    this.untrackedCache = { files, expires: now + ttlMs };
-    return files;
+    // If there's already a pending request, wait for it instead of making a new one
+    if (GitOperations.pendingUntrackedPromise) {
+      return GitOperations.pendingUntrackedPromise;
+    }
+
+    // Create new request using spawn directly (bypasses simple-git queue)
+    GitOperations.pendingUntrackedPromise = (async () => {
+      try {
+        const { spawn } = await import('child_process');
+        const startTime = Date.now();
+        logDebug(`[GitOperations] Starting git ls-files --others in ${this.gitRoot}`);
+
+        const output = await new Promise<string>((resolve, reject) => {
+          // Use GIT_OPTIONS to skip hooks and optional locks for faster execution
+          const env = {
+            ...process.env,
+            GIT_OPTIONS: '--no-optional-locks',
+          };
+
+          const proc = spawn('git', ['ls-files', '--others', '--exclude-standard'], {
+            cwd: this.gitRoot,
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env,
+          });
+
+          let stdout = '';
+          let stderr = '';
+          let hasOutput = false;
+
+          proc.stdout.on('data', (data: Buffer) => {
+            stdout += data.toString();
+            hasOutput = true;
+            const elapsed = Date.now() - startTime;
+            if (elapsed > 5000 && elapsed % 10000 < 100) {
+              // Log progress every 10 seconds after 5 seconds
+              logDebug(
+                `[GitOperations] git ls-files still running, ${elapsed}ms elapsed, ${stdout.length} bytes received`
+              );
+            }
+          });
+
+          proc.stderr.on('data', (data: Buffer) => {
+            stderr += data.toString();
+            logWarn(`[GitOperations] git ls-files stderr: ${data.toString().trim()}`);
+          });
+
+          // Set timeout - increased from 30s to 120s for large repos
+          const timeout = setTimeout(() => {
+            const elapsed = Date.now() - startTime;
+            logWarn(
+              `[GitOperations] git ls-files --others timed out after ${elapsed}ms. stdout length: ${stdout.length}, hasOutput: ${hasOutput}, stderr: ${stderr || '(none)'}`
+            );
+            proc.kill('SIGKILL'); // Force kill if SIGTERM doesn't work
+            const errorMsg = stderr
+              ? `git ls-files --others timed out after ${elapsed}ms. stderr: ${stderr}`
+              : `git ls-files --others timed out after ${elapsed}ms`;
+            reject(new Error(errorMsg));
+          }, 120000); // 120 seconds
+
+          proc.on('close', code => {
+            clearTimeout(timeout);
+            const elapsed = Date.now() - startTime;
+            if (code === 0) {
+              logDebug(
+                `[GitOperations] git ls-files --others completed in ${elapsed}ms, ${stdout.length} bytes`
+              );
+              resolve(stdout);
+            } else {
+              const errorMsg = stderr
+                ? `git ls-files --others exited with code ${code} after ${elapsed}ms. stderr: ${stderr}`
+                : `git ls-files --others exited with code ${code} after ${elapsed}ms`;
+              logWarn(`[GitOperations] ${errorMsg}`);
+              reject(new Error(errorMsg));
+            }
+          });
+
+          proc.on('error', err => {
+            clearTimeout(timeout);
+            logError(`[GitOperations] git ls-files --others spawn error:`, err);
+            reject(err);
+          });
+        });
+
+        const files = this.parseFileList(output);
+        // Calculate expiration AFTER operation completes, not before
+        const expiresAt = Date.now() + ttlMs;
+        GitOperations.untrackedCache = { files, expires: expiresAt };
+        return files;
+      } finally {
+        // Clear pending promise when done (success or failure)
+        GitOperations.pendingUntrackedPromise = undefined;
+      }
+    })();
+
+    return GitOperations.pendingUntrackedPromise;
   }
 
   /**
@@ -174,28 +380,48 @@ export class GitOperations {
     try {
       let output: string;
       try {
+        // Use raw format to get blob SHAs
         output = await withTimeout(
-          this.git.raw(['diff-tree', '-r', '--no-commit-id', '--name-status', sha]),
+          this.git.raw(['diff-tree', '-r', '--no-commit-id', sha]),
           30000,
           'Git diff-tree'
         );
       } catch (e) {
+        // Check if this is a merge commit by getting commit info
+        const commitInfo = await this.getCommitInfo(sha);
+        const parents = commitInfo.parent ? commitInfo.parent.split(' ') : [];
+
         try {
-          output = await withTimeout(
-            this.git.raw([
-              'diff-tree',
-              '-r',
-              '--no-commit-id',
-              '--name-status',
-              '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
-              sha,
-            ]),
-            30000,
-            'Git diff-tree empty fallback'
-          );
+          if (parents.length > 1) {
+            // Merge commit: compare against first parent
+            output = await withTimeout(
+              this.git.raw([
+                'diff-tree',
+                '-r',
+                '--no-commit-id',
+                `${sha}^1`, // First parent
+                sha,
+              ]),
+              30000,
+              'Git diff-tree merge commit'
+            );
+          } else {
+            // Single-parent commit: fallback to empty tree (initial commit case)
+            output = await withTimeout(
+              this.git.raw([
+                'diff-tree',
+                '-r',
+                '--no-commit-id',
+                '4b825dc642cb6eb9a060e54bf8d69288fbee4904', // Empty tree SHA
+                sha,
+              ]),
+              30000,
+              'Git diff-tree empty fallback'
+            );
+          }
         } catch (innerError) {
           logWarn(
-            `Failed to get file changes for ${sha} (even with empty tree fallback): ${innerError}`
+            `Failed to get file changes for ${sha} (${parents.length > 1 ? 'merge commit' : 'single commit'}): ${innerError}`
           );
           return [];
         }
@@ -205,22 +431,45 @@ export class GitOperations {
       const lines = output.split('\n').filter(line => line.trim());
 
       for (const line of lines) {
+        // Format: :<old-mode> <new-mode> <old-sha> <new-sha> <status>\t<path>
+        // Or for rename: :<old-mode> <new-mode> <old-sha> <new-sha> <status>\t<old-path>\t<new-path>
+        if (!line.startsWith(':')) continue;
+
         const parts = line.split('\t');
-        if (parts.length >= 2) {
-          const status = parts[0];
-          const filePath = parts[1];
-          let oldPath: string | undefined;
+        const meta = parts[0].substring(1).split(' '); // Remove leading ':' and split by space
 
-          if (status.startsWith('R') || status.startsWith('C')) {
-            oldPath = parts[2];
-          }
+        if (meta.length < 5) continue;
 
-          changes.push({
-            path: filePath,
-            status: status.charAt(0) as FileChange['status'],
-            oldPath,
-          });
+        const oldSha = meta[2];
+        const newSha = meta[3];
+        const statusRaw = meta[4];
+        const statusChar = statusRaw.charAt(0);
+
+        const filePath = parts[1]; // This is the path (or old path for rename?)
+        // For rename/copy, parts[1] is old path, parts[2] is new path
+        // Wait, git diff-tree output for rename:
+        // :100644 100644 <old-sha> <new-sha> R100\told-path\tnew-path
+
+        let path = filePath;
+        let oldPath: string | undefined;
+        let status: FileChange['status'] = 'M';
+
+        if (statusChar === 'R' || statusChar === 'C') {
+          oldPath = parts[1];
+          path = parts[2];
+          status = statusChar as FileChange['status'];
+        } else if (['A', 'M', 'D', 'U'].includes(statusChar)) {
+          status = statusChar as FileChange['status'];
+          path = parts[1];
         }
+
+        changes.push({
+          path: GitOperations.normalizePath(path),
+          status,
+          oldPath: oldPath ? GitOperations.normalizePath(oldPath) : undefined,
+          newSha,
+          oldSha,
+        });
       }
 
       return changes;
@@ -316,21 +565,27 @@ export class GitOperations {
 
   /**
    * Safely get file content, returning empty string if file doesn't exist
+   * Uses cache if available, falls back to direct call
    */
   async safeGetFileContent(sha: string, filePath: string): Promise<string> {
+    // Check cache first
     try {
-      return await withTimeout(
-        this.git.show([`${sha}:${filePath}`]),
-        30000,
-        'Git show safe file content'
-      );
-    } catch (error: any) {
-      if (this.isGitPathMissing(error)) {
-        return '';
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cache = getGitCacheService();
+      const cached = cache.getContent(sha, filePath);
+      if (cached !== undefined) {
+        return cached;
       }
-      logError(`Failed to get file content for ${sha}:${filePath}: ${error.message}`);
-      return '';
+    } catch {
+      // Cache not available
     }
+
+    // If not in cache, this should not happen if cache was warmed properly
+    // But fail fast rather than timing out
+    logWarn(
+      `[GitOperations] File content not in cache: ${sha}:${filePath} - cache should have been warmed`
+    );
+    return '';
   }
 
   /**
@@ -381,22 +636,65 @@ export class GitOperations {
 
   /**
    * Check if multiple files are ignored by git in a single call
-   * Much more efficient than calling isIgnored for each file individually
+   * Uses spawn directly to bypass simple-git queue for parallelism
    */
   async areIgnored(filePaths: string[]): Promise<Map<string, boolean>> {
     const result = new Map<string, boolean>();
     if (filePaths.length === 0) return result;
 
-    // Initialize all as not ignored
-    for (const path of filePaths) {
-      result.set(path, false);
+    // Check cache first
+    try {
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cache = getGitCacheService();
+      if (cache.isIgnoreCacheWarmed()) {
+        for (const p of filePaths) {
+          result.set(p, cache.isIgnored(p));
+        }
+        return result;
+      }
+    } catch {
+      // Cache not available
     }
 
+    // Initialize all as not ignored
+    for (const p of filePaths) {
+      result.set(p, false);
+    }
+
+    // Use spawn directly with --stdin to bypass simple-git queue
     try {
-      const ignored = await withTimeout(this.git.checkIgnore(filePaths), 5000, 'Git check ignore');
+      const { spawn } = await import('child_process');
+      const ignored = await new Promise<string[]>(resolve => {
+        const proc = spawn('git', ['check-ignore', '--stdin'], {
+          cwd: this.gitRoot,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        let stdout = '';
+        proc.stdout.on('data', (data: Buffer) => {
+          stdout += data.toString();
+        });
+
+        proc.on('close', () => {
+          // check-ignore exits with 1 if no files are ignored, 0 if some are
+          // Either way, parse stdout for ignored files
+          const ignoredPaths = stdout
+            .trim()
+            .split('\n')
+            .filter(line => line.trim());
+          resolve(ignoredPaths);
+        });
+
+        proc.on('error', () => resolve([]));
+
+        // Write all paths to stdin
+        proc.stdin.write(filePaths.join('\n'));
+        proc.stdin.end();
+      });
+
       // Mark the ignored files
-      for (const path of ignored) {
-        result.set(path, true);
+      for (const p of ignored) {
+        result.set(p, true);
       }
     } catch (error) {
       // If check-ignore fails, assume none are ignored
@@ -407,14 +705,28 @@ export class GitOperations {
 
   /**
    * Check if a file is ignored by git
+   * Uses cache if available, falls back to areIgnored (spawn-based)
    */
   async isIgnored(filePath: string): Promise<boolean> {
+    // Check cache first (import dynamically to avoid circular deps)
     try {
-      const result = await withTimeout(this.git.checkIgnore([filePath]), 5000, 'Git check ignore');
-      if (result.length > 0) {
-        logDebug(`${filePath} IS IGNORED. Result: ${JSON.stringify(result)}`);
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cache = getGitCacheService();
+      if (cache.isIgnoreCacheWarmed()) {
+        return cache.isIgnored(filePath);
       }
-      return result.length > 0;
+    } catch {
+      // Cache not available, fall through to direct call
+    }
+
+    // Use areIgnored which uses spawn directly (bypasses simple-git queue)
+    try {
+      const result = await this.areIgnored([filePath]);
+      const isIgn = result.get(filePath) ?? false;
+      if (isIgn) {
+        logDebug(`${filePath} IS IGNORED.`);
+      }
+      return isIgn;
     } catch (error) {
       return false;
     }
@@ -427,14 +739,56 @@ export class GitOperations {
   async getHeadSha(): Promise<string> {
     try {
       const now = Date.now();
-      if (this.headShaCache && this.headShaCache.expires > now) {
-        return this.headShaCache.value;
+      // Check cache first
+      if (GitOperations.headShaCache && GitOperations.headShaCache.expires > now) {
+        return GitOperations.headShaCache.value;
       }
 
-      const result = await withTimeout(this.git.revparse(['HEAD']), 5000, 'Git revparse HEAD');
+      // If there's already a pending request, wait for it instead of making a new one
+      if (GitOperations.pendingHeadShaPromise) {
+        return GitOperations.pendingHeadShaPromise;
+      }
 
-      this.headShaCache = { value: result, expires: now + 5000 };
-      return result;
+      // Create new request and cache the promise
+      // Use spawn directly to bypass simple-git's queue (like getFullTree does)
+      // This avoids waiting behind other queued git operations
+      GitOperations.pendingHeadShaPromise = (async () => {
+        try {
+          const { spawn } = await import('child_process');
+          const result = await new Promise<string>((resolve, reject) => {
+            const proc = spawn('git', ['rev-parse', 'HEAD'], {
+              cwd: this.gitRoot,
+              stdio: ['pipe', 'pipe', 'pipe'],
+            });
+
+            let stdout = '';
+            proc.stdout.on('data', (data: Buffer) => {
+              stdout += data.toString();
+            });
+
+            proc.on('close', code => {
+              if (code === 0) {
+                resolve(stdout.trim());
+              } else {
+                reject(new Error(`git rev-parse HEAD exited with code ${code}`));
+              }
+            });
+
+            proc.on('error', reject);
+          });
+
+          // Calculate expiration AFTER operation completes, not before
+          // HEAD SHA only changes on commit/checkout, so cache for 30 seconds
+          const expiresAt = Date.now() + 30000;
+          GitOperations.headShaCache = { value: result, expires: expiresAt };
+          return result;
+        } finally {
+          // Clear pending promise when done (success or failure)
+          GitOperations.pendingHeadShaPromise = undefined;
+        }
+      })();
+
+      return GitOperations.pendingHeadShaPromise;
     } catch (error: any) {
       logError(`Failed to get HEAD SHA: ${error.message}`);
       return '';
@@ -474,6 +828,21 @@ export class GitOperations {
   }
 
   async getBlobSha(sha: string, filePath: string): Promise<string> {
+    // Check cache first
+    try {
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cache = getGitCacheService();
+      if (cache.isTreeCached(sha)) {
+        const cached = cache.getBlobSha(sha, filePath);
+        if (cached) return cached;
+        // File not in tree at this commit
+        return '';
+      }
+    } catch {
+      // Cache not available, fall through to direct call
+    }
+
+    // Direct call (cold start only)
     try {
       const output = await withTimeout(
         this.git.raw(['ls-tree', '-r', sha, '--', filePath]),
@@ -501,6 +870,18 @@ export class GitOperations {
   }
 
   async getBlobSize(sha: string, filePath: string): Promise<number> {
+    // Check cache first
+    try {
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cache = getGitCacheService();
+      const cachedSize = cache.getSize(sha, filePath);
+      if (cachedSize !== undefined) {
+        return cachedSize;
+      }
+    } catch {
+      // Cache not available
+    }
+
     try {
       const output = await withTimeout(
         this.git.raw(['cat-file', '-s', `${sha}:${filePath}`]),
@@ -587,7 +968,7 @@ export class GitOperations {
         }
 
         changes.push({
-          path: filePath,
+          path: GitOperations.normalizePath(filePath),
           status: changeStatus,
         });
       }
@@ -600,14 +981,12 @@ export class GitOperations {
   }
 
   private parseGitPath(rawPath: string): string {
-    if (rawPath.startsWith('"') && rawPath.endsWith('"')) {
-      const unquoted = rawPath.slice(1, -1);
-
-      return unquoted
-        .replace(/\\(\d{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
-        .replace(/\\\\/g, '\\');
+    let p = rawPath;
+    if (p.startsWith('"') && p.endsWith('"')) {
+      p = p.slice(1, -1);
+      // Basic unescaping if needed, though simple-git might have handled it
     }
-    return rawPath;
+    return GitOperations.normalizePath(p);
   }
 
   private parseLsTreeLine(
@@ -622,7 +1001,12 @@ export class GitOperations {
 
     if (preParts.length < 3) return null;
 
-    return { mode: preParts[0], type: preParts[1], sha: preParts[2], path };
+    return {
+      mode: preParts[0],
+      type: preParts[1],
+      sha: preParts[2],
+      path: GitOperations.normalizePath(path),
+    };
   }
 
   private isGitPathMissing(error: any): boolean {
@@ -669,7 +1053,7 @@ export class GitOperations {
           }
 
           staged.push({
-            path: filePath,
+            path: GitOperations.normalizePath(filePath),
             status: changeStatus,
           });
         }
@@ -721,7 +1105,7 @@ export class GitOperations {
         for (const filePath of untrackedFiles) {
           if (!unstaged.some(f => f.path === filePath)) {
             unstaged.push({
-              path: filePath,
+              path: GitOperations.normalizePath(filePath),
               status: 'U',
             });
           }
@@ -771,7 +1155,7 @@ export class GitOperations {
         30000,
         'Git ls-files all'
       );
-      return this.parseFileList(output);
+      return this.parseFileList(output).map(f => GitOperations.normalizePath(f));
     } catch (error: any) {
       logError(`Failed to get all files: ${error.message}`);
       return [];
@@ -780,22 +1164,46 @@ export class GitOperations {
 
   async getFileHistory(filePath: string, limit: number = 10): Promise<any[]> {
     try {
-      const { stdout } = await this.spawnGit([
-        'log',
-        `-${limit}`,
-        '--format=%h|%an|%aI|%s',
-        '--',
-        filePath,
-      ]);
+      // Normalize targetPath: ensure it is relative to gitRoot with forward slashes
+      const normalizedPath = GitOperations.normalizePath(filePath);
 
-      return stdout
-        .trim()
-        .split('\n')
-        .filter(Boolean)
-        .map(line => {
-          const [hash, author, date, message] = line.split('|');
-          return { hash, author, date, message, virtual: false };
-        });
+      // Use simple-git's log() method instead of raw() for better argument handling
+      // The issue with raw() is that it might not handle the -- separator correctly
+      const logResult = await withTimeout(
+        this.git.log({
+          maxCount: limit,
+          file: normalizedPath,
+          format: {
+            hash: '%H',
+            author_name: '%an',
+            date: '%aI',
+            message: '%s',
+          },
+        }),
+        30000,
+        'Git log file history'
+      );
+
+      const result = logResult.all.map(commit => ({
+        hash: commit.hash,
+        author: commit.author_name || 'Unknown',
+        date: commit.date || '',
+        message: commit.message || '',
+        virtual: false,
+      }));
+
+      // Debug logging
+      if (result.length === 1 && limit > 1) {
+        logWarn(
+          `[GitOperations] getFileHistory returned only 1 commit for ${filePath} (normalized: ${normalizedPath}, requested ${limit}). This might mean the file only has 1 commit in history.`
+        );
+      } else if (result.length > 0) {
+        logDebug(
+          `[GitOperations] getFileHistory returned ${result.length} commits for ${filePath} (requested ${limit})`
+        );
+      }
+
+      return result;
     } catch (error: any) {
       logError(`Failed to get file history for ${filePath}: ${error.message}`);
       return [];
@@ -955,7 +1363,7 @@ export class GitOperations {
 
         const data: HotspotStat[] = Array.from(fileCounts.entries())
           .map(([path, stats]) => ({
-            path,
+            path: GitOperations.normalizePath(path),
             count: stats.count,
             added: stats.added,
             removed: stats.removed,
@@ -999,7 +1407,7 @@ export class GitOperations {
 
       const data: HotspotStat[] = Array.from(fileCounts.entries())
         .map(([path, stats]) => ({
-          path,
+          path: GitOperations.normalizePath(path),
           count: stats.count,
           added: stats.added,
           removed: stats.removed,

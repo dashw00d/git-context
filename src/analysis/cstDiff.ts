@@ -1,7 +1,6 @@
-import { DeltaChange, HybridFact } from '../types/cstFacts';
+import { DeltaChange, HybridFact, isCstFact } from '../types/cstFacts';
 import { detectLanguage } from '../utils/config';
 import { logDebug } from '../utils/logger';
-import { AstSerializer } from './astSerializer';
 import { DifftasticResult, getDifftasticIntegration } from './difftastic';
 import { getTreeSitterParser } from './tree-sitter';
 
@@ -19,12 +18,12 @@ export interface CstDiffResult {
  * CST Diff Manager - computes diffs between CST trees and generates deltas
  */
 export class CstDiffManager {
-  private astSerializer = new AstSerializer();
   private difftastic = getDifftasticIntegration();
   private parser = getTreeSitterParser();
 
   /**
    * Diff two CST trees and generate deltas for hybrid facts
+   * Re-factored to avoid re-parsing and direct Tree dependencies
    */
   async diffCst(
     oldContent: string,
@@ -42,13 +41,6 @@ export class CstDiffManager {
       };
     }
 
-    const oldTree = await this.parser.parse(oldContent, language);
-    const newTree = await this.parser.parse(newContent, language);
-
-    if (!oldTree || !newTree) {
-      return this.simpleFactDiff(oldFacts, newFacts);
-    }
-
     try {
       const difftasticResult = await this.difftastic.runDifftastic(
         oldContent,
@@ -57,11 +49,11 @@ export class CstDiffManager {
         filePath
       );
 
-      return this.mapDifftasticToFacts(difftasticResult, oldFacts, newFacts, oldTree, newTree);
+      return this.mapDifftasticToFacts(difftasticResult, oldFacts, newFacts);
     } catch (error) {
-      logDebug(`[CstDiff] Difftastic failed, using tree-sitter diff: ${error}`);
+      logDebug(`[CstDiff] Difftastic failed, using property-based diff: ${error}`);
 
-      return this.treeSitterDiff(oldTree, newTree, oldFacts, newFacts);
+      return this.simpleFactDiff(oldFacts, newFacts);
     }
   }
 
@@ -71,9 +63,7 @@ export class CstDiffManager {
   private mapDifftasticToFacts(
     difftasticResult: DifftasticResult,
     oldFacts: HybridFact[],
-    newFacts: HybridFact[],
-    oldTree: any,
-    newTree: any
+    newFacts: HybridFact[]
   ): CstDiffResult {
     const changedFacts: Array<{ fact: HybridFact; delta: DeltaChange; oldFact?: HybridFact }> = [];
     const addedFacts: HybridFact[] = [];
@@ -104,13 +94,7 @@ export class CstDiffManager {
           addedFacts.push(newFact);
         }
       } else {
-        const isModified = this.isFactModified(
-          oldFact,
-          newFact,
-          difftasticResult,
-          oldTree,
-          newTree
-        );
+        const isModified = this.isFactModified(oldFact, newFact, difftasticResult);
         if (isModified) {
           const delta: DeltaChange = {
             type: 'modified',
@@ -147,9 +131,7 @@ export class CstDiffManager {
   private isFactModified(
     oldFact: HybridFact,
     newFact: HybridFact,
-    difftasticResult: DifftasticResult,
-    oldTree?: any,
-    newTree?: any
+    difftasticResult: DifftasticResult
   ): boolean {
     if (oldFact.id !== newFact.id) {
       return true;
@@ -167,38 +149,14 @@ export class CstDiffManager {
 
     if (isHighlighted) return true;
 
-    if (oldTree && newTree) {
-      const oldNode = this.findNodeForFact(oldTree, oldFact);
-      const newNode = this.findNodeForFact(newTree, newFact);
-      if (oldNode && newNode && oldNode.type !== newNode.type) {
+    // Compare node types if they are available (they should be in HybridFact for CST nodes)
+    if (isCstFact(oldFact) && isCstFact(newFact)) {
+      if (oldFact.nodeType !== newFact.nodeType) {
         return true;
       }
     }
 
     return false;
-  }
-
-  private findNodeForFact(tree: any, fact: HybridFact): any {
-    try {
-      return tree.rootNode.descendantForPosition(
-        { row: fact.location.start.line, column: fact.location.start.column },
-        { row: fact.location.end.line, column: fact.location.end.column }
-      );
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /**
-   * Tree-sitter query-based diff (fallback)
-   */
-  private treeSitterDiff(
-    oldTree: any,
-    newTree: any,
-    oldFacts: HybridFact[],
-    newFacts: HybridFact[]
-  ): CstDiffResult {
-    return this.simpleFactDiff(oldFacts, newFacts);
   }
 
   /**
@@ -269,8 +227,8 @@ export class CstDiffManager {
    * Compute CST delta for structural diff manager integration
    */
   async computeCstDelta(
-    oldSerialized: string,
-    newSerialized: string,
+    oldContent: string,
+    newContent: string,
     filePath: string
   ): Promise<CstDiffResult> {
     const language = detectLanguage(filePath);
@@ -278,36 +236,24 @@ export class CstDiffManager {
       return { changedFacts: [], addedFacts: [], removedFacts: [] };
     }
 
-    const oldTree = await this.parser.parse(oldSerialized, language);
-    const newTree = await this.parser.parse(newSerialized, language);
-
-    if (!oldTree || !newTree) {
-      return { changedFacts: [], addedFacts: [], removedFacts: [] };
-    }
-
     try {
+      const [oldFacts, newFacts] = await Promise.all([
+        this.parser.extractHybridFacts(oldContent, filePath, language),
+        this.parser.extractHybridFacts(newContent, filePath, language),
+      ]);
+
       const difftasticResult = await this.difftastic.runDifftastic(
-        oldSerialized,
-        newSerialized,
+        oldContent,
+        newContent,
         filePath,
         filePath
       );
 
-      const oldFacts = await this.extractFactsFromTree(oldTree, filePath);
-      const newFacts = await this.extractFactsFromTree(newTree, filePath);
-
-      return this.mapDifftasticToFacts(difftasticResult, oldFacts, newFacts, oldTree, newTree);
+      return this.mapDifftasticToFacts(difftasticResult, oldFacts, newFacts);
     } catch (error) {
       logDebug(`[CstDiff] Error computing CST delta: ${error}`);
       return { changedFacts: [], addedFacts: [], removedFacts: [] };
     }
-  }
-
-  private async extractFactsFromTree(tree: any, filePath: string): Promise<HybridFact[]> {
-    const language = detectLanguage(filePath);
-    if (!language) return [];
-
-    return this.parser.extractHybridFacts(tree, filePath, language);
   }
 }
 

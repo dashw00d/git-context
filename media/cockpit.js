@@ -1043,7 +1043,7 @@
             }
             return false;
           }
-          function memo(type, compare) {
+          function memo2(type, compare) {
             {
               if (!isValidElementType(type)) {
                 error("memo: The first argument must be a component. Instead received: %s", type === null ? "null" : typeof type);
@@ -1107,7 +1107,7 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useRef(initialValue);
           }
-          function useEffect8(create, deps) {
+          function useEffect9(create, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useEffect(create, deps);
           }
@@ -1119,11 +1119,11 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useLayoutEffect(create, deps);
           }
-          function useCallback(callback, deps) {
+          function useCallback2(callback, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useCallback(callback, deps);
           }
-          function useMemo8(create, deps) {
+          function useMemo9(create, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useMemo(create, deps);
           }
@@ -1883,19 +1883,19 @@
           exports.forwardRef = forwardRef;
           exports.isValidElement = isValidElement;
           exports.lazy = lazy;
-          exports.memo = memo;
+          exports.memo = memo2;
           exports.startTransition = startTransition;
           exports.unstable_act = act;
-          exports.useCallback = useCallback;
+          exports.useCallback = useCallback2;
           exports.useContext = useContext;
           exports.useDebugValue = useDebugValue;
           exports.useDeferredValue = useDeferredValue;
-          exports.useEffect = useEffect8;
+          exports.useEffect = useEffect9;
           exports.useId = useId;
           exports.useImperativeHandle = useImperativeHandle;
           exports.useInsertionEffect = useInsertionEffect;
           exports.useLayoutEffect = useLayoutEffect;
-          exports.useMemo = useMemo8;
+          exports.useMemo = useMemo9;
           exports.useReducer = useReducer;
           exports.useRef = useRef3;
           exports.useState = useState12;
@@ -28657,9 +28657,25 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
 
   // src/webview/cockpit/hooks/useFileAnalysisData.ts
   var React5 = __toESM(require_react());
-  var useFileAnalysisData = (fileId, bundleFacts, commitIdx) => {
+  var useFileAnalysisData = (fileId, bundleFacts, commitIdx, orderedCommits = [], bundleFactsSkeleton, fileEvidenceCache, onRequestFileDetails) => {
+    const skeleton = bundleFactsSkeleton || null;
+    const cache = fileEvidenceCache || {};
+    const requestFn = onRequestFileDetails;
+    React5.useEffect(() => {
+      if (fileId && skeleton && !bundleFacts && !cache[fileId] && requestFn) {
+        requestFn(fileId);
+      }
+    }, [fileId, skeleton, bundleFacts, cache, requestFn]);
     return React5.useMemo(() => {
-      if (!bundleFacts || !fileId) {
+      const facts = bundleFacts;
+      const fileEvidence = cache[fileId] || {};
+      const isItemFuture = (itemSha) => {
+        if (commitIdx === void 0 || !itemSha || orderedCommits.length === 0) return false;
+        const itemIdx = orderedCommits.indexOf(itemSha);
+        if (itemIdx === -1) return false;
+        return itemIdx > commitIdx;
+      };
+      if (!fileId) {
         return {
           deadSymbols: /* @__PURE__ */ new Set(),
           legacySymbols: /* @__PURE__ */ new Set(),
@@ -28693,78 +28709,77 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           }
         };
       }
+      const evidence = facts?.evidence || fileEvidence;
       const deadSymbols = /* @__PURE__ */ new Set();
-      const deadEvidence = bundleFacts.evidence?.["findings.legacyAudit"]?.dead || bundleFacts.evidence?.dead || [];
+      const deadEvidence = evidence?.["findings.legacyAudit"]?.dead || evidence?.dead || [];
       deadEvidence.forEach((item) => {
-        if (item.path === fileId && item.symbol_id) {
+        if (isItemFuture(item.sha)) return;
+        const itemPath = item.path || item.filePath;
+        if (itemPath === fileId && item.symbol_id) {
           deadSymbols.add(item.symbol_id);
         }
       });
       const legacySymbols = /* @__PURE__ */ new Set();
-      const legacyEvidence = bundleFacts.evidence?.["findings.legacyAudit"]?.legacyUsed || bundleFacts.evidence?.legacyUsed || [];
+      const legacyEvidence = evidence?.["findings.legacyAudit"]?.legacyUsed || evidence?.legacyUsed || [];
       legacyEvidence.forEach((item) => {
-        if (item.path === fileId && item.symbol_id) {
+        if (isItemFuture(item.sha)) return;
+        const itemPath = item.path || item.filePath;
+        if (itemPath === fileId && item.symbol_id) {
           legacySymbols.add(item.symbol_id);
         }
       });
-      const movedBlocks = bundleFacts.bundle?.movedLineage || [];
+      const movedBlocks = (facts?.bundle?.movedLineage || []).filter((block) => {
+        return !isItemFuture(block.destVersion || block.sha);
+      });
       const driftIssues = [];
-      const conventionDrift = bundleFacts.findings?.patternDrift?.conventionDrift;
+      const conventionDrift = facts?.findings?.patternDrift?.conventionDrift || (skeleton?.findings?.patternDrift?.conventionDrift && fileEvidence?.["findings.patternDrift.conventionDrift"]?.driftSymbols ? {
+        driftSymbols: fileEvidence["findings.patternDrift.conventionDrift"].driftSymbols || []
+      } : void 0);
       if (conventionDrift?.driftSymbols) {
         conventionDrift.driftSymbols.forEach((ds) => {
-          if (ds.path === fileId) {
-            driftIssues.push({
-              symbolId: ds.symbolId,
-              name: ds.name,
-              convention: ds.convention,
-              suggestedName: ds.suggestedName,
-              path: ds.path
-            });
+          if (ds.path === fileId && !isItemFuture(ds.sha)) {
+            driftIssues.push(ds);
           }
         });
       }
       const unresolvedCallers = [];
-      const unresolvedEvidence = bundleFacts.evidence?.["findings.unresolvedCallers"] || bundleFacts.findings?.unresolvedCallers || [];
+      const unresolvedEvidence = evidence?.["findings.unresolvedCallers"] || (facts?.findings?.unresolvedCallers ? [] : []);
       if (Array.isArray(unresolvedEvidence)) {
         unresolvedEvidence.forEach((item) => {
+          if (isItemFuture(item.sha)) return;
           const itemPath = item.path || item.filePath || item.caller_path;
           if (itemPath === fileId) {
-            unresolvedCallers.push({
-              symbolId: item.symbolId || item.caller_symbol_id,
-              name: item.name || item.caller_name,
-              callerCount: item.callerCount || item.count || item.occurrence_count || 1
-            });
+            unresolvedCallers.push(item);
           }
         });
       }
       const hotspots = [];
-      const hotspotEvidence = bundleFacts.evidence?.hotspots || [];
+      const hotspotEvidence = evidence?.hotspots || [];
       hotspotEvidence.forEach((hotspot) => {
+        if (isItemFuture(hotspot.sha)) return;
         if (hotspot.path === fileId || hotspot.file_path === fileId) {
           hotspots.push({
-            path: hotspot.path || hotspot.file_path,
+            path: hotspot.path || hotspot.file_path || "",
             score: hotspot.score || hotspot.hotspot_score || 0,
             symbolId: hotspot.symbol_id
           });
         }
       });
       const importDriftIssues = [];
-      const importDriftEvidence = bundleFacts.evidence?.["findings.patternDrift.conventionDrift"]?.importDrift;
+      const importDriftEvidence = evidence?.["findings.patternDrift.conventionDrift"]?.importDrift;
       if (importDriftEvidence?.driftImports) {
         importDriftEvidence.driftImports.forEach((imp) => {
-          if (imp.file === fileId) {
-            importDriftIssues.push({
-              line: imp.line,
-              importPath: imp.importPath,
-              style: imp.style
-            });
+          if (imp.file === fileId && !isItemFuture(imp.sha)) {
+            importDriftIssues.push(imp);
           }
         });
       }
       let fileNamingDrift = null;
-      const fnDriftEvidence = bundleFacts.evidence?.["findings.patternDrift.conventionDrift"]?.fileNamingDrift;
+      const fnDriftEvidence = evidence?.["findings.patternDrift.conventionDrift"]?.fileNamingDrift;
       if (fnDriftEvidence?.driftFiles) {
-        const thisFile = fnDriftEvidence.driftFiles.find((f) => f.path === fileId);
+        const thisFile = fnDriftEvidence.driftFiles.find(
+          (f) => f.path === fileId && !isItemFuture(f.sha)
+        );
         if (thisFile) {
           fileNamingDrift = {
             hasDrift: true,
@@ -28774,18 +28789,20 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       }
       const divergentSymbols = /* @__PURE__ */ new Set();
-      const divergentEvidence = bundleFacts.evidence?.["findings.incompleteness"]?.divergent || [];
+      const divergentEvidence = evidence?.["findings.incompleteness"]?.divergent || [];
       divergentEvidence.forEach((item) => {
+        if (isItemFuture(item.sha)) return;
         const itemPath = item.path || item.filePath;
         if (itemPath === fileId && (item.symbol_id || item.symbolId)) {
-          divergentSymbols.add(item.symbol_id || item.symbolId);
+          divergentSymbols.add(item.symbol_id || item.symbolId || "");
         }
       });
       let missingEdgesCount = 0;
       let zombieEdgesCount = 0;
-      const missingEdges = bundleFacts.evidence?.["findings.incompleteness"]?.missing_edges || [];
-      const zombieEdges = bundleFacts.evidence?.["findings.incompleteness"]?.zombie_edges || [];
+      const missingEdges = evidence?.["findings.incompleteness"]?.missing_edges || [];
+      const zombieEdges = evidence?.["findings.incompleteness"]?.zombie_edges || [];
       missingEdges.forEach((e) => {
+        if (isItemFuture(e.sha)) return;
         const fromPath = e.from?.split(":")[0] || e.from;
         const toPath = e.to?.split(":")[0] || e.to;
         if (fromPath === fileId || toPath === fileId) {
@@ -28793,6 +28810,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       });
       zombieEdges.forEach((e) => {
+        if (isItemFuture(e.sha)) return;
         const fromPath = e.from?.split(":")[0] || e.from;
         const toPath = e.to?.split(":")[0] || e.to;
         if (fromPath === fileId || toPath === fileId) {
@@ -28800,9 +28818,11 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       });
       let mixedConventions = null;
-      const mixedFiles = bundleFacts.evidence?.["findings.patternDrift.mixedConventionFiles"] || [];
+      const mixedFiles = evidence?.["findings.patternDrift.mixedConventionFiles"] || [];
       if (Array.isArray(mixedFiles)) {
-        const thisMixed = mixedFiles.find((f) => f.path === fileId);
+        const thisMixed = mixedFiles.find(
+          (f) => f.path === fileId && !isItemFuture(f.sha)
+        );
         if (thisMixed) {
           mixedConventions = {
             conventions: thisMixed.conventions || [],
@@ -28810,27 +28830,36 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
           };
         }
       }
-      const cd = bundleFacts.findings?.patternDrift?.conventionDrift;
+      const cd = facts?.findings?.patternDrift?.conventionDrift || (skeleton?.findings?.patternDrift?.conventionDrift ? {
+        dominantConvention: skeleton.findings.patternDrift.conventionDrift.dominantConvention,
+        dominantImportStyle: "unknown",
+        dominantFileNaming: "unknown"
+      } : void 0);
       const conventionInfo = cd ? {
         dominantNaming: cd.dominantConvention || "unknown",
-        dominantImportStyle: cd.importDrift?.dominantStyle || "unknown",
-        dominantFileNaming: cd.fileNamingDrift?.dominantStyle || "unknown"
+        dominantImportStyle: "importDrift" in cd && cd.importDrift ? cd.importDrift.dominantStyle : "unknown",
+        dominantFileNaming: "fileNamingDrift" in cd && cd.fileNamingDrift ? cd.fileNamingDrift.dominantStyle : "unknown"
       } : null;
       const analysisStatus = {
-        partial: bundleFacts.partial || false,
-        partialReasons: bundleFacts.partialReasons || []
+        partial: facts?.partial || skeleton?.partial || false,
+        partialReasons: facts?.partialReasons || skeleton?.partialReasons || []
       };
       const findings = {
-        missing: bundleFacts.findings?.incompleteness?.missing || 0,
-        zombies: bundleFacts.findings?.incompleteness?.zombies || 0,
-        dead: deadSymbols.size || bundleFacts.findings?.legacyAudit?.dead || 0,
-        legacyUsed: legacySymbols.size || bundleFacts.findings?.legacyAudit?.legacyUsed || 0,
-        unresolved: unresolvedCallers.length || bundleFacts.findings?.unresolvedCallers?.total || 0,
-        divergent: divergentSymbols.size,
+        missing: driftIssues.filter((d) => d.type === "missing_symbols").length || 0,
+        // Heuristic: filter from driftIssues
+        zombies: driftIssues.filter((d) => d.type === "zombie_symbols").length || 0,
+        dead: deadSymbols.size || 0,
+        legacyUsed: legacySymbols.size || 0,
+        unresolved: unresolvedCallers.length || 0,
+        divergent: divergentSymbols.size || 0,
         missingEdges: missingEdgesCount,
         zombieEdges: zombieEdgesCount,
         importDrift: importDriftIssues.length
       };
+      if (commitIdx === void 0 || commitIdx === orderedCommits.length - 1) {
+        if (findings.missing === 0) findings.missing = facts?.findings?.incompleteness?.missing || 0;
+        if (findings.zombies === 0) findings.zombies = facts?.findings?.incompleteness?.zombies || 0;
+      }
       return {
         deadSymbols,
         legacySymbols,
@@ -28850,7 +28879,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         conventionInfo,
         analysisStatus
       };
-    }, [fileId, bundleFacts, commitIdx]);
+    }, [fileId, bundleFacts, skeleton, cache, commitIdx, orderedCommits]);
   };
 
   // src/webview/cockpit/components/stages/BlastRadiusStage.tsx
@@ -29102,7 +29131,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
   // src/webview/cockpit/components/StatsSection.tsx
   var React7 = __toESM(require_react());
   var StatsSection = ({ state, vscode: vscode3 }) => {
-    const selectionCount = state.selectedCommitShas.length + (state.selectedStagedPaths.length > 0 ? 1 : 0) + (state.selectedUnstagedPaths.length > 0 ? 1 : 0);
+    const selectionCount = (state.selectedCommitShas?.length || 0) + ((state.selectedStagedPaths?.length || 0) > 0 ? 1 : 0) + ((state.selectedUnstagedPaths?.length || 0) > 0 ? 1 : 0);
     const bundleFacts = state.bundleFacts;
     const bundleSummary = state.bundleSummary;
     const findings = bundleFacts?.findings;
@@ -29185,7 +29214,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         }
       },
       warningCount
-    ), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Warnings")))), /* @__PURE__ */ React7.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React7.createElement("h3", { style: TitleStyle2 }, "Scope Analysis"), /* @__PURE__ */ React7.createElement("div", { style: RowStyle }, /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement("span", { style: ValueStyle }, bundleSummary?.commitCount || state.selectedCommitShas.length), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Commits")), /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement("span", { style: ValueStyle }, bundleSummary?.fileCount || 0), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Files")), /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement("span", { style: ValueStyle }, bundleSummary?.symbolCount || 0), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Symbols"))), state.bundleReportId && /* @__PURE__ */ React7.createElement(
+    ), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Warnings")))), /* @__PURE__ */ React7.createElement("div", { style: GroupStyle }, /* @__PURE__ */ React7.createElement("h3", { style: TitleStyle2 }, "Scope Analysis"), /* @__PURE__ */ React7.createElement("div", { style: RowStyle }, /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement("span", { style: ValueStyle }, bundleSummary?.commitCount || state.selectedCommitShas?.length || 0), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Commits")), /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement("span", { style: ValueStyle }, bundleSummary?.fileCount || 0), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Files")), /* @__PURE__ */ React7.createElement("div", { style: ItemStyle }, /* @__PURE__ */ React7.createElement("span", { style: ValueStyle }, bundleSummary?.symbolCount || 0), /* @__PURE__ */ React7.createElement("span", { style: LabelStyle }, "Symbols"))), state.bundleReportId && /* @__PURE__ */ React7.createElement(
       "button",
       {
         onClick: () => postMessageWithTracing(vscode3, {
@@ -29720,6 +29749,10 @@ Churn: ${node.score.toFixed(1)}
 
   // src/webview/cockpit/hooks/useSymbolRefCounts.ts
   var React14 = __toESM(require_react());
+  function extractBaseName(symbolId) {
+    const match = symbolId.match(/^(function|method|class|variable|object|property)_(.+)$/);
+    return match ? match[2] : null;
+  }
   var useSymbolRefCounts = (bundleFacts, filePath) => {
     return React14.useMemo(() => {
       const incoming = /* @__PURE__ */ new Map();
@@ -29728,6 +29761,42 @@ Churn: ${node.score.toFixed(1)}
         return { incoming, outgoing };
       }
       const edges = bundleFacts.evidence?.["working.edges"] || [];
+      const nameToHash = /* @__PURE__ */ new Map();
+      const rawSymbols = bundleFacts.evidence?.["working.symbols"] || [];
+      const normalizedTarget = filePath;
+      rawSymbols.forEach((s) => {
+        if (typeof s === "object" && s.filePath && s.id && s.name) {
+          const symPath = s.filePath || "";
+          if (symPath === normalizedTarget) {
+            nameToHash.set(s.name, s.id);
+          }
+        }
+      });
+      if (edges.length === 0) {
+        logDebug(
+          `[useSymbolRefCounts] No edges found in bundleFacts for ${filePath} (normalized: ${normalizedTarget})`
+        );
+      } else {
+        logDebug(
+          `[useSymbolRefCounts] Found ${edges.length} edges, ${nameToHash.size} symbols mapped for ${normalizedTarget}`
+        );
+      }
+      let matchCount = 0;
+      let incomingMatches = 0;
+      let outgoingMatches = 0;
+      let resolvedByName = 0;
+      const resolveToHash = (rawSymbolId) => {
+        const baseName = extractBaseName(rawSymbolId);
+        if (!baseName) {
+          return rawSymbolId;
+        }
+        const hash = nameToHash.get(baseName);
+        if (hash) {
+          resolvedByName++;
+          return hash;
+        }
+        return rawSymbolId;
+      };
       edges.forEach((edge) => {
         let fromId;
         let toId;
@@ -29742,37 +29811,52 @@ Churn: ${node.score.toFixed(1)}
           return;
         }
         if (!fromId || !toId) return;
-        const fromFile = fromId.split(":")[0];
-        const toFile = toId.split(":")[0];
-        if (fromFile === filePath) {
-          const symbolId = fromId.split(":").slice(1).join(":") || fromId;
+        const lastColonFrom = fromId.lastIndexOf(":");
+        const lastColonTo = toId.lastIndexOf(":");
+        const fromPath = lastColonFrom !== -1 ? fromId.substring(0, lastColonFrom) : fromId;
+        const toPath = lastColonTo !== -1 ? toId.substring(0, lastColonTo) : toId;
+        const normalizedFrom = fromPath;
+        const normalizedTo = toPath;
+        if (normalizedFrom === normalizedTarget) {
+          const rawSymbolId = lastColonFrom !== -1 ? fromId.substring(lastColonFrom + 1) : fromId;
+          const symbolId = resolveToHash(rawSymbolId);
           outgoing.set(symbolId, (outgoing.get(symbolId) || 0) + 1);
+          outgoingMatches++;
+          matchCount++;
         }
-        if (toFile === filePath) {
-          const symbolId = toId.split(":").slice(1).join(":") || toId;
+        if (normalizedTo === normalizedTarget) {
+          const rawSymbolId = lastColonTo !== -1 ? toId.substring(lastColonTo + 1) : toId;
+          const symbolId = resolveToHash(rawSymbolId);
           incoming.set(symbolId, (incoming.get(symbolId) || 0) + 1);
+          incomingMatches++;
+          matchCount++;
         }
       });
-      const blastIncoming = bundleFacts.evidence?.["scope.blastRadius"]?.incoming || [];
-      const blastOutgoing = bundleFacts.evidence?.["scope.blastRadius"]?.outgoing || [];
-      blastIncoming.forEach((ref) => {
-        const toPath = ref.to?.split(":")[0] || ref.to;
-        if (toPath === filePath) {
-          const symbolId = ref.to?.split(":").slice(1).join(":") || ref.to || "";
-          if (symbolId) {
-            incoming.set(symbolId, (incoming.get(symbolId) || 0) + 1);
-          }
+      if (edges.length > 0) {
+        logDebug(
+          `[useSymbolRefCounts] Matched ${matchCount} edges (${incomingMatches} incoming, ${outgoingMatches} outgoing, ${resolvedByName} resolved by name) for ${normalizedTarget}`
+        );
+        if (matchCount === 0 && edges.length > 0) {
+          const sampleEdges = edges.slice(0, 3);
+          logDebug(
+            `[useSymbolRefCounts] No matches found. Sample edge paths: ${JSON.stringify(
+              sampleEdges.map((e) => {
+                if (typeof e === "string") {
+                  const match = e.match(/^(.+?)\s*->\s*(.+?)\s*\(/);
+                  if (match) {
+                    const from = match[1];
+                    const to = match[2];
+                    const fromPath = from.lastIndexOf(":") !== -1 ? from.substring(0, from.lastIndexOf(":")) : from;
+                    const toPath = to.lastIndexOf(":") !== -1 ? to.substring(0, to.lastIndexOf(":")) : to;
+                    return { from: fromPath, to: toPath };
+                  }
+                }
+                return e;
+              })
+            )} vs target: ${normalizedTarget}`
+          );
         }
-      });
-      blastOutgoing.forEach((ref) => {
-        const fromPath = ref.from?.split(":")[0] || ref.from;
-        if (fromPath === filePath) {
-          const symbolId = ref.from?.split(":").slice(1).join(":") || ref.from || "";
-          if (symbolId) {
-            outgoing.set(symbolId, (outgoing.get(symbolId) || 0) + 1);
-          }
-        }
-      });
+      }
       return { incoming, outgoing };
     }, [bundleFacts, filePath]);
   };
@@ -30037,119 +30121,121 @@ Churn: ${node.score.toFixed(1)}
     if (kindLower.includes("variable")) return "v";
     return "\u2022";
   };
-  var SymbolHeaderBar = ({
-    symbol,
-    incomingRefs,
-    outgoingRefs,
-    riskScore,
-    lastModified,
-    author,
-    isCollapsed,
-    isDead,
-    isLegacy,
-    hasDrift,
-    onToggle,
-    onRefsClick,
-    onFocus
-  }) => {
-    return /* @__PURE__ */ React18.createElement(
-      "div",
-      {
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          padding: "2px 8px",
-          backgroundColor: "var(--vscode-editor-lineHighlightBackground)",
-          borderRadius: "3px",
-          fontSize: "11px",
-          marginBottom: "2px",
-          cursor: onFocus ? "pointer" : "default"
-        },
-        onClick: onFocus,
-        onMouseEnter: (e) => {
-          if (onFocus) {
-            e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)";
+  var SymbolHeaderBar = React18.memo(
+    ({
+      symbol,
+      incomingRefs,
+      outgoingRefs,
+      riskScore,
+      lastModified,
+      author,
+      isCollapsed,
+      isDead,
+      isLegacy,
+      hasDrift,
+      onToggle,
+      onRefsClick,
+      onFocus
+    }) => {
+      return /* @__PURE__ */ React18.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "2px 8px",
+            backgroundColor: "var(--vscode-editor-lineHighlightBackground)",
+            borderRadius: "3px",
+            fontSize: "11px",
+            marginBottom: "2px",
+            cursor: onFocus ? "pointer" : "default"
+          },
+          onClick: onFocus,
+          onMouseEnter: (e) => {
+            if (onFocus) {
+              e.currentTarget.style.backgroundColor = "var(--vscode-list-hoverBackground)";
+            }
+          },
+          onMouseLeave: (e) => {
+            if (onFocus) {
+              e.currentTarget.style.backgroundColor = "var(--vscode-editor-lineHighlightBackground)";
+            }
           }
         },
-        onMouseLeave: (e) => {
-          if (onFocus) {
-            e.currentTarget.style.backgroundColor = "var(--vscode-editor-lineHighlightBackground)";
-          }
-        }
-      },
-      /* @__PURE__ */ React18.createElement(
-        "span",
-        {
-          style: {
-            fontSize: "12px",
-            fontWeight: 600,
-            opacity: 0.8
+        /* @__PURE__ */ React18.createElement(
+          "span",
+          {
+            style: {
+              fontSize: "12px",
+              fontWeight: 600,
+              opacity: 0.8
+            },
+            title: symbol.kind
           },
-          title: symbol.kind
-        },
-        getKindIcon(symbol.kind)
-      ),
-      /* @__PURE__ */ React18.createElement("span", { style: { fontWeight: 600 } }, symbol.name),
-      /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.7, display: "flex", gap: "4px" } }, /* @__PURE__ */ React18.createElement(
-        "span",
-        {
-          onClick: (e) => {
-            e.stopPropagation();
-            onRefsClick?.("in");
+          getKindIcon(symbol.kind)
+        ),
+        /* @__PURE__ */ React18.createElement("span", { style: { fontWeight: 600 } }, symbol.name),
+        /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.7, display: "flex", gap: "4px" } }, /* @__PURE__ */ React18.createElement(
+          "span",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              onRefsClick?.("in");
+            },
+            style: {
+              cursor: onRefsClick ? "pointer" : "default",
+              color: onRefsClick ? "var(--vscode-textLink-foreground)" : "inherit"
+            },
+            title: "Incoming references"
           },
-          style: {
-            cursor: onRefsClick ? "pointer" : "default",
-            color: onRefsClick ? "var(--vscode-textLink-foreground)" : "inherit"
+          "\u2199",
+          incomingRefs
+        ), /* @__PURE__ */ React18.createElement(
+          "span",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              onRefsClick?.("out");
+            },
+            style: {
+              cursor: onRefsClick ? "pointer" : "default",
+              color: onRefsClick ? "var(--vscode-textLink-foreground)" : "inherit"
+            },
+            title: "Outgoing references"
           },
-          title: "Incoming references"
-        },
-        "\u2199",
-        incomingRefs
-      ), /* @__PURE__ */ React18.createElement(
-        "span",
-        {
-          onClick: (e) => {
-            e.stopPropagation();
-            onRefsClick?.("out");
+          "\u2197",
+          outgoingRefs
+        )),
+        riskScore !== void 0 && /* @__PURE__ */ React18.createElement(RiskDots, { score: riskScore }),
+        lastModified && /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.5, fontSize: "10px" }, title: `Last modified: ${lastModified}` }, lastModified),
+        author && /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.6, fontSize: "10px" }, title: author }, "@", author.charAt(0)),
+        isDead && /* @__PURE__ */ React18.createElement("span", { title: "Dead symbol", style: { fontSize: "12px" } }, "\u{1F47B}"),
+        isLegacy && /* @__PURE__ */ React18.createElement("span", { title: "Legacy symbol", style: { fontSize: "12px" } }, "\u26A0\uFE0F"),
+        hasDrift && /* @__PURE__ */ React18.createElement("span", { title: "Convention drift", style: { fontSize: "12px" } }, "\u{1F4DD}"),
+        /* @__PURE__ */ React18.createElement(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              onToggle();
+            },
+            style: {
+              marginLeft: "auto",
+              background: "transparent",
+              border: "none",
+              color: "var(--vscode-foreground)",
+              cursor: "pointer",
+              fontSize: "10px",
+              padding: "2px 4px"
+            },
+            title: isCollapsed ? "Expand" : "Collapse"
           },
-          style: {
-            cursor: onRefsClick ? "pointer" : "default",
-            color: onRefsClick ? "var(--vscode-textLink-foreground)" : "inherit"
-          },
-          title: "Outgoing references"
-        },
-        "\u2197",
-        outgoingRefs
-      )),
-      riskScore !== void 0 && /* @__PURE__ */ React18.createElement(RiskDots, { score: riskScore }),
-      lastModified && /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.5, fontSize: "10px" }, title: `Last modified: ${lastModified}` }, lastModified),
-      author && /* @__PURE__ */ React18.createElement("span", { style: { opacity: 0.6, fontSize: "10px" }, title: author }, "@", author.charAt(0)),
-      isDead && /* @__PURE__ */ React18.createElement("span", { title: "Dead symbol", style: { fontSize: "12px" } }, "\u{1F47B}"),
-      isLegacy && /* @__PURE__ */ React18.createElement("span", { title: "Legacy symbol", style: { fontSize: "12px" } }, "\u26A0\uFE0F"),
-      hasDrift && /* @__PURE__ */ React18.createElement("span", { title: "Convention drift", style: { fontSize: "12px" } }, "\u{1F4DD}"),
-      /* @__PURE__ */ React18.createElement(
-        "button",
-        {
-          onClick: (e) => {
-            e.stopPropagation();
-            onToggle();
-          },
-          style: {
-            marginLeft: "auto",
-            background: "transparent",
-            border: "none",
-            color: "var(--vscode-foreground)",
-            cursor: "pointer",
-            fontSize: "10px",
-            padding: "2px 4px"
-          },
-          title: isCollapsed ? "Expand" : "Collapse"
-        },
-        isCollapsed ? "\u25B6" : "\u25BC"
-      )
-    );
-  };
+          isCollapsed ? "\u25B6" : "\u25BC"
+        )
+      );
+    }
+  );
 
   // src/webview/cockpit/components/stages/CodeEditor.tsx
   var EditorContainer = {
@@ -30229,10 +30315,10 @@ Churn: ${node.score.toFixed(1)}
     showLineNumbers = true,
     showAgeGutter = true,
     showMovedGutter = true,
-    metrics
+    metrics,
+    analysisData
   }) => {
     const lines = content.split("\n");
-    const analysisData = useFileAnalysisData(filePath || "", bundleFacts, currentCommitIndex);
     const refCounts = useSymbolRefCounts(bundleFacts, filePath || "");
     const [collapsedSymbols, setCollapsedSymbols] = React19.useState(/* @__PURE__ */ new Set());
     const toggleSymbolCollapse = (symbolId) => {
@@ -30294,7 +30380,12 @@ Churn: ${node.score.toFixed(1)}
     const lineToCommitIndex = /* @__PURE__ */ new Map();
     if (lineCommits.length > 0 && orderedCommits.length > 0) {
       lineCommits.forEach(({ line, commitSha }) => {
-        const commitIndex = orderedCommits.indexOf(commitSha);
+        let commitIndex = orderedCommits.indexOf(commitSha);
+        if (commitIndex === -1) {
+          commitIndex = orderedCommits.findIndex(
+            (sha) => sha.startsWith(commitSha) || commitSha.startsWith(sha)
+          );
+        }
         if (commitIndex >= 0) {
           lineToCommitIndex.set(line, commitIndex);
         }
@@ -30399,7 +30490,7 @@ Churn: ${node.score.toFixed(1)}
     const editorRef = React19.useRef(null);
     React19.useEffect(() => {
       if (focusedSymbolId && focusedStartLine > 0 && editorRef.current) {
-        const lineElement = editorRef.current.querySelector(`[data-line="${focusedStartLine}"]`);
+        const lineElement = editorRef.current.querySelector(`[data-line="${focusedStartLine}-header"]`) || editorRef.current.querySelector(`[data-line="${focusedStartLine}"]`);
         if (lineElement) {
           lineElement.scrollIntoView({ behavior: "smooth", block: "center" });
         }
@@ -30501,9 +30592,17 @@ ${hotspotText}` : hotspotText;
         const ageColor = getAgeColor(lineNumber);
         const lineIsAfterTime = isLineAfterTime(lineNumber);
         const lineShouldHide = lineIsAfterTime && currentCommitIndex !== void 0;
-        const symbolId = symbolAtLine?.id || symbolAtLine?.name || "";
+        const symbolId = symbolAtLine?.id || "";
+        if (!symbolId && symbolAtLine) {
+          logDebug(`[CodeEditor] Symbol ${symbolAtLine.name} missing ID, cannot lookup refs`);
+        }
         const incomingRefs = symbolId ? refCounts.incoming.get(symbolId) || 0 : 0;
         const outgoingRefs = symbolId ? refCounts.outgoing.get(symbolId) || 0 : 0;
+        if (symbolId && (incomingRefs > 0 || outgoingRefs > 0)) {
+          logDebug(
+            `[CodeEditor] Symbol ${symbolAtLine?.name} (${symbolId}): ${incomingRefs} incoming, ${outgoingRefs} outgoing refs`
+          );
+        }
         const lineCommit = lineCommits.find((lc) => lc.line === lineNumber);
         const lineCommitIndex = lineToCommitIndex.get(lineNumber);
         const commitsAgo = lineCommitIndex !== void 0 && currentCommitIndex !== void 0 ? currentCommitIndex - lineCommitIndex : null;
@@ -30550,8 +30649,8 @@ ${hotspotText}` : hotspotText;
                 isLegacy: isLegacySymbol || false,
                 hasDrift: !!driftIssue,
                 onToggle: () => toggleSymbolCollapse(symbolId),
-                onRefsClick: onSymbolClick ? () => onSymbolClick(symbolId) : void 0,
-                onFocus: onSymbolClick ? () => onSymbolClick(symbolId) : void 0
+                onRefsClick: () => onSymbolClick?.(symbolId),
+                onFocus: () => onSymbolClick?.(symbolId)
               }
             )
           ),
@@ -30597,7 +30696,7 @@ ${hotspotText}` : hotspotText;
             onClick: symbolAtLine && onSymbolClick && !lineShouldHide ? () => onSymbolClick(symbolAtLine.id || symbolAtLine.name) : void 0,
             title: lineShouldHide ? `Line added after selected commit (hidden)` : importDriftOnLine ? `Import style: ${importDriftOnLine.style} (expected: ${analysisData.conventionInfo?.dominantImportStyle || "unknown"})` : isDivergent ? "Symbol diverged from expected state" : symbolTooltip || (symbolAtLine ? `Click to focus on ${symbolAtLine.name}` : isFocused ? "Focused symbol" : void 0)
           },
-          showLineNumbers && /* @__PURE__ */ React19.createElement("div", { style: LineNumberStyle, title: `Line ${lineNumber}` }, lineNumber),
+          showLineNumbers && /* @__PURE__ */ React19.createElement("div", { style: LineNumberStyle, title: `Line ${lineNumber}` }, " ", lineNumber, " "),
           showAgeGutter && /* @__PURE__ */ React19.createElement(
             "div",
             {
@@ -31237,7 +31336,7 @@ ${hotspotText}` : hotspotText;
 
   // src/webview/cockpit/components/stages/PortalsRail.tsx
   function dirname(filePath) {
-    const normalized = filePath.replace(/\\/g, "/");
+    const normalized = filePath;
     const lastSlash = normalized.lastIndexOf("/");
     return lastSlash === -1 ? "" : normalized.substring(0, lastSlash);
   }
@@ -31325,7 +31424,8 @@ ${hotspotText}` : hotspotText;
     references.forEach((ref) => {
       const refPath = ref.from || ref.to || "";
       if (refPath) {
-        const filePath = refPath.split(":")[0];
+        const lastColon = refPath.lastIndexOf(":");
+        const filePath = lastColon !== -1 ? refPath.substring(0, lastColon) : refPath;
         const folder = extractFolderName(filePath);
         groups.set(folder, (groups.get(folder) || 0) + 1);
       }
@@ -31342,26 +31442,33 @@ ${hotspotText}` : hotspotText;
     orderedCommits = [],
     bundleFacts,
     vscode: vscode3,
-    commits = []
+    commits = [],
+    analysisData
   }) => {
     const [activeTab, setActiveTab] = React24.useState("connections");
     const isTimeTravelActive = currentCommitIndex !== void 0 && orderedCommits.length > 0;
     let filteredIncoming = blastRadius?.incoming || [];
     let filteredOutgoing = blastRadius?.outgoing || [];
     if (focusedSymbolId && currentFilePath) {
+      const normalizedTarget = currentFilePath;
+      const baseSymbolId = focusedSymbolId.includes(":") ? focusedSymbolId.substring(focusedSymbolId.lastIndexOf(":") + 1) : focusedSymbolId;
       filteredIncoming = (blastRadius?.incoming || []).filter((ref) => {
-        const toMatch = ref.to?.match(/^(.+):(.+)$/);
-        if (toMatch) {
-          const [, toPath, toSymbol] = toMatch;
-          return toPath === currentFilePath && (toSymbol === focusedSymbolId || toSymbol.includes(focusedSymbolId));
+        const lastColon = ref.to?.lastIndexOf(":");
+        if (lastColon !== void 0 && lastColon !== -1) {
+          const toPath = ref.to.substring(0, lastColon);
+          const toSymbol = ref.to.substring(lastColon + 1);
+          const normalizedPath = toPath;
+          return normalizedPath === normalizedTarget && (toSymbol === baseSymbolId || toSymbol === focusedSymbolId);
         }
         return false;
       });
       filteredOutgoing = (blastRadius?.outgoing || []).filter((ref) => {
-        const fromMatch = ref.from?.match(/^(.+):(.+)$/);
-        if (fromMatch) {
-          const [, fromPath, fromSymbol] = fromMatch;
-          return fromPath === currentFilePath && (fromSymbol === focusedSymbolId || fromSymbol.includes(focusedSymbolId));
+        const lastColon = ref.from?.lastIndexOf(":");
+        if (lastColon !== void 0 && lastColon !== -1) {
+          const fromPath = ref.from.substring(0, lastColon);
+          const fromSymbol = ref.from.substring(lastColon + 1);
+          const normalizedPath = fromPath;
+          return normalizedPath === normalizedTarget && (fromSymbol === baseSymbolId || fromSymbol === focusedSymbolId);
         }
         return false;
       });
@@ -31668,12 +31775,12 @@ ${hotspotText}` : hotspotText;
   // src/webview/cockpit/components/stages/StageHeader.tsx
   var React28 = __toESM(require_react());
   function dirname2(filePath) {
-    const normalized = filePath.replace(/\\/g, "/");
+    const normalized = filePath;
     const lastSlash = normalized.lastIndexOf("/");
     return lastSlash === -1 ? "" : normalized.substring(0, lastSlash);
   }
   function basename(filePath) {
-    const normalized = filePath.replace(/\\/g, "/");
+    const normalized = filePath;
     const lastSlash = normalized.lastIndexOf("/");
     return lastSlash === -1 ? normalized : normalized.substring(lastSlash + 1);
   }
@@ -32222,22 +32329,24 @@ ${hotspotText}` : hotspotText;
     currentCommitIndex,
     onCommitIndexChange,
     bundleFacts,
-    lineCommits = []
+    lineCommits = [],
+    symbols = []
   }) => {
     const [isPlaying, setIsPlaying] = React31.useState(false);
     const maxIndex = commits.length > 0 ? commits.length - 1 : 0;
-    const effectiveIndex = currentCommitIndex !== void 0 ? currentCommitIndex : maxIndex;
-    const [currentIndex, setCurrentIndex] = React31.useState(effectiveIndex);
+    const [localIndex, setLocalIndex] = React31.useState(
+      currentCommitIndex !== void 0 ? currentCommitIndex : maxIndex
+    );
     React31.useEffect(() => {
-      if (currentCommitIndex !== void 0) {
-        setCurrentIndex(currentCommitIndex);
+      if (currentCommitIndex !== void 0 && currentCommitIndex !== localIndex) {
+        setLocalIndex(currentCommitIndex);
       }
     }, [currentCommitIndex]);
     React31.useEffect(() => {
       let interval;
       if (isPlaying && commits.length > 0) {
         interval = setInterval(() => {
-          setCurrentIndex((prev) => {
+          setLocalIndex((prev) => {
             if (prev >= maxIndex) {
               setIsPlaying(false);
               return maxIndex;
@@ -32246,19 +32355,23 @@ ${hotspotText}` : hotspotText;
             onCommitIndexChange(next);
             return next;
           });
-        }, 500);
+        }, 800);
       }
-      return () => clearInterval(interval);
+      return () => {
+        if (interval) clearInterval(interval);
+      };
     }, [isPlaying, maxIndex, commits.length, onCommitIndexChange]);
-    React31.useEffect(() => {
-      if (currentIndex !== effectiveIndex) {
-        onCommitIndexChange(currentIndex);
-      }
-    }, [currentIndex]);
     const handleChange = (e) => {
       const val = parseInt(e.target.value, 10);
-      setCurrentIndex(val);
-      onCommitIndexChange(val);
+      if (!isNaN(val)) {
+        setLocalIndex(val);
+        onCommitIndexChange(val);
+      }
+    };
+    const handleReset = () => {
+      setLocalIndex(maxIndex);
+      onCommitIndexChange(maxIndex);
+      setIsPlaying(false);
     };
     const formatCommit = (index) => {
       if (commits.length === 0 || index < 0 || index >= commits.length) {
@@ -32272,20 +32385,29 @@ ${hotspotText}` : hotspotText;
       return `${shortSha} - ${shortMessage}${date ? ` (${date})` : ""}`;
     };
     const driftCommitIndices = React31.useMemo(() => {
-      if (!bundleFacts?.findings?.patternDrift?.conventionDrift?.driftSymbols) {
+      const driftSymbols = bundleFacts?.findings?.patternDrift?.conventionDrift?.driftSymbols || [];
+      if (driftSymbols.length === 0) {
         return /* @__PURE__ */ new Set();
       }
       const indices = /* @__PURE__ */ new Set();
-      if (lineCommits.length > 0 && commits.length > 0) {
-        lineCommits.forEach((lc) => {
-          const commitIndex = commits.findIndex((c) => c.sha === lc.commitSha);
-          if (commitIndex >= 0) {
-            indices.add(commitIndex);
+      if (lineCommits.length > 0 && commits.length > 0 && symbols.length > 0) {
+        driftSymbols.forEach((ds) => {
+          const symbol = symbols.find((s) => s.name === ds.name);
+          if (symbol?.location) {
+            const start = symbol.location.start.line;
+            const end = symbol.location.end.line;
+            const relevantLineCommits = lineCommits.filter((lc) => lc.line >= start && lc.line <= end);
+            relevantLineCommits.forEach((lc) => {
+              const commitIndex = commits.findIndex((c) => c.sha === lc.commitSha);
+              if (commitIndex >= 0) {
+                indices.add(commitIndex);
+              }
+            });
           }
         });
       }
       return indices;
-    }, [bundleFacts, lineCommits, commits]);
+    }, [bundleFacts, lineCommits, commits, symbols]);
     if (commits.length === 0) {
       return /* @__PURE__ */ React31.createElement("div", { style: ScrubberContainer }, /* @__PURE__ */ React31.createElement("span", { style: { fontSize: "11px", opacity: 0.7 } }, "No commits available"));
     }
@@ -32298,10 +32420,13 @@ ${hotspotText}` : hotspotText;
           border: "none",
           color: "var(--vscode-button-foreground)",
           cursor: "pointer",
-          fontSize: "16px"
+          fontSize: "16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "24px"
         },
-        title: isPlaying ? "Pause" : "Play History",
-        disabled: commits.length === 0
+        title: isPlaying ? "Pause" : "Play History"
       },
       isPlaying ? "\u23F8" : "\u25B6"
     ), /* @__PURE__ */ React31.createElement(
@@ -32313,20 +32438,20 @@ ${hotspotText}` : hotspotText;
           minWidth: "200px",
           maxWidth: "300px",
           overflow: "hidden",
-          textOverflow: "ellipsis"
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
         }
       },
-      formatCommit(currentIndex)
-    ), /* @__PURE__ */ React31.createElement("div", { style: { position: "relative", flex: 1, display: "flex", alignItems: "center" } }, /* @__PURE__ */ React31.createElement("div", { style: { position: "relative", flex: 1, display: "flex", alignItems: "center" } }, /* @__PURE__ */ React31.createElement(
+      formatCommit(localIndex)
+    ), /* @__PURE__ */ React31.createElement("div", { style: { position: "relative", flex: 1, display: "flex", alignItems: "center" } }, /* @__PURE__ */ React31.createElement(
       "input",
       {
         type: "range",
         min: 0,
         max: maxIndex,
-        value: currentIndex,
+        value: localIndex,
         onChange: handleChange,
-        style: SliderStyle,
-        disabled: commits.length === 0
+        style: SliderStyle
       }
     ), Array.from(driftCommitIndices).map((driftIndex) => /* @__PURE__ */ React31.createElement(
       "div",
@@ -32336,45 +32461,27 @@ ${hotspotText}` : hotspotText;
           position: "absolute",
           left: `${driftIndex / maxIndex * 100}%`,
           width: "2px",
-          height: "20px",
-          backgroundColor: "var(--vscode-inputValidation-errorBorder)",
+          height: "12px",
+          backgroundColor: "var(--vscode-charts-orange)",
           pointerEvents: "none",
-          zIndex: 5
+          zIndex: 5,
+          opacity: 0.8
         },
-        title: "Convention drift introduced here"
+        title: "Convention drift potentially introduced here"
       }
-    ))), Array.from(driftCommitIndices).map((driftIndex) => /* @__PURE__ */ React31.createElement(
-      "div",
-      {
-        key: driftIndex,
-        style: {
-          position: "absolute",
-          left: `${driftIndex / maxIndex * 100}%`,
-          width: "2px",
-          height: "20px",
-          backgroundColor: "var(--vscode-inputValidation-errorBorder)",
-          pointerEvents: "none",
-          zIndex: 5
-        },
-        title: "Convention drift introduced here"
-      }
-    ))), /* @__PURE__ */ React31.createElement("span", { style: { fontSize: "11px", opacity: 0.7, minWidth: "50px", textAlign: "right" } }, currentIndex + 1, " / ", commits.length), /* @__PURE__ */ React31.createElement(
+    ))), /* @__PURE__ */ React31.createElement("span", { style: { fontSize: "11px", opacity: 0.7, minWidth: "50px", textAlign: "right" } }, localIndex + 1, " / ", commits.length), /* @__PURE__ */ React31.createElement(
       "button",
       {
-        onClick: () => {
-          setCurrentIndex(maxIndex);
-          onCommitIndexChange(maxIndex);
-        },
+        onClick: handleReset,
         style: {
           fontSize: "11px",
           background: "none",
           border: "1px solid var(--vscode-button-border)",
           borderRadius: "4px",
-          padding: "2px 6px",
+          padding: "2px 8px",
           color: "var(--vscode-foreground)",
           cursor: "pointer"
-        },
-        disabled: commits.length === 0
+        }
       },
       "Reset"
     ));
@@ -32409,7 +32516,8 @@ ${hotspotText}` : hotspotText;
       });
     };
     const handleCommitIndexChange = (index) => {
-      vscode3.postMessage({ type: "updateCommitIndex", value: index });
+      const sha = orderedCommits[index];
+      vscode3.postMessage({ type: "updateCommitIndex", value: index, sha });
     };
     const frameData = frame.level === "bundle" ? cockpitState?.bundleView || frame.data : frame.data;
     const renderFrame = frame.level === "bundle" ? { ...frame, data: frameData } : frame;
@@ -32418,15 +32526,85 @@ ${hotspotText}` : hotspotText;
       renderFrame.data?.symbolId || null
     );
     React32.useEffect(() => {
-      if (renderFrame.data?.symbolId) {
+      if (renderFrame.level === "symbol" && renderFrame.id.includes("::")) {
+        const symbolId = renderFrame.id.split("::")[1];
+        if (symbolId && symbolId !== focusedSymbolId) {
+          setFocusedSymbolId(symbolId);
+          setZoomLevel("focus");
+        }
+      } else if (renderFrame.data?.symbolId && renderFrame.data.symbolId !== focusedSymbolId) {
         setFocusedSymbolId(renderFrame.data.symbolId);
         setZoomLevel("focus");
       }
-    }, [renderFrame.data?.symbolId, renderFrame.id]);
+    }, [renderFrame.id, renderFrame.level, renderFrame.data?.symbolId]);
+    const handleRequestFileDetails = React32.useCallback(
+      (filePath) => {
+        if (vscode3) {
+          vscode3.postMessage({ type: "requestFileDetails", payload: { filePath } });
+        }
+      },
+      [vscode3]
+    );
+    const totalCommits = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
+    const headInfo = cockpitState?.headInfo;
+    const fileDataHistory = renderFrame.data?.history;
+    const selectedCommitShas = cockpitState?.selectedCommitShas || [];
+    const orderedCommits = React32.useMemo(() => {
+      if (selectedCommitShas.length > 0 && cockpitState?.commits) {
+        const selectedCommits = cockpitState.commits.filter((c) => selectedCommitShas.includes(c.sha)).sort((a, b) => new Date(a.authoredAt).getTime() - new Date(b.authoredAt).getTime());
+        if (selectedCommits.length > 0) {
+          return selectedCommits.map((c) => c.sha);
+        }
+        return [...selectedCommitShas].reverse();
+      }
+      if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
+        return [...renderFrame.data.history].reverse().map((c) => c.hash || c.sha);
+      }
+      if (headInfo) {
+        return [headInfo.sha];
+      }
+      return [];
+    }, [selectedCommitShas, cockpitState?.commits, renderFrame.data?.history, headInfo]);
+    const commits = React32.useMemo(() => {
+      if (selectedCommitShas.length > 0) {
+        return (cockpitState?.commits || []).filter((c) => selectedCommitShas.includes(c.sha)).sort((a, b) => {
+          const aIndex = orderedCommits.indexOf(a.sha);
+          const bIndex = orderedCommits.indexOf(b.sha);
+          return aIndex - bIndex;
+        }).map((c) => ({
+          sha: c.sha,
+          date: c.authoredAt,
+          message: c.message,
+          author: c.author
+        }));
+      }
+      if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
+        return [...renderFrame.data.history].reverse().map((c) => ({
+          sha: c.hash || c.sha,
+          date: c.date,
+          message: c.message,
+          author: c.author_name || c.author
+        }));
+      }
+      if (headInfo) {
+        return [headInfo];
+      }
+      return [];
+    }, [
+      selectedCommitShas,
+      cockpitState?.commits,
+      orderedCommits,
+      renderFrame.data?.history,
+      headInfo
+    ]);
     const analysisData = useFileAnalysisData(
       renderFrame.level === "file" ? renderFrame.id : "",
       cockpitState?.bundleFacts,
-      cockpitState?.currentCommitIndex
+      cockpitState?.currentCommitIndex,
+      orderedCommits,
+      cockpitState?.bundleFactsSkeleton,
+      cockpitState?.fileEvidenceCache,
+      handleRequestFileDetails
     );
     const handleWheel = (e) => {
       if (e.ctrlKey) {
@@ -32443,10 +32621,6 @@ ${hotspotText}` : hotspotText;
         }
       }
     };
-    const totalCommits = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
-    const headInfo = cockpitState?.headInfo;
-    const fileDataHistory = renderFrame.data?.history;
-    const selectedCommitShas = cockpitState?.selectedCommitShas || [];
     React32.useEffect(() => {
       if (renderFrame.level === "file" && selectedCommitShas.length === 0 && !fileDataHistory && totalCommits > 0 && !headInfo) {
         vscode3.postMessage({ type: "getHeadInfo" });
@@ -32459,41 +32633,61 @@ ${hotspotText}` : hotspotText;
       headInfo,
       vscode3
     ]);
+    const lineCommitsData = renderFrame.level === "file" ? renderFrame.data?.lineCommits || [] : [];
+    const effectiveOrderedCommits = React32.useMemo(() => {
+      if (lineCommitsData.length > 0) {
+        const commitMap = /* @__PURE__ */ new Map();
+        lineCommitsData.forEach((lc) => {
+          if (!commitMap.has(lc.commitSha)) {
+            commitMap.set(lc.commitSha, lc.date);
+          }
+        });
+        const sorted = Array.from(commitMap.entries()).sort((a, b) => new Date(a[1]).getTime() - new Date(b[1]).getTime()).map(([sha]) => sha);
+        return sorted;
+      }
+      return orderedCommits;
+    }, [lineCommitsData, orderedCommits]);
+    const fileCommits = React32.useMemo(() => {
+      let blameCommits = [];
+      if (lineCommitsData.length > 0) {
+        const commitMap = /* @__PURE__ */ new Map();
+        lineCommitsData.forEach((lc) => {
+          if (!commitMap.has(lc.commitSha)) {
+            commitMap.set(lc.commitSha, {
+              sha: lc.commitSha,
+              date: lc.date,
+              author: lc.author,
+              message: ""
+              // Blame doesn't include message, leave empty
+            });
+          }
+        });
+        blameCommits = Array.from(commitMap.values()).sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+        );
+      }
+      if (renderFrame.data?.history && Array.isArray(renderFrame.data.history) && renderFrame.data.history.length >= 5) {
+        return [...renderFrame.data.history].reverse().map((c) => ({
+          sha: c.hash || c.sha,
+          date: c.date,
+          message: c.message || "",
+          author: c.author_name || c.author || "Unknown"
+        }));
+      }
+      if (blameCommits.length > 0) {
+        return blameCommits;
+      }
+      return commits;
+    }, [lineCommitsData, commits, renderFrame.data?.history]);
     if (renderFrame.level === "file") {
       const metrics = cockpitState?.nodeMetrics?.[renderFrame.id] || renderFrame.data?.metrics;
       const content = renderFrame.data?.content || "";
       const symbols = renderFrame.data?.symbols || [];
-      const lineCommits = renderFrame.data?.lineCommits || [];
+      const lineCommits = lineCommitsData;
       const blastRadius = renderFrame.data?.blastRadius;
       const driftIssues = renderFrame.data?.drift || [];
-      let orderedCommits = cockpitState?.selectedCommitShas || [];
-      let commits = [];
-      const optimisticHead = cockpitState?.headInfo || null;
-      if (orderedCommits.length > 0) {
-        commits = (cockpitState?.commits || []).filter((c) => orderedCommits.includes(c.sha)).sort((a, b) => {
-          const aIndex = orderedCommits.indexOf(a.sha);
-          const bIndex = orderedCommits.indexOf(b.sha);
-          return aIndex - bIndex;
-        }).map((c) => ({
-          sha: c.sha,
-          date: c.authoredAt,
-          message: c.message,
-          author: c.author
-        }));
-      } else if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
-        const fileHistory = [...renderFrame.data.history].reverse();
-        orderedCommits = fileHistory.map((c) => c.hash || c.sha);
-        commits = fileHistory.map((c) => ({
-          sha: c.hash || c.sha,
-          date: c.date,
-          message: c.message,
-          author: c.author_name || c.author
-        }));
-      } else if (optimisticHead) {
-        orderedCommits = [optimisticHead.sha];
-        commits = [optimisticHead];
-      }
-      const currentCommitIndex = cockpitState?.currentCommitIndex !== void 0 ? cockpitState.currentCommitIndex : orderedCommits.length > 0 ? orderedCommits.length - 1 : void 0;
+      const normalizedFilePath = renderFrame.id;
+      const currentCommitIndex = cockpitState?.currentCommitIndex !== void 0 ? cockpitState.currentCommitIndex : effectiveOrderedCommits.length > 0 ? effectiveOrderedCommits.length - 1 : void 0;
       const handleNeighborClick = (filePath) => {
         if (vscode3) {
           const neighborFrame = {
@@ -32565,15 +32759,16 @@ ${hotspotText}` : hotspotText;
           onSymbolClick: (symbolId) => setFocusedSymbolId(symbolId),
           onClearFocus: () => setFocusedSymbolId(null),
           lineCommits,
-          orderedCommits,
+          orderedCommits: effectiveOrderedCommits,
           currentCommitIndex,
-          filePath: renderFrame.id,
+          filePath: normalizedFilePath,
           bundleFacts: cockpitState?.bundleFacts,
           movedBlocks: analysisData.movedBlocks,
           showLineNumbers: true,
           showAgeGutter: true,
           showMovedGutter: true,
-          metrics
+          metrics,
+          analysisData
         }
       ) : zoomLevel === "overview" ? /* @__PURE__ */ React32.createElement("div", { style: { flex: 1, overflow: "auto", padding: "12px" } }, symbols.length > 0 ? symbols.map((sym) => {
         const symbolDriftIssues = driftIssues.filter(
@@ -32620,19 +32815,21 @@ ${hotspotText}` : hotspotText;
           focusedSymbolId,
           currentFilePath: renderFrame.id,
           currentCommitIndex,
-          orderedCommits,
+          orderedCommits: effectiveOrderedCommits,
           bundleFacts: cockpitState?.bundleFacts,
           vscode: vscode3,
-          commits
+          commits,
+          analysisData
         }
       )), /* @__PURE__ */ React32.createElement(
         TimeScrubber,
         {
-          commits,
+          commits: fileCommits,
           currentCommitIndex,
           onCommitIndexChange: handleCommitIndexChange,
           bundleFacts: cockpitState?.bundleFacts,
-          lineCommits
+          lineCommits,
+          symbols
         }
       ), /* @__PURE__ */ React32.createElement(
         DriftBrowserPanel,
@@ -33110,9 +33307,12 @@ ${hotspotText}` : hotspotText;
     workspaceScope: "workspace",
     bundleSummary: null,
     bundleFacts: null,
+    bundleFactsSkeleton: null,
     bundleReportId: null,
     bundleView: null,
     bundleViewVersion: 0,
+    fileEvidenceCache: {},
+    symbolEvidenceCache: {},
     symbols: [],
     symbolFilterText: "",
     symbolKindFilter: "all",
@@ -33195,6 +33395,22 @@ ${hotspotText}` : hotspotText;
             setState((prev) => ({
               ...prev,
               activeFrame: message.payload.frame
+            }));
+          } else if (message.type === "fileDetailsResponse") {
+            setState((prev) => ({
+              ...prev,
+              fileEvidenceCache: {
+                ...prev.fileEvidenceCache || {},
+                [message.payload.filePath]: message.payload.evidence
+              }
+            }));
+          } else if (message.type === "symbolDetailsResponse") {
+            setState((prev) => ({
+              ...prev,
+              symbolEvidenceCache: {
+                ...prev.symbolEvidenceCache || {},
+                [message.payload.symbolId]: message.payload.evidence
+              }
             }));
           }
         } catch (error) {

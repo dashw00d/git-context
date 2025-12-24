@@ -1,5 +1,6 @@
 import { DatabaseService, getDatabaseService } from '../services/databaseService';
 import { getDatabaseManager } from '../storage/database';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
@@ -73,6 +74,7 @@ export interface CrossVersionSymbolLineage {
 
 export class MovedBlockDetector {
   private similarityThreshold: number = 0.6;
+  private fileLineCache = new Map<string, string[]>();
 
   constructor(
     private dbManager = getDatabaseManager(),
@@ -97,12 +99,14 @@ export class MovedBlockDetector {
   async detectMovedBlocks(
     commitSha: string,
     deletedSymbols: SymbolInfo[],
-    addedSymbols: SymbolInfo[]
+    addedSymbols: SymbolInfo[],
+    plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<MovedBlockResult> {
     logInfo(`[MovedBlockDetector] Detecting moves for commit ${commitSha.substring(0, 8)}`);
+    this.fileLineCache.clear();
 
-    const deletedBlocks = await this.extractCodeBlocks(deletedSymbols, commitSha, 'deleted');
-    const addedBlocks = await this.extractCodeBlocks(addedSymbols, commitSha, 'added');
+    const deletedBlocks = await this.extractCodeBlocks(deletedSymbols, commitSha, 'deleted', plan);
+    const addedBlocks = await this.extractCodeBlocks(addedSymbols, commitSha, 'added', plan);
 
     const candidates = this.findMoveCandidates(deletedBlocks, addedBlocks);
 
@@ -133,6 +137,7 @@ export class MovedBlockDetector {
       `[MovedBlockDetector] Found ${movedBlocks.length} moved blocks, ${symbolLineage.length} lineage entries`
     );
 
+    this.fileLineCache.clear();
     return { movedBlocks, symbolLineage };
   }
 
@@ -142,30 +147,42 @@ export class MovedBlockDetector {
   async extractCodeBlocks(
     symbols: SymbolInfo[],
     commitSha: string,
-    context: 'added' | 'deleted'
+    context: 'added' | 'deleted',
+    plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<CodeBlock[]> {
     const blocks: CodeBlock[] = [];
 
     for (const symbol of symbols) {
       try {
         const filePath = symbol.filePath;
-        const contentSha = context === 'deleted' ? await this.getParentSha(commitSha) : commitSha;
-        const fileContent = await this.getFileContent(filePath, contentSha);
+        const targetSha = context === 'deleted' ? await this.getParentSha(commitSha) : commitSha;
 
-        const symbolContent = this.extractSymbolContent(fileContent, symbol);
+        let lines = this.fileLineCache.get(`${targetSha}:${filePath}`);
 
-        const normalizedHash = this.hashNormalized(symbolContent);
+        // Use symbol bodyHash if available to avoid re-hashing
+        const normalizedHash = symbol.bodyHash || '';
+
+        if (!lines) {
+          const fileContent = await this.getFileContent(filePath, targetSha, plan);
+          lines = fileContent.split('\n');
+          this.fileLineCache.set(`${targetSha}:${filePath}`, lines);
+        }
+
+        const symbolContent = this.extractSymbolContentViaLines(lines, symbol);
+        if (!symbolContent.trim()) continue;
+
+        const currentNormalizedHash = normalizedHash || this.hashNormalized(symbolContent);
         const structureHash = this.hashStructure(symbolContent);
 
         blocks.push({
           file: filePath,
-          symbolId: symbol.id, // id is now the DNA hash
-          dnaId: symbol.id, // id is now the DNA hash
+          symbolId: symbol.id,
+          dnaId: symbol.id,
           symbolKind: symbol.kind,
           startLine: symbol.location.start.line,
           endLine: symbol.location.end.line,
           content: symbolContent,
-          normalizedHash,
+          normalizedHash: currentNormalizedHash,
           structureHash,
         });
       } catch (error) {
@@ -233,13 +250,16 @@ export class MovedBlockDetector {
         if (deleted.normalizedHash === added.normalizedHash) {
           similarityScore = 1.0;
         } else if (deleted.structureHash === added.structureHash) {
-          similarityScore = this.calculateTextSimilarity(deleted.content, added.content);
+          similarityScore = this.calculateOptimizedSimilarity(deleted.content, added.content);
           if (similarityScore < this.similarityThreshold) continue;
         } else {
-          similarityScore = this.calculateLevenshteinSimilarity(
-            deleted.normalizedHash,
-            added.normalizedHash
-          );
+          // If structure differs, only use Levenshtein on small blocks
+          if (deleted.content.length < 1000 && added.content.length < 1000) {
+            similarityScore = this.calculateLevenshteinSimilarity(
+              deleted.normalizedHash,
+              added.normalizedHash
+            );
+          }
           if (similarityScore < this.similarityThreshold) continue;
         }
 
@@ -259,11 +279,7 @@ export class MovedBlockDetector {
    * Uses actual symbol kind from SymbolInfo, not regex on IDs
    */
   inferBlockType(block: CodeBlock): string {
-    if (block.symbolKind) {
-      return block.symbolKind;
-    }
-
-    return 'block';
+    return block.symbolKind || 'block';
   }
 
   /**
@@ -280,14 +296,6 @@ export class MovedBlockDetector {
       return 'extraction';
     }
 
-    if (this.hasMultipleMovesToSameFile(destBlock.file)) {
-      return 'consolidation';
-    }
-
-    if (this.isNewFile(destBlock.file) && this.isLargeFile(sourceBlock.file)) {
-      return 'module_split';
-    }
-
     if (candidate.similarityScore >= 0.95) {
       return 'refactoring';
     }
@@ -296,7 +304,49 @@ export class MovedBlockDetector {
   }
 
   /**
-   * Calculate text similarity using diff-match-patch
+   * Optimized similarity calculation:
+   * 1. If very large, use dice coefficient on tokens (O(N))
+   * 2. If small, use Levenshtein (O(N^2))
+   */
+  private calculateOptimizedSimilarity(text1: string, text2: string): number {
+    const len1 = text1.length;
+    const len2 = text2.length;
+
+    // Levenshtein is too slow for large symbols (> 2000 chars)
+    if (len1 > 2000 || len2 > 2000) {
+      return this.calculateDiceSimilarity(text1, text2);
+    }
+
+    return this.calculateTextSimilarity(text1, text2);
+  }
+
+  /**
+   * Dice coefficient on bigrams for fast similarity
+   */
+  private calculateDiceSimilarity(str1: string, str2: string): number {
+    const getBigrams = (s: string) => {
+      const bigrams = new Set<string>();
+      for (let i = 0; i < s.length - 1; i++) {
+        bigrams.add(s.substring(i, i + 2));
+      }
+      return bigrams;
+    };
+
+    const s1 = getBigrams(str1);
+    const s2 = getBigrams(str2);
+
+    if (s1.size === 0 && s2.size === 0) return 1.0;
+
+    let intersect = 0;
+    for (const b of s1) {
+      if (s2.has(b)) intersect++;
+    }
+
+    return (2.0 * intersect) / (s1.size + s2.size);
+  }
+
+  /**
+   * Calculate text similarity using Levenshtein distance
    */
   private calculateTextSimilarity(text1: string, text2: string): number {
     const longer = text1.length > text2.length ? text1 : text2;
@@ -322,34 +372,29 @@ export class MovedBlockDetector {
   }
 
   /**
-   * Levenshtein distance calculation
+   * Levenshtein distance calculation (Optimized space complexity)
    */
   private levenshteinDistance(str1: string, str2: string): number {
-    const matrix = [];
+    const len1 = str1.length;
+    const len2 = str2.length;
+    const matrix: number[] = new Array(len2 + 1);
 
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
+    for (let j = 0; j <= len2; j++) matrix[j] = j;
 
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          );
-        }
+    for (let i = 1; i <= len1; i++) {
+      let prev = i;
+      for (let j = 1; j <= len2; j++) {
+        const val =
+          str1[i - 1] === str2[j - 1]
+            ? matrix[j - 1]
+            : Math.min(matrix[j - 1] + 1, prev + 1, matrix[j] + 1);
+        matrix[j - 1] = prev;
+        prev = val;
       }
+      matrix[len2] = prev;
     }
 
-    return matrix[str2.length][str1.length];
+    return matrix[len2];
   }
 
   /**
@@ -389,7 +434,7 @@ export class MovedBlockDetector {
 
         if (move.sourceFile !== move.destFile && move.sourceSymbolId === move.destSymbolId) {
           moveType = 'file_rename';
-        } else if (move.sourceSymbolId !== move.destSymbolId) {
+        } else {
           moveType = 'symbol_rename';
         }
 
@@ -409,32 +454,9 @@ export class MovedBlockDetector {
    * Store moved blocks in database
    */
   private async storeMovedBlocks(movedBlocks: MovedBlock[]): Promise<void> {
+    const writeQueue = DatabaseWriteQueue.getInstance();
     for (const block of movedBlocks) {
-      const stmt = prepare(`
-        INSERT INTO moved_blocks (
-          commit_sha, source_file, source_symbol_id, source_start_line, source_end_line,
-          source_content_hash, dest_file, dest_symbol_id, dest_start_line, dest_end_line,
-          dest_content_hash, similarity_score, block_type, move_reason, line_count
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      stmt.run(
-        block.commitSha,
-        block.sourceFile,
-        block.sourceSymbolId || null,
-        block.sourceStartLine,
-        block.sourceEndLine,
-        block.sourceContentHash,
-        block.destFile,
-        block.destSymbolId || null,
-        block.destStartLine,
-        block.destEndLine,
-        block.destContentHash,
-        block.similarityScore,
-        block.blockType,
-        block.moveReason,
-        block.lineCount
-      );
+      writeQueue.queue({ type: 'moved_block', data: block });
     }
   }
 
@@ -442,13 +464,18 @@ export class MovedBlockDetector {
    * Store symbol lineage in database
    */
   private async storeSymbolLineage(lineage: SymbolLineage[]): Promise<void> {
-    for (const entry of lineage) {
-      const stmt = prepare(`
-        INSERT INTO symbol_lineage (symbol_id, previous_symbol_id, commit_sha, move_type)
-        VALUES (?, ?, ?, ?)
-      `);
+    const writeQueue = DatabaseWriteQueue.getInstance();
 
-      stmt.run(entry.symbolId, entry.previousSymbolId, entry.commitSha, entry.moveType);
+    for (const entry of lineage) {
+      writeQueue.queue({
+        type: 'symbol_lineage',
+        data: {
+          symbolId: entry.symbolId,
+          previousSymbolId: entry.previousSymbolId,
+          commitSha: entry.commitSha,
+          moveType: entry.moveType,
+        },
+      });
     }
   }
 
@@ -456,7 +483,16 @@ export class MovedBlockDetector {
    * Get file content for a given file and commit SHA
    * Uses GitOperations to get historical file content
    */
-  private async getFileContent(filePath: string, commitSha: string): Promise<string> {
+  private async getFileContent(
+    filePath: string,
+    commitSha: string,
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<string> {
+    // Try plan data first
+    if (plan?.content.has(`${commitSha}:${filePath}`)) {
+      return plan.content.get(`${commitSha}:${filePath}`)!;
+    }
+
     if (!this.git) {
       logDebug(`[MovedBlockDetector] GitOperations not available, returning empty content`);
       return '';
@@ -482,11 +518,7 @@ export class MovedBlockDetector {
     return metadata?.parent || commitSha;
   }
 
-  /**
-   * Extract symbol content from file content
-   */
-  private extractSymbolContent(fileContent: string, symbol: SymbolInfo): string {
-    const lines = fileContent.split('\n');
+  private extractSymbolContentViaLines(lines: string[], symbol: SymbolInfo): string {
     const startLine = Math.max(0, symbol.location.start.line - 1);
     const endLine = Math.min(lines.length - 1, symbol.location.end.line - 1);
 
@@ -526,30 +558,11 @@ export class MovedBlockDetector {
     return patterns.some(p => filePath.toLowerCase().includes(p.toLowerCase()));
   }
 
-  private hasMultipleMovesToSameFile(_filePath: string): boolean {
-    // TODO: Implement by tracking destination files in detectMovedBlocks and passing context
-
-    return false;
-  }
-
-  private isNewFile(filePath: string): boolean {
-    const newFilePatterns = ['/new/', '/temp/', '/test/', '/spec/'];
-    return newFilePatterns.some(pattern => filePath.toLowerCase().includes(pattern));
-  }
-
-  private isLargeFile(filePath: string): boolean {
-    // TODO: Implement by reading file content and counting lines, or using git to get file size
-    const largeFilePatterns = ['/generated/', '/vendor/', '/node_modules/', '.min.', '.bundle.'];
-    return largeFilePatterns.some(pattern => filePath.toLowerCase().includes(pattern));
-  }
-
   private isFileRename(sourcePath: string, destPath: string): boolean {
-    const sourceDir = sourcePath.substring(0, sourcePath.lastIndexOf('/'));
-    const destDir = destPath.substring(0, destPath.lastIndexOf('/'));
     const sourceName = sourcePath.substring(sourcePath.lastIndexOf('/') + 1);
     const destName = destPath.substring(destPath.lastIndexOf('/') + 1);
 
-    return sourceDir === destDir && sourceName !== destName;
+    return sourcePath !== destPath && sourceName === destName;
   }
 
   async getMovedBlocks(commitSha: string): Promise<MovedBlock[]> {
@@ -657,9 +670,10 @@ export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, 
   async detectMovedBlocks(
     commitSha: string,
     deletedSymbols: SymbolInfo[],
-    addedSymbols: SymbolInfo[]
+    addedSymbols: SymbolInfo[],
+    plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<MovedBlockResult> {
-    return this.legacyDetector.detectMovedBlocks(commitSha, deletedSymbols, addedSymbols);
+    return this.legacyDetector.detectMovedBlocks(commitSha, deletedSymbols, addedSymbols, plan);
   }
 
   matchByDna(
@@ -675,5 +689,13 @@ export class MovedBlockDetectorV2 extends BaseDetector<MovedBlockDetectorInput, 
 
   setSimilarityThreshold(threshold: number): void {
     this.legacyDetector.setSimilarityThreshold(threshold);
+  }
+
+  async getFileMoves(filePath: string): Promise<MovedBlock[]> {
+    return this.legacyDetector.getFileMoves(filePath);
+  }
+
+  async getSymbolLineage(symbolId: string): Promise<SymbolLineage[]> {
+    return this.legacyDetector.getSymbolLineage(symbolId);
   }
 }

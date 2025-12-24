@@ -14,7 +14,7 @@ import { DriftFindings, IntendedState, UnresolvedCallerFact } from '../types/dri
 import { NamingConvention } from '../types/naming';
 import { detectLanguage, getGitRoot } from '../utils/config';
 import { logWarn } from '../utils/logger';
-import { WorkingSnapshot } from './workingSnapshot';
+import { WorkingSnapshot, extractDnaHash } from './workingSnapshot';
 
 export { DriftFindings, UnresolvedCallerFact };
 
@@ -246,10 +246,18 @@ function findReachableSymbols(
   while (queue.length > 0) {
     const currentSymbolId = queue.shift()!;
 
-    const outgoingEdges = working.edges.filter(edge => edge.from_symbol_id === currentSymbolId);
+    // Extract DNA hash from currentSymbolId (may be filePath:symbolId or just symbolId)
+    const currentDnaHash = extractDnaHash(currentSymbolId);
+
+    const outgoingEdges = working.edges.filter(edge => {
+      // Extract DNA hash from edge.from_symbol_id for comparison
+      const edgeFromDna = extractDnaHash(edge.from_symbol_id);
+      return edgeFromDna === currentDnaHash;
+    });
 
     for (const edge of outgoingEdges) {
-      const targetSymbolId = edge.to_symbol_id;
+      // Extract DNA hash from edge.to_symbol_id
+      const targetSymbolId = extractDnaHash(edge.to_symbol_id);
 
       if (!reachable.has(targetSymbolId)) {
         reachable.add(targetSymbolId);
@@ -279,7 +287,17 @@ export function detectDrift(
   };
 
   for (const [symbolKey, expected] of intended) {
-    const found = working.symbolsById.get(symbolKey);
+    let found = working.symbolsById.get(symbolKey);
+
+    // Fallback: if DNA hash lookup fails, try matching by name and path
+    if (!found && expected.lastName && expected.lastPath) {
+      for (const [_, symbol] of working.symbolsById) {
+        if (symbol.name === expected.lastName && symbol.filePath === expected.lastPath) {
+          found = symbol;
+          break;
+        }
+      }
+    }
 
     if (expected.expect === 'present') {
       if (!found) {
@@ -317,62 +335,113 @@ export function detectDrift(
         edge_type: string;
       }>;
 
+      // Build maps for readable symbol identification
+      const idToSymbol = new Map<string, SymbolContext>();
+      for (const [id, symbol] of working.symbolsById) {
+        idToSymbol.set(id, symbol);
+      }
+
+      const getReadableId = (id: string) => {
+        const dna = extractDnaHash(id);
+        const symbol = idToSymbol.get(dna);
+        if (symbol) {
+          const path = extractPathFromSymbol(symbol, working);
+          return `${path}:${symbol.name}`;
+        }
+        return id;
+      };
+
+      const missingEdgesSet = new Set<string>();
       for (const intendedEdge of intendedEdges) {
-        const found = working.edges.find(
-          e =>
-            e.from_symbol_id === intendedEdge.from_symbol_id &&
-            e.to_symbol_id === intendedEdge.to_symbol_id &&
+        // Extract DNA hashes from intended edge IDs (database may not have file path prefix)
+        const intendedFromDna = extractDnaHash(intendedEdge.from_symbol_id);
+        const intendedToDna = extractDnaHash(intendedEdge.to_symbol_id);
+
+        const found = working.edges.find(e => {
+          // Extract DNA hashes from working edge IDs for comparison
+          const workingFromDna = extractDnaHash(e.from_symbol_id);
+          const workingToDna = extractDnaHash(e.to_symbol_id);
+
+          return (
+            workingFromDna === intendedFromDna &&
+            workingToDna === intendedToDna &&
             e.edge_type === intendedEdge.edge_type
-        );
+          );
+        });
 
         if (!found) {
-          const fromIntended = intended.has(intendedEdge.from_symbol_id);
-          const toIntended = intended.has(intendedEdge.to_symbol_id);
+          // intended map uses DNA hash as key, not full edge ID
+          const fromIntended = intended.has(intendedFromDna);
+          const toIntended = intended.has(intendedToDna);
 
           if (fromIntended || toIntended) {
-            findings.missing_edges.push({
-              from: intendedEdge.from_symbol_id,
-              to: intendedEdge.to_symbol_id,
-              type: intendedEdge.edge_type,
-              expected: intended.get(intendedEdge.from_symbol_id) ||
-                intended.get(intendedEdge.to_symbol_id) || {
-                  expect: 'present',
-                  lastSha: commitShas[commitShas.length - 1],
-                },
-            });
+            const fromReadable = getReadableId(intendedEdge.from_symbol_id);
+            const toReadable = getReadableId(intendedEdge.to_symbol_id);
+            const edgeKey = `${fromReadable}->${toReadable}:${intendedEdge.edge_type}`;
+
+            if (!missingEdgesSet.has(edgeKey)) {
+              missingEdgesSet.add(edgeKey);
+              findings.missing_edges.push({
+                from: fromReadable,
+                to: toReadable,
+                type: intendedEdge.edge_type,
+                expected: intended.get(intendedFromDna) ||
+                  intended.get(intendedToDna) || {
+                    expect: 'present',
+                    lastSha: commitShas[commitShas.length - 1],
+                  },
+              });
+            }
           }
         }
       }
 
+      const zombieEdgesSet = new Set<string>();
       for (const workingEdge of working.edges) {
-        const fromIntended = intended.has(workingEdge.from_symbol_id);
-        const toIntended = intended.has(workingEdge.to_symbol_id);
+        // Extract DNA hashes from working edge IDs (intended map uses DNA hash as key)
+        const workingFromDna = extractDnaHash(workingEdge.from_symbol_id);
+        const workingToDna = extractDnaHash(workingEdge.to_symbol_id);
+
+        const fromIntended = intended.has(workingFromDna);
+        const toIntended = intended.has(workingToDna);
 
         if (!fromIntended && !toIntended) {
           continue;
         }
 
-        const fromState = intended.get(workingEdge.from_symbol_id);
-        const toState = intended.get(workingEdge.to_symbol_id);
+        const fromState = intended.get(workingFromDna);
+        const toState = intended.get(workingToDna);
 
-        const edgeInIntended = intendedEdges.some(
-          intendedEdge =>
-            intendedEdge.from_symbol_id === workingEdge.from_symbol_id &&
-            intendedEdge.to_symbol_id === workingEdge.to_symbol_id &&
+        const edgeInIntended = intendedEdges.some(intendedEdge => {
+          // Extract DNA hashes for comparison
+          const intendedFromDna = extractDnaHash(intendedEdge.from_symbol_id);
+          const intendedToDna = extractDnaHash(intendedEdge.to_symbol_id);
+
+          return (
+            intendedFromDna === workingFromDna &&
+            intendedToDna === workingToDna &&
             intendedEdge.edge_type === workingEdge.edge_type
-        );
+          );
+        });
 
         if (
           !edgeInIntended ||
           (fromState && fromState.expect === 'absent') ||
           (toState && toState.expect === 'absent')
         ) {
-          findings.zombie_edges.push({
-            from: workingEdge.from_symbol_id,
-            to: workingEdge.to_symbol_id,
-            type: workingEdge.edge_type,
-            found: workingEdge,
-          });
+          const fromReadable = getReadableId(workingEdge.from_symbol_id);
+          const toReadable = getReadableId(workingEdge.to_symbol_id);
+          const edgeKey = `${fromReadable}->${toReadable}:${workingEdge.edge_type}`;
+
+          if (!zombieEdgesSet.has(edgeKey)) {
+            zombieEdgesSet.add(edgeKey);
+            findings.zombie_edges.push({
+              from: fromReadable,
+              to: toReadable,
+              type: workingEdge.edge_type,
+              found: workingEdge,
+            });
+          }
         }
       }
     } catch (error) {
@@ -439,9 +508,15 @@ function detectUnresolvedCallers(
   for (const edge of working.edges) {
     if (edge.edge_type !== 'calls') continue;
 
-    if (edge.to_symbol_id && working.symbolsById.has(edge.to_symbol_id)) continue;
+    // Extract DNA hash from edge.to_symbol_id for lookup
+    const toDnaHash = extractDnaHash(edge.to_symbol_id);
 
-    const caller = edge.from_symbol_id ? working.symbolsById.get(edge.from_symbol_id) : undefined;
+    if (toDnaHash && working.symbolsById.has(toDnaHash)) continue;
+
+    // Extract DNA hash from edge.from_symbol_id for lookup
+    const fromDnaHash = extractDnaHash(edge.from_symbol_id);
+
+    const caller = fromDnaHash ? working.symbolsById.get(fromDnaHash) : undefined;
     const calleeRaw = edge.to_symbol_id || '';
     const calleeName = extractCalleeName(calleeRaw);
 
@@ -464,8 +539,260 @@ function detectUnresolvedCallers(
     facts.set(key, current);
   }
 
+  // Known built-in methods to filter out (organized by category)
+  // TODO: Consider adding UI ignore feature for user-defined exclusions
+  const builtInMethods = new Set([
+    // Console/Logger
+    'log',
+    'warn',
+    'error',
+    'info',
+    'debug',
+    'trace',
+    'logdebug',
+    'loginfo',
+    'logwarn',
+    'logerror',
+    'logtrace',
+
+    // Array
+    'join',
+    'filter',
+    'map',
+    'reduce',
+    'reduceright',
+    'foreach',
+    'slice',
+    'push',
+    'pop',
+    'shift',
+    'unshift',
+    'splice',
+    'sort',
+    'reverse',
+    'find',
+    'findindex',
+    'findlast',
+    'findlastindex',
+    'some',
+    'every',
+    'includes',
+    'indexof',
+    'lastindexof',
+    'flat',
+    'flatmap',
+    'fill',
+    'copywithin',
+    'at',
+    'from',
+    'of',
+    'isarray',
+
+    // String
+    'split',
+    'substring',
+    'substr',
+    'replace',
+    'replaceall',
+    'match',
+    'matchall',
+    'search',
+    'tolowercase',
+    'touppercase',
+    'trim',
+    'trimstart',
+    'trimend',
+    'padstart',
+    'padend',
+    'repeat',
+    'startswith',
+    'endswith',
+    'charat',
+    'charcodeat',
+    'codepointat',
+    'normalize',
+    'localecompare',
+
+    // Object methods
+    'concat',
+    'keys',
+    'values',
+    'entries',
+    'assign',
+    'create',
+    'freeze',
+    'seal',
+    'isfrozen',
+    'issealed',
+    'isextensible',
+    'preventextensions',
+    'getownpropertynames',
+    'getownpropertysymbols',
+    'getownpropertydescriptor',
+    'getownpropertydescriptors',
+    'getprototypeof',
+    'setprototypeof',
+    'defineproperty',
+    'defineproperties',
+    'fromentries',
+    'hasown',
+    'is',
+
+    // Map/Set/WeakMap/WeakSet methods
+    'get',
+    'has',
+    'set',
+    'delete',
+    'clear',
+    'add',
+    'size',
+
+    // Date methods
+    'now',
+    'parse',
+    'utc',
+    'gettime',
+    'getfullyear',
+    'getmonth',
+    'getdate',
+    'getday',
+    'gethours',
+    'getminutes',
+    'getseconds',
+    'getmilliseconds',
+    'gettimezoneoffset',
+    'settime',
+    'setfullyear',
+    'setmonth',
+    'setdate',
+    'sethours',
+    'setminutes',
+    'setseconds',
+    'setmilliseconds',
+    'toisostring',
+    'tojson',
+    'todatestring',
+    'totimestring',
+    'tolocalestring',
+    'tolocaledatestring',
+    'tolocaletimestring',
+
+    // Math methods
+    'min',
+    'max',
+    'abs',
+    'floor',
+    'ceil',
+    'round',
+    'random',
+    'sqrt',
+    'pow',
+    'exp',
+    'log',
+    'log10',
+    'log2',
+    'sin',
+    'cos',
+    'tan',
+    'asin',
+    'acos',
+    'atan',
+    'atan2',
+    'sign',
+    'trunc',
+    'cbrt',
+    'hypot',
+
+    // Promise methods
+    'then',
+    'catch',
+    'finally',
+    'resolve',
+    'reject',
+    'all',
+    'allsettled',
+    'any',
+    'race',
+
+    // JSON methods
+    'stringify',
+
+    // Node.js fs methods
+    'existssync',
+    'readfile',
+    'readfilesync',
+    'writefile',
+    'writefilesync',
+    'stat',
+    'statsync',
+    'mkdir',
+    'mkdirsync',
+    'readdir',
+    'readdirsync',
+    'unlink',
+    'unlinksync',
+    'rmdir',
+    'rmdirsync',
+    'rename',
+    'renamesync',
+    'copyfile',
+    'copyfilesync',
+    'access',
+    'accesssync',
+
+    // Class-related
+    'constructor',
+    'tostring',
+    'valueof',
+    'hasownproperty',
+    'isprototypeof',
+    'propertyisenumerable',
+
+    // RegExp methods
+    'test',
+    'exec',
+
+    // TypedArray / ArrayBuffer methods
+    'buffer',
+    'bytelength',
+    'byteoffset',
+    'subarray',
+
+    // Reflect methods
+    'apply',
+    'construct',
+    'ownkeys',
+
+    // Symbol methods
+    'for',
+    'keyfor',
+
+    // Iterator methods
+    'next',
+    'return',
+    'throw',
+
+    // WeakRef / FinalizationRegistry
+    'deref',
+    'register',
+    'unregister',
+
+    // Common utility patterns
+    'call',
+    'bind',
+    'length',
+    'name',
+    'prototype',
+  ]);
+
   const results: UnresolvedCallerFact[] = [];
   for (const fact of facts.values()) {
+    // Filter out known built-in methods
+    const calleeNameLower = fact.callee_name.toLowerCase();
+    if (builtInMethods.has(calleeNameLower)) {
+      continue;
+    }
+
     const OCCURRENCE_SCALE_FACTOR = 5;
     const baseSeverity = Math.min(1, Math.log1p(fact.count) / Math.log1p(OCCURRENCE_SCALE_FACTOR));
 
@@ -484,8 +811,15 @@ function detectUnresolvedCallers(
 function extractCalleeName(raw: string): string {
   if (!raw) return '';
 
-  const tokens = raw.split(/[:.\s]/).filter(Boolean);
-  const last = tokens[tokens.length - 1] || raw;
+  // Strip function_ and method_ prefixes
+  let cleaned = raw.replace(/^(function_|method_)/, '');
+
+  // Remove trailing spaces and split by common delimiters
+  cleaned = cleaned.trim();
+  const tokens = cleaned.split(/[:.\s]/).filter(Boolean);
+  const last = tokens[tokens.length - 1] || cleaned;
+
+  // Return clean name without special characters
   return last.replace(/[^A-Za-z0-9_]/g, '');
 }
 

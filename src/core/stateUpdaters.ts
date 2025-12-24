@@ -60,9 +60,8 @@ export async function refreshCockpitState(
 
 export async function updateContexts(): Promise<void> {
   try {
-    const { getCockpitOrchestrator } = await import('../state/cockpitOrchestrator');
-    const orchestrator = getCockpitOrchestrator();
-    const state = orchestrator.getState();
+    const store = getStore();
+    const state = store.getState();
 
     await vscode.commands.executeCommand(
       'setContext',

@@ -1,5 +1,8 @@
 import { GitOperations } from '../analysis/git';
+import { getGitCacheService } from '../services/gitCacheService';
 import { prepare } from '../storage/statement-wrapper';
+import { FileChange } from '../types';
+import { getGitRoot } from '../utils/config';
 import { logDebug } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
 
@@ -81,7 +84,7 @@ async function computeBlastRadiusNeighbors(
   `);
   const symbolVersions = symbolVersionsStmt.all() as Array<{ dna_id: string; path: string }>;
   for (const row of symbolVersions) {
-    dnaToPathCache.set(row.dna_id, row.path);
+    dnaToPathCache.set(row.dna_id, GitOperations.normalizePath(row.path));
   }
   logDebug(`🟩 [computeBlastRadius] Built DNA->path cache with ${dnaToPathCache.size} entries`);
 
@@ -157,12 +160,14 @@ export async function computeScope(
   workspaceParts?: Set<'staged' | 'unstaged'>,
   explicitTimeline?: string[],
   liveOverridePaths?: Iterable<string>,
-  gitInstance?: GitOperations
+  gitInstance?: GitOperations,
+  plan?: import('../analysis/runner/pipelineTypes').PlanData
 ): Promise<ScopeSet> {
   const { ensureDatabaseInitialized } = await import('../storage/database');
 
   await ensureDatabaseInitialized();
   const git = gitInstance ?? new GitOperations();
+  const gitRoot = getGitRoot();
 
   const scope: ScopeSet = {
     commitFiles: new Set(),
@@ -173,19 +178,34 @@ export async function computeScope(
     allPaths: new Set(),
   };
 
+  const cacheService = getGitCacheService();
+
   for (const sha of commitShas) {
-    const commitFiles = await git.getFileChanges(sha);
+    const commitFiles = await cacheService.getCachedFileChanges(sha);
     commitFiles.forEach(f => scope.commitFiles.add(f.path));
   }
 
-  const workingChanges = await git.getWorkingDirectoryChanges();
+  // Use plan data if available (from initStep) to avoid redundant git calls
+  let stagedFiles: FileChange[];
+  let unstagedFiles: FileChange[];
+  let workingChanges: FileChange[];
+
+  if (plan?.stagedFiles && plan?.unstagedFiles) {
+    // Use cached data from init step - no git calls needed!
+    stagedFiles = plan.stagedFiles;
+    unstagedFiles = plan.unstagedFiles;
+    workingChanges = [...stagedFiles, ...unstagedFiles];
+    logDebug('[Scope] Using staged/unstaged files from plan (no git calls)');
+  } else {
+    // Fallback to git calls (should rarely happen in normal pipeline execution)
+    workingChanges = await git.getWorkingDirectoryChanges();
+    stagedFiles = await git.getStagedFiles();
+    unstagedFiles = await git.getUnstagedFiles();
+  }
 
   if (workspaceParts) {
     const includeStaged = workspaceParts.has('staged');
     const includeUnstaged = workspaceParts.has('unstaged');
-
-    const stagedFiles = await git.getStagedFiles();
-    const unstagedFiles = await git.getUnstagedFiles();
 
     if (includeStaged) {
       stagedFiles.forEach(f => {
@@ -205,11 +225,12 @@ export async function computeScope(
   }
 
   if (liveOverridePaths) {
-    for (const path of liveOverridePaths) {
-      scope.workingChanged.add(path);
+    for (const p of liveOverridePaths) {
+      const normalized = GitOperations.normalizePath(p);
+      scope.workingChanged.add(normalized);
 
       if (!workspaceParts || workspaceParts.has('unstaged')) {
-        scope.unstagedFiles.add(path);
+        scope.unstagedFiles.add(normalized);
       }
     }
   }
@@ -228,10 +249,17 @@ export async function computeScope(
 
   const filteredPaths = new Set<string>();
 
-  // Batch git check-ignore to avoid 196 individual calls (each taking ~113ms)
+  // Use plan's ignore data if available (already populated by initStep)
   const pathsArray = Array.from(allPaths);
-  logDebug(`[Scope] Batch checking ${pathsArray.length} paths for git-ignore...`);
-  const ignoreMap = await git.areIgnored(pathsArray);
+  let ignoreMap: Map<string, boolean>;
+  if (plan?.ignoredPaths) {
+    ignoreMap = new Map(pathsArray.map(p => [p, plan.ignoredPaths.has(p)]));
+    logDebug(`[Scope] Using plan ignoreData for ${pathsArray.length} paths`);
+  } else {
+    // Fallback to git call (should rarely happen in normal pipeline execution)
+    logDebug(`[Scope] Batch checking ${pathsArray.length} paths for git-ignore...`);
+    ignoreMap = await git.areIgnored(pathsArray);
+  }
   logDebug(`[Scope] Found ${Array.from(ignoreMap.values()).filter(v => v).length} ignored paths`);
 
   // Now filter paths with cached ignore results
@@ -263,7 +291,7 @@ export async function computeScope(
       } else if (version === 'HEAD') {
         versionFiles = scope.commitFiles;
       } else {
-        const commitFiles = await git.getFileChanges(version);
+        const commitFiles = await cacheService.getCachedFileChanges(version);
         versionFiles = new Set(commitFiles.map(f => f.path));
       }
 

@@ -98,7 +98,7 @@ describe('LiveDiffTracker', () => {
 
 
     (tracker as any).emit('changesUpdated', {
-      uri: 'file:/
+      uri: 'file:/path/to/file',
       pendingChanges: { files: 1, totalEdits: 1 }
     });
 

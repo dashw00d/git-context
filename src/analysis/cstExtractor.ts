@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import { SymbolInfo } from '../types';
 import { CstFact } from '../types/cstFacts';
 import { getExtensionConfig, isCstOnlyLanguage, LANGUAGES } from '../utils/config';
+import { logError, logWarn } from '../utils/logger';
 
 export class CstExtractor {
   extractCstFacts(
@@ -21,31 +22,76 @@ export class CstExtractor {
     const facts: CstFact[] = [];
     const depthLimit = 3;
 
-    const traverse = (node: any, depth: number): void => {
-      if (depth > depthLimit) return;
+    // Use iterative traversal instead of recursive to avoid stack overflow
+    // This is safer for very deep trees
+    const stack: Array<{ node: any; depth: number }> = [{ node: tree.rootNode, depth: 0 }];
+    const MAX_STACK_SIZE = 10000; // Safety limit to prevent infinite loops
 
-      if (isCstOnly) {
-        const fact = this.extractCstOnlyFact(node, filePath, language);
-        if (fact) {
-          facts.push(fact);
-        }
-      } else if (enableAugment) {
-        const fact = this.extractHybridAuxiliaryFact(node, filePath, language, existingSymbols);
-        if (fact) {
-          facts.push(fact);
-        }
-      }
+    try {
+      while (stack.length > 0 && stack.length < MAX_STACK_SIZE) {
+        const { node, depth } = stack.pop()!;
 
-      if (node.childCount > 0 && depth < depthLimit) {
-        for (const child of node.children) {
-          if (child.isNamed) {
-            traverse(child, depth + 1);
+        if (!node || depth > depthLimit) continue;
+
+        try {
+          if (isCstOnly) {
+            const fact = this.extractCstOnlyFact(node, filePath, language);
+            if (fact) {
+              facts.push(fact);
+            }
+          } else if (enableAugment) {
+            const fact = this.extractHybridAuxiliaryFact(node, filePath, language, existingSymbols);
+            if (fact) {
+              facts.push(fact);
+            }
           }
+
+          if (node.childCount > 0 && depth < depthLimit) {
+            // Push children in reverse order to maintain left-to-right traversal
+            for (let i = node.childCount - 1; i >= 0; i--) {
+              const child = node.child(i);
+              if (child && child.isNamed) {
+                stack.push({ node: child, depth: depth + 1 });
+              }
+            }
+          }
+        } catch (nodeError) {
+          const nodeErrorMsg = nodeError instanceof Error ? nodeError.message : String(nodeError);
+          if (
+            nodeErrorMsg.includes('Maximum call stack') ||
+            nodeErrorMsg.includes('stack overflow') ||
+            nodeErrorMsg.includes('RangeError')
+          ) {
+            logWarn(
+              `[CstExtractor] Stack overflow at depth ${depth} for ${filePath}, stopping traversal`
+            );
+            break;
+          }
+          // For other errors, log and continue with next node
+          logWarn(`[CstExtractor] Error processing node at depth ${depth}: ${nodeErrorMsg}`);
         }
       }
-    };
 
-    traverse(tree.rootNode, 0);
+      if (stack.length >= MAX_STACK_SIZE) {
+        logWarn(
+          `[CstExtractor] Reached max stack size limit for ${filePath}, stopping traversal early`
+        );
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (
+        errorMsg.includes('Maximum call stack') ||
+        errorMsg.includes('stack overflow') ||
+        errorMsg.includes('RangeError')
+      ) {
+        logWarn(
+          `[CstExtractor] Stack overflow in traversal for ${filePath}, returning partial facts`
+        );
+      } else {
+        logError(`[CstExtractor] Unexpected error extracting facts for ${filePath}:`, error);
+      }
+    }
+
     return facts;
   }
 
@@ -240,17 +286,17 @@ export class CstExtractor {
   }
 
   private hashCstSubset(node: any, includeChildren: boolean = true): string {
-    const serialized = this.serializeNodeForHash(node, includeChildren);
+    const serialized = this.serializeNodeForHash(node, includeChildren, 5);
     return crypto.createHash('sha256').update(serialized).digest('hex').substring(0, 16);
   }
 
-  private serializeNodeForHash(node: any, includeChildren: boolean): string {
+  private serializeNodeForHash(node: any, includeChildren: boolean, maxDepth: number): string {
     const parts: string[] = [node.type];
 
-    if (includeChildren && node.childCount > 0) {
+    if (includeChildren && maxDepth > 0 && node.childCount > 0) {
       for (const child of node.children) {
         if (child.isNamed) {
-          parts.push(this.serializeNodeForHash(child, true));
+          parts.push(this.serializeNodeForHash(child, true, maxDepth - 1));
         }
       }
     }

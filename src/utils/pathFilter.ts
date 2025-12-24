@@ -12,6 +12,8 @@ export interface PathFilterOptions {
   commitSha?: string;
   skipSizeCheck?: boolean;
   skipGitIgnore?: boolean; // Skip git ignore check if files already came from ls-files --exclude-standard
+  plan?: import('../analysis/runner/pipelineTypes').PlanData;
+  excludedPrefixes?: string[];
 }
 
 export interface PathFilterResult {
@@ -51,7 +53,24 @@ export async function shouldProcessPath(
   const normalized = filePath.replace(/\\/g, '/');
 
   const config = getExtensionConfig();
-  const excludedPrefixes = config.excludedPrefixes || DEFAULT_EXCLUDED_PREFIXES;
+  const baseExclusions = [
+    'node_modules/',
+    '.git/',
+    'dist/',
+    'out/',
+    'build/',
+    'public/',
+    'vendor/',
+    'storage/',
+  ];
+
+  const excludedPrefixes = [
+    ...new Set([
+      ...baseExclusions,
+      ...(config.excludedPrefixes || []),
+      ...(options.excludedPrefixes || []),
+    ]),
+  ];
 
   for (const prefix of excludedPrefixes) {
     if (normalized.startsWith(prefix) || normalized.includes('/' + prefix)) {
@@ -66,45 +85,59 @@ export async function shouldProcessPath(
   }
 
   // Skip git ignore check if files already came from ls-files --exclude-standard
-  if (options.git && !options.skipGitIgnore) {
-    const cacheKey = `${filePath}:workspace:gitignore`;
-    let isIgnored: boolean;
-
-    const cached = filterCache.get(cacheKey);
-    if (cached !== undefined) {
-      isIgnored = cached;
-    } else {
-      isIgnored = await options.git.isIgnored(filePath);
-      filterCache.set(cacheKey, isIgnored);
+  if (!options.skipGitIgnore) {
+    // Try plan data first
+    if (options.plan?.ignoredPaths.has(normalized)) {
+      return { shouldProcess: false, reason: 'ignored by git (plan)' };
     }
 
-    if (isIgnored) {
-      return { shouldProcess: false, reason: 'ignored by git' };
+    if (options.git) {
+      const cacheKey = `${filePath}:workspace:gitignore`;
+      let isIgnored: boolean;
+
+      const cached = filterCache.get(cacheKey);
+      if (cached !== undefined) {
+        isIgnored = cached;
+      } else {
+        isIgnored = await options.git.isIgnored(filePath);
+        filterCache.set(cacheKey, isIgnored);
+      }
+
+      if (isIgnored) {
+        return { shouldProcess: false, reason: 'ignored by git' };
+      }
     }
   }
 
   if (options.git && options.commitSha) {
-    const cacheKey = `${filePath}:${options.commitSha}:gitignore-commit`;
-    let isIgnored: boolean;
+    // If plan data has ignoredPaths populated, trust it completely.
+    // The plan was populated by initStep which already did a batch check-ignore.
+    // If we reach here, the file is NOT in ignoredPaths, so it's not ignored.
+    if (options.plan?.ignoredPaths === undefined) {
+      // No plan data available - fall back to git check-ignore
+      const cacheKey = `${filePath}:${options.commitSha}:gitignore-commit`;
+      let isIgnored: boolean;
 
-    const cached = filterCache.get(cacheKey);
-    if (cached !== undefined) {
-      isIgnored = cached;
-    } else {
-      if (typeof (options.git as any).isIgnoredAtCommit === 'function') {
-        isIgnored = await (options.git as any).isIgnoredAtCommit(options.commitSha, filePath);
+      const cached = filterCache.get(cacheKey);
+      if (cached !== undefined) {
+        isIgnored = cached;
       } else {
-        isIgnored = await options.git.isIgnored(filePath);
+        if (typeof (options.git as any).isIgnoredAtCommit === 'function') {
+          isIgnored = await (options.git as any).isIgnoredAtCommit(options.commitSha, filePath);
+        } else {
+          isIgnored = await options.git.isIgnored(filePath);
+        }
+        filterCache.set(cacheKey, isIgnored);
       }
-      filterCache.set(cacheKey, isIgnored);
-    }
 
-    if (isIgnored) {
-      return {
-        shouldProcess: false,
-        reason: `ignored by git at commit ${options.commitSha.substring(0, 8)}`,
-      };
+      if (isIgnored) {
+        return {
+          shouldProcess: false,
+          reason: `ignored by git at commit ${options.commitSha.substring(0, 8)}`,
+        };
+      }
     }
+    // else: plan.ignoredPaths exists and file is not in it, so proceed
   }
 
   const ignoreMatcher = createCustomIgnoreMatcher(config.customIgnorePaths);
@@ -115,6 +148,15 @@ export async function shouldProcessPath(
   if (!options.skipSizeCheck && options.status !== 'D') {
     const maxFileSize = config.maxFileSize ?? 102400;
     let fileSize: number | null = null;
+
+    // Try plan data first
+    if (options.commitSha && options.plan?.sizes.has(`${options.commitSha}:${filePath}`)) {
+      fileSize = options.plan.sizes.get(`${options.commitSha}:${filePath}`)!;
+      if (fileSize > maxFileSize) {
+        return { shouldProcess: false, reason: `size ${fileSize} > ${maxFileSize} (plan)` };
+      }
+      return { shouldProcess: true };
+    }
 
     if (options.commitSha && options.git) {
       const cacheKey = `${filePath}:${options.commitSha}:size`;

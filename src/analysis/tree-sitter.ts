@@ -73,6 +73,8 @@ export class TreeSitterParser {
               this.initialized = true;
               logInfo(`All ${this.totalWorkers} workers initialized.`);
               resolve();
+              // Kickstart queue processing for any tasks that were queued during init
+              this.dispatchAll();
             }
           } else if (msg.type === 'result') {
             const task = this.activeTasks.get(msg.id);
@@ -184,16 +186,42 @@ export class TreeSitterParser {
   }
 
   private dispatch() {
-    // Dispatch high priority to on-demand workers
+    // Process high priority tasks first (they jump the queue)
+    // Try to use all available on-demand workers for parallel processing
     if (this.highPriorityQueue.length > 0 && this.onDemandWorkers.length > 0) {
-      const worker = this.onDemandWorkers[Math.floor(Math.random() * this.onDemandWorkers.length)];
-      this.processQueue(worker, true);
+      // Dispatch to all on-demand workers to maximize parallelism
+      for (const worker of this.onDemandWorkers) {
+        if (this.highPriorityQueue.length > 0) {
+          this.processQueue(worker, true);
+        }
+      }
     }
     // Dispatch low priority to background workers
     if (this.lowPriorityQueue.length > 0 && this.backgroundWorkers.length > 0) {
-      const worker =
-        this.backgroundWorkers[Math.floor(Math.random() * this.backgroundWorkers.length)];
-      this.processQueue(worker, false);
+      // Dispatch to all background workers to maximize parallelism
+      for (const worker of this.backgroundWorkers) {
+        if (this.lowPriorityQueue.length > 0) {
+          this.processQueue(worker, false);
+        }
+      }
+    }
+  }
+
+  /**
+   * Dispatch tasks to ALL available workers - called after init to kickstart processing
+   */
+  private dispatchAll() {
+    // Dispatch to all on-demand workers if high priority tasks exist
+    for (const worker of this.onDemandWorkers) {
+      if (this.highPriorityQueue.length > 0) {
+        this.processQueue(worker, true);
+      }
+    }
+    // Dispatch to all background workers if low priority tasks exist
+    for (const worker of this.backgroundWorkers) {
+      if (this.lowPriorityQueue.length > 0) {
+        this.processQueue(worker, false);
+      }
     }
   }
 

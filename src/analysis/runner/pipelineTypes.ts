@@ -4,9 +4,48 @@ import type { IntendedState } from '../../facts/intendedMap';
 import type { LegacyAuditResult } from '../../facts/legacyAudit';
 import type { ScopeSet } from '../../facts/scope';
 import type { WorkingSnapshot } from '../../facts/workingSnapshot';
+import type { FileChange } from '../../types';
 import type { CrossVersionSymbolLineage, MovedBlock } from '../movedBlockDetector';
 import type { WorkspaceFacts } from '../workspaceIndexer';
 import type { EmbeddingMetrics, HistoryMetrics, LlmMetrics } from './pipelineMetrics';
+
+/**
+ * Tree entry from git ls-tree
+ */
+export interface TreeEntry {
+  mode: string;
+  type: string;
+  sha: string;
+  path: string;
+}
+
+/**
+ * Pre-gathered data for the pipeline.
+ * All data is gathered upfront by InitStep and passed to later steps.
+ * Steps should NOT fetch data - they receive it here.
+ */
+export interface PlanData {
+  /** File changes per commit (from git diff-tree) */
+  fileChanges: Map<string, FileChange[]>;
+
+  /** File content (key: "sha:path", value: content) */
+  content: Map<string, string>;
+
+  /** Tree entries for relevant commits (sha -> (path -> entry)) */
+  trees: Map<string, Map<string, TreeEntry>>;
+
+  /** File sizes (key: "sha:path", value: bytes) */
+  sizes: Map<string, number>;
+
+  /** Ignored paths */
+  ignoredPaths: Set<string>;
+
+  /** Staged files (from init step) */
+  stagedFiles?: FileChange[];
+
+  /** Unstaged files (from init step) */
+  unstagedFiles?: FileChange[];
+}
 
 export interface PipelineState {
   selectedCommitShas: string[];
@@ -14,6 +53,9 @@ export interface PipelineState {
   workspaceParts?: Set<'staged' | 'unstaged'>;
   explicitTimeline?: string[];
   liveOverrides?: Map<string, string>;
+
+  /** Pre-gathered plan data - steps read from here, don't fetch */
+  plan?: PlanData;
 
   commitFacts?: any[];
   workspaceFacts?: {

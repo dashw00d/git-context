@@ -1,5 +1,17 @@
 import * as React from 'react';
 import { RefactorBundleFacts } from '../../../facts/types';
+import { BundleFactsSkeleton } from '../../../types/cockpit';
+import type {
+  ConventionDriftSymbol,
+  DeadSymbolEvidence,
+  DivergentSymbolEvidence,
+  HotspotEvidence,
+  ImportDriftIssue,
+  LegacyUsedSymbolEvidence,
+  MissingEdgeEvidence,
+  UnresolvedCallerEvidence,
+  ZombieEdgeEvidence,
+} from '../../../types/EvidenceTypes';
 
 export interface FileAnalysisData {
   deadSymbols: Set<string>;
@@ -17,18 +29,8 @@ export interface FileAnalysisData {
     destStartLine?: number;
     destEndLine?: number;
   }>;
-  driftIssues: Array<{
-    symbolId: string;
-    name: string;
-    convention: string;
-    suggestedName: string;
-    path: string;
-  }>;
-  unresolvedCallers: Array<{
-    symbolId?: string;
-    name?: string;
-    callerCount?: number;
-  }>;
+  driftIssues: ConventionDriftSymbol[];
+  unresolvedCallers: UnresolvedCallerEvidence[];
   hotspots: Array<{
     path: string;
     score: number;
@@ -46,11 +48,7 @@ export interface FileAnalysisData {
     importDrift: number;
   };
   // NEW fields
-  importDriftIssues: Array<{
-    line: number;
-    importPath: string;
-    style: string;
-  }>;
+  importDriftIssues: ImportDriftIssue[];
   fileNamingDrift: {
     hasDrift: boolean;
     currentStyle: string;
@@ -79,10 +77,37 @@ export interface FileAnalysisData {
 export const useFileAnalysisData = (
   fileId: string,
   bundleFacts: RefactorBundleFacts | null | undefined,
-  commitIdx?: number
+  commitIdx?: number,
+  orderedCommits: string[] = [],
+  bundleFactsSkeleton?: BundleFactsSkeleton | null,
+  fileEvidenceCache?: Record<string, Record<string, any>>,
+  onRequestFileDetails?: (filePath: string) => void
 ): FileAnalysisData => {
+  // Make parameters optional for backward compatibility
+  const skeleton = bundleFactsSkeleton || null;
+  const cache = fileEvidenceCache || {};
+  const requestFn = onRequestFileDetails;
+  // Request file details if we have skeleton but no cached evidence
+  React.useEffect(() => {
+    if (fileId && skeleton && !bundleFacts && !cache[fileId] && requestFn) {
+      requestFn(fileId);
+    }
+  }, [fileId, skeleton, bundleFacts, cache, requestFn]);
+
   return React.useMemo(() => {
-    if (!bundleFacts || !fileId) {
+    // Use full bundleFacts if available
+    const facts = bundleFacts;
+    // Otherwise, merge skeleton with cached evidence
+    const fileEvidence = cache[fileId] || {};
+
+    const isItemFuture = (itemSha?: string): boolean => {
+      if (commitIdx === undefined || !itemSha || orderedCommits.length === 0) return false;
+      const itemIdx = orderedCommits.indexOf(itemSha);
+      if (itemIdx === -1) return false; // Assume old if not in our current timeline
+      return itemIdx > commitIdx;
+    };
+
+    if (!fileId) {
       return {
         deadSymbols: new Set(),
         legacySymbols: new Set(),
@@ -117,12 +142,21 @@ export const useFileAnalysisData = (
       };
     }
 
+    // Use full facts if available, otherwise use skeleton + cached evidence
+    const evidence = facts?.evidence || fileEvidence;
+
     // Extract dead symbols
     const deadSymbols = new Set<string>();
     const deadEvidence =
-      bundleFacts.evidence?.['findings.legacyAudit']?.dead || bundleFacts.evidence?.dead || [];
-    deadEvidence.forEach((item: any) => {
-      if (item.path === fileId && item.symbol_id) {
+      (evidence?.['findings.legacyAudit']?.dead as DeadSymbolEvidence[] | undefined) ||
+      (evidence?.dead as DeadSymbolEvidence[] | undefined) ||
+      [];
+    deadEvidence.forEach((item: DeadSymbolEvidence) => {
+      // Filter by time if commit metadata is available
+      if (isItemFuture((item as any).sha)) return;
+
+      const itemPath = item.path || item.filePath;
+      if (itemPath === fileId && item.symbol_id) {
         deadSymbols.add(item.symbol_id);
       }
     });
@@ -130,73 +164,69 @@ export const useFileAnalysisData = (
     // Extract legacy-used symbols
     const legacySymbols = new Set<string>();
     const legacyEvidence =
-      bundleFacts.evidence?.['findings.legacyAudit']?.legacyUsed ||
-      bundleFacts.evidence?.legacyUsed ||
+      (evidence?.['findings.legacyAudit']?.legacyUsed as LegacyUsedSymbolEvidence[] | undefined) ||
+      (evidence?.legacyUsed as LegacyUsedSymbolEvidence[] | undefined) ||
       [];
-    legacyEvidence.forEach((item: any) => {
-      if (item.path === fileId && item.symbol_id) {
+    legacyEvidence.forEach((item: LegacyUsedSymbolEvidence) => {
+      if (isItemFuture((item as any).sha)) return;
+
+      const itemPath = item.path || item.filePath;
+      if (itemPath === fileId && item.symbol_id) {
         legacySymbols.add(item.symbol_id);
       }
     });
 
     // Extract moved blocks for this file
-    // Note: movedLineage contains cross-version moves, we'll filter by file in the component
-    const movedBlocks = bundleFacts.bundle?.movedLineage || [];
+    const movedBlocks = (facts?.bundle?.movedLineage || []).filter(block => {
+      // For lineage, we generally show it all or filter by destination version
+      return !isItemFuture((block as any).destVersion || (block as any).sha);
+    });
 
     // Extract convention drift issues for this file
-    const driftIssues: Array<{
-      symbolId: string;
-      name: string;
-      convention: string;
-      suggestedName: string;
-      path: string;
-    }> = [];
-    const conventionDrift = bundleFacts.findings?.patternDrift?.conventionDrift;
+    const driftIssues: ConventionDriftSymbol[] = [];
+    const conventionDrift =
+      facts?.findings?.patternDrift?.conventionDrift ||
+      (skeleton?.findings?.patternDrift?.conventionDrift &&
+      fileEvidence?.['findings.patternDrift.conventionDrift']?.driftSymbols
+        ? {
+            driftSymbols:
+              (fileEvidence['findings.patternDrift.conventionDrift']
+                .driftSymbols as ConventionDriftSymbol[]) || [],
+          }
+        : undefined);
     if (conventionDrift?.driftSymbols) {
-      conventionDrift.driftSymbols.forEach((ds: any) => {
-        if (ds.path === fileId) {
-          driftIssues.push({
-            symbolId: ds.symbolId,
-            name: ds.name,
-            convention: ds.convention,
-            suggestedName: ds.suggestedName,
-            path: ds.path,
-          });
+      conventionDrift.driftSymbols.forEach((ds: ConventionDriftSymbol) => {
+        if (ds.path === fileId && !isItemFuture((ds as any).sha)) {
+          driftIssues.push(ds);
         }
       });
     }
 
     // Extract unresolved callers
-    const unresolvedCallers: Array<{
-      symbolId?: string;
-      name?: string;
-      callerCount?: number;
-    }> = [];
+    const unresolvedCallers: UnresolvedCallerEvidence[] = [];
     const unresolvedEvidence =
-      bundleFacts.evidence?.['findings.unresolvedCallers'] ||
-      bundleFacts.findings?.unresolvedCallers ||
-      [];
+      (evidence?.['findings.unresolvedCallers'] as UnresolvedCallerEvidence[] | undefined) ||
+      (facts?.findings?.unresolvedCallers ? [] : []);
     if (Array.isArray(unresolvedEvidence)) {
-      unresolvedEvidence.forEach((item: any) => {
-        // UnresolvedCallerFact has caller_path, caller_name, callee_name, occurrence_count
+      unresolvedEvidence.forEach((item: UnresolvedCallerEvidence) => {
+        if (isItemFuture((item as any).sha)) return;
+
         const itemPath = item.path || item.filePath || item.caller_path;
         if (itemPath === fileId) {
-          unresolvedCallers.push({
-            symbolId: item.symbolId || item.caller_symbol_id,
-            name: item.name || item.caller_name,
-            callerCount: item.callerCount || item.count || item.occurrence_count || 1,
-          });
+          unresolvedCallers.push(item);
         }
       });
     }
 
     // Extract hotspots for this file
     const hotspots: Array<{ path: string; score: number; symbolId?: string }> = [];
-    const hotspotEvidence = bundleFacts.evidence?.hotspots || [];
-    hotspotEvidence.forEach((hotspot: any) => {
+    const hotspotEvidence = (evidence?.hotspots as HotspotEvidence[] | undefined) || [];
+    hotspotEvidence.forEach((hotspot: HotspotEvidence) => {
+      if (isItemFuture((hotspot as any).sha)) return;
+
       if (hotspot.path === fileId || hotspot.file_path === fileId) {
         hotspots.push({
-          path: hotspot.path || hotspot.file_path,
+          path: hotspot.path || hotspot.file_path || '',
           score: hotspot.score || hotspot.hotspot_score || 0,
           symbolId: hotspot.symbol_id,
         });
@@ -204,27 +234,23 @@ export const useFileAnalysisData = (
     });
 
     // Import drift for this file
-    const importDriftIssues: FileAnalysisData['importDriftIssues'] = [];
-    const importDriftEvidence =
-      bundleFacts.evidence?.['findings.patternDrift.conventionDrift']?.importDrift;
+    const importDriftIssues: ImportDriftIssue[] = [];
+    const importDriftEvidence = evidence?.['findings.patternDrift.conventionDrift']?.importDrift;
     if (importDriftEvidence?.driftImports) {
-      importDriftEvidence.driftImports.forEach((imp: any) => {
-        if (imp.file === fileId) {
-          importDriftIssues.push({
-            line: imp.line,
-            importPath: imp.importPath,
-            style: imp.style,
-          });
+      importDriftEvidence.driftImports.forEach((imp: ImportDriftIssue) => {
+        if (imp.file === fileId && !isItemFuture((imp as any).sha)) {
+          importDriftIssues.push(imp);
         }
       });
     }
 
     // File naming drift
     let fileNamingDrift: FileAnalysisData['fileNamingDrift'] = null;
-    const fnDriftEvidence =
-      bundleFacts.evidence?.['findings.patternDrift.conventionDrift']?.fileNamingDrift;
+    const fnDriftEvidence = evidence?.['findings.patternDrift.conventionDrift']?.fileNamingDrift;
     if (fnDriftEvidence?.driftFiles) {
-      const thisFile = fnDriftEvidence.driftFiles.find((f: any) => f.path === fileId);
+      const thisFile = fnDriftEvidence.driftFiles.find(
+        (f: any) => f.path === fileId && !isItemFuture((f as any).sha)
+      );
       if (thisFile) {
         fileNamingDrift = {
           hasDrift: true,
@@ -236,27 +262,39 @@ export const useFileAnalysisData = (
 
     // Divergent symbols
     const divergentSymbols = new Set<string>();
-    const divergentEvidence = bundleFacts.evidence?.['findings.incompleteness']?.divergent || [];
-    divergentEvidence.forEach((item: any) => {
+    const divergentEvidence =
+      (evidence?.['findings.incompleteness']?.divergent as DivergentSymbolEvidence[] | undefined) ||
+      [];
+    divergentEvidence.forEach((item: DivergentSymbolEvidence) => {
+      if (isItemFuture((item as any).sha)) return;
+
       const itemPath = item.path || item.filePath;
       if (itemPath === fileId && (item.symbol_id || item.symbolId)) {
-        divergentSymbols.add(item.symbol_id || item.symbolId);
+        divergentSymbols.add(item.symbol_id || item.symbolId || '');
       }
     });
 
     // Edge issues
     let missingEdgesCount = 0;
     let zombieEdgesCount = 0;
-    const missingEdges = bundleFacts.evidence?.['findings.incompleteness']?.missing_edges || [];
-    const zombieEdges = bundleFacts.evidence?.['findings.incompleteness']?.zombie_edges || [];
-    missingEdges.forEach((e: any) => {
+    const missingEdges =
+      (evidence?.['findings.incompleteness']?.missing_edges as MissingEdgeEvidence[] | undefined) ||
+      [];
+    const zombieEdges =
+      (evidence?.['findings.incompleteness']?.zombie_edges as ZombieEdgeEvidence[] | undefined) ||
+      [];
+    missingEdges.forEach((e: MissingEdgeEvidence) => {
+      if (isItemFuture((e as any).sha)) return;
+
       const fromPath = e.from?.split(':')[0] || e.from;
       const toPath = e.to?.split(':')[0] || e.to;
       if (fromPath === fileId || toPath === fileId) {
         missingEdgesCount++;
       }
     });
-    zombieEdges.forEach((e: any) => {
+    zombieEdges.forEach((e: ZombieEdgeEvidence) => {
+      if (isItemFuture((e as any).sha)) return;
+
       const fromPath = e.from?.split(':')[0] || e.from;
       const toPath = e.to?.split(':')[0] || e.to;
       if (fromPath === fileId || toPath === fileId) {
@@ -266,9 +304,11 @@ export const useFileAnalysisData = (
 
     // Mixed conventions for this file
     let mixedConventions: FileAnalysisData['mixedConventions'] = null;
-    const mixedFiles = bundleFacts.evidence?.['findings.patternDrift.mixedConventionFiles'] || [];
+    const mixedFiles = evidence?.['findings.patternDrift.mixedConventionFiles'] || [];
     if (Array.isArray(mixedFiles)) {
-      const thisMixed = mixedFiles.find((f: any) => f.path === fileId);
+      const thisMixed = mixedFiles.find(
+        (f: any) => f.path === fileId && !isItemFuture((f as any).sha)
+      );
       if (thisMixed) {
         mixedConventions = {
           conventions: thisMixed.conventions || [],
@@ -278,33 +318,51 @@ export const useFileAnalysisData = (
     }
 
     // Convention info (workspace-level)
-    const cd = bundleFacts.findings?.patternDrift?.conventionDrift;
+    const cd =
+      facts?.findings?.patternDrift?.conventionDrift ||
+      (skeleton?.findings?.patternDrift?.conventionDrift
+        ? {
+            dominantConvention: skeleton.findings.patternDrift.conventionDrift.dominantConvention,
+            dominantImportStyle: 'unknown',
+            dominantFileNaming: 'unknown',
+          }
+        : undefined);
     const conventionInfo = cd
       ? {
           dominantNaming: cd.dominantConvention || 'unknown',
-          dominantImportStyle: cd.importDrift?.dominantStyle || 'unknown',
-          dominantFileNaming: cd.fileNamingDrift?.dominantStyle || 'unknown',
+          dominantImportStyle:
+            'importDrift' in cd && cd.importDrift ? cd.importDrift.dominantStyle : 'unknown',
+          dominantFileNaming:
+            'fileNamingDrift' in cd && cd.fileNamingDrift
+              ? cd.fileNamingDrift.dominantStyle
+              : 'unknown',
         }
       : null;
 
     // Partial analysis status
     const analysisStatus = {
-      partial: bundleFacts.partial || false,
-      partialReasons: bundleFacts.partialReasons || [],
+      partial: facts?.partial || skeleton?.partial || false,
+      partialReasons: facts?.partialReasons || skeleton?.partialReasons || [],
     };
 
-    // Extract findings counts
+    // Extract findings counts (use filtered lists where possible)
     const findings = {
-      missing: bundleFacts.findings?.incompleteness?.missing || 0,
-      zombies: bundleFacts.findings?.incompleteness?.zombies || 0,
-      dead: deadSymbols.size || bundleFacts.findings?.legacyAudit?.dead || 0,
-      legacyUsed: legacySymbols.size || bundleFacts.findings?.legacyAudit?.legacyUsed || 0,
-      unresolved: unresolvedCallers.length || bundleFacts.findings?.unresolvedCallers?.total || 0,
-      divergent: divergentSymbols.size,
+      missing: driftIssues.filter(d => (d as any).type === 'missing_symbols').length || 0, // Heuristic: filter from driftIssues
+      zombies: driftIssues.filter(d => (d as any).type === 'zombie_symbols').length || 0,
+      dead: deadSymbols.size || 0,
+      legacyUsed: legacySymbols.size || 0,
+      unresolved: unresolvedCallers.length || 0,
+      divergent: divergentSymbols.size || 0,
       missingEdges: missingEdgesCount,
       zombieEdges: zombieEdgesCount,
       importDrift: importDriftIssues.length,
     };
+
+    // Fallback counts from facts if we didn't extract everything (respecting time travel ideally)
+    if (commitIdx === undefined || commitIdx === orderedCommits.length - 1) {
+      if (findings.missing === 0) findings.missing = facts?.findings?.incompleteness?.missing || 0;
+      if (findings.zombies === 0) findings.zombies = facts?.findings?.incompleteness?.zombies || 0;
+    }
 
     return {
       deadSymbols,
@@ -325,5 +383,5 @@ export const useFileAnalysisData = (
       conventionInfo,
       analysisStatus,
     };
-  }, [fileId, bundleFacts, commitIdx]);
+  }, [fileId, bundleFacts, skeleton, cache, commitIdx, orderedCommits]);
 };

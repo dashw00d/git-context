@@ -2,6 +2,7 @@ import * as React from 'react';
 import { CockpitState, ContextFrame } from '../../../types/cockpit';
 import { useFileAnalysisData } from '../hooks/useFileAnalysisData';
 import { BlastRadiusStage } from './stages/BlastRadiusStage';
+
 import { BundleStage } from './stages/BundleStage';
 import { CodeEditor } from './stages/CodeEditor';
 import { DriftBrowserPanel } from './stages/DriftBrowserPanel';
@@ -53,7 +54,8 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
   };
 
   const handleCommitIndexChange = (index: number) => {
-    vscode.postMessage({ type: 'updateCommitIndex', value: index });
+    const sha = orderedCommits[index];
+    vscode.postMessage({ type: 'updateCommitIndex', value: index, sha });
   };
 
   const frameData = frame.level === 'bundle' ? cockpitState?.bundleView || frame.data : frame.data;
@@ -64,19 +66,103 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     renderFrame.data?.symbolId || null
   );
 
-  // Effect to sync focusedSymbolId when frame changes (e.g. navigation to symbol)
+  // Handle symbol navigation from sidebar/explorer
   React.useEffect(() => {
-    if (renderFrame.data?.symbolId) {
+    if (renderFrame.level === 'symbol' && renderFrame.id.includes('::')) {
+      const symbolId = renderFrame.id.split('::')[1];
+      if (symbolId && symbolId !== focusedSymbolId) {
+        setFocusedSymbolId(symbolId);
+        setZoomLevel('focus');
+      }
+    } else if (renderFrame.data?.symbolId && renderFrame.data.symbolId !== focusedSymbolId) {
       setFocusedSymbolId(renderFrame.data.symbolId);
       setZoomLevel('focus');
     }
-  }, [renderFrame.data?.symbolId, renderFrame.id]);
+  }, [renderFrame.id, renderFrame.level, renderFrame.data?.symbolId]);
 
   // Unconditional hook call
+  const handleRequestFileDetails = React.useCallback(
+    (filePath: string) => {
+      if (vscode) {
+        vscode.postMessage({ type: 'requestFileDetails', payload: { filePath } });
+      }
+    },
+    [vscode]
+  );
+
+  // Calculate values at top level for useFileAnalysisData and useEffect
+  const totalCommits = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
+  const headInfo = cockpitState?.headInfo;
+  const fileDataHistory = renderFrame.data?.history;
+  const selectedCommitShas = cockpitState?.selectedCommitShas || [];
+
+  // Get ordered commits from state (for commit index calculation)
+  // We want OLDEST to NEWEST for the scrubber (index 0 = oldest)
+  const orderedCommits = React.useMemo(() => {
+    if (selectedCommitShas.length > 0 && cockpitState?.commits) {
+      const selectedCommits = cockpitState.commits
+        .filter(c => selectedCommitShas.includes(c.sha))
+        .sort((a, b) => new Date(a.authoredAt).getTime() - new Date(b.authoredAt).getTime());
+
+      if (selectedCommits.length > 0) {
+        return selectedCommits.map(c => c.sha);
+      }
+      return [...selectedCommitShas].reverse();
+    }
+    if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
+      // getFileHistory returns newest first, so reverse for oldest-to-newest
+      return [...renderFrame.data.history].reverse().map((c: any) => c.hash || c.sha);
+    }
+    if (headInfo) {
+      return [headInfo.sha];
+    }
+    return [];
+  }, [selectedCommitShas, cockpitState?.commits, renderFrame.data?.history, headInfo]);
+
+  const commits = React.useMemo(() => {
+    if (selectedCommitShas.length > 0) {
+      return (cockpitState?.commits || [])
+        .filter(c => selectedCommitShas.includes(c.sha))
+        .sort((a, b) => {
+          const aIndex = orderedCommits.indexOf(a.sha);
+          const bIndex = orderedCommits.indexOf(b.sha);
+          return aIndex - bIndex;
+        })
+        .map(c => ({
+          sha: c.sha,
+          date: c.authoredAt,
+          message: c.message,
+          author: c.author,
+        }));
+    }
+    if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
+      return [...renderFrame.data.history].reverse().map((c: any) => ({
+        sha: c.hash || c.sha,
+        date: c.date,
+        message: c.message,
+        author: c.author_name || c.author,
+      }));
+    }
+    if (headInfo) {
+      return [headInfo];
+    }
+    return [];
+  }, [
+    selectedCommitShas,
+    cockpitState?.commits,
+    orderedCommits,
+    renderFrame.data?.history,
+    headInfo,
+  ]);
+
   const analysisData = useFileAnalysisData(
     renderFrame.level === 'file' ? renderFrame.id : '',
     cockpitState?.bundleFacts,
-    cockpitState?.currentCommitIndex
+    cockpitState?.currentCommitIndex,
+    orderedCommits,
+    cockpitState?.bundleFactsSkeleton,
+    cockpitState?.fileEvidenceCache,
+    handleRequestFileDetails
   );
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -94,12 +180,6 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
       }
     }
   };
-
-  // Calculate values at top level for useEffect
-  const totalCommits = cockpitState?.bundleFacts?.bundle?.totalCommits || 0;
-  const headInfo = cockpitState?.headInfo;
-  const fileDataHistory = renderFrame.data?.history;
-  const selectedCommitShas = cockpitState?.selectedCommitShas || [];
 
   React.useEffect(() => {
     if (
@@ -121,58 +201,99 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
     vscode,
   ]);
 
+  // Extract lineCommits outside conditional for hook usage
+  const lineCommitsData = renderFrame.level === 'file' ? renderFrame.data?.lineCommits || [] : [];
+
+  // Build file-specific ordered commits from lineCommits (sorted by date, oldest first)
+  // This is more complete than orderedCommits which only has selected/history commits
+  const effectiveOrderedCommits = React.useMemo(() => {
+    if (lineCommitsData.length > 0) {
+      // Get unique commits with their dates from lineCommits
+      const commitMap = new Map<string, string>(); // sha -> date
+      lineCommitsData.forEach((lc: { commitSha: string; date: string }) => {
+        if (!commitMap.has(lc.commitSha)) {
+          commitMap.set(lc.commitSha, lc.date);
+        }
+      });
+
+      // Sort by date (oldest first)
+      const sorted = Array.from(commitMap.entries())
+        .sort((a, b) => new Date(a[1]).getTime() - new Date(b[1]).getTime())
+        .map(([sha]) => sha);
+
+      return sorted;
+    }
+    // Fall back to orderedCommits
+    return orderedCommits;
+  }, [lineCommitsData, orderedCommits]);
+
+  // Build commits for TimeScrubber - use blame data if history is incomplete
+  // This ensures we show the full commit timeline (e.g., "1/20") instead of just "1/1"
+  const fileCommits = React.useMemo(() => {
+    // Extract unique commits from lineCommitsData (blame) - this has all commits that touched the file
+    let blameCommits: Array<{ sha: string; date: string; author: string; message: string }> = [];
+    if (lineCommitsData.length > 0) {
+      const commitMap = new Map<
+        string,
+        { sha: string; date: string; author: string; message: string }
+      >();
+      lineCommitsData.forEach((lc: { commitSha: string; date: string; author: string }) => {
+        if (!commitMap.has(lc.commitSha)) {
+          commitMap.set(lc.commitSha, {
+            sha: lc.commitSha,
+            date: lc.date,
+            author: lc.author,
+            message: '', // Blame doesn't include message, leave empty
+          });
+        }
+      });
+      blameCommits = Array.from(commitMap.values()).sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+    }
+
+    // Use history if it has a reasonable number of commits (5+), otherwise use blame data
+    // History might only have 1 commit if getFileHistory failed or file is new
+    // But blame data will have all commits that actually touched lines in the file
+    if (
+      renderFrame.data?.history &&
+      Array.isArray(renderFrame.data.history) &&
+      renderFrame.data.history.length >= 5
+    ) {
+      return [...renderFrame.data.history].reverse().map((c: any) => ({
+        sha: c.hash || c.sha,
+        date: c.date,
+        message: c.message || '',
+        author: c.author_name || c.author || 'Unknown',
+      }));
+    }
+
+    // Use blame commits if we have them (they're more complete than incomplete history)
+    if (blameCommits.length > 0) {
+      return blameCommits;
+    }
+
+    // Fall back to commits (which includes selectedCommitShas or headInfo)
+    return commits;
+  }, [lineCommitsData, commits, renderFrame.data?.history]);
+
   if (renderFrame.level === 'file') {
     const metrics = cockpitState?.nodeMetrics?.[renderFrame.id] || renderFrame.data?.metrics;
     const content = renderFrame.data?.content || '';
     const symbols = renderFrame.data?.symbols || [];
-    const lineCommits = renderFrame.data?.lineCommits || [];
+    const lineCommits = lineCommitsData; // Use the extracted data
     const blastRadius = renderFrame.data?.blastRadius;
     const driftIssues = renderFrame.data?.drift || [];
 
-    // Get ordered commits from state (for commit index calculation)
-    let orderedCommits = cockpitState?.selectedCommitShas || [];
-    let commits: any[] = [];
-
-    const optimisticHead = cockpitState?.headInfo || null;
-
-    if (orderedCommits.length > 0) {
-      // Use global selection
-      commits = (cockpitState?.commits || [])
-        .filter(c => orderedCommits.includes(c.sha))
-        .sort((a, b) => {
-          const aIndex = orderedCommits.indexOf(a.sha);
-          const bIndex = orderedCommits.indexOf(b.sha);
-          return aIndex - bIndex;
-        })
-        .map(c => ({
-          sha: c.sha,
-          date: c.authoredAt,
-          message: c.message,
-          author: c.author,
-        }));
-    } else if (renderFrame.data?.history && Array.isArray(renderFrame.data.history)) {
-      // Fallback to file history
-      // History is usually newest to oldest, so we reverse for the timeline (oldest to newest)
-      const fileHistory = [...renderFrame.data.history].reverse();
-      orderedCommits = fileHistory.map((c: any) => c.hash || c.sha);
-      commits = fileHistory.map((c: any) => ({
-        sha: c.hash || c.sha,
-        date: c.date,
-        message: c.message,
-        author: c.author_name || c.author,
-      }));
-    } else if (optimisticHead) {
-      // Optimistic: Use HEAD commit for time travel
-      orderedCommits = [optimisticHead.sha];
-      commits = [optimisticHead];
-    }
+    // Normalize filePath to match edge path format (browser-compatible)
+    const normalizedFilePath = renderFrame.id;
 
     // Default to latest commit if index is undefined
     const currentCommitIndex =
       cockpitState?.currentCommitIndex !== undefined
         ? cockpitState.currentCommitIndex
-        : orderedCommits.length > 0
-          ? orderedCommits.length - 1
+        : effectiveOrderedCommits.length > 0
+          ? effectiveOrderedCommits.length - 1
           : undefined;
 
     const handleNeighborClick = (filePath: string) => {
@@ -243,15 +364,16 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
               onSymbolClick={(symbolId: string) => setFocusedSymbolId(symbolId)}
               onClearFocus={() => setFocusedSymbolId(null)}
               lineCommits={lineCommits}
-              orderedCommits={orderedCommits}
+              orderedCommits={effectiveOrderedCommits}
               currentCommitIndex={currentCommitIndex}
-              filePath={renderFrame.id}
+              filePath={normalizedFilePath}
               bundleFacts={cockpitState?.bundleFacts}
               movedBlocks={analysisData.movedBlocks}
               showLineNumbers={true}
               showAgeGutter={true}
               showMovedGutter={true}
               metrics={metrics}
+              analysisData={analysisData}
             />
           ) : zoomLevel === 'overview' ? (
             <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
@@ -316,19 +438,21 @@ export const CodeMicroscope: React.FC<CodeMicroscopeProps> = ({
             focusedSymbolId={focusedSymbolId}
             currentFilePath={renderFrame.id}
             currentCommitIndex={currentCommitIndex}
-            orderedCommits={orderedCommits}
+            orderedCommits={effectiveOrderedCommits}
             bundleFacts={cockpitState?.bundleFacts}
             vscode={vscode}
             commits={commits}
+            analysisData={analysisData}
           />
         </div>
 
         <TimeScrubber
-          commits={commits}
+          commits={fileCommits}
           currentCommitIndex={currentCommitIndex}
           onCommitIndexChange={handleCommitIndexChange}
           bundleFacts={cockpitState?.bundleFacts}
           lineCommits={lineCommits}
+          symbols={symbols}
         />
 
         <DriftBrowserPanel

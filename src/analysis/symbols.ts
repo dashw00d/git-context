@@ -340,6 +340,8 @@ export class SymbolExtractor {
       'interface',
       'enum',
       'module',
+      'type',
+      'type_alias',
     ]);
     const symbols = facts.filter(f => symbolKinds.has(f.kind)) as SymbolInfo[];
 
@@ -468,7 +470,13 @@ export class SymbolExtractor {
       return false;
     }
 
-    const skipPatterns = [/vendor/, /\.min\./, getTestFilePattern()];
+    const skipPatterns = [
+      /vendor/,
+      /public\/.*\.js$/,
+      /public\/.*\.css$/,
+      /\.min\./,
+      getTestFilePattern(),
+    ];
 
     return !skipPatterns.some(pattern => pattern.test(filePath));
   }

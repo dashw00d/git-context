@@ -112,8 +112,8 @@ export function createHotspotStep(): PipelineStep {
           filesBySha.get(row.sha)!.push(row.path);
         }
 
-        // Concurrency for hybrid facts retrieval
-        const limit = pLimit(16);
+        // DEBUG: Sequential processing
+        const limit = pLimit(1);
         const tasks: Promise<void>[] = [];
 
         for (const sha of state.selectedCommitShas) {

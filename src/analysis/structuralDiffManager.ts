@@ -1,3 +1,4 @@
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
 import { getCstDiffManager } from './cstDiff';
@@ -14,18 +15,10 @@ export interface StructuralDiffMetrics {
   rawData?: any;
 }
 
-interface QueuedDiff {
-  parentBlobSha: string;
-  currentBlobSha: string;
-  filePath: string;
-  metrics: StructuralDiffMetrics;
-}
-
 export class StructuralDiffManager {
   private difftastic = getDifftasticIntegration();
   private cstDiff = getCstDiffManager();
-  private writeQueue: QueuedDiff[] = [];
-  private readonly BATCH_SIZE = 50;
+  private writeQueue = DatabaseWriteQueue.getInstance();
 
   constructor(private db: any) {
     //empty
@@ -52,7 +45,11 @@ export class StructuralDiffManager {
         linesRemoved: 0,
       };
 
-      this.storeDiff(parentBlobSha, currentBlobSha, filePath, emptyDiff);
+      // Queue empty diff for batch write
+      this.writeQueue.queue({
+        type: 'structural_diff',
+        data: { parentBlobSha, currentBlobSha, filePath, metrics: emptyDiff },
+      });
       return emptyDiff;
     }
 
@@ -87,18 +84,22 @@ export class StructuralDiffManager {
       logDebug(`[StructDiff] Failed to compute CST delta for refinement: ${e}`);
     }
 
-    this.queueDiff(parentBlobSha, currentBlobSha, filePath, metrics);
+    // Queue diff for batch write
+    this.writeQueue.queue({
+      type: 'structural_diff',
+      data: { parentBlobSha, currentBlobSha, filePath, metrics },
+    });
 
     return metrics;
   }
 
   /**
    * Flush any pending diff writes (call at end of processing)
+   * Now handled by centralized DatabaseWriteQueue
    */
   flushDiffQueue(): void {
-    while (this.writeQueue.length > 0) {
-      this.flushDiffQueueInternal();
-    }
+    // No-op: flushing is handled by DatabaseWriteQueue.flushAll()
+    // Kept for backward compatibility
   }
 
   private getCachedDiff(
@@ -122,62 +123,6 @@ export class StructuralDiffManager {
       linesRemoved: row.lines_removed,
       rawData: row.data_json ? JSON.parse(row.data_json) : undefined,
     };
-  }
-
-  private queueDiff(
-    parentBlobSha: string,
-    currentBlobSha: string,
-    filePath: string,
-    metrics: StructuralDiffMetrics
-  ): void {
-    this.writeQueue.push({ parentBlobSha, currentBlobSha, filePath, metrics });
-    if (this.writeQueue.length >= this.BATCH_SIZE) {
-      this.flushDiffQueueInternal();
-    }
-  }
-
-  private flushDiffQueueInternal(): void {
-    if (this.writeQueue.length === 0) return;
-    const batch = this.writeQueue.splice(0, this.BATCH_SIZE);
-
-    const stmt = prepare(`
-      INSERT OR REPLACE INTO structural_diffs
-      (parent_blob_sha, current_blob_sha, file_path, structural_change_score,
-       control_flow_changed, interface_changed, moved_blocks, lines_added,
-       lines_removed, data_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const now = new Date().toISOString();
-
-    this.db.transaction(() => {
-      for (const diff of batch) {
-        stmt.run([
-          diff.parentBlobSha,
-          diff.currentBlobSha,
-          diff.filePath,
-          diff.metrics.structuralChangeScore,
-          diff.metrics.controlFlowChanged ? 1 : 0,
-          diff.metrics.interfaceChanged ? 1 : 0,
-          diff.metrics.movedBlocks,
-          diff.metrics.linesAdded,
-          diff.metrics.linesRemoved,
-          diff.metrics.rawData ? JSON.stringify(diff.metrics.rawData) : null,
-          now,
-        ]);
-      }
-    })();
-
-    logDebug(`[StructuralDiffManager] Batched ${batch.length} diff writes`);
-  }
-
-  private storeDiff(
-    parentBlobSha: string,
-    currentBlobSha: string,
-    filePath: string,
-    metrics: StructuralDiffMetrics
-  ): void {
-    this.queueDiff(parentBlobSha, currentBlobSha, filePath, metrics);
   }
 
   private extractMetrics(difftasticOutput: any): StructuralDiffMetrics {

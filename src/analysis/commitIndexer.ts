@@ -1,6 +1,9 @@
+/* eslint-disable no-restricted-syntax */
+// CancellationError must be thrown to halt the pipeline immediately (see code review P1)
 import * as crypto from 'crypto';
 import pLimit = require('p-limit');
 import * as vscode from 'vscode';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { ANALYSIS_VERSION } from '../storage/schema';
 import { prepare } from '../storage/statement-wrapper';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
@@ -15,7 +18,7 @@ import { MovedBlockDetectorV2 } from './movedBlockDetector';
 import { SnapshotManager } from './snapshotManager';
 import { StructuralDiffManager } from './structuralDiffManager';
 import { getTreeSitterParser } from './tree-sitter';
-import type { SymbolInfo } from '../types';
+import type { FileChange, SymbolInfo } from '../types';
 
 export interface CommitFacts {
   sha: string;
@@ -78,6 +81,39 @@ export class CommitIndexer {
     private movedBlockDetector: MovedBlockDetectorV2
   ) {
     //empty
+  }
+
+  /**
+   * Get content from plan data or fallback to git
+   */
+  private async getContent(
+    sha: string,
+    path: string,
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<string> {
+    // Try plan data first (synchronous, no lookup overhead)
+    if (plan?.content.has(`${sha}:${path}`)) {
+      return plan.content.get(`${sha}:${path}`)!;
+    }
+    // Fallback to git (will log warning)
+    return this.git.safeGetFileContent(sha, path);
+  }
+
+  /**
+   * Get blob SHA from plan data or fallback to git
+   */
+  private async getBlobSha(
+    sha: string,
+    path: string,
+    plan?: import('./runner/pipelineTypes').PlanData
+  ): Promise<string> {
+    // Try plan data first
+    const tree = plan?.trees.get(sha);
+    if (tree?.has(path)) {
+      return tree.get(path)!.sha;
+    }
+    // Fallback to git
+    return this.git.getBlobSha(sha, path);
   }
 
   /**
@@ -151,6 +187,7 @@ export class CommitIndexer {
         file: string;
         sha: string;
       }) => void;
+      plan?: import('./runner/pipelineTypes').PlanData;
     }
   ): Promise<CommitFacts | null> {
     if (opts?.token?.isCancellationRequested) {
@@ -189,21 +226,31 @@ export class CommitIndexer {
   async ensureCommitsIndexed(
     shas: string[],
     concurrency: number = 8,
-    opts?: { force?: boolean; modules?: string[]; token?: vscode.CancellationToken },
+    opts?: {
+      force?: boolean;
+      modules?: string[];
+      token?: vscode.CancellationToken;
+      plan?: import('./runner/pipelineTypes').PlanData;
+      priority?: boolean;
+    },
     onProgress?: (event: {
       type: 'file_start' | 'file_complete';
       file: string;
       sha: string;
     }) => void
   ): Promise<CommitFacts[]> {
-    const limit = pLimit(concurrency);
-    const promises = shas.map(sha =>
+    const effectiveConcurrency = concurrency;
+    // logInfo(`[CommitIndexer] Using concurrency=${effectiveConcurrency}`);
+    const limit = pLimit(effectiveConcurrency);
+
+    const promises = shas.map((sha, idx) =>
       limit(async () => {
+        const commitStart = Date.now(); // DEBUG timing
         if (opts?.token?.isCancellationRequested) {
           logInfo('[CommitIndexer] Operation cancelled');
           throw new vscode.CancellationError();
         }
-        return this.retryWithBackoff(async () => {
+        const result = await this.retryWithBackoff(async () => {
           if (opts?.token?.isCancellationRequested) {
             logInfo('[CommitIndexer] Operation cancelled');
             throw new vscode.CancellationError();
@@ -212,14 +259,18 @@ export class CommitIndexer {
           if (!facts) return Promise.reject(new Error(`Failed to index ${sha}`));
           return facts;
         });
+        logInfo(
+          `[CommitIndexer] 🕐 Commit ${idx + 1}/${shas.length} ${sha.substring(0, 8)}: ${Date.now() - commitStart}ms`
+        );
+        return result;
       })
     );
 
     const results = await Promise.all(promises);
     const validResults = results.filter((f): f is CommitFacts => f !== null && f !== undefined);
 
-    this.snapshotManager.flushSnapshotQueue();
-    this.structuralDiffManager.flushDiffQueue();
+    // Flush all queued database writes (replaces individual flushSnapshotQueue/flushDiffQueue calls)
+    await DatabaseWriteQueue.getInstance().flushAll();
 
     const stats = this.getCacheStats();
     logInfo(
@@ -242,34 +293,54 @@ export class CommitIndexer {
         file: string;
         sha: string;
       }) => void;
+      plan?: import('./runner/pipelineTypes').PlanData;
+      priority?: boolean;
     }
   ): Promise<CommitFacts> {
     logInfo(`[CommitIndexer] Indexing commit ${sha}`);
 
     const commitInfo = await this.git.getCommitInfo(sha);
-    const files = await this.git.getFileChanges(sha);
+
+    // Use plan data if available, otherwise fallback to cache service
+    let files: FileChange[];
+    if (opts?.plan?.fileChanges.has(sha)) {
+      files = opts.plan.fileChanges.get(sha)!;
+    } else {
+      const { getGitCacheService } = await import('../services/gitCacheService');
+      const cacheService = getGitCacheService();
+      files = await cacheService.getCachedFileChanges(sha);
+    }
+
     const parentSha = commitInfo.parent || null;
 
-    const CONCURRENCY = 8;
+    const CONCURRENCY = opts?.force ? 1 : 8;
     const limit = pLimit(CONCURRENCY);
 
-    logInfo(
-      `[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY})`
-    );
+    // logInfo(`[CommitIndexer] Processing ${files.length} files for ${sha} (concurrency: ${CONCURRENCY})`);
 
-    const promises = files.map(file =>
+    const commitFileStartTime = Date.now();
+    const promises = files.map((file, fileIdx) =>
       limit(async () => {
+        const fileStartTime = Date.now();
         if (opts?.token?.isCancellationRequested) {
           logInfo('[CommitIndexer] Operation cancelled');
           throw new vscode.CancellationError();
         }
         opts?.onProgress?.({ type: 'file_start', file: file.path, sha });
-        const result = await this.processFile(file, sha, parentSha);
+        const result = await this.processFile(file, sha, parentSha, opts?.plan, opts?.priority);
         opts?.onProgress?.({ type: 'file_complete', file: file.path, sha });
+        const fileDuration = Date.now() - fileStartTime;
+        logInfo(
+          `[CommitIndexer] 🕐 File ${fileIdx + 1}/${files.length} ${file.path}: ${fileDuration}ms`
+        );
         return result;
       })
     );
     const results = await Promise.all(promises);
+    const commitFileDuration = Date.now() - commitFileStartTime;
+    logInfo(
+      `[CommitIndexer] 🕐 All files for commit ${sha.substring(0, 8)}: ${commitFileDuration}ms (${files.length} files)`
+    );
 
     let totalSymbolsAdded = 0;
     let totalSymbolsModified = 0;
@@ -292,14 +363,23 @@ export class CommitIndexer {
       totalEdgesAdded += res.edgesAdded;
       totalEdgesRemoved += res.edgesRemoved;
       maxStructuralChange = Math.max(maxStructuralChange, res.maxStructuralChange);
-      allRisks.push(...res.risks);
-      changedSymbols.push(...res.changedSymbols);
+
+      // Use loops instead of spread to prevent stack overflow on large arrays
+      for (const r of res.risks) allRisks.push(r);
+      for (const s of res.changedSymbols) changedSymbols.push(s);
+
+      // Log if file had structural change
+      if (res.maxStructuralChange > 0) {
+        logDebug(
+          `[CommitIndexer] File contributed structural change: ${res.maxStructuralChange.toFixed(3)}`
+        );
+      }
 
       for (const change of res.symbolChanges) {
         symbolChanges.set(change.id, change);
       }
-      edgesToInsert.push(...res.edgesToInsert);
-      fileHotspotsToUpdate.push(...res.hotspots);
+      for (const e of res.edgesToInsert) edgesToInsert.push(e);
+      for (const h of res.hotspots) fileHotspotsToUpdate.push(h);
     }
 
     for (const edge of edgesToInsert) {
@@ -337,7 +417,7 @@ export class CommitIndexer {
       { added: allEdges, removed: [] }
     );
 
-    allRisks.push(...detectedRisks);
+    for (const r of detectedRisks) allRisks.push(r);
 
     const facts: CommitFacts = {
       sha,
@@ -352,6 +432,11 @@ export class CommitIndexer {
       blastRadius: totalImpact,
       hotspots,
     };
+
+    // Log final structural change score for debugging
+    logInfo(
+      `[CommitIndexer] Commit ${sha.substring(0, 8)}: ${files.length} files, structural change: ${(maxStructuralChange * 100).toFixed(1)}%`
+    );
 
     this.storeCommitMetadata(commitInfo, facts.filesChanged);
 
@@ -371,7 +456,8 @@ export class CommitIndexer {
         .map(s => s.symbol),
       Array.from(symbolChanges.values())
         .filter(s => s.type === 'added')
-        .map(s => s.symbol)
+        .map(s => s.symbol),
+      opts?.plan
     );
 
     this.reconcileMovesWithSymbols(symbolChanges, movedBlocks);
@@ -387,10 +473,12 @@ export class CommitIndexer {
     return facts;
   }
 
-  private async processFile(
-    file: { path: string; status: string },
+  async processFile(
+    file: FileChange,
     sha: string,
-    parentSha: string | null
+    parentSha: string | null,
+    plan?: import('./runner/pipelineTypes').PlanData,
+    priority: boolean = false
   ): Promise<FileProcessingResult | null> {
     const { path, status } = file;
     const result: FileProcessingResult = {
@@ -411,8 +499,9 @@ export class CommitIndexer {
       path,
       {
         git: this.git,
-        status: status as any,
         commitSha: sha,
+        status: file.status,
+        plan,
         skipSizeCheck: status === 'D',
       },
       'CommitIndexer'
@@ -424,8 +513,8 @@ export class CommitIndexer {
 
     if (status === 'D') {
       if (parentSha) {
-        const parentBlobSha = await this.git.getBlobSha(parentSha, path);
-        const parentContent = await this.git.safeGetFileContent(parentSha, path);
+        const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path, plan));
+        const parentContent = await this.getContent(parentSha, path, plan);
         const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
           path,
           parentBlobSha,
@@ -457,15 +546,38 @@ export class CommitIndexer {
       return result;
     }
 
-    const currentBlobSha = await this.git.getBlobSha(sha, path);
-    const currentContent = await this.git.safeGetFileContent(sha, path);
+    const fileStartTime = Date.now();
+
+    const blobShaTime = Date.now();
+    const currentBlobSha = file.newSha || (await this.getBlobSha(sha, path, plan));
+    logDebug(`[CommitIndexer] 🕐 getBlobSha for ${path}: ${Date.now() - blobShaTime}ms`);
+
+    const getContentTime = Date.now();
+    const currentContent = await this.getContent(sha, path, plan);
+    logDebug(
+      `[CommitIndexer] 🕐 getContent for ${path}: ${Date.now() - getContentTime}ms (${currentContent.length} bytes)`
+    );
+
+    const snapshotTime = Date.now();
     const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
       path,
       currentBlobSha,
       currentContent
     );
+    logDebug(`[CommitIndexer] 🕐 Snapshot creation for ${path}: ${Date.now() - snapshotTime}ms`);
 
-    await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
+    const hybridFactsTime = Date.now();
+    await this.extractAndSaveHybridFacts(
+      path,
+      sha,
+      currentContent,
+      currentSnapshot.symbols,
+      undefined,
+      priority
+    );
+    logDebug(
+      `[CommitIndexer] 🕐 extractAndSaveHybridFacts for ${path}: ${Date.now() - hybridFactsTime}ms`
+    );
 
     if (status === 'A') {
       result.symbolsAdded += currentSnapshot.symbols.length;
@@ -492,21 +604,35 @@ export class CommitIndexer {
         });
       }
     } else if (status === 'M' && parentSha) {
-      const parentBlobSha = await this.git.getBlobSha(parentSha, path);
+      const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path, plan));
 
       if (parentBlobSha === currentBlobSha) {
-        await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols);
+        await this.extractAndSaveHybridFacts(
+          path,
+          sha,
+          currentContent,
+          currentSnapshot.symbols,
+          undefined,
+          priority
+        );
         return result;
       }
 
-      const parentContent = await this.git.safeGetFileContent(parentSha, path);
+      const parentContent = await this.getContent(parentSha, path, plan);
+
+      const parentSnapshotTime = Date.now();
       const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
         path,
         parentBlobSha,
         parentContent
       );
+      logDebug(
+        `[CommitIndexer] 🕐 Parent snapshot for ${path}: ${Date.now() - parentSnapshotTime}ms`
+      );
 
+      const diffTime = Date.now();
       const symbolDiff = this.snapshotManager.compareSnapshots(parentSnapshot, currentSnapshot);
+      logDebug(`[CommitIndexer] 🕐 Symbol diff for ${path}: ${Date.now() - diffTime}ms`);
 
       result.symbolsAdded += symbolDiff.added.length;
       result.symbolsModified += symbolDiff.modified.length;
@@ -580,6 +706,7 @@ export class CommitIndexer {
         }
       }
 
+      const structDiffTime = Date.now();
       const structDiff = await this.structuralDiffManager.getOrCreateStructuralDiff(
         parentBlobSha,
         currentBlobSha,
@@ -587,8 +714,16 @@ export class CommitIndexer {
         parentContent,
         currentContent
       );
+      logDebug(`[CommitIndexer] 🕐 Structural diff for ${path}: ${Date.now() - structDiffTime}ms`);
 
       result.maxStructuralChange = structDiff.structuralChangeScore;
+
+      // Log structural change for debugging
+      if (structDiff.structuralChangeScore > 0) {
+        logDebug(
+          `[CommitIndexer] Structural change detected in ${path}: ${(structDiff.structuralChangeScore * 100).toFixed(1)}%`
+        );
+      }
 
       if (structDiff.interfaceChanged) result.risks.push('breaking-api');
       if (structDiff.controlFlowChanged) result.risks.push('refactor');
@@ -599,7 +734,8 @@ export class CommitIndexer {
         sha,
         currentContent,
         currentSnapshot.symbols,
-        parentFileHash
+        parentFileHash,
+        priority
       );
     }
 
@@ -609,6 +745,8 @@ export class CommitIndexer {
       result.hotspots.push({ path, symbols: fileSymbols });
     }
 
+    const totalFileTime = Date.now() - fileStartTime;
+    logDebug(`[CommitIndexer] 🕐 Total processFile for ${path}: ${totalFileTime}ms`);
     return result;
   }
 
@@ -626,27 +764,22 @@ export class CommitIndexer {
       isResolved: number;
     }>
   ): Promise<void> {
-    const stmt = prepare(`
-      INSERT OR REPLACE INTO edges
-      (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+    const writeQueue = DatabaseWriteQueue.getInstance();
 
-    const transaction = this.db.transaction(() => {
-      for (const edge of edges) {
-        stmt.run([
+    for (const edge of edges) {
+      writeQueue.queue({
+        type: 'edge',
+        data: {
           sha,
-          edge.from,
-          edge.to,
-          edge.changeType,
-          edge.edgeType,
-          edge.confidence,
-          edge.isResolved,
-        ]);
-      }
-    });
-
-    transaction();
+          from: edge.from,
+          to: edge.to,
+          changeType: edge.changeType,
+          edgeType: edge.edgeType,
+          confidence: edge.confidence,
+          isResolved: edge.isResolved,
+        },
+      });
+    }
   }
 
   private async updateHotspotsFromBatch(
@@ -666,7 +799,7 @@ export class CommitIndexer {
       .filter(s => s && s.id); // id is now the DNA hash
 
     if (symbols.length > 0) {
-      const limit = pLimit(8);
+      const limit = pLimit(1); // DEBUG: Sequential processing
       const batches: SymbolInfo[][] = [];
       const batchSize = 50;
 
@@ -696,39 +829,21 @@ export class CommitIndexer {
     sha: string,
     symbolChanges: Map<string, { type: string; symbol: any; filePath: string }>
   ): Promise<void> {
-    // First, ensure symbol_dna records exist
-    const dnaStmt = prepare(`
-      INSERT OR IGNORE INTO symbol_dna (dna_id, first_seen_sha, first_seen_path)
-      VALUES (?, ?, ?)
-    `);
+    const writeQueue = DatabaseWriteQueue.getInstance();
 
-    const symbolStmt = prepare(`
-      INSERT OR REPLACE INTO symbols
-      (sha, path, symbol_id, dna_id, name, kind, signature, change_type, diff_snippet_pre, diff_snippet_post, confidence)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    for (const [_dnaId, { type, symbol, filePath }] of symbolChanges) {
+      // Queue symbol_dna insert
+      writeQueue.queue({
+        type: 'symbol',
+        data: { sha, path: filePath, symbol, changeType: type, isDna: true },
+      });
 
-    this.db.transaction(() => {
-      for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
-        // Insert into symbol_dna first (if not exists)
-        dnaStmt.run([dnaId, sha, filePath]);
-
-        // Then insert into symbols
-        symbolStmt.run([
-          sha,
-          filePath,
-          symbol.semanticId || symbol.id, // Keep semanticId for reference, fallback to id
-          dnaId, // dna_id is the DNA hash (same as symbol.id)
-          symbol.name,
-          symbol.kind,
-          symbol.signature || '',
-          type,
-          '',
-          '',
-          1.0,
-        ]);
-      }
-    })();
+      // Queue symbols insert
+      writeQueue.queue({
+        type: 'symbol',
+        data: { sha, path: filePath, symbol, changeType: type, isDna: false },
+      });
+    }
   }
 
   /**
@@ -739,7 +854,8 @@ export class CommitIndexer {
     commitSha: string,
     content: string,
     existingSymbols: any[],
-    prevHash?: string
+    prevHash?: string,
+    priority: boolean = false
   ): Promise<void> {
     const config = getExtensionConfig();
     const enableCst = config.enableCstTracking ?? true;
@@ -758,14 +874,24 @@ export class CommitIndexer {
     }
 
     try {
+      const parseStart = Date.now();
       const hybridFacts = await this.parser.extractHybridFacts(
         content,
         filePath,
         language,
-        existingSymbols
+        existingSymbols,
+        priority
+      );
+      logDebug(
+        `[CommitIndexer] 🕐 parser.extractHybridFacts for ${filePath}: ${Date.now() - parseStart}ms (${hybridFacts.length} facts)`
       );
 
+      const saveStart = Date.now();
       await this.cstTimelineManager.saveFacts(filePath, commitSha, hybridFacts, prevHash);
+      logDebug(
+        `[CommitIndexer] 🕐 cstTimelineManager.saveFacts for ${filePath}: ${Date.now() - saveStart}ms`
+      );
+
       if (hybridFacts.length > 0) {
         logDebug(
           `[CommitIndexer] Saved ${
@@ -855,37 +981,19 @@ export class CommitIndexer {
   }
 
   private markPending(sha: string): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO commits_analysis
-      (sha, status, analysis_version, analyzed_at)
-      VALUES (?, ?, ?, ?)
-    `);
-    stmt.run([sha, 'pending', ANALYSIS_VERSION, new Date().toISOString()]);
+    const writeQueue = DatabaseWriteQueue.getInstance();
+    writeQueue.queue({
+      type: 'commit_analysis',
+      data: { sha, status: 'pending' },
+    });
   }
 
   private markComplete(sha: string, facts: CommitFacts): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO commits_analysis
-      (sha, status, analysis_version, symbols_added, symbols_modified, symbols_removed,
-       edges_added, edges_removed, risks, blast_radius, structural_change_score,
-       files_changed, hotspots_json, analyzed_at)
-      VALUES (?, 'complete', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run([
-      sha,
-      ANALYSIS_VERSION,
-      facts.symbolsAdded,
-      facts.symbolsModified,
-      facts.symbolsRemoved,
-      facts.edgesAdded,
-      facts.edgesRemoved,
-      JSON.stringify(facts.risks),
-      facts.blastRadius,
-      facts.structuralChangeScore,
-      facts.filesChanged,
-      JSON.stringify(facts.hotspots),
-      new Date().toISOString(),
-    ]);
+    const writeQueue = DatabaseWriteQueue.getInstance();
+    writeQueue.queue({
+      type: 'commit_analysis',
+      data: { sha, status: 'complete', facts },
+    });
   }
 
   private async storeSymbolHistory(
@@ -893,37 +1001,22 @@ export class CommitIndexer {
     symbolChanges: Map<string, { type: string; symbol: any; filePath: string }>,
     impactScores: Map<string, number>
   ): Promise<void> {
-    const stmt = prepare(`
-      INSERT INTO symbol_history
-      (symbol_dna_id, sha, file_path, name, kind, signature, body_hash,
-       change_type, impact_score, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    const writeQueue = DatabaseWriteQueue.getInstance();
 
-    this.db.transaction(() => {
-      for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
-        const impactScore = impactScores.get(dnaId) || 0;
-
-        stmt.run([
-          dnaId,
-          sha,
-          filePath,
-          symbol.name,
-          symbol.kind,
-          symbol.signature,
-          symbol.bodyHash || null,
-          type,
-          impactScore,
-          new Date().toISOString(),
-        ]);
-      }
-    })();
+    for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
+      const impactScore = impactScores.get(dnaId) || 0;
+      writeQueue.queue({
+        type: 'symbol_history',
+        data: { dnaId, sha, filePath, symbol, impactScore, changeType: type },
+      });
+    }
   }
 
   private async storeEdges(
     sha: string,
     files: Array<{ path: string; status: string }>,
-    parentSha: string | null
+    parentSha: string | null,
+    plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<void> {
     const stmt = prepare(`
       INSERT OR REPLACE INTO edges
@@ -950,6 +1043,7 @@ export class CommitIndexer {
           git: this.git,
           status: status as 'A' | 'M' | 'D' | 'R' | 'C' | 'U',
           commitSha: sha,
+          plan,
           skipSizeCheck: status === 'D',
         },
         'CommitIndexer.storeEdges'
@@ -961,8 +1055,8 @@ export class CommitIndexer {
 
       if (status === 'D') {
         if (parentSha) {
-          const parentBlobSha = await this.git.getBlobSha(parentSha, path);
-          const parentContent = await this.git.safeGetFileContent(parentSha, path);
+          const parentBlobSha = await this.getBlobSha(parentSha, path);
+          const parentContent = await this.getContent(parentSha, path);
           const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
             path,
             parentBlobSha,
@@ -984,8 +1078,8 @@ export class CommitIndexer {
         continue;
       }
 
-      const currentBlobSha = await this.git.getBlobSha(sha, path);
-      const currentContent = await this.git.safeGetFileContent(sha, path);
+      const currentBlobSha = await this.getBlobSha(sha, path);
+      const currentContent = await this.getContent(sha, path);
       const currentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
         path,
         currentBlobSha,
@@ -1005,8 +1099,8 @@ export class CommitIndexer {
           });
         }
       } else if (status === 'M' && parentSha) {
-        const parentBlobSha = await this.git.getBlobSha(parentSha, path);
-        const parentContent = await this.git.safeGetFileContent(parentSha, path);
+        const parentBlobSha = await this.getBlobSha(parentSha, path);
+        const parentContent = await this.getContent(parentSha, path);
         const parentSnapshot = await this.snapshotManager.getOrCreateSnapshot(
           path,
           parentBlobSha,
@@ -1094,7 +1188,7 @@ export class CommitIndexer {
       .filter(s => s && s.id); // id is now the DNA hash
 
     if (symbols.length > 0) {
-      const limit = pLimit(8);
+      const limit = pLimit(1); // DEBUG: Sequential processing
       const batches: SymbolInfo[][] = [];
       const batchSize = 50;
 
@@ -1143,28 +1237,17 @@ export class CommitIndexer {
   }
 
   private markFailed(sha: string, _error: unknown): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO commits_analysis
-      (sha, status, analysis_version, analyzed_at)
-      VALUES (?, 'failed', ?, ?)
-    `);
-    stmt.run([sha, ANALYSIS_VERSION, new Date().toISOString()]);
+    DatabaseWriteQueue.getInstance().queue({
+      type: 'commit_analysis',
+      data: { sha, status: 'failed' },
+    });
   }
 
   private storeCommitMetadata(info: any, filesChanged: number): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO commits_metadata
-      (sha, author, date, message, parent, files_changed, loaded_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run([
-      info.sha,
-      info.author,
-      info.date,
-      info.message,
-      info.parent || null,
-      filesChanged,
-      new Date().toISOString(),
-    ]);
+    const writeQueue = DatabaseWriteQueue.getInstance();
+    writeQueue.queue({
+      type: 'commit_metadata',
+      data: { sha: info.sha, info, filesChanged },
+    });
   }
 }

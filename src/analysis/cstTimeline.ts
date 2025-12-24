@@ -1,4 +1,5 @@
 import { getDatabase } from '../storage/database';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { DeltaChange, HybridFact, isCstFact } from '../types/cstFacts';
 import { logDebug, logError } from '../utils/logger';
@@ -11,6 +12,7 @@ import type { ScopeSet } from '../facts/scope';
 export class CstTimelineManager {
   /**
    * Save hybrid facts for a file at a specific version
+   * Optimized: uses batched transaction and pre-computed DNA hashes
    */
   async saveFacts(
     filePath: string,
@@ -24,28 +26,112 @@ export class CstTimelineManager {
       return;
     }
 
+    if (facts.length === 0) {
+      return;
+    }
+
     this.ensureTableExists();
 
     const fileHash = this.computeFileHash(facts);
-
     const priorFacts = prevHash ? await this.getFactsByHash(filePath, prevHash) : null;
 
-    const factsWithDeltas = await Promise.all(
+    // Pre-compute all DNA hashes in parallel (avoid redundant async calls)
+    const dnaMap = new Map<string, string>();
+    await Promise.all(
       facts.map(async fact => {
-        const delta = await this.computeDelta(fact, priorFacts);
-        return { fact, delta };
+        const dna = await computeHybridDna(fact);
+        dnaMap.set(fact.id, dna);
       })
     );
 
-    for (const { fact, delta } of factsWithDeltas) {
-      await this.appendToTimeline(filePath, commitSha, fact, delta, fileHash);
+    // Build prior facts lookup map for O(1) lookups
+    const priorFactsById = new Map<string, HybridFact>();
+    const priorFactsByNameKind = new Map<string, HybridFact>();
+    if (priorFacts) {
+      for (const p of priorFacts) {
+        priorFactsById.set(p.id, p);
+        const key = `${p.name}::${isCstFact(p) ? p.kind : p.kind}`;
+        priorFactsByNameKind.set(key, p);
+      }
+    }
+
+    // Queue all facts for batch write
+    const writeQueue = DatabaseWriteQueue.getInstance();
+
+    for (const fact of facts) {
+      const dnaId = dnaMap.get(fact.id)!;
+
+      // Compute delta synchronously using pre-built lookup
+      const delta = this.computeDeltaSync(fact, dnaId, priorFactsById, priorFactsByNameKind);
+
+      // Build timeline entry (needed for serialization)
+      const timelineEntry = { version: commitSha, dna: dnaId, delta };
+      const timeline = isCstFact(fact) ? [...fact.timeline, timelineEntry] : [timelineEntry];
+
+      // Queue for batch write with pre-computed DNA and timeline
+      writeQueue.queue({
+        type: 'hybrid_fact',
+        data: {
+          filePath,
+          version: commitSha,
+          fact,
+          delta,
+          hash: fileHash,
+          dnaId, // Pre-computed DNA
+          timeline, // Pre-computed timeline
+        },
+      });
     }
 
     logDebug(
-      `[CstTimeline] Saved ${
-        facts.length
-      } hybrid facts for ${filePath}@${commitSha.substring(0, 8)}`
+      `[CstTimeline] Queued ${facts.length} hybrid facts for ${filePath}@${commitSha.substring(0, 8)}`
     );
+  }
+
+  /**
+   * Synchronous delta computation using pre-built lookups
+   */
+  private computeDeltaSync(
+    fact: HybridFact,
+    dnaId: string,
+    priorFactsById: Map<string, HybridFact>,
+    priorFactsByNameKind: Map<string, HybridFact>
+  ): DeltaChange {
+    // Try to find prior fact by ID or name+kind
+    let priorFact = priorFactsById.get(fact.id);
+    if (!priorFact) {
+      const key = `${fact.name}::${isCstFact(fact) ? fact.kind : fact.kind}`;
+      priorFact = priorFactsByNameKind.get(key);
+      // Only use name+kind match if kinds match
+      if (priorFact && !this.sameKind(priorFact, fact)) {
+        priorFact = undefined;
+      }
+    }
+
+    if (!priorFact) {
+      return { type: 'added', newDna: dnaId };
+    }
+
+    const dnaChanged = priorFact.id !== fact.id;
+    const locationChanged =
+      priorFact.location.start.line !== fact.location.start.line ||
+      priorFact.location.start.column !== fact.location.start.column;
+
+    if (dnaChanged || locationChanged) {
+      return {
+        type: 'modified',
+        oldDna: priorFact.id,
+        newDna: dnaId,
+        locationDelta: locationChanged
+          ? {
+              oldLine: priorFact.location.start.line,
+              newLine: fact.location.start.line,
+            }
+          : undefined,
+      };
+    }
+
+    return { type: 'modified', oldDna: priorFact.id, newDna: dnaId };
   }
 
   /**

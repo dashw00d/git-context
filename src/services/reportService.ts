@@ -111,16 +111,7 @@ export class ReportService {
       payload: { step: 'Analyzing commits...' },
     });
 
-    // Update cockpit provider with analysis start
-    try {
-      const { getCockpitProvider } = await import('../extension');
-      const cockpitProvider = getCockpitProvider();
-      if (cockpitProvider) {
-        cockpitProvider.setProgress(true, 'Analyzing commits...', 0);
-      }
-    } catch {
-      // Ignore if provider not available
-    }
+    // Progress updates flow through Redux -> CockpitProvider subscription
 
     try {
       const includeWorkspace = scope === 'staged' || scope === 'unstaged' || scope === 'full';
@@ -184,9 +175,7 @@ export class ReportService {
             stepTimings: Object.keys(timings).length ? timings : undefined,
             pipelineErrors: pipelineError,
           };
-          // Update cockpit provider directly
-          const { getCockpitProvider } = await import('../extension');
-          const cockpitProvider = getCockpitProvider();
+          // Progress flows through Redux dispatch -> CockpitProvider subscription
 
           switch (event.type) {
             case 'start':
@@ -195,9 +184,6 @@ export class ReportService {
                 payload: { step: event.step.label },
               });
               getStore().dispatch(pipelineActions.health(healthPayload));
-              if (cockpitProvider) {
-                cockpitProvider.setProgress(true, event.step.label, undefined);
-              }
               break;
 
             case 'complete':
@@ -206,9 +192,6 @@ export class ReportService {
                 payload: { step: event.step.label, progress: 100 },
               });
               getStore().dispatch(pipelineActions.health(healthPayload));
-              if (cockpitProvider) {
-                cockpitProvider.setProgress(true, event.step.label, 100);
-              }
               break;
 
             case 'error':
@@ -217,10 +200,6 @@ export class ReportService {
                 payload: { error: String(event.error) },
               });
               getStore().dispatch(pipelineActions.health(healthPayload));
-              if (cockpitProvider) {
-                cockpitProvider.setProgress(false, undefined, undefined);
-                cockpitProvider.setError(String(event.error));
-              }
               break;
 
             case 'finished':
@@ -241,10 +220,10 @@ export class ReportService {
 
             case 'aborted':
               getStore().dispatch(pipelineActions.health(healthPayload));
-              if (cockpitProvider) {
-                cockpitProvider.setProgress(false, undefined, undefined);
-                cockpitProvider.setError(event.state.abortReason || 'Pipeline aborted');
-              }
+              getStore().dispatch({
+                type: 'ANALYSIS_FAILED',
+                payload: { error: event.state.abortReason || 'Pipeline aborted' },
+              });
               break;
 
             case 'progress':
@@ -256,10 +235,7 @@ export class ReportService {
                     status: event.data.status,
                   },
                 });
-                // Update explorer node status in cockpit provider
-                if (cockpitProvider && event.data.status) {
-                  cockpitProvider.updateExplorerNodeStatus(event.data.file, event.data.status);
-                }
+                // Explorer node status updated via EXPLORER_NODE_UPDATED action above
               }
               break;
           }
@@ -409,6 +385,9 @@ export class ReportService {
         mode: scope,
       };
 
+      // Set ignore flag before saving to prevent file watcher echo
+      getStore().dispatch({ type: 'IGNORE_NEXT_FACTS_UPDATE' });
+
       reportManager.save({
         ...report,
         treemap: (facts as any).treemap,
@@ -454,8 +433,7 @@ export class ReportService {
               branchName,
             }
           );
-          // Mark analysis as complete
-          cockpitProvider.setProgress(false, undefined, undefined);
+          // Progress cleared via ANALYSIS_COMPLETED dispatch below
           logInfo('[ReportService] Updated cockpit via provider');
         } else {
           logWarn('[ReportService] CockpitProvider not available, skipping UI update');
@@ -491,17 +469,7 @@ export class ReportService {
           error: error instanceof Error ? error.message : String(error),
         },
       });
-      // Update cockpit provider with error
-      try {
-        const { getCockpitProvider } = await import('../extension');
-        const cockpitProvider = getCockpitProvider();
-        if (cockpitProvider) {
-          cockpitProvider.setProgress(false, undefined, undefined);
-          cockpitProvider.setError(error instanceof Error ? error.message : String(error));
-        }
-      } catch {
-        // Ignore if provider not available
-      }
+      // Error state flows through ANALYSIS_FAILED action above -> CockpitProvider subscription
       return null;
     }
   }

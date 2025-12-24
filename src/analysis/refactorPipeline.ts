@@ -102,16 +102,19 @@ export class RefactorPipeline {
       errors: [],
     };
 
-    logDebug(`🎯 [RefactorPipeline] About to call runPipeline with ${steps.length} steps`);
-    const finalState = await runPipeline(steps, initialState, token, onEvent);
-    logDebug('🎯 [RefactorPipeline] runPipeline returned');
-
-    const workspaceIndexerAny = this.workspaceIndexer as any;
-    const commitIndexerAny = this.commitIndexer as any;
-    workspaceIndexerAny.snapshotManager?.flushSnapshotQueue();
-    workspaceIndexerAny.structuralDiffManager?.flushDiffQueue();
-    commitIndexerAny.snapshotManager?.flushSnapshotQueue();
-    commitIndexerAny.structuralDiffManager?.flushDiffQueue();
+    let finalState: PipelineState;
+    try {
+      logDebug(`🎯 [RefactorPipeline] About to call runPipeline with ${steps.length} steps`);
+      finalState = await runPipeline(steps, initialState, token, onEvent);
+      logDebug('🎯 [RefactorPipeline] runPipeline returned');
+    } finally {
+      const workspaceIndexerAny = this.workspaceIndexer as any;
+      const commitIndexerAny = this.commitIndexer as any;
+      workspaceIndexerAny.snapshotManager?.flushSnapshotQueue();
+      workspaceIndexerAny.structuralDiffManager?.flushDiffQueue();
+      commitIndexerAny.snapshotManager?.flushSnapshotQueue();
+      commitIndexerAny.structuralDiffManager?.flushDiffQueue();
+    }
 
     return finalState;
   }
@@ -166,7 +169,16 @@ export class RefactorPipeline {
       errors: [],
     };
 
-    return runPipeline(steps, initialState);
+    try {
+      return await runPipeline(steps, initialState);
+    } finally {
+      const workspaceIndexerAny = this.workspaceIndexer as any;
+      const commitIndexerAny = this.commitIndexer as any;
+      workspaceIndexerAny.snapshotManager?.flushSnapshotQueue();
+      workspaceIndexerAny.structuralDiffManager?.flushDiffQueue();
+      commitIndexerAny.snapshotManager?.flushSnapshotQueue();
+      commitIndexerAny.structuralDiffManager?.flushDiffQueue();
+    }
   }
 
   async indexCommits(commitShas: string[]): Promise<void> {

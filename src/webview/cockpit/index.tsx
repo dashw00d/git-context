@@ -38,9 +38,12 @@ const defaultState: CockpitState = {
   workspaceScope: 'workspace',
   bundleSummary: null,
   bundleFacts: null,
+  bundleFactsSkeleton: null,
   bundleReportId: null,
   bundleView: null,
   bundleViewVersion: 0,
+  fileEvidenceCache: {},
+  symbolEvidenceCache: {},
   symbols: [],
   symbolFilterText: '',
   symbolKindFilter: 'all',
@@ -132,6 +135,22 @@ const App: React.FC = () => {
           setState(prev => ({
             ...prev,
             activeFrame: message.payload.frame,
+          }));
+        } else if (message.type === 'fileDetailsResponse') {
+          setState(prev => ({
+            ...prev,
+            fileEvidenceCache: {
+              ...(prev.fileEvidenceCache || {}),
+              [message.payload.filePath]: message.payload.evidence,
+            },
+          }));
+        } else if (message.type === 'symbolDetailsResponse') {
+          setState(prev => ({
+            ...prev,
+            symbolEvidenceCache: {
+              ...(prev.symbolEvidenceCache || {}),
+              [message.payload.symbolId]: message.payload.evidence,
+            },
           }));
         }
       } catch (error) {

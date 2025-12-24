@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import { DatabaseService, getDatabaseService } from '../services/databaseService';
 import { getDatabaseManager } from '../storage/database';
+import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
@@ -62,6 +63,10 @@ export class HotspotDetector {
 
   /**
    * Calculate hotspot score from metrics (0-100)
+   *
+   * Note: When analyzing a small number of commits (e.g., 2-3), files that changed
+   * in all commits will have identical metrics, leading to identical scores. This is
+   * expected behavior and scores will differentiate as more commit history is analyzed.
    */
   calculateHotspotScore(metrics: HotspotMetrics): number {
     const weights = {
@@ -101,38 +106,37 @@ export class HotspotDetector {
     symbolChanges: SymbolInfo[],
     author?: string
   ): Promise<void> {
-    const now = new Date().toISOString();
-
     const existing = this.getFileHotspot(filePath);
 
+    // Calculate metrics first (async operation)
     const metrics = await this.calculateFileMetrics(filePath, sha, symbolChanges, author);
-
-    const stmt = this.dbManager.getDatabase().prepare(`
-      INSERT OR REPLACE INTO file_hotspots
-      (file_path, total_commits, total_changes, unique_authors,
-       last_changed_sha, last_changed_date, hotspot_score,
-       first_seen_sha, risk_level)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
 
     const totalCommits = (existing?.totalCommits || 0) + 1;
     const totalChanges = (existing?.totalChanges || 0) + symbolChanges.length;
     const uniqueAuthors = await this.updateAuthorCount(filePath, author || 'unknown');
 
-    stmt.run(
-      filePath,
-      totalCommits,
-      totalChanges,
-      uniqueAuthors,
-      sha,
-      now,
-      metrics.hotspotScore,
-      existing?.firstSeenSha || sha,
-      metrics.riskLevel
-    );
+    // Queue for batch write
+    const writeQueue = DatabaseWriteQueue.getInstance();
+    writeQueue.queue({
+      type: 'file_hotspot',
+      data: {
+        filePath,
+        sha,
+        symbolChanges,
+        author,
+        metrics: {
+          hotspotScore: metrics.hotspotScore,
+          riskLevel: metrics.riskLevel,
+          totalCommits,
+          totalChanges,
+          uniqueAuthors,
+          firstSeenSha: existing?.firstSeenSha || sha,
+        },
+      },
+    });
 
     logDebug(
-      `[HotspotDetector] Updated file hotspot: ${filePath} (score: ${metrics.hotspotScore.toFixed(
+      `[HotspotDetector] Queued file hotspot update: ${filePath} (score: ${metrics.hotspotScore.toFixed(
         1
       )})`
     );
@@ -425,41 +429,42 @@ export class HotspotDetector {
    * Create periodic snapshot for trend analysis
    */
   async createSnapshot(sha: string): Promise<void> {
-    const now = new Date().toISOString();
+    const writeQueue = DatabaseWriteQueue.getInstance();
 
     const fileHotspots = await this.getTopFileHotspots(1000);
     for (const hotspot of fileHotspots) {
       if (!hotspot.filePath) continue;
 
-      const stmt = this.dbManager.getDatabase().prepare(`
-        INSERT INTO hotspot_snapshots
-        (snapshot_sha, snapshot_date, entity_type, entity_id, hotspot_score, total_changes)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      stmt.run([sha, now, 'file', hotspot.filePath, hotspot.hotspotScore, hotspot.totalChanges]);
+      writeQueue.queue({
+        type: 'hotspot_snapshot',
+        data: {
+          sha,
+          entityType: 'file',
+          entityId: hotspot.filePath,
+          score: hotspot.hotspotScore,
+          changes: hotspot.totalChanges,
+        },
+      });
     }
 
     const symbolHotspots = await this.getTopSymbolHotspots(1000);
     for (const hotspot of symbolHotspots) {
       if (!hotspot.symbolId) continue;
 
-      const stmt = this.dbManager.getDatabase().prepare(`
-        INSERT INTO hotspot_snapshots
-        (snapshot_sha, snapshot_date, entity_type, entity_id, hotspot_score, total_changes)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      stmt.run([
-        sha,
-        now,
-        'symbol',
-        hotspot.symbolId,
-        hotspot.hotspotScore,
-        hotspot.totalModifications,
-      ]);
+      writeQueue.queue({
+        type: 'hotspot_snapshot',
+        data: {
+          sha,
+          entityType: 'symbol',
+          entityId: hotspot.symbolId,
+          score: hotspot.hotspotScore,
+          changes: hotspot.totalModifications,
+        },
+      });
     }
 
     logInfo(
-      `[HotspotDetector] Created hotspot snapshot for ${fileHotspots.length} files and ${symbolHotspots.length} symbols`
+      `[HotspotDetector] Queued hotspot snapshot for ${fileHotspots.length} files and ${symbolHotspots.length} symbols`
     );
   }
 

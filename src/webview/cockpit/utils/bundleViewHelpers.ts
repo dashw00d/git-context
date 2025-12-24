@@ -1,4 +1,5 @@
-import { BundleFactsDTO, BundleView } from '../../../types/cockpit';
+import { RefactorBundleFacts } from '../../../facts/types';
+import { BundleFactsDTO, BundleFactsSkeleton, BundleView } from '../../../types/cockpit';
 import { logDebug, logError } from '../../../utils/logger';
 
 export type HotspotCache = Map<string, any[]>;
@@ -190,6 +191,181 @@ export async function buildBundleView(
     logError('[BundleView] Build failed', error);
     return { hotspots: [], error: String(error) };
   }
+}
+
+/**
+ * Create a lightweight skeleton from full bundle facts.
+ * Only includes counts and metadata, not full evidence arrays.
+ */
+export function createBundleFactsSkeleton(
+  facts: RefactorBundleFacts | null
+): BundleFactsSkeleton | null {
+  if (!facts) {
+    return null;
+  }
+
+  const evidenceCounts: BundleFactsSkeleton['evidenceCounts'] = {
+    'scope.files': 0,
+    'scope.blastRadius': 0,
+    hotspots: 0,
+    missing: 0,
+    zombies: 0,
+    divergent: 0,
+    dead: 0,
+    legacyUsed: 0,
+  };
+
+  // Count evidence arrays
+  if (facts.evidence) {
+    for (const [key, value] of Object.entries(facts.evidence)) {
+      if (Array.isArray(value)) {
+        const count = value.length;
+        if (key in evidenceCounts) {
+          evidenceCounts[key as keyof typeof evidenceCounts] = count;
+        } else {
+          evidenceCounts[key] = count;
+        }
+      } else if (typeof value === 'object' && value !== null) {
+        // For nested objects, count top-level keys or use a default
+        const count = Object.keys(value).length;
+        if (key in evidenceCounts) {
+          evidenceCounts[key as keyof typeof evidenceCounts] = count;
+        } else {
+          evidenceCounts[key] = count;
+        }
+      }
+    }
+  }
+
+  // Defensive checks for findings structure
+  const findings = facts.findings || {
+    incompleteness: { missing: 0, zombies: 0, divergent: 0 },
+    patternDrift: { mixedTargets: 0, oldNamespaces: 0 },
+    legacyAudit: { dead: 0, legacyUsed: 0, replacedLeftovers: [] },
+  };
+  const incompleteness = findings.incompleteness || { missing: 0, zombies: 0, divergent: 0 };
+  const patternDrift = findings.patternDrift || { mixedTargets: 0, oldNamespaces: 0 };
+  const legacyAudit = findings.legacyAudit || { dead: 0, legacyUsed: 0, replacedLeftovers: [] };
+
+  return {
+    version: facts.version,
+    generated_at: facts.generated_at,
+    confidence: facts.confidence,
+    partial: facts.partial,
+    partialReasons: facts.partialReasons,
+    bundle: {
+      oldestSha: facts.bundle.oldestSha,
+      newestSha: facts.bundle.newestSha,
+      shas: facts.bundle.shas,
+      totalCommits: facts.bundle.totalCommits,
+    },
+    scope: facts.scope,
+    intended: facts.intended,
+    working: facts.working,
+    evidence: {
+      'working.edges': (facts.evidence as any)?.['working.edges'] || [],
+    },
+    findings: {
+      incompleteness: {
+        missing: incompleteness.missing || 0,
+        zombies: incompleteness.zombies || 0,
+        divergent: incompleteness.divergent || 0,
+        ...('missing_edges' in incompleteness
+          ? { missing_edges: incompleteness.missing_edges as number | undefined }
+          : {}),
+        ...('zombie_edges' in incompleteness
+          ? { zombie_edges: incompleteness.zombie_edges as number | undefined }
+          : {}),
+      },
+      patternDrift: {
+        mixedTargets: patternDrift.mixedTargets || 0,
+        oldNamespaces: patternDrift.oldNamespaces || 0,
+        conventionDrift: patternDrift.conventionDrift
+          ? {
+              dominantConvention: patternDrift.conventionDrift.dominantConvention,
+              driftPercent: patternDrift.conventionDrift.driftPercent,
+              driftSymbolCount: patternDrift.conventionDrift.driftSymbolCount,
+            }
+          : undefined,
+        mixedConventionFiles: patternDrift.mixedConventionFiles,
+      },
+      legacyAudit: {
+        dead: legacyAudit.dead || 0,
+        legacyUsed: legacyAudit.legacyUsed || 0,
+        replacedLeftovers: Array.isArray(legacyAudit.replacedLeftovers)
+          ? legacyAudit.replacedLeftovers.length
+          : 0,
+      },
+      unresolvedCallers: findings.unresolvedCallers,
+    },
+    evidenceCounts,
+    hybridSummary: facts.hybridSummary,
+  };
+}
+
+/**
+ * Extract file-specific evidence from bundle facts
+ */
+export function extractFileEvidence(
+  facts: RefactorBundleFacts | null,
+  filePath: string
+): Record<string, any> {
+  if (!facts || !facts.evidence) {
+    return {};
+  }
+
+  const fileEvidence: Record<string, any> = {};
+
+  // Filter evidence arrays to only include items for this file
+  for (const [key, value] of Object.entries(facts.evidence)) {
+    if (Array.isArray(value)) {
+      if (key === 'scope.files') {
+        // Special case: scope.files is just an array of paths
+        if (value.includes(filePath)) {
+          fileEvidence[key] = [filePath];
+        }
+      } else {
+        const filtered = value.filter((item: any) => {
+          const itemPath = item.path || item.filePath || item.caller_path;
+          return itemPath === filePath;
+        });
+        if (filtered.length > 0) {
+          fileEvidence[key] = filtered;
+        }
+      }
+    }
+  }
+
+  return fileEvidence;
+}
+
+/**
+ * Extract symbol-specific evidence from bundle facts
+ */
+export function extractSymbolEvidence(
+  facts: RefactorBundleFacts | null,
+  symbolId: string
+): Record<string, any> {
+  if (!facts || !facts.evidence) {
+    return {};
+  }
+
+  const symbolEvidence: Record<string, any> = {};
+
+  // Filter evidence arrays to only include items for this symbol
+  for (const [key, value] of Object.entries(facts.evidence)) {
+    if (Array.isArray(value)) {
+      const filtered = value.filter((item: any) => {
+        const itemSymbolId = item.symbol_id || item.symbolId || item.caller_symbol_id;
+        return itemSymbolId === symbolId;
+      });
+      if (filtered.length > 0) {
+        symbolEvidence[key] = filtered;
+      }
+    }
+  }
+
+  return symbolEvidence;
 }
 
 /**

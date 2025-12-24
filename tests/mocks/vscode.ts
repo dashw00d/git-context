@@ -36,6 +36,12 @@ export const Uri = {
 
 export const Range = vi.fn();
 export const Position = vi.fn();
+export class CancellationError extends Error {
+  constructor() {
+    super('Cancellation requested');
+    this.name = 'CancellationError';
+  }
+}
 export const EventEmitter = vi.fn().mockImplementation(() => ({
   event: vi.fn(),
   fire: vi.fn(),

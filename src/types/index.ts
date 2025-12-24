@@ -12,6 +12,8 @@ export interface FileChange {
   path: string;
   status: 'A' | 'M' | 'D' | 'R' | 'C' | 'U';
   oldPath?: string;
+  newSha?: string;
+  oldSha?: string;
 }
 
 export interface SymbolInfo {

@@ -395,6 +395,15 @@ function generateLegacySection(state: PipelineState): string {
     });
   }
 
+  // If no legacy issues found, add a message
+  if (
+    (!state.legacy.dead || state.legacy.dead.length === 0) &&
+    (!state.legacy.legacyUsed || state.legacy.legacyUsed.length === 0) &&
+    (!state.legacy.replacedLeftovers || state.legacy.replacedLeftovers.length === 0)
+  ) {
+    lines.push(`*No legacy code issues detected.*\n`);
+  }
+
   return lines.join('\n');
 }
 

@@ -4,13 +4,13 @@ import { useFileAnalysisData } from '../../hooks/useFileAnalysisData';
 
 // Browser-compatible path utilities
 function dirname(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/');
+  const normalized = filePath;
   const lastSlash = normalized.lastIndexOf('/');
   return lastSlash === -1 ? '' : normalized.substring(0, lastSlash);
 }
 
 function basename(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/');
+  const normalized = filePath;
   const lastSlash = normalized.lastIndexOf('/');
   return lastSlash === -1 ? normalized : normalized.substring(lastSlash + 1);
 }

@@ -5,7 +5,6 @@ import { GitOperations } from '../../../analysis/git';
 import { RefactorBundleFacts } from '../../../facts/types';
 import { getAnalysisService } from '../../../services/analysisService';
 import { getRefactorPipeline } from '../../../services/pipelineFactory';
-import { getStore } from '../../../state/store';
 import { BundleSummaryDTO } from '../../../types/cockpit';
 import { withTimeout } from '../../../utils/async';
 import { getGitRoot } from '../../../utils/config';
@@ -92,7 +91,12 @@ export class AnalysisController {
     let quickSymbols: any[] = [];
     try {
       logInfo(`[AnalysisController] Starting Quick Scan for ${skeleton.files.length} files...`);
-      quickSymbols = await pipeline.workspaceIndexer.quickScanSymbols(skeleton.files);
+      // Enable persistence for quick scan to populate DB immediately
+      // Use low priority (background workers) for the massive initial scan
+      quickSymbols = await pipeline.workspaceIndexer.quickScanSymbols(skeleton.files, {
+        persist: true,
+        priority: false,
+      });
       logInfo(`[AnalysisController] Quick Scan complete. Found ${quickSymbols.length} symbols.`);
     } catch (e) {
       logWarn(`[AnalysisController] Quick Scan failed: ${e}`);
@@ -146,6 +150,7 @@ export class AnalysisController {
       evidence: {
         'scope.files': skeleton.files,
         'working.symbols': quickSymbols,
+        'working.edges': [],
       },
     };
 
@@ -155,10 +160,9 @@ export class AnalysisController {
   public async startBackgroundAnalysis(
     config: any,
     files: string[],
-    onProgress: (event: any) => void
+    _onProgress: (event: any) => void
   ): Promise<void> {
     logInfo(`[AnalysisController] Starting background analysis for ${files.length} files...`);
-    const pipeline = await getRefactorPipeline();
     const { GitOperations } = await import('../../../analysis/git');
     const git = new GitOperations();
 
@@ -172,18 +176,12 @@ export class AnalysisController {
     const shas = history.map(c => c.sha);
 
     if (shas.length > 0) {
-      // Run pipeline in background
-      const result = await pipeline.analyzeBundle(shas, true, undefined, onProgress);
+      // Use AnalysisCoordinator instead of calling pipeline directly
+      const { getAnalysisCoordinator } = await import('../../../services/analysisCoordinator');
+      const coordinator = getAnalysisCoordinator();
+      await coordinator.requestBackgroundAnalysis(shas);
 
-      if (result.bundleFacts) {
-        // Dispatch update to Redux
-        const store = getStore();
-        store.dispatch({
-          type: 'BUNDLE_FACTS_UPDATED',
-          payload: { facts: result.bundleFacts },
-        });
-        logInfo('[AnalysisController] Background analysis complete and merged.');
-      }
+      logInfo('[AnalysisController] Background analysis complete.');
     }
   }
 

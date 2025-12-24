@@ -9,10 +9,12 @@ import { createEmbeddingStep } from './steps/embeddingStep';
 import { createHistoryRetrievalStep } from './steps/historyStep';
 import { createHotspotStep } from './steps/hotspotStep';
 import { createIndexCommitsStep } from './steps/indexCommitsStep';
+import { createInitStep } from './steps/initStep';
 import { createIntendedStep } from './steps/intendedStep';
 import { createLegacyStep } from './steps/legacyStep';
 import { createMovedBlockStep } from './steps/movedBlockStep';
 import { createScopeStep } from './steps/scopeStep';
+import { createSizeStep } from './steps/sizeStep';
 import { createStoryStep } from './steps/storyStep';
 import { createWorkingStep } from './steps/workingStep';
 import { createWorkspaceOverlayStep } from './steps/workspaceStep';
@@ -39,24 +41,38 @@ type StepDescriptor = {
 
 const manifest: StepDescriptor[] = [
   {
+    id: 'init',
+    label: 'Quick Scan',
+    factory: ctx => createInitStep(ctx.git),
+  },
+  {
     id: 'workspace_overlay',
     label: 'Analyze workspace changes',
+    deps: ['init'],
     factory: ctx => createWorkspaceOverlayStep(ctx.workspaceIndexer),
   },
   {
     id: 'scope',
     label: 'Calculate analysis scope',
+    deps: ['init'],
     factory: ctx => createScopeStep(ctx.git),
   },
   {
     id: 'index_commits',
     label: 'Index commits',
+    deps: ['init'],
     factory: ctx => createIndexCommitsStep(ctx.commitIndexer, ctx.concurrency),
+  },
+  {
+    id: 'size',
+    label: 'Filter large files',
+    deps: ['scope'],
+    factory: () => createSizeStep(),
   },
   {
     id: 'working',
     label: 'Compute working snapshot',
-    deps: ['scope'],
+    deps: ['scope', 'size'],
     factory: () => createWorkingStep(),
   },
   {

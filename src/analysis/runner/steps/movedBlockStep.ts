@@ -219,6 +219,75 @@ export function createMovedBlockStep(): PipelineStep {
 
       state.movedBlocks = allMoved.slice(0, 50);
       state.movedLineage = crossVersionLineage;
+
+      // Also query database for existing moves involving files in scope
+      if (state.scope?.allPaths && state.scope.allPaths.size > 0) {
+        try {
+          const allPaths = Array.from(state.scope.allPaths);
+          logDebug(
+            `[MovedBlockStep] Querying DB for existing moves involving ${allPaths.length} files`
+          );
+
+          for (const filePath of allPaths) {
+            const dbMoves = await detector.getFileMoves(filePath);
+            if (dbMoves.length > 0) {
+              // Merge with allMoved, avoiding duplicates
+              for (const move of dbMoves) {
+                if (
+                  !allMoved.some(
+                    m =>
+                      m.commitSha === move.commitSha &&
+                      m.sourceFile === move.sourceFile &&
+                      m.destFile === move.destFile &&
+                      m.sourceStartLine === move.sourceStartLine
+                  )
+                ) {
+                  allMoved.push(move);
+                }
+              }
+            }
+          }
+
+          // Also fetch lineage for all working symbols in scope
+          if (state.working?.symbolsById) {
+            logDebug(
+              `[MovedBlockStep] Querying DB for lineage of ${state.working.symbolsById.size} symbols`
+            );
+            for (const symbolId of state.working.symbolsById.keys()) {
+              const dbLineage = await detector.getSymbolLineage(symbolId);
+              for (const entry of dbLineage) {
+                if (
+                  !crossVersionLineage.some(
+                    l =>
+                      l.symbolId === entry.symbolId && l.previousSymbolId === entry.previousSymbolId
+                  )
+                ) {
+                  crossVersionLineage.push({
+                    symbolId: entry.symbolId,
+                    previousSymbolId: entry.previousSymbolId,
+                    sourceVersion: entry.commitSha,
+                    destVersion: entry.commitSha, // Approximation
+                    moveType:
+                      entry.moveType === 'symbol_rename'
+                        ? 'rename'
+                        : entry.moveType === 'file_rename'
+                          ? 'relocate'
+                          : 'refactor',
+                  });
+                }
+              }
+            }
+          }
+
+          state.movedBlocks = allMoved.slice(0, 50);
+          state.movedLineage = crossVersionLineage;
+          logDebug(
+            `[MovedBlockStep] Final count: ${state.movedBlocks.length} moved blocks, ${state.movedLineage.length} lineage entries`
+          );
+        } catch (e) {
+          logDebug(`[MovedBlockStep] Failed to query existing moves: ${e}`);
+        }
+      }
     },
   };
 }

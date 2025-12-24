@@ -83,7 +83,7 @@ export async function buildRefactorBundleFacts(
   } catch (error) {
     logError('BundleFactsSchema validation failed', error);
 
-    return facts as RefactorBundleFacts;
+    return facts as unknown as RefactorBundleFacts;
   }
 }
 
@@ -99,8 +99,8 @@ export async function assembleFacts(
 ): Promise<RefactorBundleFacts> {
   const intendedCounts = calculateIntendedCounts(intended);
   const intendedLists = getIntendedLists(intended);
-  const workingLists = getWorkingLists(working);
   const newestSha = commitShas.length > 0 ? commitShas[0] : 'unknown';
+  const workingLists = getWorkingLists(working, newestSha);
   const oldestSha = commitShas.length > 0 ? commitShas[commitShas.length - 1] : 'unknown';
 
   const hybridFactsMap: Record<string, HybridFact[]> = {};
@@ -165,8 +165,6 @@ export async function assembleFacts(
         missing: drift.missing_symbols.length,
         zombies: drift.zombie_symbols.length,
         divergent: drift.divergent_symbols.length,
-        missing_edges: drift.missing_edges?.length || 0,
-        zombie_edges: drift.zombie_edges?.length || 0,
       },
       patternDrift: {
         mixedTargets: detectMixedTargets(drift, working),
@@ -344,7 +342,7 @@ export async function assembleFacts(
     hybridFacts: Object.keys(hybridFactsMap).length > 0 ? hybridFactsMap : undefined,
   };
 
-  return facts as RefactorBundleFacts;
+  return facts as unknown as RefactorBundleFacts;
 }
 
 export async function saveFacts(facts: RefactorBundleFacts): Promise<string> {
@@ -412,14 +410,32 @@ function getIntendedLists(intended: Map<string, IntendedState>): {
   return { present, absent, renamed };
 }
 
-function getWorkingLists(working: WorkingSnapshot): {
-  symbols: string[];
+function getWorkingLists(
+  working: WorkingSnapshot,
+  newestSha: string
+): {
+  symbols: any[]; // Full symbol objects for FrameAnalyzer compatibility
   edges: string[];
 } {
+  // Collect all symbols from all files to avoid DNA collisions in the UI
+  const allSymbols: any[] = [];
+  for (const [filePath, symbols] of working.symbolsByFile.entries()) {
+    for (const s of symbols) {
+      allSymbols.push({
+        id: s.symbol_id,
+        name: s.name,
+        kind: s.kind,
+        signature: s.signature || '',
+        location: s.loc_post || s.loc_pre || null,
+        filePath: s.filePath || filePath || '',
+        sha: newestSha, // Add SHA (from commit context)
+        complete: true, // Mark full pipeline as complete
+      });
+    }
+  }
+
   return {
-    symbols: Array.from(working.symbolsById.values()).map(
-      s => `${s.filePath}:${s.name}:${s.symbol_id}`
-    ),
+    symbols: allSymbols,
     edges: working.edges.map(e => `${e.from_symbol_id} -> ${e.to_symbol_id} (${e.edge_type})`),
   };
 }
@@ -431,19 +447,20 @@ export function detectMixedTargets(drift: DriftFindings, working: WorkingSnapsho
 
   const fileConventions = new Map<string, Set<string>>();
 
-  for (const [symbolId, symbol] of working.symbolsById) {
-    const filePath = symbolId.split(':')[0];
+  for (const [filePath, symbols] of working.symbolsByFile.entries()) {
     if (!fileConventions.has(filePath)) {
       fileConventions.set(filePath, new Set());
     }
 
-    const name = symbol.name;
-    if (/^[a-z]/.test(name)) {
-      fileConventions.get(filePath)!.add('camelCase');
-    } else if (/^[A-Z]/.test(name) && /[A-Z]/.test(name.slice(1))) {
-      fileConventions.get(filePath)!.add('PascalCase');
-    } else if (/_/.test(name)) {
-      fileConventions.get(filePath)!.add('snake_case');
+    for (const symbol of symbols) {
+      const name = symbol.name;
+      if (/^[a-z]/.test(name)) {
+        fileConventions.get(filePath)!.add('camelCase');
+      } else if (/^[A-Z]/.test(name) && /[A-Z]/.test(name.slice(1))) {
+        fileConventions.get(filePath)!.add('PascalCase');
+      } else if (/_/.test(name)) {
+        fileConventions.get(filePath)!.add('snake_case');
+      }
     }
   }
 
@@ -474,21 +491,23 @@ export function detectOldNamespaces(
 
   let oldNamespaceCount = 0;
 
-  for (const [symbolId, symbol] of working.symbolsById) {
-    const filePath = symbolId.split(':')[0];
-    const symbolName = symbol.name;
+  for (const [filePath, symbols] of working.symbolsByFile.entries()) {
+    for (const symbol of symbols) {
+      const symbolName = symbol.name;
+      const symbolId = symbol.symbol_id;
 
-    const matchesOldPattern = oldNamespacePatterns.some(
-      pattern => pattern.test(filePath) || pattern.test(symbolName)
-    );
+      const matchesOldPattern = oldNamespacePatterns.some(
+        pattern => pattern.test(filePath) || pattern.test(symbolName)
+      );
 
-    if (matchesOldPattern) {
-      const intendedState = intended.get(symbolId);
-      if (intendedState || !intended.has(symbolId)) {
-        if (intendedState?.expect === 'absent') {
-          oldNamespaceCount++;
-        } else if (!intended.has(symbolId)) {
-          oldNamespaceCount++;
+      if (matchesOldPattern) {
+        const intendedState = intended.get(symbolId);
+        if (intendedState || !intended.has(symbolId)) {
+          if (intendedState?.expect === 'absent') {
+            oldNamespaceCount++;
+          } else if (!intended.has(symbolId)) {
+            oldNamespaceCount++;
+          }
         }
       }
     }

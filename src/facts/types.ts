@@ -1,4 +1,5 @@
 import type { HybridFact } from '../types/cstFacts';
+import type { TypedEvidence } from '../types/EvidenceTypes';
 
 export interface RefactorBundleFacts {
   version: '2.0';
@@ -79,7 +80,7 @@ export interface RefactorBundleFacts {
       total: number;
     };
   };
-  evidence: Record<string, any>;
+  evidence: TypedEvidence;
 
   hybridFacts?: Record<string, HybridFact[]>;
 

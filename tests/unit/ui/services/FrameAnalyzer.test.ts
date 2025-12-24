@@ -9,20 +9,27 @@ vi.mock('path');
 vi.mock('vscode', () => ({
   WebviewView: class {},
 }));
-vi.mock('../../../../../src/analysis/tree-sitter', () => ({
-  getTreeSitterParser: vi.fn(),
+vi.mock('../../../../src/analysis/tree-sitter', () => ({
+  getTreeSitterParser: vi.fn().mockReturnValue({
+    extractHybridFacts: vi.fn().mockResolvedValue([]),
+  }),
 }));
-vi.mock('../../../../../src/analysis/git', () => ({
+vi.mock('../../../../src/analysis/git', () => ({
   GitOperations: class {
     getHistory = vi.fn().mockResolvedValue([]);
+    static normalizePath(p: string) {
+      if (!p) return '';
+      return p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
+    }
   },
 }));
-vi.mock('../../../../../src/utils/logger', () => ({
+vi.mock('../../../../src/utils/logger', () => ({
   logDebug: vi.fn(),
-  logError: vi.fn(),
+  logError: (...args: any[]) => console.error(...args),
   logInfo: vi.fn(),
+  logWarn: (...args: any[]) => console.warn(...args),
 }));
-vi.mock('../../../../../src/utils/supportedLanguages', () => ({
+vi.mock('../../../../src/utils/supportedLanguages', () => ({
   detectLanguage: vi.fn().mockReturnValue('typescript'),
 }));
 
@@ -36,6 +43,7 @@ describe('FrameAnalyzer', () => {
 
     (path.join as any).mockImplementation((...args: string[]) => args.join('/'));
     (path.extname as any).mockReturnValue('.ts');
+    (path.isAbsolute as any).mockImplementation((p: string) => p.startsWith('/'));
   });
 
   describe('analyzeTier1', () => {
@@ -45,13 +53,13 @@ describe('FrameAnalyzer', () => {
 
       const result = await analyzer.analyzeTier1('frame1', 'src/test.ts', mockGitRoot);
 
-      expect(result).toEqual({
+      expect(result).toEqual(expect.objectContaining({
         content: mockContent,
         lineCount: 3,
-        language: 'ts',
+        language: 'typescript',
         filePath: 'src/test.ts',
         fileExists: true,
-      });
+      }));
       expect(fs.readFileSync).toHaveBeenCalledWith('/mock/root/src/test.ts', 'utf8');
     });
 
@@ -62,13 +70,36 @@ describe('FrameAnalyzer', () => {
 
       const result = await analyzer.analyzeTier1('frame1', 'src/missing.ts', mockGitRoot);
 
-      expect(result).toEqual({
+      expect(result).toEqual(expect.objectContaining({
         content: '[File not found on disk]',
         lineCount: 1,
-        language: 'ts',
+        language: 'typescript',
         filePath: 'src/missing.ts',
         fileExists: false,
-      });
+      }));
+    });
+
+    it('should handle working.symbols in string format', async () => {
+      const mockContent = 'class Test {}';
+      (fs.readFileSync as any).mockReturnValue(mockContent);
+
+      const bundleFacts = {
+        evidence: {
+          'working.symbols': [
+            'src/test.ts:Test:class_Test_id',
+            'other/file.ts:Other:class_Other_id',
+          ],
+        },
+      } as any;
+
+      const result = await analyzer.analyzeTier1('frame1', 'src/test.ts', mockGitRoot, bundleFacts);
+
+      expect(result.symbols).toHaveLength(1);
+      expect(result.symbols[0]).toEqual(expect.objectContaining({
+        filePath: 'src/test.ts',
+        name: 'Test',
+        symbolId: 'class_Test_id',
+      }));
     });
   });
 

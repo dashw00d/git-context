@@ -1,296 +1,143 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   assignDNAIds,
-  assignDNAIds_v2,
   computeSymbolDNA,
-  computeSymbolDNA_v2,
   configureDNA,
   getDNAConfig,
 } from '../../../src/analysis/symbolDna';
 import { SymbolInfo } from '../../../src/types';
 
-describe('DNA v2 Integration Tests', () => {
+describe('DNA Integration Tests', () => {
   beforeEach(() => {
-    configureDNA({ enableV2: false, preferV2: false, v2MaxDepth: 5, v2NgramSizes: [2, 3] });
+    configureDNA({ maxDepth: 5, ngramSizes: [2, 3] });
   });
 
-  describe('Feature Flags', () => {
-    it('should default to v2 disabled', () => {
+  describe('Configuration', () => {
+    it('should default to standard config', () => {
       const config = getDNAConfig();
-      expect(config.enableV2).toBe(false);
-      expect(config.preferV2).toBe(false);
+      expect(config.ngramSizes).toEqual([2, 3]);
     });
 
     it('should allow configuration', () => {
-      configureDNA({ enableV2: true, preferV2: true });
+      configureDNA({ ngramSizes: [2, 3, 4] });
       const config = getDNAConfig();
-      expect(config.enableV2).toBe(true);
-      expect(config.preferV2).toBe(true);
-    });
-
-    it('should preserve unmodified config values', () => {
-      configureDNA({ enableV2: true });
-      const config = getDNAConfig();
-      expect(config.enableV2).toBe(true);
-      expect(config.preferV2).toBe(false);
-      expect(config.v2MaxDepth).toBe(5);
+      expect(config.ngramSizes).toEqual([2, 3, 4]);
     });
   });
 
-  describe('DNA v1 (Legacy)', () => {
-    it('should compute stable DNA for same function', () => {
+  describe('DNA Computation', () => {
+    it('should compute stable DNA for same function', async () => {
       const symbol: SymbolInfo = {
         id: 'test',
-        dnaId: '',
         name: 'foo',
         kind: 'function',
         signature: '(x: number)',
+        filePath: 'test.ts',
         location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
       };
 
       const bodyText = 'function foo(x) { return x + 1; }';
-      const dna1 = computeSymbolDNA(symbol, bodyText);
-      const dna2 = computeSymbolDNA(symbol, bodyText);
+      const dna1 = await computeSymbolDNA(symbol, bodyText);
+      const dna2 = await computeSymbolDNA(symbol, bodyText);
 
       expect(dna1).toBe(dna2);
       expect(dna1).toHaveLength(16);
     });
 
-    it('should produce different DNA for different structure', () => {
+    it('should produce different DNA for different structure', async () => {
       const symbol1: SymbolInfo = {
         id: 'test1',
-        dnaId: '',
         name: 'foo',
         kind: 'function',
         signature: '(x: number)',
+        filePath: 'test1.ts',
         location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
       };
 
       const symbol2: SymbolInfo = {
         id: 'test2',
-        dnaId: '',
         name: 'bar',
         kind: 'class',
         signature: '(x: number)',
+        filePath: 'test2.ts',
         location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
       };
 
-      const dna1 = computeSymbolDNA(symbol1, 'function foo(x) { return x; }');
-      const dna2 = computeSymbolDNA(symbol2, 'class bar { constructor(x) {} }');
+      const dna1 = await computeSymbolDNA(symbol1, 'function foo(x) { return x; }');
+      const dna2 = await computeSymbolDNA(symbol2, 'class bar { constructor(x) {} }');
 
       expect(dna1).not.toBe(dna2);
     });
-  });
 
-  describe('DNA v2 (AST N-Grams)', () => {
     it('should compute enhanced DNA with AST n-grams', async () => {
       const symbol: SymbolInfo = {
         id: 'test',
-        dnaId: '',
         name: 'foo',
         kind: 'function',
         signature: '(x: number)',
+        filePath: 'test.ts',
         location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
       };
 
       const bodyText = 'function foo(x) { return x + 1; }';
-      const dna = await computeSymbolDNA_v2(symbol, bodyText, 'typescript');
+      const dna = await computeSymbolDNA(symbol, bodyText, 'typescript');
 
       expect(dna).toBeTruthy();
       expect(dna).toHaveLength(16);
     });
-
-    it('should be resilient to identifier changes', async () => {
-      const symbol1: SymbolInfo = {
-        id: 'test1',
-        dnaId: '',
-        name: 'foo',
-        kind: 'function',
-        signature: '(x: number)',
-        location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
-      };
-
-      const symbol2: SymbolInfo = {
-        id: 'test2',
-        dnaId: '',
-        name: 'bar',
-        kind: 'function',
-        signature: '(y: number)',
-        location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
-      };
-
-      const dna1 = await computeSymbolDNA_v2(
-        symbol1,
-        'function foo(x) { return x + 1; }',
-        'typescript'
-      );
-      const dna2 = await computeSymbolDNA_v2(
-        symbol2,
-        'function bar(y) { return y + 1; }',
-        'typescript'
-      );
-
-      expect(dna1).toBeTruthy();
-      expect(dna2).toBeTruthy();
-    });
-
-    it('should detect structural changes', async () => {
-      const symbol1: SymbolInfo = {
-        id: 'test1',
-        dnaId: '',
-        name: 'foo',
-        kind: 'function',
-        signature: '(x: number)',
-        location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
-      };
-
-      const symbol2: SymbolInfo = {
-        id: 'test2',
-        dnaId: '',
-        name: 'foo',
-        kind: 'function',
-        signature: '(x: number)',
-        location: { start: { line: 1, column: 0 }, end: { line: 5, column: 0 } },
-      };
-
-      const dna1 = await computeSymbolDNA_v2(
-        symbol1,
-        'function foo(x) { return x + 1; }',
-        'typescript'
-      );
-      const dna2 = await computeSymbolDNA_v2(
-        symbol2,
-        'function foo(x) { if (x > 0) return x + 1; return 0; }',
-        'typescript'
-      );
-
-      expect(dna1).not.toBe(dna2);
-    });
   });
 
-  describe('Dual DNA Assignment', () => {
-    it('should assign v1 DNA by default (sync)', () => {
+  describe('DNA Assignment', () => {
+    it('should assign DNA IDs to symbols', async () => {
       const symbols: SymbolInfo[] = [
         {
           id: 'func1',
-          dnaId: '',
           name: 'foo',
           kind: 'function',
           signature: '()',
+          filePath: 'test.ts',
           location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
         },
       ];
 
-      const bodyTexts = new Map([['func1', 'function foo() { return 42; }']]);
-      const result = assignDNAIds(symbols, bodyTexts);
+      const bodyTexts = new Map([['test.ts', 'function foo() { return 42; }']]);
+      const result = await assignDNAIds(symbols, bodyTexts, 'typescript');
 
       expect(result).toHaveLength(1);
-      expect(result[0].dnaId).toBeTruthy();
-      expect(result[0].dnaVersion).toBe(1);
-      expect(result[0].dnaIdV2).toBeUndefined();
-    });
-
-    it('should support dual DNA when v2 enabled (async)', async () => {
-      configureDNA({ enableV2: true });
-
-      const symbols: SymbolInfo[] = [
-        {
-          id: 'func1',
-          dnaId: '',
-          name: 'foo',
-          kind: 'function',
-          signature: '()',
-          location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
-        },
-      ];
-
-      const bodyTexts = new Map([['func1', 'function foo() { return 42; }']]);
-      const result = await assignDNAIds_v2(symbols, bodyTexts, 'typescript');
-
-      expect(result).toHaveLength(1);
-      expect(result[0].dnaId).toBeTruthy();
-      expect(result[0].dnaIdV2).toBeTruthy();
+      expect(result[0].id).toBeTruthy();
       expect(result[0].dnaVersion).toBe(2);
     });
 
-    it('should only compute v1 when v2 disabled (async)', async () => {
-      configureDNA({ enableV2: false });
-
-      const symbols: SymbolInfo[] = [
-        {
-          id: 'func1',
-          dnaId: '',
-          name: 'foo',
-          kind: 'function',
-          signature: '()',
-          location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
-        },
-      ];
-
-      const bodyTexts = new Map([['func1', 'function foo() { return 42; }']]);
-      const result = await assignDNAIds_v2(symbols, bodyTexts, 'typescript');
-
-      expect(result).toHaveLength(1);
-      expect(result[0].dnaId).toBeTruthy();
-      expect(result[0].dnaIdV2).toBeUndefined();
-      expect(result[0].dnaVersion).toBe(1);
-    });
-
     it('should handle multiple symbols efficiently', async () => {
-      configureDNA({ enableV2: true });
-
       const symbols: SymbolInfo[] = [
         {
           id: 'func1',
-          dnaId: '',
           name: 'foo',
           kind: 'function',
           signature: '()',
+          filePath: 'file1.ts',
           location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
         },
         {
           id: 'func2',
-          dnaId: '',
           name: 'bar',
           kind: 'function',
           signature: '()',
+          filePath: 'file2.ts',
           location: { start: { line: 5, column: 0 }, end: { line: 7, column: 0 } },
         },
       ];
 
       const bodyTexts = new Map([
-        ['func1', 'function foo() { return 42; }'],
-        ['func2', 'function bar() { return 100; }'],
+        ['file1.ts', 'function foo() { return 42; }'],
+        ['file2.ts', 'function bar() { return 100; }'],
       ]);
 
-      const result = await assignDNAIds_v2(symbols, bodyTexts, 'typescript');
+      const result = await assignDNAIds(symbols, bodyTexts, 'typescript');
 
       expect(result).toHaveLength(2);
-
-      expect(result[0].dnaId).toBeTruthy();
-      expect(result[1].dnaId).toBeTruthy();
-      expect(result[0].dnaIdV2).toBeTruthy();
-      expect(result[1].dnaIdV2).toBeTruthy();
-    });
-  });
-
-  describe('Backward Compatibility', () => {
-    it('should maintain v1 behavior when v2 disabled', () => {
-      const symbol: SymbolInfo = {
-        id: 'test',
-        dnaId: '',
-        name: 'foo',
-        kind: 'function',
-        signature: '(x: number)',
-        location: { start: { line: 1, column: 0 }, end: { line: 3, column: 0 } },
-      };
-
-      const bodyText = 'function foo(x) { return x + 1; }';
-      const dnaV1 = computeSymbolDNA(symbol, bodyText);
-
-      const symbols = assignDNAIds([symbol], new Map([['test', bodyText]]));
-      expect(symbols[0].dnaId).toBe(dnaV1);
-      expect(symbols[0].dnaVersion).toBe(1);
+      expect(result[0].id).toBeTruthy();
+      expect(result[1].id).toBeTruthy();
     });
   });
 });

@@ -3,7 +3,7 @@ import * as path from 'path';
 import { parentPort } from 'worker_threads';
 import { SymbolInfo } from '../types';
 import { isCstOnlyLanguage, LANGUAGES } from '../utils/config';
-import { logWarn } from '../utils/logger';
+import { logDebug, logError, logWarn } from '../utils/logger';
 import { CstExtractor } from './cstExtractor';
 const { Parser, Language } = require('web-tree-sitter');
 
@@ -144,22 +144,91 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
   return null;
 }
 
-function extractSymbols(tree: any, filePath: string, language: string): SymbolInfo[] {
+// Maximum reasonable symbol count for a source file
+// Files with more symbols are likely minified/bundled and should be skipped
+const MAX_REASONABLE_SYMBOLS = 1000;
+// Maximum iterations to prevent infinite loops in malformed trees
+const MAX_ITERATIONS = 500000;
+
+// Return type to indicate if file was filtered
+type ExtractSymbolsResult = {
+  symbols: SymbolInfo[];
+  wasFiltered: boolean;
+};
+
+function extractSymbols(tree: any, filePath: string, language: string): ExtractSymbolsResult {
+  const startTime = Date.now();
   const symbols: SymbolInfo[] = [];
   const cursor = tree.walk();
+  let iterations = 0;
+  let completedSuccessfully = false;
 
-  while (true) {
-    const node = cursor.currentNode;
-    const symbol = extractSymbolFromNode(node, filePath, language);
-    if (symbol) {
-      symbols.push(symbol);
+  try {
+    while (iterations < MAX_ITERATIONS) {
+      iterations++;
+      const node = cursor.currentNode;
+      const symbol = extractSymbolFromNode(node, filePath, language);
+      if (symbol) {
+        symbols.push(symbol);
+        // Stop early if we've found too many symbols (likely minified/bundled file)
+        if (symbols.length >= MAX_REASONABLE_SYMBOLS) {
+          logWarn(
+            `[ParserWorker] Reached symbol limit (${MAX_REASONABLE_SYMBOLS}) for ${filePath}, stopping symbol extraction early. Found ${symbols.length} symbols in ${Date.now() - startTime}ms (${iterations} iterations). File may be minified/bundled.`
+          );
+          // Return empty array to indicate this file should be filtered out
+          return { symbols: [], wasFiltered: true };
+        }
+      }
+
+      if (cursor.gotoFirstChild()) continue;
+      while (!cursor.gotoNextSibling()) {
+        if (!cursor.gotoParent()) {
+          // Successfully completed traversal
+          completedSuccessfully = true;
+          logDebug(
+            `[ParserWorker] extractSymbols completed for ${filePath}: ${symbols.length} symbols in ${Date.now() - startTime}ms (${iterations} iterations)`
+          );
+          return { symbols, wasFiltered: false };
+        }
+      }
     }
 
-    if (cursor.gotoFirstChild()) continue;
-    while (!cursor.gotoNextSibling()) {
-      if (!cursor.gotoParent()) return symbols;
+    // If we hit the limit, log a warning but return what we have
+    if (iterations >= MAX_ITERATIONS) {
+      logWarn(
+        `[ParserWorker] Reached max iterations limit (${MAX_ITERATIONS}) for ${filePath}, stopping symbol extraction early. Found ${symbols.length} symbols in ${Date.now() - startTime}ms.`
+      );
     }
+  } catch (error) {
+    const endTime = Date.now();
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (
+      errorMsg.includes('Maximum call stack') ||
+      errorMsg.includes('stack overflow') ||
+      errorMsg.includes('RangeError')
+    ) {
+      logWarn(
+        `[ParserWorker] Stack overflow in extractSymbols for ${filePath}, returning partial symbols (${symbols.length} found) in ${endTime - startTime}ms`
+      );
+    } else {
+      logError(
+        `[ParserWorker] Error in extractSymbols for ${filePath} (${endTime - startTime}ms): ${errorMsg}`
+      );
+    }
+  } finally {
+    // Always delete cursor to prevent memory leaks
+    cursor.delete();
   }
+
+  // Only log success message if we completed successfully
+  if (completedSuccessfully) {
+    const endTime = Date.now();
+    logDebug(
+      `[ParserWorker] extractSymbols finished for ${filePath}: ${symbols.length} symbols in ${endTime - startTime}ms (${iterations} iterations)`
+    );
+  }
+
+  return { symbols, wasFiltered: false };
 }
 
 async function initialize(wasmDir: string, languages: string[]) {
@@ -189,10 +258,79 @@ async function initialize(wasmDir: string, languages: string[]) {
   }
 }
 
+// Validation helpers
+function validateParseMessage(msg: any): msg is Extract<WorkerMessage, { type: 'parse' }> {
+  return (
+    msg &&
+    typeof msg === 'object' &&
+    msg.type === 'parse' &&
+    typeof msg.id === 'number' &&
+    typeof msg.content === 'string' &&
+    typeof msg.languageId === 'string' &&
+    typeof msg.filePath === 'string'
+  );
+}
+
+function validateSerializeMessage(msg: any): msg is Extract<WorkerMessage, { type: 'serialize' }> {
+  return (
+    msg &&
+    typeof msg === 'object' &&
+    msg.type === 'serialize' &&
+    typeof msg.id === 'number' &&
+    typeof msg.content === 'string' &&
+    typeof msg.languageId === 'string'
+  );
+}
+
+function validateInitMessage(msg: any): msg is Extract<WorkerMessage, { type: 'init' }> {
+  return (
+    msg &&
+    typeof msg === 'object' &&
+    msg.type === 'init' &&
+    typeof msg.wasmDir === 'string' &&
+    Array.isArray(msg.languages)
+  );
+}
+
+// Cleanup function for worker termination
+function cleanup(): void {
+  parsers.clear();
+  isInitialized = false;
+}
+
+// Handle worker termination
+if (parentPort) {
+  parentPort.once('close', cleanup);
+}
+
 parentPort?.on('message', async (msg: WorkerMessage) => {
   if (msg.type === 'init') {
+    // Validate message structure
+    if (!validateInitMessage(msg)) {
+      parentPort?.postMessage({
+        type: 'initialized',
+        success: false,
+        error: 'Invalid init message: missing required fields',
+      });
+      return;
+    }
+
+    const startTime = Date.now();
     await initialize(msg.wasmDir, msg.languages);
+    const endTime = Date.now();
+    logDebug(`[ParserWorker] Initialization completed in ${endTime - startTime}ms`);
   } else if (msg.type === 'parse') {
+    // Validate message structure
+    if (!validateParseMessage(msg)) {
+      parentPort?.postMessage({
+        type: 'result',
+        id: typeof msg === 'object' && typeof (msg as any).id === 'number' ? (msg as any).id : -1,
+        error: 'Invalid parse message: missing required fields',
+      });
+      return;
+    }
+
+    const parseStartTime = Date.now();
     if (!isInitialized) {
       parentPort?.postMessage({ type: 'result', id: msg.id, error: 'Worker not initialized' });
       return;
@@ -208,28 +346,175 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
       return;
     }
 
+    let tree: any = null;
     try {
-      const tree = parser.parse(msg.content);
+      const parseTreeStartTime = Date.now();
+      try {
+        tree = parser.parse(msg.content);
+        const parseTreeEndTime = Date.now();
+        logDebug(
+          `[ParserWorker] parser.parse() for ${msg.filePath}: ${parseTreeEndTime - parseTreeStartTime}ms (${msg.content.length} bytes)`
+        );
+      } catch (parseError) {
+        const parseTreeEndTime = Date.now();
+        const parseErrorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+        if (
+          parseErrorMsg.includes('Maximum call stack') ||
+          parseErrorMsg.includes('stack overflow') ||
+          parseErrorMsg.includes('RangeError')
+        ) {
+          logWarn(
+            `[ParserWorker] Stack overflow parsing ${msg.filePath} (${parseTreeEndTime - parseTreeStartTime}ms), returning empty result`
+          );
+          parentPort?.postMessage({
+            type: 'result',
+            id: msg.id,
+            data: { symbols: [], hybridFacts: [] },
+          });
+          return;
+        }
+        logError(
+          `[ParserWorker] Unexpected parse error for ${msg.filePath} (${parseTreeEndTime - parseTreeStartTime}ms):`,
+          parseError
+        );
+        parentPort?.postMessage({
+          type: 'result',
+          id: msg.id,
+          data: { symbols: [], hybridFacts: [] },
+        });
+        return;
+      }
 
       const result: any = {};
 
       if (msg.extractHybrid) {
         const isCstOnly = isCstOnlyLanguage(msg.languageId);
-        const symbols =
-          msg.existingSymbols ||
-          (isCstOnly ? [] : extractSymbols(tree, msg.filePath, msg.languageId));
-        const cstFacts = cstExtractor.extractCstFacts(tree, msg.filePath, msg.languageId, symbols);
-        result.hybridFacts = [...symbols, ...cstFacts];
+        const extractSymbolsStartTime = Date.now();
+        let symbols: SymbolInfo[] = [];
+        let wasFiltered = false;
+
+        if (msg.existingSymbols) {
+          symbols = msg.existingSymbols;
+          // Check if existingSymbols exceeds limit
+          if (symbols.length >= MAX_REASONABLE_SYMBOLS) {
+            logWarn(
+              `[ParserWorker] File ${msg.filePath} has ${symbols.length} symbols (exceeds ${MAX_REASONABLE_SYMBOLS}), likely minified/bundled. Skipping.`
+            );
+            symbols = [];
+            wasFiltered = true;
+          }
+        } else if (isCstOnly) {
+          symbols = [];
+        } else {
+          const result = extractSymbols(tree, msg.filePath, msg.languageId);
+          symbols = result.symbols;
+          wasFiltered = result.wasFiltered;
+        }
+        const extractSymbolsEndTime = Date.now();
+
+        if (!msg.existingSymbols && !isCstOnly) {
+          logDebug(
+            `[ParserWorker] extractSymbols for ${msg.filePath}: ${extractSymbolsEndTime - extractSymbolsStartTime}ms (${symbols.length} symbols)`
+          );
+        }
+
+        // If file was filtered out, return empty hybridFacts (don't include CST facts)
+        if (wasFiltered) {
+          result.hybridFacts = [];
+        } else {
+          // Wrap CST extraction in try-catch for stack overflow
+          let cstFacts: any[] = [];
+          const extractCstStartTime = Date.now();
+          try {
+            cstFacts = cstExtractor.extractCstFacts(tree, msg.filePath, msg.languageId, symbols);
+            const extractCstEndTime = Date.now();
+            logDebug(
+              `[ParserWorker] extractCstFacts for ${msg.filePath}: ${extractCstEndTime - extractCstStartTime}ms (${cstFacts.length} facts)`
+            );
+          } catch (cstError) {
+            const extractCstEndTime = Date.now();
+            const cstErrorMsg = cstError instanceof Error ? cstError.message : String(cstError);
+            if (
+              cstErrorMsg.includes('Maximum call stack') ||
+              cstErrorMsg.includes('stack overflow') ||
+              cstErrorMsg.includes('RangeError')
+            ) {
+              logWarn(
+                `[ParserWorker] Stack overflow in CST extraction for ${msg.filePath} (${extractCstEndTime - extractCstStartTime}ms), skipping CST facts`
+              );
+              cstFacts = [];
+            } else {
+              logError(
+                `[ParserWorker] Unexpected error in CST extraction for ${msg.filePath} (${extractCstEndTime - extractCstStartTime}ms):`,
+                cstError
+              );
+              cstFacts = [];
+            }
+          }
+
+          result.hybridFacts = [...symbols, ...cstFacts];
+        }
       } else {
-        result.symbols = extractSymbols(tree, msg.filePath, msg.languageId);
+        const extractSymbolsStartTime = Date.now();
+        const extractResult = extractSymbols(tree, msg.filePath, msg.languageId);
+        const extractSymbolsEndTime = Date.now();
+
+        // extractSymbols returns empty array if it hits MAX_REASONABLE_SYMBOLS (filters out minified/bundled files)
+        result.symbols = extractResult.symbols;
+        if (extractResult.symbols.length > 0) {
+          logDebug(
+            `[ParserWorker] extractSymbols for ${msg.filePath}: ${extractSymbolsEndTime - extractSymbolsStartTime}ms (${extractResult.symbols.length} symbols)`
+          );
+        }
       }
 
-      tree.delete();
+      const parseEndTime = Date.now();
+      logDebug(
+        `[ParserWorker] Total parse operation for ${msg.filePath}: ${parseEndTime - parseStartTime}ms`
+      );
       parentPort?.postMessage({ type: 'result', id: msg.id, data: result });
     } catch (error) {
-      parentPort?.postMessage({ type: 'result', id: msg.id, error: String(error) });
+      const parseEndTime = Date.now();
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      // Check for stack overflow specifically
+      if (
+        errorMsg.includes('Maximum call stack') ||
+        errorMsg.includes('stack overflow') ||
+        errorMsg.includes('RangeError')
+      ) {
+        logWarn(
+          `[ParserWorker] Stack overflow parsing ${msg.filePath} (${parseEndTime - parseStartTime}ms), returning empty result`
+        );
+        parentPort?.postMessage({
+          type: 'result',
+          id: msg.id,
+          data: { symbols: [], hybridFacts: [] },
+        });
+      } else {
+        logError(
+          `[ParserWorker] Error parsing ${msg.filePath} (${parseEndTime - parseStartTime}ms): ${errorMsg}`
+        );
+        parentPort?.postMessage({ type: 'result', id: msg.id, error: errorMsg });
+      }
+    } finally {
+      // Always delete tree to prevent memory leaks
+      if (tree) {
+        tree.delete();
+      }
     }
   } else if (msg.type === 'serialize') {
+    // Validate message structure
+    if (!validateSerializeMessage(msg)) {
+      parentPort?.postMessage({
+        type: 'result',
+        id: typeof msg === 'object' && typeof (msg as any).id === 'number' ? (msg as any).id : -1,
+        error: 'Invalid serialize message: missing required fields',
+      });
+      return;
+    }
+
+    const serializeStartTime = Date.now();
     if (!isInitialized) {
       parentPort?.postMessage({ type: 'result', id: msg.id, error: 'Worker not initialized' });
       return;
@@ -243,13 +528,44 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
       });
       return;
     }
+    let tree: any = null;
     try {
-      const tree = parser.parse(msg.content);
+      const parseStartTime = Date.now();
+      tree = parser.parse(msg.content);
+      const parseEndTime = Date.now();
+      logDebug(`[ParserWorker] serialize parser.parse(): ${parseEndTime - parseStartTime}ms`);
+
+      const serializeNodeStartTime = Date.now();
       const serialized = serializeNode(tree.rootNode, msg.maxDepth || 5);
-      tree.delete();
+      const serializeNodeEndTime = Date.now();
+      logDebug(
+        `[ParserWorker] serializeNode(): ${serializeNodeEndTime - serializeNodeStartTime}ms`
+      );
+
+      const serializeEndTime = Date.now();
+      logDebug(
+        `[ParserWorker] Total serialize operation: ${serializeEndTime - serializeStartTime}ms`
+      );
       parentPort?.postMessage({ type: 'result', id: msg.id, data: serialized });
     } catch (error) {
+      const serializeEndTime = Date.now();
+      logError(
+        `[ParserWorker] Error in serialize (${serializeEndTime - serializeStartTime}ms): ${error}`
+      );
       parentPort?.postMessage({ type: 'result', id: msg.id, error: String(error) });
+    } finally {
+      // Always delete tree to prevent memory leaks
+      if (tree) {
+        tree.delete();
+      }
     }
+  } else {
+    // Unknown message type
+    logWarn(`[ParserWorker] Received unknown message type: ${(msg as any).type}`);
+    parentPort?.postMessage({
+      type: 'result',
+      id: typeof (msg as any).id === 'number' ? (msg as any).id : -1,
+      error: `Unknown message type: ${(msg as any).type}`,
+    });
   }
 });

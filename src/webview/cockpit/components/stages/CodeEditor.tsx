@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { useFileAnalysisData } from '../../hooks/useFileAnalysisData';
+import { FileAnalysisData } from '../../hooks/useFileAnalysisData';
 import { useSymbolRefCounts } from '../../hooks/useSymbolRefCounts';
 import { HoverInfoCard } from './HoverInfoCard';
 import { SymbolHeaderBar } from './SymbolHeaderBar';
+import { logDebug } from '../../../../utils/logger';
 
 interface DriftIssue {
   type?: string;
@@ -58,6 +59,7 @@ interface CodeEditorProps {
     lastModified?: number;
     authors?: string[];
   };
+  analysisData: FileAnalysisData;
 }
 
 const EditorContainer: React.CSSProperties = {
@@ -146,11 +148,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   showAgeGutter = true,
   showMovedGutter = true,
   metrics,
+  analysisData,
 }) => {
   const lines = content.split('\n');
 
-  // Get analysis data for this file
-  const analysisData = useFileAnalysisData(filePath || '', bundleFacts, currentCommitIndex);
   const refCounts = useSymbolRefCounts(bundleFacts, filePath || '');
 
   // Symbol collapse state
@@ -266,7 +267,15 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const lineToCommitIndex = new Map<number, number>();
   if (lineCommits.length > 0 && orderedCommits.length > 0) {
     lineCommits.forEach(({ line, commitSha }) => {
-      const commitIndex = orderedCommits.indexOf(commitSha);
+      // Robust matching: Try exact match first, then prefix match
+      let commitIndex = orderedCommits.indexOf(commitSha);
+
+      if (commitIndex === -1) {
+        commitIndex = orderedCommits.findIndex(
+          sha => sha.startsWith(commitSha) || commitSha.startsWith(sha)
+        );
+      }
+
       if (commitIndex >= 0) {
         lineToCommitIndex.set(line, commitIndex);
       }
@@ -407,7 +416,11 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const editorRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (focusedSymbolId && focusedStartLine > 0 && editorRef.current) {
-      const lineElement = editorRef.current.querySelector(`[data-line="${focusedStartLine}"]`);
+      // Try to find the header row first, then fall back to the line row
+      const lineElement =
+        editorRef.current.querySelector(`[data-line="${focusedStartLine}-header"]`) ||
+        editorRef.current.querySelector(`[data-line="${focusedStartLine}"]`);
+
       if (lineElement) {
         lineElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
@@ -551,10 +564,21 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         const lineIsAfterTime = isLineAfterTime(lineNumber);
         const lineShouldHide = lineIsAfterTime && currentCommitIndex !== undefined;
 
-        // Get symbol ref counts
-        const symbolId = symbolAtLine?.id || symbolAtLine?.name || '';
+        // Get symbol ref counts - MUST use DNA hash (id), not name
+        // refCounts Map keys are DNA hashes, so we can't fall back to name
+        const symbolId = symbolAtLine?.id || '';
+        if (!symbolId && symbolAtLine) {
+          logDebug(`[CodeEditor] Symbol ${symbolAtLine.name} missing ID, cannot lookup refs`);
+        }
         const incomingRefs = symbolId ? refCounts.incoming.get(symbolId) || 0 : 0;
         const outgoingRefs = symbolId ? refCounts.outgoing.get(symbolId) || 0 : 0;
+
+        // Debug logging for successful lookups
+        if (symbolId && (incomingRefs > 0 || outgoingRefs > 0)) {
+          logDebug(
+            `[CodeEditor] Symbol ${symbolAtLine?.name} (${symbolId}): ${incomingRefs} incoming, ${outgoingRefs} outgoing refs`
+          );
+        }
 
         // Get line commit info for age display
         const lineCommit = lineCommits.find(lc => lc.line === lineNumber);
@@ -614,8 +638,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
                     isLegacy={isLegacySymbol || false}
                     hasDrift={!!driftIssue}
                     onToggle={() => toggleSymbolCollapse(symbolId)}
-                    onRefsClick={onSymbolClick ? () => onSymbolClick(symbolId) : undefined}
-                    onFocus={onSymbolClick ? () => onSymbolClick(symbolId) : undefined}
+                    onRefsClick={() => onSymbolClick?.(symbolId)}
+                    onFocus={() => onSymbolClick?.(symbolId)}
                   />
                 </div>
                 <div style={RefIndicatorStyle}>
@@ -715,7 +739,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
                 {/* Line Number Column */}
                 {showLineNumbers && (
                   <div style={LineNumberStyle} title={`Line ${lineNumber}`}>
-                    {lineNumber}
+                    {' '}
+                    {lineNumber}{' '}
                   </div>
                 )}
 

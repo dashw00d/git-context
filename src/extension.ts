@@ -81,14 +81,15 @@ export async function activate(context: vscode.ExtensionContext) {
         editCount?: number;
         thresholdReached?: boolean;
       }) => {
-        shell.getOrchestrator().updateLiveState(
-          {
+        const { getStore } = require('./state/store');
+        getStore().dispatch({
+          type: 'LIVE_ANALYSIS_UPDATED',
+          payload: {
             pendingChanges: data.pendingChanges.files,
             totalEdits: data.pendingChanges.totalEdits,
             isTracking: true,
           },
-          'liveTracker:changesUpdated'
-        );
+        });
       }
     );
 
@@ -111,9 +112,8 @@ export async function activate(context: vscode.ExtensionContext) {
     const showReportCommand = vscode.commands.registerCommand(
       'gitContext.showRefactorReport',
       async () => {
-        const { getCockpitOrchestrator } = await import('./state/cockpitOrchestrator');
-        const orchestrator = getCockpitOrchestrator();
-        const { llmOutputs } = orchestrator.getState();
+        const { getStore } = await import('./state/store');
+        const { llmOutputs } = getStore().getState();
 
         const analysis = llmOutputs?.llmAnalysis || llmOutputs;
 
@@ -218,6 +218,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
       } else {
         logInfo(`[Cockpit] Database already has ${commitCount} commits, skipping initial load`);
+        await commitsProvider.refresh();
       }
     } catch (error) {
       logError('[Cockpit] Failed to auto-load initial commits', error);

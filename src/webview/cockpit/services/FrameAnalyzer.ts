@@ -7,6 +7,7 @@ import { Tier1DataSchema, Tier2DataSchema, Tier3DataSchema } from '../../../stat
 import { BundleFactsDTO } from '../../../types/cockpit';
 import { detectLanguage } from '../../../utils/config';
 import { logDebug, logError, logWarn } from '../../../utils/logger';
+import { normalizeToAbsolute, normalizeToRelative } from '../../../utils/path';
 
 type Tier1Data = {
   content: string;
@@ -56,10 +57,16 @@ export class FrameAnalyzer {
     workspaceRoot: string,
     bundleFacts?: BundleFactsDTO
   ): Promise<Tier1Data & { symbolId?: string }> {
-    const fullPath = path.join(workspaceRoot, targetPath);
+    const fullPath = normalizeToAbsolute(targetPath, workspaceRoot);
+    const normalizedTargetPath = GitOperations.normalizePath(targetPath);
+
+    logDebug(
+      `[FrameAnalyzer] Analyzing Tier 1: frameId=${frameId}, targetPath=${targetPath}, workspaceRoot=${workspaceRoot} -> fullPath=${fullPath}`
+    );
+
     const language =
       detectLanguage(targetPath) ||
-      path.extname(fullPath).toLowerCase().replace('.', '') ||
+      (fullPath ? path.extname(fullPath).toLowerCase().replace('.', '') : '') ||
       'unknown';
 
     // Extract symbol ID if present in frameId (filePath::symbolId)
@@ -72,33 +79,84 @@ export class FrameAnalyzer {
       // Extract symbols if language is supported
       let symbols: any[] = [];
 
-      const normalizePath = (p: string) => p.replace(/^\.\//, '').replace(/\\/g, '/');
+      // Use consistent path normalization matching the main pipeline
+      const normalizePathForMatch = (p: string) => {
+        return GitOperations.normalizePath(p);
+      };
 
       // First, try to use quick scan symbols from bundleFacts
       if (bundleFacts?.evidence?.['working.symbols']) {
-        const quickSymbols = bundleFacts.evidence['working.symbols'] as any[];
-        // Filter symbols for this file
+        const rawSymbols = bundleFacts.evidence['working.symbols'] as any[];
+
+        // Handle both string format "path:name:id" and object format
+        const quickSymbols = rawSymbols
+          .map(s => {
+            if (typeof s === 'string') {
+              // String format: "filePath:name:symbolId"
+              const parts = s.split(':');
+              if (parts.length >= 3) {
+                const symbolId = parts.pop()!;
+                const name = parts.pop()!;
+                const filePath = parts.join(':');
+                return {
+                  filePath: normalizePathForMatch(filePath), // Normalize when parsing
+                  name,
+                  symbolId,
+                  // String format lacks location/signature - can't use directly
+                };
+              }
+              return null;
+            }
+            // Object format - normalize the filePath
+            return {
+              ...s,
+              filePath: normalizePathForMatch(s.filePath || ''),
+            };
+          })
+          .filter(Boolean);
+
+        // Filter symbols for this file - use normalized paths
+        const normalizedTarget = normalizePathForMatch(normalizedTargetPath);
         const fileSymbols = quickSymbols.filter(
-          (s: any) => normalizePath(s.filePath) === normalizePath(targetPath)
+          (s: any) => s?.filePath && normalizePathForMatch(s.filePath) === normalizedTarget
         );
 
-        if (fileSymbols.length > 0) {
-          // Quick scan symbols already have location/signature, use them directly
-          symbols = fileSymbols;
-          logDebug(`FrameAnalyzer: Using ${symbols.length} quick scan symbols for ${frameId}`);
+        if (fileSymbols.length === 0 && quickSymbols.length > 0) {
+          const samplePaths = quickSymbols.slice(0, 5).map((s: any) => s?.filePath);
+          logWarn(
+            `FrameAnalyzer: No symbols matched for "${normalizedTarget}". ` +
+              `Total quickSymbols: ${quickSymbols.length}. Sample paths: ${JSON.stringify(samplePaths)}`
+          );
+        }
+
+        // Separate symbols into complete (usable) and incomplete (string format)
+        const usableSymbols = fileSymbols.filter((s: any) => s.location && s.signature);
+        const incompleteSymbols = fileSymbols.filter((s: any) => !s.location || !s.signature);
+
+        if (usableSymbols.length > 0) {
+          symbols = usableSymbols;
+          logDebug(
+            `FrameAnalyzer: Using ${symbols.length} complete symbols from bundleFacts for ${frameId}`
+          );
+        } else if (incompleteSymbols.length > 0) {
+          // Use incomplete symbols as temporary fallback
+          symbols = incompleteSymbols;
+          logDebug(
+            `FrameAnalyzer: Using ${symbols.length} incomplete symbols from bundleFacts as fallback for ${frameId}`
+          );
         }
       }
 
-      // If no quick scan symbols, extract fresh
+      // Always parse if we don't have complete symbols, using priority queue
       if (symbols.length === 0 && language && language !== 'unknown') {
         try {
           const parser = getTreeSitterParser();
           const hybridFacts = await parser.extractHybridFacts(
             content,
-            targetPath,
+            normalizedTargetPath,
             language,
             undefined,
-            true // High priority
+            true // High priority - should jump the queue
           );
           // Filter to only symbol kinds (functions, classes, etc.)
           const symbolKinds = new Set([
@@ -114,6 +172,45 @@ export class FrameAnalyzer {
             'type_alias',
           ]);
           symbols = hybridFacts.filter((f: any) => symbolKinds.has(f.kind));
+
+          // Persist to DB via shared queue
+          const { DatabaseWriteQueue } = await import('../../../storage/databaseWriteQueue');
+          const { computeHybridDna } = await import('../../../analysis/symbolDna');
+          const writeQueue = DatabaseWriteQueue.getInstance();
+          const headSha = await this.gitOps.getHeadSha();
+
+          for (const s of symbols) {
+            // Compute DNA for stable ID
+            const dnaId = await computeHybridDna(s, undefined, language);
+            s.id = dnaId;
+
+            // Queue symbol_dna insert
+            writeQueue.queue({
+              type: 'symbol',
+              data: {
+                sha: headSha,
+                path: normalizedTargetPath,
+                symbol: s,
+                changeType: 'priority_click',
+                isDna: true,
+              },
+            });
+
+            // Queue symbols insert
+            writeQueue.queue({
+              type: 'symbol',
+              data: {
+                sha: headSha,
+                path: normalizedTargetPath,
+                symbol: s,
+                changeType: 'priority_click',
+                isDna: false,
+              },
+            });
+          }
+
+          // Flush immediately for click-triggered analysis
+          await writeQueue.flushAll();
         } catch (error) {
           logDebug(`FrameAnalyzer: Failed to extract symbols for ${frameId}: ${error}`);
         }
@@ -123,7 +220,7 @@ export class FrameAnalyzer {
         content,
         lineCount,
         language,
-        filePath: targetPath,
+        filePath: normalizedTargetPath,
         fileExists: true,
         symbols,
         symbolId,
@@ -148,9 +245,10 @@ export class FrameAnalyzer {
         content: '[File not found on disk]',
         lineCount: 1,
         language,
-        filePath: targetPath,
+        filePath: normalizedTargetPath,
         fileExists: false,
         symbols: [],
+        symbolId,
       };
     }
   }
@@ -175,6 +273,9 @@ export class FrameAnalyzer {
     // If facts are missing, we can still return git history/blame/diff
     // We just won't have graph edges or cross-file metrics
 
+    // Ensure targetPath is normalized for matching
+    const normalizedTarget = GitOperations.normalizePath(targetPath);
+
     try {
       if (facts) {
         const edgeStrings = (facts.evidence?.['working.edges'] as string[]) || [];
@@ -182,21 +283,36 @@ export class FrameAnalyzer {
         const incoming: any[] = [];
 
         edgeStrings.forEach(es => {
-          const match = es.match(/^(.*) -> (.*) \((.*)\)$/);
+          const match = es.match(/^(.+) -> (.+) \((.+)\)$/);
           if (!match) return;
 
           const from = match[1];
           const to = match[2];
           const type = match[3];
 
-          const fromPath = from.split(':')[0];
-          const toPath = to.split(':')[0];
+          // Use lastIndexOf(':') to safely handle Windows paths and composite IDs
+          const lastColonFrom = from.lastIndexOf(':');
+          const lastColonTo = to.lastIndexOf(':');
 
-          if (fromPath === targetPath) {
+          const fromPath = lastColonFrom !== -1 ? from.substring(0, lastColonFrom) : from;
+          const toPath = lastColonTo !== -1 ? to.substring(0, lastColonTo) : to;
+
+          const normalizedFrom = GitOperations.normalizePath(fromPath);
+          const normalizedTo = GitOperations.normalizePath(toPath);
+
+          if (normalizedFrom === normalizedTarget) {
             outgoing.push({ from, to, type });
+          } else {
+            logWarn(
+              `[FrameAnalyzer] Tier 2 mismatch (outgoing): ${normalizedFrom} !== ${normalizedTarget}`
+            );
           }
-          if (toPath === targetPath) {
+          if (normalizedTo === normalizedTarget) {
             incoming.push({ from, to, type });
+          } else {
+            logWarn(
+              `[FrameAnalyzer] Tier 2 mismatch (incoming): ${normalizedTo} !== ${normalizedTarget}`
+            );
           }
         });
 
@@ -246,7 +362,7 @@ export class FrameAnalyzer {
       }
 
       try {
-        const history = await this.gitOps.getFileHistory(targetPath, 5);
+        const history = await this.gitOps.getFileHistory(targetPath, 20);
         data.history = history;
       } catch (e) {
         logDebug(`FrameAnalyzer: Failed to get git history for ${frameId}: ${e}`);
@@ -261,8 +377,10 @@ export class FrameAnalyzer {
       }
 
       // Fetch line-by-line commit information (blame)
+
       try {
         const lineCommits = await this.gitOps.getFileBlame(targetPath);
+
         data.lineCommits = lineCommits;
       } catch (e) {
         logDebug(`FrameAnalyzer: Failed to get blame for ${frameId}: ${e}`);

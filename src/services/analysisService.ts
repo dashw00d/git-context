@@ -1,8 +1,10 @@
+import * as path from 'path';
+import { GitOperations } from '../analysis/git';
 import { analysisActions } from '../state/actionCreators';
 import { getStore } from '../state/store';
 import { BundleFactsDTO } from '../types/cockpit';
 import { withTimeout } from '../utils/async';
-import { logError, logInfo } from '../utils/logger';
+import { logDebug, logError, logInfo } from '../utils/logger';
 import { PipelineDebugger } from '../utils/pipelineDebugger';
 import { FrameAnalyzer } from '../webview/cockpit/services/FrameAnalyzer';
 
@@ -32,9 +34,6 @@ export class AnalysisService {
 
     store.dispatch(analysisActions.progress(true, 'Analyzing frame...'));
 
-    // We need a view to pass to FrameAnalyzer if it needs it (e.g. for webview communication)
-    // But FrameAnalyzer mostly returns data.
-    // If the existing FrameAnalyzer requires a view, we might need to refactor or pass it in.
     const analyzer = new FrameAnalyzer(view);
 
     const gitRoot = (await import('../utils/config')).getGitRoot();
@@ -56,6 +55,17 @@ export class AnalysisService {
       } else if (legacyMatch) {
         targetPath = legacyMatch[1];
       }
+    }
+
+    // Normalize targetPath: ensure it is relative to gitRoot with forward slashes
+    const normalizedPath = GitOperations.normalizePath(targetPath);
+    if (normalizedPath !== targetPath) {
+      logInfo(
+        `[AnalysisService] Normalized targetPath: ${targetPath} -> ${normalizedPath} (gitRoot: ${gitRoot})`
+      );
+      targetPath = normalizedPath;
+    } else {
+      logDebug(`[AnalysisService] Using normalized targetPath: ${targetPath}`);
     }
 
     let tier1Data: any;
@@ -92,36 +102,25 @@ export class AnalysisService {
     try {
       let facts = state.bundleFacts as BundleFactsDTO;
 
-      // Issue 2: Ensure comprehensive data by triggering pipeline if needed
-      // If we don't have sufficient facts (e.g. missing edges/graph), run a targeted analysis
       if (
         !facts ||
         !facts.evidence?.['working.edges'] ||
         (facts.evidence['working.edges'].length === 0 && level === 'file')
       ) {
         logInfo(`[AnalysisService] Triggering targeted pipeline analysis for ${targetPath}`);
-        const { getRefactorPipeline } = await import('./pipelineFactory');
-        const pipeline = await getRefactorPipeline();
-        const { GitOperations } = await import('../analysis/git');
         const git = new GitOperations();
 
         // Fetch recent commits for this file to build a mini-bundle
-        const history = await git.getFileHistory(targetPath, 5);
+        const history = await git.getFileHistory(targetPath, 20);
         const shas = history.map((h: any) => h.hash).filter((h: string) => h);
 
         if (shas.length > 0) {
-          // Run pipeline for these commits + workspace
-          const result = await pipeline.analyzeBundle(shas, true);
-          // Update local facts reference from the pipeline result
-          // Note: We need to fetch the updated facts from the store or result
-          // analyzeBundle returns PipelineState which has bundleFacts
+          const { getAnalysisCoordinator } = await import('./analysisCoordinator');
+          const coordinator = getAnalysisCoordinator();
+          const result = await coordinator.requestFrameAnalysis(shas);
+
           if (result.bundleFacts) {
             facts = result.bundleFacts;
-            // Also update the global store so the UI gets the new graph
-            store.dispatch({
-              type: 'BUNDLE_FACTS_UPDATED',
-              payload: { facts: result.bundleFacts },
-            });
           }
         }
       }
@@ -131,8 +130,16 @@ export class AnalysisService {
         120000,
         'Tier 2 analysis'
       );
+
       const currentState = store.getState();
+
+      logInfo(`[AnalysisService] Tier 2 complete for frameId=${frameId}`);
+      logInfo(`[AnalysisService] Active frame ID=${currentState.activeFrame.id}`);
+      logInfo(`[AnalysisService] Frame IDs match: ${frameId === currentState.activeFrame.id}`);
+      logInfo(`[AnalysisService] lineCommits count: ${tier2Data?.lineCommits?.length || 0}`);
+
       this.pipelineDebugger.completeTier(frameId, 2, tier2Data, currentState.activeFrame.id);
+
       store.dispatch({
         type: 'FRAME_ANALYSIS_TIER_2_COMPLETE',
         payload: { frameId, data: tier2Data },

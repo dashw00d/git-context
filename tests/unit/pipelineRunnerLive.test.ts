@@ -33,6 +33,6 @@ describe('runPipeline cheap live handling', () => {
 
     expect(result.errors.length).toBe(1);
     expect(result.completedSteps.has('scope')).toBe(true);
-    expect(result.currentStepId).toBeNull();
+    expect(result.currentStepId).toBeUndefined();
   });
 });

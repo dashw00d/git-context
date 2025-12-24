@@ -5,7 +5,6 @@ import { getCstTimelineManager } from './analysis/cstTimeline';
 import { GitOperations } from './analysis/git';
 import { SymbolExtractor } from './analysis/symbols';
 import { getTreeSitterParser } from './analysis/tree-sitter';
-import { getCockpitOrchestrator } from './state/cockpitOrchestrator';
 import { getStore } from './state/store';
 import {
   detectLanguage,
@@ -68,7 +67,7 @@ export class LiveDiffTracker extends EventEmitter {
     );
     this.setupWatcher();
 
-    getCockpitOrchestrator().updateLiveState({ isTracking: true }, 'liveTracker:start');
+    getStore().dispatch({ type: 'LIVE_ANALYSIS_UPDATED', payload: { isTracking: true } });
 
     logInfo('[LiveTracker] Started tracking live changes');
   }
@@ -79,7 +78,7 @@ export class LiveDiffTracker extends EventEmitter {
     this.isTracking = false;
     this.disposeWatchers();
 
-    getCockpitOrchestrator().updateLiveState({ isTracking: false }, 'liveTracker:stop');
+    getStore().dispatch({ type: 'LIVE_ANALYSIS_UPDATED', payload: { isTracking: false } });
 
     logInfo('[LiveTracker] Stopped tracking live changes');
   }

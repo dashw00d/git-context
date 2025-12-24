@@ -1,5 +1,6 @@
 /* eslint-disable no-restricted-syntax */
 import * as vscode from 'vscode';
+import { DatabaseWriteQueue } from '../../storage/databaseWriteQueue';
 import { withTimeout } from '../../utils/async';
 import { logDebug, logInfo, logError } from '../../utils/logger';
 import { OPTIONAL_STEPS } from './pipelineConfigs';
@@ -130,7 +131,11 @@ export async function runPipeline(
         // Wrap in Promise.resolve to handle both async and sync returns
         const runPromise = Promise.resolve(step.run(state, token!));
 
-        await withTimeout(runPromise, 300000, `Pipeline step '${step.id}'`);
+        // Use longer timeout for steps that can legitimately take a long time
+        // index_commits and workspace_overlay can take 10+ minutes on large repos
+        const timeoutMs =
+          step.id === 'index_commits' || step.id === 'workspace_overlay' ? 600000 : 300000; // 10 min for slow steps, 5 min for others
+        await withTimeout(runPromise, timeoutMs, `Pipeline step '${step.id}'`);
 
         // Success handling
         const endTime = Date.now();
@@ -221,6 +226,15 @@ export async function runPipeline(
 
   if (state.status === 'pending') {
     state.status = 'completed';
+  }
+
+  // Flush all queued database writes before completing pipeline
+  try {
+    await DatabaseWriteQueue.getInstance().flushAll();
+    logDebug('[Pipeline] Flushed all queued database writes');
+  } catch (error) {
+    logError(`[Pipeline] Failed to flush database writes: ${error}`);
+    // Don't fail the pipeline if flush fails - writes will be flushed by auto-flush
   }
 
   const pipelineEndTime = Date.now();

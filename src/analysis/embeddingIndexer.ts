@@ -180,6 +180,7 @@ export class EmbeddingIndexer {
 
     let processed = 0;
     let skipped = 0;
+    const startTime = Date.now();
     await runWithConcurrency(shardsToIndex, 30, async ({ shard, symbol }) => {
       try {
         const embedding = await generateEmbedding(shard.text);
@@ -198,8 +199,11 @@ export class EmbeddingIndexer {
         processed++;
         if (processed % 50 === 0) {
           const pct = Math.round((processed / shardsToIndex.length) * 100);
-          const rate = Math.round((processed / (Date.now() - Date.now())) * 1000);
-          logInfo(`[EmbeddingIndexer] Progress: ${processed}/${shardsToIndex.length} (${pct}%)`);
+          const elapsed = Date.now() - startTime;
+          const rate = elapsed > 0 ? Math.round((processed / elapsed) * 1000) : 0; // items per second
+          logInfo(
+            `[EmbeddingIndexer] Progress: ${processed}/${shardsToIndex.length} (${pct}%) - ${rate} items/sec`
+          );
         }
       } catch (error) {
         skipped++;
