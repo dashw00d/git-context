@@ -127,9 +127,9 @@ describe('Quick Scan vs Full Scan', () => {
   });
 
   describe('Symbol Structure Identity', () => {
-    // TODO: DNA IDs may differ between quick scan and full scan due to different
-    // AST parsing contexts (single file vs commit context). This is expected behavior.
-    it.skip('should produce identical symbol structures for same file', async () => {
+    // Note: DNA IDs should be consistent between quick scan and full scan
+    // as both use computeSymbolDNA with the same algorithm
+    it('should produce identical symbol structures for same file', async () => {
       // Use fixture file from sandbox repo
       const testFile = 'src/ts/math.ts';
 
@@ -190,6 +190,8 @@ describe('Quick Scan vs Full Scan', () => {
       const fullScanMap = new Map(fullScanDbSymbols.map(s => [s.dna_id, s]));
 
       // All quick scan symbols should have matching full scan symbols with same DNA ID
+      // Note: They may have different change_type values (quick_scan vs added/modified/removed)
+      // but the DNA IDs should match for the same symbols
       for (const [dnaId, quickSymbol] of quickScanMap) {
         const fullSymbol = fullScanMap.get(dnaId);
         expect(fullSymbol).toBeDefined();
@@ -254,12 +256,16 @@ describe('Quick Scan vs Full Scan', () => {
       await DatabaseWriteQueue.getInstance().flushAll();
 
       // Check no edges from quick scan - quick scan doesn't generate edges
+      // Quick scan symbols use headSha, so we should check for edges with that SHA
       const db = dbManager.getDatabase();
+      const headSha = await git.getHeadSha();
+      // Quick scan doesn't generate edges, so there should be no edges with quick scan symbols
+      // Since edges store DNA IDs now (not path-prefixed), we need to JOIN with symbols to check
       const quickScanEdges = db
         .prepare(
-          "SELECT * FROM edges WHERE sha = ? AND from_symbol_id LIKE ?"
+          'SELECT e.* FROM edges e JOIN symbols s ON e.sha = s.sha AND e.from_symbol_id = s.dna_id WHERE s.path = ? AND s.sha = ? AND s.change_type = ?'
         )
-        .all(['quick_scan', testFile + '%']);
+        .all([testFile, headSha, 'quick_scan']);
 
       expect(quickScanEdges.length).toBe(0);
 
@@ -267,12 +273,13 @@ describe('Quick Scan vs Full Scan', () => {
       await pipeline.analyzeBundle([commits[1]]);
       await DatabaseWriteQueue.getInstance().flushAll();
 
-      // Check edges exist from full scan - use simple query that matches path prefix
+      // Check edges exist from full scan - JOIN with symbols to match by path
+      // Edges now store pure DNA IDs after normalization, so we need to JOIN
       const fullScanEdges = db
         .prepare(
-          "SELECT * FROM edges WHERE sha = ? AND from_symbol_id LIKE ?"
+          'SELECT e.* FROM edges e JOIN symbols s ON e.sha = s.sha AND e.from_symbol_id = s.dna_id WHERE s.path = ? AND s.sha = ?'
         )
-        .all([commits[1], testFile + '%']);
+        .all([testFile, commits[1]]);
 
       expect(fullScanEdges.length).toBeGreaterThan(0);
     });
@@ -369,21 +376,19 @@ describe('Quick Scan vs Full Scan', () => {
 
       expect(fullScanSymbols).toBeDefined();
       // Full scan should have edges for files with imports
+      // Edges now store pure DNA IDs after normalization, so we need to JOIN with symbols
       const edges = db
         .prepare(
-          "SELECT COUNT(*) as count FROM edges WHERE sha = ? AND from_symbol_id LIKE ?"
+          'SELECT COUNT(*) as count FROM edges e JOIN symbols s ON e.sha = s.sha AND e.from_symbol_id = s.dna_id WHERE s.path = ? AND s.sha = ?'
         )
-        .get([commits[1], testFile + '%']) as { count: number };
+        .get([testFile, commits[1]]) as { count: number };
 
       expect(edges.count).toBeGreaterThan(0);
     });
   });
 
   describe('ID Structure Consistency', () => {
-    // TODO: DNA IDs may differ between quick scan and full scan due to different
-    // AST parsing contexts. This test expects deterministic DNA generation which
-    // is not guaranteed.
-    it.skip('should use same DNA ID format for quick scan and full scan', async () => {
+    it('should use same DNA ID format for quick scan and full scan', async () => {
       const testFile = 'src/ts/math.ts';
 
       // Run quick scan
@@ -412,13 +417,13 @@ describe('Quick Scan vs Full Scan', () => {
 
       expect(fullScanSymbols.length).toBeGreaterThan(0);
 
-      // DNA IDs should follow same format (16-char hex hash)
+      // DNA IDs should follow same format (dna: prefix with 64-char hex hash)
       quickScanSymbols.forEach(s => {
-        expect(s.dna_id).toMatch(/^[a-f0-9]{16}$/);
+        expect(s.dna_id).toMatch(/^dna:[a-f0-9]{64}$/);
       });
 
       fullScanSymbols.forEach(s => {
-        expect(s.dna_id).toMatch(/^[a-f0-9]{16}$/);
+        expect(s.dna_id).toMatch(/^dna:[a-f0-9]{64}$/);
       });
 
       // Matching symbols should have same DNA ID

@@ -100,11 +100,9 @@ export class WorkspaceIndexer {
 
     const workspaceHash = await this.computeWorkspaceHash(filteredFiles);
 
-    const cached = this.getCachedWorkspace(headSha, workspaceHash);
-    if (cached) {
-      logDebug(`[WorkspaceIndexer] Cache hit for ${mode} workspace`);
-      return cached;
-    }
+    // Removed cache check: workspace analysis is idempotent and we want to verify actual state
+    // rather than trusting metadata. Always recompute to ensure correctness.
+    // If performance becomes an issue, we can add back cache with data verification.
 
     let totalAdded = 0;
     let totalModified = 0;
@@ -890,12 +888,16 @@ export class WorkspaceIndexer {
                   if (options?.persist) {
                     try {
                       // Extract body text if location is available
+                      // Use same extraction logic as SymbolExtractor.extractBodyText for consistency
                       let bodyText = undefined;
                       if (s.location && s.location.start && s.location.end) {
+                        // Location line numbers are 1-indexed (as per SymbolInfo interface)
+                        // Use same logic as SymbolExtractor.extractBodyText: slice(startLine - 1, endLine)
+                        // This ensures DNA IDs match between quick scan and full scan
                         const lines = content.split('\n');
-                        const startLine = Math.max(0, s.location.start.line - 1);
-                        const endLine = Math.min(lines.length, s.location.end.line);
-                        bodyText = lines.slice(startLine, endLine).join('\n');
+                        bodyText = lines
+                          .slice(s.location.start.line - 1, s.location.end.line)
+                          .join('\n');
                       }
 
                       dnaId = await computeHybridDna(s as any, bodyText, language);
@@ -905,13 +907,16 @@ export class WorkspaceIndexer {
                     }
                   }
 
+                  // Normalize path for consistency with full scan
+                  const normalizedPath = GitOperations.normalizePath(filePath);
+
                   results.push({
                     id: s.id,
                     name: s.name,
                     kind: s.kind,
                     signature: s.signature,
                     location: s.location,
-                    filePath: GitOperations.normalizePath(filePath), // Normalize for consistency with full scan
+                    filePath: normalizedPath,
                     sha: headSha, // Add SHA for path+sha ID
                     complete: false, // Mark quick scan as incomplete
                   });
@@ -924,7 +929,7 @@ export class WorkspaceIndexer {
                       type: 'symbol',
                       data: {
                         sha: headSha,
-                        path: filePath,
+                        path: normalizedPath, // Use normalized path for database consistency
                         symbol: s as any,
                         changeType: 'quick_scan', // Marker for quick scan
                         isDna: true,
@@ -936,7 +941,7 @@ export class WorkspaceIndexer {
                       type: 'symbol',
                       data: {
                         sha: headSha,
-                        path: filePath,
+                        path: normalizedPath, // Use normalized path for database consistency
                         symbol: s as any,
                         changeType: 'quick_scan',
                         isDna: false,

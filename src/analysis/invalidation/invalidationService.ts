@@ -4,7 +4,6 @@
  * when files change between scans
  */
 
-import { getDatabaseManager } from '../../storage/database';
 import { prepare } from '../../storage/statement-wrapper';
 import { logDebug, logInfo, logWarn } from '../../utils/logger';
 

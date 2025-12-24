@@ -150,14 +150,9 @@ export class HotspotDetector {
 
     const now = new Date().toISOString();
 
-    const cacheKey = this.generateCacheKey(symbols, sha);
-    const cacheHash = crypto.createHash('sha256').update(cacheKey).digest('hex');
-
-    const cached = this.getCachedResult(cacheHash);
-    if (cached) {
-      logDebug(`[HotspotDetector] Cache hit for batch update (${symbols.length} symbols)`);
-      return;
-    }
+    // Removed cache check: hotspot updates are idempotent (INSERT OR REPLACE)
+    // Always compute to ensure correctness rather than trusting metadata flags
+    // If performance becomes an issue, we can add back cache with data verification
 
     const dnaIds = symbols.filter(s => s.id).map(s => s.id);
     if (dnaIds.length === 0) return;
@@ -265,10 +260,8 @@ export class HotspotDetector {
 
     const result = batch(symbols);
     logDebug(
-      `[HotspotDetector] Batch updated ${result.updated} symbols, skipped ${result.skipped} (dedup/cache)`
+      `[HotspotDetector] Batch updated ${result.updated} symbols, skipped ${result.skipped} (dedup)`
     );
-
-    this.setCachedResult(cacheKey, cacheHash, now);
   }
 
   /**

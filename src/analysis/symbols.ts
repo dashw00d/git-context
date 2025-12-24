@@ -379,8 +379,20 @@ export class SymbolExtractor {
     return { symbols, bodyTexts };
   }
 
-  private extractBodyText(content: string, startLine: number, endLine: number): string {
+  /**
+   * Extract body text for a symbol given line numbers (1-indexed)
+   * Used for DNA computation - must be consistent across quick scan and full scan
+   * @param content - File content
+   * @param startLine - 1-indexed start line (from symbol.location.start.line)
+   * @param endLine - 1-indexed end line (from symbol.location.end.line)
+   * @returns Body text as string
+   */
+  extractBodyText(content: string, startLine: number, endLine: number): string {
     const lines = content.split('\n');
+    // Line numbers are 1-indexed, array is 0-indexed, endLine is inclusive
+    // slice(startLine - 1, endLine) gives lines [startLine-1 .. endLine-1] (endLine exclusive)
+    // But endLine should be inclusive, so we use endLine directly (not endLine-1)
+    // This matches: if symbol spans lines 1-5, we want lines[0..4] which is slice(0, 5)
     return lines.slice(startLine - 1, endLine).join('\n');
   }
 

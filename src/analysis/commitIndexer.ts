@@ -196,9 +196,39 @@ export class CommitIndexer {
     }
 
     if (!opts?.force && this.isIndexed(sha)) {
-      logDebug(`[CommitIndexer] ${sha} already indexed`);
-      this.cacheHits++;
-      return this.loadCommitFacts(sha);
+      // Verify that actual data exists (not just metadata)
+      // If commit is marked as indexed but data doesn't exist, force re-index
+      // Since indexing is idempotent (INSERT OR REPLACE), it's safe to re-index
+      if (this.db) {
+        const symbolCount = this.db
+          .prepare('SELECT COUNT(*) as count FROM symbols WHERE sha = ?')
+          .get([sha]) as { count: number } | null;
+        const edgeCount = this.db
+          .prepare('SELECT COUNT(*) as count FROM edges WHERE sha = ?')
+          .get([sha]) as { count: number } | null;
+
+        const hasSymbols = symbolCount && symbolCount.count > 0;
+        const hasEdges = edgeCount && edgeCount.count > 0;
+
+        // If we have both symbols and edges, we're good (some commits may have no edges)
+        // If we have neither, data is missing - re-index
+        // If we have symbols but no edges, that's acceptable (commits can have symbols without edges)
+        if (!hasSymbols) {
+          logInfo(
+            `[CommitIndexer] ${sha.substring(0, 8)} marked as indexed but no symbols found (symbols: ${symbolCount?.count || 0}, edges: ${edgeCount?.count || 0}), forcing re-index`
+          );
+          // Fall through to re-index
+        } else {
+          logDebug(
+            `[CommitIndexer] ${sha} already indexed (${symbolCount?.count || 0} symbols, ${edgeCount?.count || 0} edges)`
+          );
+          this.cacheHits++;
+          return this.loadCommitFacts(sha);
+        }
+      } else {
+        // No database, can't verify - fall through to re-index
+        logDebug(`[CommitIndexer] ${sha} marked as indexed but no DB access, re-indexing`);
+      }
     }
 
     this.cacheMisses++;
@@ -439,6 +469,7 @@ export class CommitIndexer {
     );
 
     this.storeCommitMetadata(commitInfo, facts.filesChanged);
+    this.storeFiles(sha, files);
 
     logInfo(
       `[CommitIndexer] Storing ${symbolChanges.size} symbol changes, ${edgesToInsert.length} edges for ${sha.substring(0, 8)}`
@@ -891,6 +922,21 @@ export class CommitIndexer {
         type: 'symbol',
         data: { sha, path: filePath, symbol, changeType: type, isDna: false },
       });
+
+      // Queue symbol_versions insert
+      writeQueue.queue({
+        type: 'symbol_version',
+        data: {
+          dnaId,
+          sha,
+          path: filePath,
+          symbolId: symbol.id || dnaId,
+          name: symbol.name,
+          kind: symbol.kind,
+          signatureHash: symbol.signatureHash || undefined,
+          bodyHash: symbol.bodyHash || undefined,
+        },
+      });
     }
 
     logDebug(
@@ -1199,12 +1245,19 @@ export class CommitIndexer {
     }
 
     if (edgesToInsert.length > 0) {
+      const { normalizeEdgeIdForStorage } = require('../utils/edgeNormalization');
       this.db.transaction(() => {
         for (const edge of edgesToInsert) {
+          // Normalize edge IDs to extract DNA hash from path-prefixed format
+          // Edges from DependencyExtractor are in format "filePath:dna:hash"
+          // Database should store just "dna:hash" to match symbols.dna_id for JOINs
+          const normalizedFrom = normalizeEdgeIdForStorage(edge.from);
+          const normalizedTo = normalizeEdgeIdForStorage(edge.to);
+
           stmt.run([
             edge.sha,
-            edge.from,
-            edge.to,
+            normalizedFrom,
+            normalizedTo,
             edge.changeType,
             edge.edgeType,
             edge.confidence,
@@ -1301,5 +1354,22 @@ export class CommitIndexer {
       type: 'commit_metadata',
       data: { sha: info.sha, info, filesChanged },
     });
+  }
+
+  private storeFiles(sha: string, files: FileChange[]): void {
+    const writeQueue = DatabaseWriteQueue.getInstance();
+
+    for (const file of files) {
+      const lang = detectLanguage(file.path);
+      writeQueue.queue({
+        type: 'file',
+        data: {
+          sha,
+          path: file.path,
+          status: file.status,
+          lang: lang || undefined,
+        },
+      });
+    }
   }
 }

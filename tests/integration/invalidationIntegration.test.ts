@@ -13,7 +13,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
 import { setupSandboxRepo, SANDBOX_DIR } from '../fixtures/setupSandbox';
-import { DatabaseManager } from '../../src/storage/database';
+import { DatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
 import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
 import { GitOperations } from '../../src/analysis/git';
 import { CommitIndexer } from '../../src/analysis/commitIndexer';
@@ -60,17 +60,7 @@ describe('Invalidation Integration', () => {
 
     // Set the singleton to use our test database
     // This is needed because invalidation service uses getDatabaseManager()
-    // We need to set it before any code calls getDatabaseManager()
-    // Since dbManager is a module-level variable, we need to access it via the module
-    // We'll use a workaround: ensure getDatabaseManager() returns our initialized manager
-    const dbModule = await import('../../src/storage/database');
-    // Try to set the private dbManager variable
-    // Note: This is a hack for tests - in production, getDatabaseManager() creates a new instance
-    Object.defineProperty(dbModule, 'dbManager', {
-      value: dbManager,
-      writable: true,
-      configurable: true,
-    });
+    setDatabaseManagerForTesting(dbManager);
 
     // Also set DatabaseWriteQueue to use our test database
     DatabaseWriteQueue.getInstance(db);
@@ -126,6 +116,9 @@ describe('Invalidation Integration', () => {
       // Ignore errors restoring directory
     }
 
+    // Reset singleton
+    setDatabaseManagerForTesting(null);
+
     // Clean up database
     if (dbManager) {
       dbManager.close();
@@ -136,9 +129,7 @@ describe('Invalidation Integration', () => {
   });
 
   describe('File Invalidation', () => {
-    // TODO: This test has database isolation issues - invalidateFileSymbols uses prepare()
-    // which gets the global database, not the test's injected database
-    it.skip('should invalidate symbols when file changes', async () => {
+    it('should invalidate symbols when file changes', async () => {
       // Use fixture file from sandbox repo
       const testFile = 'src/ts/math.ts';
       const fullPath = path.join(repoPath, testFile);
@@ -226,9 +217,7 @@ describe('Invalidation Integration', () => {
       }
     });
 
-    // TODO: This test has database isolation issues - invalidateFileSymbols uses prepare()
-    // which gets the global database, not the test's injected database
-    it.skip('should invalidate edges when symbols are invalidated', async () => {
+    it('should invalidate edges when symbols are invalidated', async () => {
       // Use fixture file from sandbox repo (Calculator.ts has dependencies)
       const testFile = 'src/ts/Calculator.ts';
 
@@ -366,9 +355,7 @@ describe('Invalidation Integration', () => {
   });
 
   describe('Commit Invalidation', () => {
-    // TODO: This test has database isolation issues - invalidateCommit uses prepare()
-    // which gets the global database, not the test's injected database
-    it.skip('should invalidate all symbols for a commit', async () => {
+    it('should invalidate all symbols for a commit', async () => {
       // Use fixture file from sandbox repo
       const testFile = 'src/ts/math.ts';
 

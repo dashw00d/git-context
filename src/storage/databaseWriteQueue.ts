@@ -66,6 +66,23 @@ export type WriteOperation =
       data: { sha: string; status: string; facts?: CommitFacts };
     }
   | {
+      type: 'file';
+      data: { sha: string; path: string; status: string; lang?: string };
+    }
+  | {
+      type: 'symbol_version';
+      data: {
+        dnaId: string;
+        sha: string;
+        path: string;
+        symbolId: string;
+        name: string;
+        kind: string;
+        signatureHash?: string;
+        bodyHash?: string;
+      };
+    }
+  | {
       type: 'file_hotspot';
       data: {
         filePath: string;
@@ -304,6 +321,12 @@ export class DatabaseWriteQueue {
       case 'commit_analysis':
         this.flushCommitAnalysis(batch as Array<WriteOperation & { type: 'commit_analysis' }>);
         break;
+      case 'file':
+        this.flushFiles(batch as Array<WriteOperation & { type: 'file' }>);
+        break;
+      case 'symbol_version':
+        this.flushSymbolVersions(batch as Array<WriteOperation & { type: 'symbol_version' }>);
+        break;
       case 'file_hotspot':
         this.flushFileHotspots(batch as Array<WriteOperation & { type: 'file_hotspot' }>);
         break;
@@ -533,13 +556,20 @@ export class DatabaseWriteQueue {
       (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
+    const { normalizeEdgeIdForStorage } = require('../utils/edgeNormalization');
     let edgesInserted = 0;
     for (const op of ops) {
       try {
+        // Normalize edge IDs to extract DNA hash from path-prefixed format
+        // Edges from DependencyExtractor are in format "filePath:dna:hash"
+        // Database should store just "dna:hash" to match symbols.dna_id for JOINs
+        const normalizedFrom = normalizeEdgeIdForStorage(op.data.from);
+        const normalizedTo = normalizeEdgeIdForStorage(op.data.to);
+
         stmt.run([
           op.data.sha,
-          op.data.from,
-          op.data.to,
+          normalizedFrom,
+          normalizedTo,
           op.data.changeType,
           op.data.edgeType,
           op.data.confidence,
@@ -619,6 +649,35 @@ export class DatabaseWriteQueue {
         `);
         failedStmt.run([op.data.sha, 'failed', ANALYSIS_VERSION, now]);
       }
+    }
+  }
+
+  private flushFiles(ops: Array<WriteOperation & { type: 'file' }>): void {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO files (sha, path, status, lang)
+      VALUES (?, ?, ?, ?)
+    `);
+    for (const op of ops) {
+      stmt.run([op.data.sha, op.data.path, op.data.status, op.data.lang || null]);
+    }
+  }
+
+  private flushSymbolVersions(ops: Array<WriteOperation & { type: 'symbol_version' }>): void {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO symbol_versions (dna_id, sha, path, symbol_id, name, kind, signature_hash, body_hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const op of ops) {
+      stmt.run([
+        op.data.dnaId,
+        op.data.sha,
+        op.data.path,
+        op.data.symbolId,
+        op.data.name,
+        op.data.kind,
+        op.data.signatureHash || null,
+        op.data.bodyHash || null,
+      ]);
     }
   }
 

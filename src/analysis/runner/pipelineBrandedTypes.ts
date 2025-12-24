@@ -5,13 +5,13 @@
 
 /**
  * Symbol ID: Can be DNA hash or readable ID format
- * Format: 16-char hex hash or "symbol:123" or "path:kind:name"
+ * Format: dna:[64-char-hex] or "symbol:123" or "path:kind:name"
  */
 export type SymbolId = string & { readonly __brand: 'SymbolId' };
 
 /**
  * DNA Hash: Stable hash for symbol identity across renames
- * Format: 16-char hex string (e.g., "9780191b73844aca")
+ * Format: dna:[64-char-hex] (e.g., "dna:9780191b73844aca1190f06e507bcb90692dc6b043af299831ca4691081ff539")
  */
 export type DnaHash = string & { readonly __brand: 'DnaHash' };
 
@@ -30,9 +30,9 @@ export type CommitSha = string & { readonly __brand: 'CommitSha' };
  */
 export function isValidSymbolId(id: string): id is SymbolId {
   if (!id || typeof id !== 'string') return false;
-  // Accept 16-char hex DNA hash, symbol ID format, or path:kind:name format
+  // Accept dna:[64-char-hex] format, symbol ID format, or path:kind:name format
   return (
-    /^[a-f0-9]{16}$/.test(id) || /^symbol:\d+$/.test(id) || /.+:.+:.+/.test(id) // path:kind:name
+    /^dna:[a-f0-9]{64}$/.test(id) || /^symbol:\d+$/.test(id) || /.+:.+:.+/.test(id) // path:kind:name
   );
 }
 
@@ -41,7 +41,7 @@ export function isValidSymbolId(id: string): id is SymbolId {
  */
 export function isValidDnaHash(hash: string): hash is DnaHash {
   if (!hash || typeof hash !== 'string') return false;
-  return /^[a-f0-9]{16}$/.test(hash);
+  return /^dna:[a-f0-9]{64}$/.test(hash);
 }
 
 /**

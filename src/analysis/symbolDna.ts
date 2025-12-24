@@ -51,7 +51,8 @@ export async function computeSymbolDNA(
     parts.push(bodyShape);
   }
 
-  return crypto.createHash('sha256').update(parts.join('::')).digest('hex').substring(0, 16);
+  const hash = crypto.createHash('sha256').update(parts.join('::')).digest('hex');
+  return `dna:${hash}`;
 }
 
 /**
