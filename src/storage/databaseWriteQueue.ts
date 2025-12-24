@@ -1,4 +1,4 @@
-import { logDebug, logWarn } from '../utils/logger';
+import { logDebug, logInfo, logWarn } from '../utils/logger';
 import { getDatabase } from './database';
 import { ANALYSIS_VERSION } from './schema';
 import type { CommitFacts } from '../analysis/commitIndexer';
@@ -171,7 +171,15 @@ export class DatabaseWriteQueue {
    * Flush all pending writes in a single transaction
    */
   async flushAll(): Promise<void> {
-    if (this.isFlushing || this.totalPending === 0) return;
+    if (this.isFlushing || this.totalPending === 0) {
+      if (this.isFlushing) {
+        logDebug('[DatabaseWriteQueue] Flush already in progress, skipping');
+      }
+      return;
+    }
+
+    const pendingBefore = this.totalPending;
+    logDebug(`[DatabaseWriteQueue] flushAll called, ${pendingBefore} operations pending`);
     this.isFlushing = true;
 
     try {
@@ -217,11 +225,26 @@ export class DatabaseWriteQueue {
         }
       })();
 
-      logDebug(`[DatabaseWriteQueue] Flushed ${processedCount} operations in single transaction`);
+      // Diagnostic logging
+      const typeCounts = new Map<string, number>();
+      for (const [key, batch] of batches) {
+        typeCounts.set(key, (typeCounts.get(key) || 0) + batch.length);
+      }
+      logInfo(
+        `[DatabaseWriteQueue] Flushed ${processedCount} operations in single transaction: ` +
+          `${Array.from(typeCounts.entries())
+            .map(([t, c]) => `${t}=${c}`)
+            .join(', ')}`
+      );
 
       // If we hit the limit, schedule immediate follow-up flush
       if (this.totalPending > 0) {
+        logDebug(
+          `[DatabaseWriteQueue] ${this.totalPending} operations still pending, scheduling follow-up flush`
+        );
         setImmediate(() => this.flushAll());
+      } else {
+        logDebug(`[DatabaseWriteQueue] All ${pendingBefore} operations flushed successfully`);
       }
     } catch (error) {
       logWarn(`[DatabaseWriteQueue] Flush failed: ${error}`);
@@ -355,16 +378,50 @@ export class DatabaseWriteQueue {
   }
 
   private flushSymbols(ops: Array<WriteOperation & { type: 'symbol' }>): void {
+    // Diagnostic logging
+    const dnaOps = ops.filter(op => op.data.isDna);
+    const symbolOps = ops.filter(op => !op.data.isDna);
+    const shaCounts = new Map<string, number>();
+    const changeTypeCounts = new Map<string, number>();
+    const pathCounts = new Map<string, number>();
+
+    for (const op of symbolOps) {
+      shaCounts.set(op.data.sha, (shaCounts.get(op.data.sha) || 0) + 1);
+      changeTypeCounts.set(op.data.changeType, (changeTypeCounts.get(op.data.changeType) || 0) + 1);
+      pathCounts.set(op.data.path, (pathCounts.get(op.data.path) || 0) + 1);
+    }
+
+    logInfo(
+      `[DatabaseWriteQueue] flushSymbols: ${dnaOps.length} DNA ops, ${symbolOps.length} symbol ops, ` +
+        `SHAs: ${Array.from(shaCounts.entries())
+          .map(([s, c]) => `${s.substring(0, 8)}=${c}`)
+          .join(', ')}, ` +
+        `changeTypes: ${Array.from(changeTypeCounts.entries())
+          .map(([t, c]) => `${t}=${c}`)
+          .join(', ')}, ` +
+        `paths: ${Array.from(pathCounts.entries())
+          .slice(0, 5)
+          .map(([p, c]) => `${p}=${c}`)
+          .join(', ')}${pathCounts.size > 5 ? '...' : ''}`
+    );
+
     // First, handle symbol_dna inserts
     const dnaStmt = this.db.prepare(`
       INSERT OR IGNORE INTO symbol_dna (dna_id, first_seen_sha, first_seen_path)
       VALUES (?, ?, ?)
     `);
+    let dnaInserted = 0;
     for (const op of ops) {
       if (op.data.isDna) {
-        dnaStmt.run([op.data.symbol.id, op.data.sha, op.data.path]);
+        try {
+          dnaStmt.run([op.data.symbol.id, op.data.sha, op.data.path]);
+          dnaInserted++;
+        } catch (error) {
+          logWarn(`[DatabaseWriteQueue] Failed to insert DNA for ${op.data.symbol.id}: ${error}`);
+        }
       }
     }
+    logDebug(`[DatabaseWriteQueue] Inserted ${dnaInserted} DNA records`);
 
     // Then, handle symbols inserts
     const symbolStmt = this.db.prepare(`
@@ -372,24 +429,33 @@ export class DatabaseWriteQueue {
       (sha, path, symbol_id, dna_id, name, kind, signature, change_type, diff_snippet_pre, diff_snippet_post, confidence)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    let symbolsInserted = 0;
     for (const op of ops) {
       if (!op.data.isDna) {
         const s = op.data.symbol;
-        symbolStmt.run([
-          op.data.sha,
-          op.data.path,
-          s.semanticId || s.id,
-          s.id, // dna_id is the DNA hash
-          s.name,
-          s.kind,
-          s.signature || '',
-          op.data.changeType,
-          '',
-          '',
-          1.0,
-        ]);
+        try {
+          symbolStmt.run([
+            op.data.sha,
+            op.data.path,
+            s.semanticId || s.id,
+            s.id, // dna_id is the DNA hash
+            s.name,
+            s.kind,
+            s.signature || '',
+            op.data.changeType,
+            '',
+            '',
+            1.0,
+          ]);
+          symbolsInserted++;
+        } catch (error) {
+          logWarn(
+            `[DatabaseWriteQueue] Failed to insert symbol ${s.name} (${s.id}) at ${op.data.path}@${op.data.sha.substring(0, 8)}: ${error}`
+          );
+        }
       }
     }
+    logInfo(`[DatabaseWriteQueue] Inserted ${symbolsInserted} symbol records`);
   }
 
   private flushSymbolHistory(ops: Array<WriteOperation & { type: 'symbol_history' }>): void {
@@ -418,22 +484,55 @@ export class DatabaseWriteQueue {
   }
 
   private flushEdges(ops: Array<WriteOperation & { type: 'edge' }>): void {
+    // Diagnostic logging
+    const shaCounts = new Map<string, number>();
+    const changeTypeCounts = new Map<string, number>();
+    const edgeTypeCounts = new Map<string, number>();
+
+    for (const op of ops) {
+      shaCounts.set(op.data.sha, (shaCounts.get(op.data.sha) || 0) + 1);
+      changeTypeCounts.set(op.data.changeType, (changeTypeCounts.get(op.data.changeType) || 0) + 1);
+      edgeTypeCounts.set(op.data.edgeType, (edgeTypeCounts.get(op.data.edgeType) || 0) + 1);
+    }
+
+    logInfo(
+      `[DatabaseWriteQueue] flushEdges: ${ops.length} edges, ` +
+        `SHAs: ${Array.from(shaCounts.entries())
+          .map(([s, c]) => `${s.substring(0, 8)}=${c}`)
+          .join(', ')}, ` +
+        `changeTypes: ${Array.from(changeTypeCounts.entries())
+          .map(([t, c]) => `${t}=${c}`)
+          .join(', ')}, ` +
+        `edgeTypes: ${Array.from(edgeTypeCounts.entries())
+          .map(([t, c]) => `${t}=${c}`)
+          .join(', ')}`
+    );
+
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO edges
       (sha, from_symbol_id, to_symbol_id, change_type, edge_type, confidence, is_resolved)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
+    let edgesInserted = 0;
     for (const op of ops) {
-      stmt.run([
-        op.data.sha,
-        op.data.from,
-        op.data.to,
-        op.data.changeType,
-        op.data.edgeType,
-        op.data.confidence,
-        op.data.isResolved,
-      ]);
+      try {
+        stmt.run([
+          op.data.sha,
+          op.data.from,
+          op.data.to,
+          op.data.changeType,
+          op.data.edgeType,
+          op.data.confidence,
+          op.data.isResolved,
+        ]);
+        edgesInserted++;
+      } catch (error) {
+        logWarn(
+          `[DatabaseWriteQueue] Failed to insert edge ${op.data.from} -> ${op.data.to} at ${op.data.sha.substring(0, 8)}: ${error}`
+        );
+      }
     }
+    logInfo(`[DatabaseWriteQueue] Inserted ${edgesInserted} edge records`);
   }
 
   private flushCommitMetadata(ops: Array<WriteOperation & { type: 'commit_metadata' }>): void {

@@ -28,6 +28,12 @@ import { buildIntendedMap } from '../../src/facts/intendedMap';
 import { getWorkingSnapshot } from '../../src/facts/workingSnapshot';
 import { DriftDetector } from '../../src/facts/driftDetector';
 import { LegacyDetector } from '../../src/facts/legacyAudit';
+import { RefactorPipeline } from '../../src/analysis/refactorPipeline';
+import { EmbeddingIndexer } from '../../src/analysis/embeddingIndexer';
+import { BundleStoryEngine } from '../../src/analysis/bundleStoryEngine';
+import { LlmAnalyst } from '../../src/analysis/llmAnalyst/runner';
+import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
+import { setDatabaseManagerForTesting } from '../../src/storage/database';
 
 const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-steps.db');
 
@@ -35,7 +41,7 @@ describe('Pipeline Steps Verification', () => {
   let repoPath: string;
   let commits: string[];
   let dbManager: DatabaseManager;
-  let commitIndexer: CommitIndexer;
+  let pipeline: RefactorPipeline;
   let git: GitOperations;
   let db: any;
   let originalCwd: string;
@@ -64,7 +70,7 @@ describe('Pipeline Steps Verification', () => {
     const hotspotDetector = new HotspotDetectorV2();
     const movedBlockDetector = new MovedBlockDetectorV2();
 
-    commitIndexer = new CommitIndexer(
+    const commitIndexer = new CommitIndexer(
       db,
       git,
       snapshotManager,
@@ -75,8 +81,26 @@ describe('Pipeline Steps Verification', () => {
       movedBlockDetector
     );
 
-    // Index commits for step tests
-    await commitIndexer.ensureCommitsIndexed(commits.slice(0, 3));
+    const workspaceIndexer = new WorkspaceIndexer(db, git, snapshotManager, structuralDiffManager);
+    const embeddingIndexer = new EmbeddingIndexer();
+    const llmAnalyst = new LlmAnalyst();
+    const storyEngine = new BundleStoryEngine(llmAnalyst);
+
+    pipeline = new RefactorPipeline(
+      commitIndexer,
+      workspaceIndexer,
+      embeddingIndexer,
+      storyEngine,
+      git,
+      {
+        skipEmbedding: true,
+        skipLLM: true,
+      }
+    );
+
+    // Index commits for step tests using pipeline (fixture data flows through all steps)
+    await pipeline.analyzeBundle(commits.slice(0, 3));
+    await DatabaseWriteQueue.getInstance().flushAll();
   });
 
   afterAll(() => {
@@ -88,6 +112,9 @@ describe('Pipeline Steps Verification', () => {
     } catch (error) {
       // Ignore errors restoring directory
     }
+
+    // Reset singleton
+    setDatabaseManagerForTesting(null);
 
     if (dbManager) {
       dbManager.close();
@@ -150,7 +177,8 @@ describe('Pipeline Steps Verification', () => {
 
     it('should track absent symbols', async () => {
       // After commit 5, divide is removed
-      await commitIndexer.ensureCommitsIndexed([commits[4]]);
+      await pipeline.analyzeBundle([commits[4]]);
+      await DatabaseWriteQueue.getInstance().flushAll();
       const intended = await buildIntendedMap([commits[0], commits[4]]);
 
       const absent = Array.from(intended.values()).filter(s => s.expect === 'absent');

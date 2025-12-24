@@ -407,6 +407,14 @@ export function getDatabaseManager(): DatabaseManager {
   return dbManager;
 }
 
+/**
+ * Test helper: Set the database manager singleton
+ * This should only be used in tests to inject a custom database manager
+ */
+export function setDatabaseManagerForTesting(manager: DatabaseManager | null): void {
+  dbManager = manager;
+}
+
 // Helper to ensure initialization with retry logic
 export async function ensureDatabaseInitialized(): Promise<void> {
   const manager = getDatabaseManager();

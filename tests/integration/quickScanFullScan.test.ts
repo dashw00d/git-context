@@ -25,6 +25,10 @@ import { DependencyExtractor } from '../../src/analysis/dependencies';
 import { RiskDetector } from '../../src/analysis/heuristics';
 import { HotspotDetectorV2 } from '../../src/analysis/hotspotDetector';
 import { MovedBlockDetectorV2 } from '../../src/analysis/movedBlockDetector';
+import { RefactorPipeline } from '../../src/analysis/refactorPipeline';
+import { EmbeddingIndexer } from '../../src/analysis/embeddingIndexer';
+import { BundleStoryEngine } from '../../src/analysis/bundleStoryEngine';
+import { LlmAnalyst } from '../../src/analysis/llmAnalyst/runner';
 
 const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-quickscan-fullscan.db');
 
@@ -32,6 +36,7 @@ describe('Quick Scan vs Full Scan', () => {
   let repoPath: string;
   let commits: string[];
   let dbManager: DatabaseManager;
+  let pipeline: RefactorPipeline;
   let workspaceIndexer: WorkspaceIndexer;
   let commitIndexer: CommitIndexer;
   let git: GitOperations;
@@ -53,6 +58,12 @@ describe('Quick Scan vs Full Scan', () => {
     dbManager = new DatabaseManager(TEST_DB_PATH);
     await dbManager.initialize();
     const db = dbManager.getDatabase();
+
+    // Set the singleton to use our test database
+    // This is needed because some services use getDatabaseManager()
+    const dbModule = await import('../../src/storage/database');
+    (dbModule as any).dbManager = dbManager;
+    DatabaseWriteQueue.getInstance(db);
 
     // Initialize git operations
     git = new GitOperations();
@@ -78,6 +89,22 @@ describe('Quick Scan vs Full Scan', () => {
     );
 
     workspaceIndexer = new WorkspaceIndexer(db, git, snapshotManager, structuralDiffManager);
+
+    const embeddingIndexer = new EmbeddingIndexer();
+    const llmAnalyst = new LlmAnalyst();
+    const storyEngine = new BundleStoryEngine(llmAnalyst);
+
+    pipeline = new RefactorPipeline(
+      commitIndexer,
+      workspaceIndexer,
+      embeddingIndexer,
+      storyEngine,
+      git,
+      {
+        skipEmbedding: true,
+        skipLLM: true,
+      }
+    );
   });
 
   afterAll(() => {
@@ -101,31 +128,8 @@ describe('Quick Scan vs Full Scan', () => {
 
   describe('Symbol Structure Identity', () => {
     it('should produce identical symbol structures for same file', async () => {
-      // Get a test file from the sandbox
-      const testFile = 'math.ts';
-      const fullPath = path.join(repoPath, testFile);
-
-      if (!fs.existsSync(fullPath)) {
-        // Create a simple test file
-        fs.writeFileSync(
-          fullPath,
-          `
-export function add(a: number, b: number): number {
-  return a + b;
-}
-
-export function subtract(a: number, b: number): number {
-  return a - b;
-}
-
-export class Calculator {
-  multiply(a: number, b: number): number {
-    return a * b;
-  }
-}
-`
-        );
-      }
+      // Use fixture file from sandbox repo
+      const testFile = 'src/ts/math.ts';
 
       // Run quick scan
       const quickScanResults = await workspaceIndexer.quickScanSymbols([testFile], {
@@ -155,19 +159,17 @@ export class Calculator {
 
       expect(quickScanDbSymbols.length).toBeGreaterThan(0);
 
-      // Now run full scan (index commit)
-      const headSha = await git.getHeadSha();
-      await commitIndexer.ensureCommitsIndexed([headSha]);
-
-      // Flush queues
+      // Now run full scan through pipeline (uses fixture commits)
+      // Use commit 0 which contains src/ts/math.ts
+      await pipeline.analyzeBundle([commits[0]]);
       await DatabaseWriteQueue.getInstance().flushAll();
 
-      // Get full scan symbols from database
+      // Get full scan symbols from database (filter by commit SHA)
       const fullScanDbSymbols = db
         .prepare(
-          'SELECT sha, path, symbol_id, dna_id, name, kind, signature, change_type FROM symbols WHERE path = ? AND change_type IN (?, ?, ?)'
+          'SELECT sha, path, symbol_id, dna_id, name, kind, signature, change_type FROM symbols WHERE path = ? AND sha = ? AND change_type IN (?, ?, ?)'
         )
-        .all([testFile, 'added', 'modified', 'removed']) as Array<{
+        .all([testFile, commits[0], 'added', 'modified', 'removed']) as Array<{
         sha: string;
         path: string;
         symbol_id: string;
@@ -197,7 +199,7 @@ export class Calculator {
     });
 
     it('should set correct changeType for quick scan', async () => {
-      const testFile = 'math.ts';
+      const testFile = 'src/ts/math.ts';
       const quickScanResults = await workspaceIndexer.quickScanSymbols([testFile], {
         persist: true,
         priority: false,
@@ -217,18 +219,20 @@ export class Calculator {
     });
 
     it('should set correct changeType for full scan', async () => {
-      const testFile = 'math.ts';
-      const headSha = await git.getHeadSha();
-      await commitIndexer.ensureCommitsIndexed([headSha]);
+      const testFile = 'src/ts/math.ts';
+      // Use commit 0 which contains src/ts/math.ts
+      await pipeline.analyzeBundle([commits[0]]);
 
       await DatabaseWriteQueue.getInstance().flushAll();
 
       const db = dbManager.getDatabase();
       const symbols = db
         .prepare(
-          'SELECT change_type FROM symbols WHERE path = ? AND change_type IN (?, ?, ?)'
+          'SELECT change_type FROM symbols WHERE path = ? AND sha = ? AND change_type IN (?, ?, ?)'
         )
-        .all([testFile, 'added', 'modified', 'removed']) as Array<{ change_type: string }>;
+        .all([testFile, commits[0], 'added', 'modified', 'removed']) as Array<{
+        change_type: string;
+      }>;
 
       expect(symbols.length).toBeGreaterThan(0);
       symbols.forEach(s => {
@@ -237,8 +241,7 @@ export class Calculator {
     });
 
     it('should have edges only in full scan', async () => {
-      const testFile = 'math.ts';
-      const headSha = await git.getHeadSha();
+      const testFile = 'src/ts/math.ts';
 
       // Run quick scan
       await workspaceIndexer.quickScanSymbols([testFile], {
@@ -257,16 +260,16 @@ export class Calculator {
 
       expect(quickScanEdges.length).toBe(0);
 
-      // Run full scan
-      await commitIndexer.ensureCommitsIndexed([headSha]);
+      // Run full scan (use commit 0 which contains src/ts/math.ts)
+      await pipeline.analyzeBundle([commits[0]]);
       await DatabaseWriteQueue.getInstance().flushAll();
 
-      // Check edges exist from full scan
+      // Check edges exist from full scan (filter by commit SHA)
       const fullScanEdges = db
         .prepare(
-          'SELECT e.* FROM edges e JOIN symbols s ON e.sha = s.sha AND e.from_symbol_id = s.dna_id WHERE s.path = ? AND s.change_type IN (?, ?, ?)'
+          'SELECT e.* FROM edges e JOIN symbols s ON e.sha = s.sha AND e.from_symbol_id = s.dna_id WHERE s.path = ? AND s.sha = ? AND s.change_type IN (?, ?, ?)'
         )
-        .all([testFile, 'added', 'modified', 'removed']);
+        .all([testFile, commits[0], 'added', 'modified', 'removed']);
 
       expect(fullScanEdges.length).toBeGreaterThan(0);
     });
@@ -274,8 +277,7 @@ export class Calculator {
 
   describe('Database Overwrite Behavior', () => {
     it('should overwrite quick scan data with full scan data', async () => {
-      const testFile = 'math.ts';
-      const headSha = await git.getHeadSha();
+      const testFile = 'src/ts/math.ts';
 
       // Run quick scan first
       await workspaceIndexer.quickScanSymbols([testFile], {
@@ -291,8 +293,9 @@ export class Calculator {
 
       expect(quickScanCount.count).toBeGreaterThan(0);
 
-      // Run full scan (should overwrite)
-      await commitIndexer.ensureCommitsIndexed([headSha]);
+      // Run full scan through pipeline (should overwrite)
+      // Use commit 0 which contains src/ts/math.ts
+      await pipeline.analyzeBundle([commits[0]]);
       await DatabaseWriteQueue.getInstance().flushAll();
 
       // Quick scan symbols should be gone (replaced by full scan)
@@ -305,18 +308,20 @@ export class Calculator {
       // But if they have same symbol_id, quick_scan should be replaced
       const fullScanCount = db
         .prepare(
-          'SELECT COUNT(*) as count FROM symbols WHERE path = ? AND change_type IN (?, ?, ?)'
+          'SELECT COUNT(*) as count FROM symbols WHERE path = ? AND sha = ? AND change_type IN (?, ?, ?)'
         )
-        .get([testFile, 'added', 'modified', 'removed']) as { count: number };
+        .get([testFile, commits[0], 'added', 'modified', 'removed']) as { count: number };
 
       expect(fullScanCount.count).toBeGreaterThan(0);
 
       // Verify full scan symbols have correct changeType
       const fullScanSymbols = db
         .prepare(
-          'SELECT change_type FROM symbols WHERE path = ? AND change_type IN (?, ?, ?)'
+          'SELECT change_type FROM symbols WHERE path = ? AND sha = ? AND change_type IN (?, ?, ?)'
         )
-        .all([testFile, 'added', 'modified', 'removed']) as Array<{ change_type: string }>;
+        .all([testFile, commits[0], 'added', 'modified', 'removed']) as Array<{
+        change_type: string;
+      }>;
 
       fullScanSymbols.forEach(s => {
         expect(['added', 'modified', 'removed']).toContain(s.change_type);
@@ -327,7 +332,7 @@ export class Calculator {
 
   describe('Completeness Flags', () => {
     it('should mark quick scan symbols as incomplete', async () => {
-      const testFile = 'math.ts';
+      const testFile = 'src/ts/math.ts';
 
       // Run quick scan
       const quickScanResults = await workspaceIndexer.quickScanSymbols([testFile], {
@@ -345,11 +350,10 @@ export class Calculator {
     });
 
     it('should mark full scan symbols as complete', async () => {
-      const testFile = 'math.ts';
-      const headSha = await git.getHeadSha();
+      const testFile = 'src/ts/math.ts';
 
-      // Run full scan
-      await commitIndexer.ensureCommitsIndexed([headSha]);
+      // Run full scan (use commit 0 which contains src/ts/math.ts)
+      await pipeline.analyzeBundle([commits[0]]);
       await DatabaseWriteQueue.getInstance().flushAll();
 
       // Full scan symbols should be marked complete in bundle facts
@@ -358,17 +362,17 @@ export class Calculator {
       const db = dbManager.getDatabase();
       const fullScanSymbols = db
         .prepare(
-          'SELECT * FROM symbols WHERE path = ? AND change_type IN (?, ?, ?) LIMIT 1'
+          'SELECT * FROM symbols WHERE path = ? AND sha = ? AND change_type IN (?, ?, ?) LIMIT 1'
         )
-        .get([testFile, 'added', 'modified', 'removed']);
+        .get([testFile, commits[0], 'added', 'modified', 'removed']);
 
       expect(fullScanSymbols).toBeDefined();
       // Full scan symbols should have edges (indicating completeness)
       const edges = db
         .prepare(
-          'SELECT COUNT(*) as count FROM edges e JOIN symbols s ON e.sha = s.sha AND e.from_symbol_id = s.dna_id WHERE s.path = ? AND s.change_type IN (?, ?, ?)'
+          'SELECT COUNT(*) as count FROM edges e JOIN symbols s ON e.sha = s.sha AND e.from_symbol_id = s.dna_id WHERE s.path = ? AND s.sha = ? AND s.change_type IN (?, ?, ?)'
         )
-        .get([testFile, 'added', 'modified', 'removed']) as { count: number };
+        .get([testFile, commits[0], 'added', 'modified', 'removed']) as { count: number };
 
       expect(edges.count).toBeGreaterThan(0);
     });
@@ -376,8 +380,7 @@ export class Calculator {
 
   describe('ID Structure Consistency', () => {
     it('should use same DNA ID format for quick scan and full scan', async () => {
-      const testFile = 'math.ts';
-      const headSha = await git.getHeadSha();
+      const testFile = 'src/ts/math.ts';
 
       // Run quick scan
       await workspaceIndexer.quickScanSymbols([testFile], {
@@ -393,15 +396,15 @@ export class Calculator {
 
       expect(quickScanSymbols.length).toBeGreaterThan(0);
 
-      // Run full scan
-      await commitIndexer.ensureCommitsIndexed([headSha]);
+      // Run full scan (use commit 0 which contains src/ts/math.ts)
+      await pipeline.analyzeBundle([commits[0]]);
       await DatabaseWriteQueue.getInstance().flushAll();
 
       const fullScanSymbols = db
         .prepare(
-          'SELECT dna_id FROM symbols WHERE path = ? AND change_type IN (?, ?, ?)'
+          'SELECT dna_id FROM symbols WHERE path = ? AND sha = ? AND change_type IN (?, ?, ?)'
         )
-        .all([testFile, 'added', 'modified', 'removed']) as Array<{ dna_id: string }>;
+        .all([testFile, commits[0], 'added', 'modified', 'removed']) as Array<{ dna_id: string }>;
 
       expect(fullScanSymbols.length).toBeGreaterThan(0);
 
@@ -422,4 +425,3 @@ export class Calculator {
     });
   });
 });
-

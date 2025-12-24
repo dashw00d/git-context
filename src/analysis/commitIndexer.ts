@@ -440,13 +440,19 @@ export class CommitIndexer {
 
     this.storeCommitMetadata(commitInfo, facts.filesChanged);
 
-    logInfo(`[CommitIndexer] Storing ${symbolChanges.size} symbol changes for ${sha}`);
+    logInfo(
+      `[CommitIndexer] Storing ${symbolChanges.size} symbol changes, ${edgesToInsert.length} edges for ${sha.substring(0, 8)}`
+    );
     await this.storeSymbolHistory(sha, symbolChanges, blastRadiusResult.impactScore);
 
     await this.storeSymbols(sha, symbolChanges);
 
     if (!opts?.modules || opts.modules.includes('edges')) {
       await this.storeEdgesBatch(sha, edgesToInsert);
+    } else {
+      logInfo(
+        `[CommitIndexer] Skipping edge storage (modules: ${opts?.modules?.join(', ') || 'all'})`
+      );
     }
 
     const { movedBlocks } = await this.movedBlockDetector.detectMovedBlocks(
@@ -580,6 +586,9 @@ export class CommitIndexer {
     );
 
     if (status === 'A') {
+      logDebug(
+        `[CommitIndexer] Processing added file ${path}@${sha.substring(0, 8)}: ${currentSnapshot.symbols.length} symbols, ${currentSnapshot.edges.length} edges`
+      );
       result.symbolsAdded += currentSnapshot.symbols.length;
       result.edgesAdded += currentSnapshot.edges.length;
 
@@ -603,6 +612,9 @@ export class CommitIndexer {
           isResolved: (edge as any).isResolved !== false ? 1 : 0,
         });
       }
+      logDebug(
+        `[CommitIndexer] Queued ${currentSnapshot.symbols.length} symbols and ${currentSnapshot.edges.length} edges for ${path}@${sha.substring(0, 8)}`
+      );
     } else if (status === 'M' && parentSha) {
       const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path, plan));
 
@@ -766,6 +778,23 @@ export class CommitIndexer {
   ): Promise<void> {
     const writeQueue = DatabaseWriteQueue.getInstance();
 
+    // Diagnostic logging
+    const changeTypeCounts = new Map<string, number>();
+    const edgeTypeCounts = new Map<string, number>();
+    for (const edge of edges) {
+      changeTypeCounts.set(edge.changeType, (changeTypeCounts.get(edge.changeType) || 0) + 1);
+      edgeTypeCounts.set(edge.edgeType, (edgeTypeCounts.get(edge.edgeType) || 0) + 1);
+    }
+    logInfo(
+      `[CommitIndexer] storeEdgesBatch called for ${sha.substring(0, 8)}: ${edges.length} edges, ` +
+        `changeTypes: ${Array.from(changeTypeCounts.entries())
+          .map(([t, c]) => `${t}=${c}`)
+          .join(', ')}, ` +
+        `edgeTypes: ${Array.from(edgeTypeCounts.entries())
+          .map(([t, c]) => `${t}=${c}`)
+          .join(', ')}`
+    );
+
     for (const edge of edges) {
       writeQueue.queue({
         type: 'edge',
@@ -780,6 +809,8 @@ export class CommitIndexer {
         },
       });
     }
+
+    logDebug(`[CommitIndexer] Queued ${edges.length} edge operations for ${sha.substring(0, 8)}`);
   }
 
   private async updateHotspotsFromBatch(
@@ -831,7 +862,24 @@ export class CommitIndexer {
   ): Promise<void> {
     const writeQueue = DatabaseWriteQueue.getInstance();
 
-    for (const [_dnaId, { type, symbol, filePath }] of symbolChanges) {
+    // Diagnostic logging
+    const changeTypeCounts = new Map<string, number>();
+    const fileCounts = new Map<string, number>();
+    for (const [_dnaId, { type, filePath }] of symbolChanges) {
+      changeTypeCounts.set(type, (changeTypeCounts.get(type) || 0) + 1);
+      fileCounts.set(filePath, (fileCounts.get(filePath) || 0) + 1);
+    }
+    logInfo(
+      `[CommitIndexer] storeSymbols called for ${sha.substring(0, 8)}: ${symbolChanges.size} symbols, ` +
+        `changeTypes: ${Array.from(changeTypeCounts.entries())
+          .map(([t, c]) => `${t}=${c}`)
+          .join(', ')}, ` +
+        `files: ${Array.from(fileCounts.entries())
+          .map(([f, c]) => `${f}=${c}`)
+          .join(', ')}`
+    );
+
+    for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
       // Queue symbol_dna insert
       writeQueue.queue({
         type: 'symbol',
@@ -844,6 +892,10 @@ export class CommitIndexer {
         data: { sha, path: filePath, symbol, changeType: type, isDna: false },
       });
     }
+
+    logDebug(
+      `[CommitIndexer] Queued ${symbolChanges.size * 2} symbol operations (${symbolChanges.size} DNA + ${symbolChanges.size} symbols) for ${sha.substring(0, 8)}`
+    );
   }
 
   /**
