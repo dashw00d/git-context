@@ -518,14 +518,6 @@ export class CommitIndexer {
     priority: boolean = false
   ): Promise<FileProcessingResult | null> {
     const { path, status } = file;
-
-    // Debug: Log for TypeScript files
-    if (path.includes('math.ts')) {
-      const fs = require('fs');
-      const path = require('path');
-      const debugFile = path.join(process.cwd(), 'tests/fixtures/sandbox-repo/debug.log');
-      fs.appendFileSync(debugFile, `[CommitIndexer] processFile called for ${path} (${status}) in ${sha.substring(0,8)}\n`);
-    }
     const result: FileProcessingResult = {
       symbolsAdded: 0,
       symbolsModified: 0,
@@ -553,11 +545,8 @@ export class CommitIndexer {
     );
 
     if (!filterResult.shouldProcess) {
-      logDebug(`[CommitIndexer] Filtered out ${path}: ${filterResult.reason}`);
       return null;
     }
-
-    logDebug(`[CommitIndexer] Processing ${path} (${status}) in ${sha.substring(0,8)}`);
 
     if (status === 'D') {
       if (parentSha) {
@@ -612,7 +601,7 @@ export class CommitIndexer {
       currentBlobSha,
       currentContent
     );
-    logDebug(`[CommitIndexer] 🕐 Snapshot creation for ${path}: ${Date.now() - snapshotTime}ms (${currentSnapshot.symbols.length} symbols, ${currentSnapshot.edges.length} edges)`);
+    logDebug(`[CommitIndexer] 🕐 Snapshot creation for ${path}: ${Date.now() - snapshotTime}ms`);
 
     const hybridFactsTime = Date.now();
     await this.extractAndSaveHybridFacts(
@@ -922,16 +911,19 @@ export class CommitIndexer {
     );
 
     for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
+      // Normalize path for consistency with workspace indexer
+      const normalizedPath = GitOperations.normalizePath(filePath);
+
       // Queue symbol_dna insert
       writeQueue.queue({
         type: 'symbol',
-        data: { sha, path: filePath, symbol, changeType: type, isDna: true },
+        data: { sha, path: normalizedPath, symbol, changeType: type, isDna: true },
       });
 
       // Queue symbols insert
       writeQueue.queue({
         type: 'symbol',
-        data: { sha, path: filePath, symbol, changeType: type, isDna: false },
+        data: { sha, path: normalizedPath, symbol, changeType: type, isDna: false },
       });
 
       // Queue symbol_versions insert
@@ -940,7 +932,7 @@ export class CommitIndexer {
         data: {
           dnaId,
           sha,
-          path: filePath,
+          path: normalizedPath,
           symbolId: symbol.id || dnaId,
           name: symbol.name,
           kind: symbol.kind,
@@ -1114,9 +1106,11 @@ export class CommitIndexer {
 
     for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
       const impactScore = impactScores.get(dnaId) || 0;
+      // Normalize path for consistency
+      const normalizedPath = GitOperations.normalizePath(filePath);
       writeQueue.queue({
         type: 'symbol_history',
-        data: { dnaId, sha, filePath, symbol, impactScore, changeType: type },
+        data: { dnaId, sha, filePath: normalizedPath, symbol, impactScore, changeType: type },
       });
     }
   }
@@ -1372,11 +1366,13 @@ export class CommitIndexer {
 
     for (const file of files) {
       const lang = detectLanguage(file.path);
+      // Normalize path for consistency
+      const normalizedPath = GitOperations.normalizePath(file.path);
       writeQueue.queue({
         type: 'file',
         data: {
           sha,
-          path: file.path,
+          path: normalizedPath,
           status: file.status,
           lang: lang || undefined,
         },

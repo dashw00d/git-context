@@ -13,12 +13,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
 import { setupSandboxRepo, SANDBOX_DIR } from '../fixtures/setupSandbox';
-
-// Debug helper
-function debugLog(message: string) {
-  const debugFile = path.join(SANDBOX_DIR, 'debug.log');
-  fs.appendFileSync(debugFile, `[${new Date().toISOString()}] ${message}\n`);
-}
 import { DatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
 import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
 import { GitOperations } from '../../src/analysis/git';
@@ -51,6 +45,11 @@ describe('Invalidation Integration', () => {
     // Save original directory for restoration
     originalCwd = process.cwd();
 
+    // Wipe database file if it exists (fresh start every test run)
+    if (fs.existsSync(TEST_DB_PATH)) {
+      fs.unlinkSync(TEST_DB_PATH);
+    }
+
     // Setup sandbox repo
     const result = setupSandboxRepo();
     repoPath = result.repoPath;
@@ -59,7 +58,7 @@ describe('Invalidation Integration', () => {
     // Change to sandbox directory - keep it for entire test lifecycle
     process.chdir(repoPath);
 
-    // Create test database
+    // Create test database (fresh)
     dbManager = new DatabaseManager(TEST_DB_PATH);
     await dbManager.initialize();
     const db = dbManager.getDatabase();
@@ -176,47 +175,121 @@ describe('Invalidation Integration', () => {
     it('should mark symbols as stale when markStale is true', async () => {
       // Use fixture file from sandbox repo
       const testFile = 'src/ts/math.ts';
-
-      debugLog(`Analyzing bundle with commit ${commits[0]}`);
-      // Use commit 0 which contains src/ts/math.ts
-
-      // Debug: Check what files are in this commit
-      const git = new (await import('../../src/analysis/git')).GitOperations();
-      const filesInCommit = await git.getFileChanges(commits[0]);
-      debugLog(`Files in commit ${commits[0].substring(0,8)}: ${filesInCommit.length}`);
-      filesInCommit.forEach(f => debugLog(`  ${f.path} (${f.status})`));
+      // Normalize path for query consistency (same as storage)
+      const normalizedPath = GitOperations.normalizePath(testFile);
 
       await pipeline.analyzeBundle([commits[0]]);
       await DatabaseWriteQueue.getInstance().flushAll();
 
       const db = dbManager.getDatabase();
 
-      // Debug: Check what's in the database
-      debugLog('Checking database contents...');
-      const allSymbols = db.prepare('SELECT sha, path, symbol_id, dna_id, name, change_type FROM symbols LIMIT 10').all();
-      debugLog(`Total symbols in DB: ${allSymbols.length}`);
-      allSymbols.forEach(s => debugLog(`  ${s.sha?.substring(0,8)} | ${s.path} | ${s.name} | ${s.change_type}`));
+      // Check actual table schema and constraint
+      const schema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='symbols'").get() as { sql: string } | undefined;
+      const schemaStr = schema?.sql || 'Not found';
+      console.log('[TEST] Symbols table schema (first 400 chars):', schemaStr.substring(0, 400));
+      const hasPathConstraint = schemaStr.includes('UNIQUE(sha, path, dna_id)');
+      const hasOldConstraint = schemaStr.includes('UNIQUE(sha, dna_id)') && !schemaStr.includes('path');
+      console.log('[TEST] Has new constraint (sha, path, dna_id):', hasPathConstraint);
+      console.log('[TEST] Has old constraint (sha, dna_id) only:', hasOldConstraint);
+      console.log('[TEST] Database path:', (dbManager as any).dbPath || 'unknown');
 
-      const commitsAnalysis = db.prepare('SELECT sha, status FROM commits_analysis').all();
-      debugLog(`Commits analysis: ${commitsAnalysis.length}`);
-      commitsAnalysis.forEach(c => debugLog(`  ${c.sha?.substring(0,8)} | ${c.status}`));
+      // Diagnostic: Check what paths are actually stored
+      const allPaths = db
+        .prepare('SELECT DISTINCT path FROM symbols WHERE sha = ?')
+        .all([commits[0]]) as Array<{ path: string }>;
+      console.log('Stored paths for commit:', allPaths.map(p => p.path));
+      console.log('Commit SHA being queried:', commits[0]);
+      // Check what commits actually have symbols
+      const allCommits = db
+        .prepare('SELECT DISTINCT sha FROM symbols LIMIT 10')
+        .all() as Array<{ sha: string }>;
+      console.log('Commits with symbols:', allCommits.map(c => c.sha.substring(0, 8)));
+      // Check all symbols for this commit
+      const allSymbols = db
+        .prepare('SELECT path, name, dna_id FROM symbols WHERE sha = ?')
+        .all([commits[0]]) as Array<{ path: string; name: string; dna_id: string }>;
+      console.log('Total symbols stored for commits[0]:', allSymbols.length);
+      const mathSymbols = allSymbols.filter(s => s.path.includes('math'));
+      console.log('Math.ts symbols found:', mathSymbols.length, mathSymbols.map(s => s.name));
+
+      // Direct query for math.ts symbols to verify
+      const directMathQuery = db
+        .prepare('SELECT sha, path, name, dna_id FROM symbols WHERE path = ? AND sha = ?')
+        .all(['src/ts/math.ts', commits[0]]) as Array<{ sha: string; path: string; name: string; dna_id: string }>;
+      console.log('[TEST] Direct query for math.ts:', directMathQuery.length, 'symbols');
+      if (directMathQuery.length === 0) {
+        // Check if they exist with different path format
+        const anyMath = db
+          .prepare("SELECT sha, path, name, dna_id FROM symbols WHERE path LIKE '%math%' AND sha = ?")
+          .all([commits[0]]) as Array<{ sha: string; path: string; name: string; dna_id: string }>;
+        console.log('[TEST] Any math-like paths:', anyMath.length, anyMath.map(s => s.path));
+
+        // Check for duplicate DNA IDs that might have overwritten math.ts
+        const mathDnaIds = [
+          'dna:efc22128cc8c361b48a3fad19839a9326628ebd26492a988cecc43dda0c4caae',
+          'dna:5c54bbb7588008cab1ffafc9310a6704160438257448efcf917eedc1826dcce6',
+          'dna:e74ce4a702f2150e25a502a88a4ed7a2d829f21c10e4a3493c8cbae5098a282c',
+        ];
+        for (const dnaId of mathDnaIds.slice(0, 2)) {
+          const found = db
+            .prepare('SELECT sha, path, name, dna_id FROM symbols WHERE dna_id = ? AND sha = ?')
+            .all([dnaId, commits[0]]) as Array<{ sha: string; path: string; name: string; dna_id: string }>;
+          if (found.length > 0) {
+            console.log(`[TEST] Found DNA ${dnaId.substring(0, 30)}... in paths:`, found.map(s => s.path));
+          }
+        }
+      }
+
+      // Save actual database state to file for comparison
+      const fs = await import('fs');
+      const path = await import('path');
+      const debugDir = path.join(process.cwd(), '.debug');
+      if (!fs.existsSync(debugDir)) {
+        fs.mkdirSync(debugDir, { recursive: true });
+      }
+      const dbStateFile = path.join(debugDir, `db-state-${Date.now()}.json`);
+      const allStoredSymbols = db
+        .prepare('SELECT sha, path, symbol_id, dna_id, name, kind, signature, change_type FROM symbols WHERE sha = ?')
+        .all([commits[0]]) as Array<{
+        sha: string;
+        path: string;
+        symbol_id: string;
+        dna_id: string;
+        name: string;
+        kind: string;
+        signature: string;
+        change_type: string;
+      }>;
+      fs.writeFileSync(
+        dbStateFile,
+        JSON.stringify(
+          {
+            commit: commits[0],
+            totalStored: allStoredSymbols.length,
+            symbols: allStoredSymbols,
+            groupedByPath: Object.fromEntries(
+              Array.from(new Set(allStoredSymbols.map(s => s.path))).map(p => [
+                p,
+                allStoredSymbols.filter(s => s.path === p),
+              ])
+            ),
+            groupedByDna: Object.fromEntries(
+              Array.from(new Set(allStoredSymbols.map(s => s.dna_id))).map(d => [
+                d,
+                allStoredSymbols.filter(s => s.dna_id === d),
+              ])
+            ),
+          },
+          null,
+          2
+        )
+      );
+      console.log(`[TEST] Saved database state to ${dbStateFile}`);
 
       // Check symbols for this file in commit 0
-      debugLog(`Querying symbols for ${testFile} @ ${commits[0]}`);
       const beforeSymbols = db
         .prepare('SELECT * FROM symbols WHERE path = ? AND sha = ?')
-        .all([testFile, commits[0]]) as Array<{ completeness_flags: string | null }>;
-
-      debugLog(`Found ${beforeSymbols.length} symbols for ${testFile} @ ${commits[0]}`);
-      beforeSymbols.forEach(s => debugLog(`  Symbol: ${s.name} (${s.symbol_id?.substring(0,16)}...)`));
-
-      // Also check symbols with any SHA for this path
-      const anyShaSymbols = db
-        .prepare('SELECT sha, path, symbol_id, dna_id, name, change_type FROM symbols WHERE path = ?')
-        .all([testFile]) as Array<{ sha: string; path: string; symbol_id: string; dna_id: string; name: string; change_type: string }>;
-
-      debugLog(`Found ${anyShaSymbols.length} symbols for ${testFile} (any SHA)`);
-      anyShaSymbols.forEach(s => debugLog(`  ${s.sha?.substring(0,8)} | ${s.name} | ${s.change_type} | ${s.dna_id?.substring(0,16)}...`));
+        .all([normalizedPath, commits[0]]) as Array<{ completeness_flags: string | null }>;
 
       expect(beforeSymbols.length).toBeGreaterThan(0);
 
@@ -236,7 +309,7 @@ describe('Invalidation Integration', () => {
       if (hasCompletenessFlags) {
         const afterSymbols = db
           .prepare('SELECT completeness_flags FROM symbols WHERE path = ? AND sha = ?')
-          .all([testFile, commits[0]]) as Array<{ completeness_flags: string | null }>;
+          .all([normalizedPath, commits[0]]) as Array<{ completeness_flags: string | null }>;
 
         // Symbols should still exist but be marked incomplete
         expect(afterSymbols.length).toBeGreaterThan(0);
@@ -249,7 +322,7 @@ describe('Invalidation Integration', () => {
         // If column doesn't exist, just verify symbols still exist
         const afterSymbols = db
           .prepare('SELECT * FROM symbols WHERE path = ? AND sha = ?')
-          .all([testFile, commits[0]]);
+          .all([normalizedPath, commits[0]]);
         expect(afterSymbols.length).toBeGreaterThan(0);
       }
     });

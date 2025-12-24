@@ -232,7 +232,7 @@ export class DatabaseService extends ServiceBase {
         const stmt = prepare(`
           SELECT s.*, sv.dna_id as dna
           FROM symbol_versions sv
-          JOIN symbols s ON sv.sha = s.sha AND sv.dna_id = s.dna_id
+          JOIN symbols s ON sv.sha = s.sha AND sv.dna_id = s.dna_id AND sv.path = s.path
           WHERE sv.dna_id = ?
         `);
         const results = stmt.all(dnaHash) as any[];

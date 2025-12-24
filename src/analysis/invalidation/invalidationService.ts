@@ -32,6 +32,32 @@ export interface InvalidationResult {
 }
 
 /**
+ * Reset commit analysis status to force re-indexing
+ * This ensures the pipeline won't skip re-indexing when symbols have been invalidated
+ */
+async function resetCommitAnalysisStatus(sha: string): Promise<void> {
+  try {
+    // Reset commit analysis status to 'pending' so it will be re-indexed
+    const stmt = prepare(`
+      UPDATE commits_analysis
+      SET status = 'pending',
+          symbols_added = 0,
+          symbols_modified = 0,
+          symbols_removed = 0,
+          edges_added = 0,
+          edges_removed = 0
+      WHERE sha = ?
+    `);
+    stmt.run(sha);
+    stmt.free?.();
+
+    logDebug(`[Invalidation] Reset analysis status for commit ${sha.substring(0, 8)}`);
+  } catch (error) {
+    logWarn(`[Invalidation] Error resetting commit status: ${error}`);
+  }
+}
+
+/**
  * Invalidate symbols for a specific file at a specific commit
  */
 export async function invalidateFileSymbols(
@@ -57,6 +83,10 @@ export async function invalidateFileSymbols(
       result.symbolsInvalidated = deleteResult.symbols;
       result.edgesInvalidated = deleteResult.edges;
     }
+
+    // Reset commit analysis status so pipeline will re-index
+    // This is critical: if we invalidate file-level data, the commit needs re-analysis
+    await resetCommitAnalysisStatus(sha);
 
     // Cascade invalidation if requested
     if (options.cascade) {
@@ -253,6 +283,9 @@ export async function invalidateCommit(
           ? (symbolResult as { changes: number }).changes
           : 0;
     }
+
+    // Reset commit analysis status so pipeline will re-index
+    await resetCommitAnalysisStatus(sha);
 
     logDebug(
       `[Invalidation] Invalidated commit: ${result.symbolsInvalidated} symbols, ${result.edgesInvalidated} edges`

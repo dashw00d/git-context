@@ -142,11 +142,6 @@ export class TreeSitterParser {
     existingSymbols?: SymbolInfo[],
     priority: boolean = false
   ): Promise<HybridFact[]> {
-    // Debug: Log for TypeScript files
-    if (filePath.includes('math.ts')) {
-      console.log(`[TreeSitterParser] extractHybridFacts called for ${filePath} (${languageId}), content length: ${content.length}`);
-    }
-
     if (!this.initialized) await this.initializeParsers();
 
     return new Promise((resolve, reject) => {

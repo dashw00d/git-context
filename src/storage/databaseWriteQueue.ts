@@ -1,7 +1,9 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { normalizeEdgeIdForStorage } from '../utils/edgeNormalization';
 import { logDebug, logInfo, logWarn } from '../utils/logger';
 import { getDatabase } from './database';
 import { ANALYSIS_VERSION } from './schema';
-import { normalizeEdgeIdForStorage } from '../utils/edgeNormalization';
 import type { CommitFacts } from '../analysis/commitIndexer';
 import type { MovedBlock } from '../analysis/movedBlockDetector';
 import type { FileSnapshot } from '../analysis/snapshotManager';
@@ -263,6 +265,16 @@ export class DatabaseWriteQueue {
         }
       })();
 
+      // Explicitly save after transaction completes
+      // The transaction wrapper saves, but we ensure it happens here too
+      // Get DatabaseManager through getDatabaseManager
+      const { getDatabaseManager } = await import('./database');
+      const dbManager = getDatabaseManager();
+      if (dbManager) {
+        dbManager.save();
+        logDebug('[DatabaseWriteQueue] Explicitly saved database after flush');
+      }
+
       // Diagnostic logging
       const typeCounts = new Map<string, number>();
       for (const [key, batch] of batches) {
@@ -474,11 +486,37 @@ export class DatabaseWriteQueue {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     let symbolsInserted = 0;
+    interface InsertAttempt {
+      sha: string;
+      path: string;
+      symbol_id: string;
+      dna_id: string;
+      name: string;
+      kind: string;
+      signature: string;
+      change_type: string;
+      success: boolean;
+      error?: string;
+    }
+    const insertAttempts: InsertAttempt[] = [];
+
     for (const op of ops) {
       if (!op.data.isDna) {
         const s = op.data.symbol;
+        const attempt: InsertAttempt = {
+          sha: op.data.sha,
+          path: op.data.path,
+          symbol_id: s.id,
+          dna_id: s.id,
+          name: s.name,
+          kind: s.kind,
+          signature: s.signature || '',
+          change_type: op.data.changeType,
+          success: false,
+        };
+
         try {
-          symbolStmt.run([
+          const result = symbolStmt.run([
             op.data.sha,
             op.data.path,
             s.id, // symbol_id is now the DNA hash
@@ -491,14 +529,61 @@ export class DatabaseWriteQueue {
             '',
             1.0,
           ]);
-          symbolsInserted++;
-        } catch (error) {
+          // Check if insert actually succeeded
+          const changes =
+            typeof result === 'object' && 'changes' in result ? (result as any).changes : 1;
+          if (changes === 0 && op.data.path === 'src/ts/math.ts') {
+            attempt.error = 'INSERT returned 0 changes (possible constraint violation)';
+            logWarn(
+              `[DatabaseWriteQueue] INSERT returned 0 changes for ${s.name} (${s.id}) at ${op.data.path}@${op.data.sha.substring(0, 8)}`
+            );
+          } else {
+            symbolsInserted++;
+            attempt.success = true;
+          }
+        } catch (error: any) {
+          attempt.error = error?.message || String(error);
           logWarn(
             `[DatabaseWriteQueue] Failed to insert symbol ${s.name} (${s.id}) at ${op.data.path}@${op.data.sha.substring(0, 8)}: ${error}`
           );
         }
+
+        insertAttempts.push(attempt);
       }
     }
+
+    // Save insert attempts to file for debugging
+    if (insertAttempts.length > 0) {
+      try {
+        const debugDir = path.join(process.cwd(), '.debug');
+        if (!fs.existsSync(debugDir)) {
+          fs.mkdirSync(debugDir, { recursive: true });
+        }
+        const timestamp = Date.now();
+        const debugFile = path.join(debugDir, `symbol-inserts-${timestamp}.json`);
+        fs.writeFileSync(
+          debugFile,
+          JSON.stringify(
+            {
+              timestamp: new Date().toISOString(),
+              totalAttempts: insertAttempts.length,
+              successful: symbolsInserted,
+              failed: insertAttempts.length - symbolsInserted,
+              attempts: insertAttempts,
+            },
+            null,
+            2
+          )
+        );
+        logDebug(
+          `[DatabaseWriteQueue] Saved ${insertAttempts.length} insert attempts to ${debugFile}`
+        );
+      } catch (error) {
+        // Don't fail if we can't write debug file
+        logDebug(`[DatabaseWriteQueue] Failed to save debug file: ${error}`);
+      }
+    }
+
     logInfo(`[DatabaseWriteQueue] Inserted ${symbolsInserted} symbol records`);
   }
 

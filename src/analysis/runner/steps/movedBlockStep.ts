@@ -29,7 +29,7 @@ async function getSymbolsForVersion(
     SELECT s.symbol_id, s.name, s.kind, s.path, s.signature, s.change_type,
            sv.dna_id
     FROM symbols s
-    LEFT JOIN symbol_versions sv ON s.sha = sv.sha AND s.symbol_id = sv.symbol_id AND s.path = sv.path
+    LEFT JOIN symbol_versions sv ON s.sha = sv.sha AND s.dna_id = sv.dna_id AND s.path = sv.path
     WHERE s.sha = ? AND s.change_type IN ('removed', 'added')
   `);
   const symbolRows = symbolsStmt.all(sha) as any[];
