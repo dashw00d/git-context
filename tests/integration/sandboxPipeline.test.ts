@@ -22,6 +22,11 @@ import { DependencyExtractor } from '../../src/analysis/dependencies';
 import { SymbolInfo } from '../../src/types';
 import { getTreeSitterParser } from '../../src/analysis/tree-sitter';
 import { detectLanguage } from '../../src/utils/config';
+import { getRefactorPipeline } from '../../src/services/pipelineFactory';
+import { DatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
+import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
+
+const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-pipeline.db');
 
 // Helper to get file content directly from git in sandbox repo
 function getGitContent(repo: string, sha: string, filePath: string): string {
@@ -52,20 +57,36 @@ describe('Comprehensive Sandbox Pipeline Tests', () => {
   let repoPath: string;
   let commits: string[];
   let dependencyExtractor: DependencyExtractor;
+  let dbManager: DatabaseManager;
+  let originalCwd: string;
 
   beforeAll(async () => {
+    originalCwd = process.cwd();
     // Setup sandbox repo
     const result = setupSandboxRepo();
     repoPath = result.repoPath;
     commits = result.commits;
+
+    process.chdir(repoPath);
+
+    dbManager = new DatabaseManager(TEST_DB_PATH);
+    await dbManager.initialize();
+    setDatabaseManagerForTesting(dbManager);
+    DatabaseWriteQueue.getInstance().setDatabase(dbManager.getDatabase());
 
     // Initialize extractor
     dependencyExtractor = new DependencyExtractor();
   });
 
   afterAll(() => {
-    // Optionally clean up - comment out to inspect repo after tests
-    // fs.rmSync(repoPath, { recursive: true, force: true });
+    try {
+      if (originalCwd && fs.existsSync(originalCwd)) {
+        process.chdir(originalCwd);
+      }
+    } catch (error) {}
+
+    if (dbManager) dbManager.close();
+    if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
   });
 
   describe('Repository Structure Verification', () => {

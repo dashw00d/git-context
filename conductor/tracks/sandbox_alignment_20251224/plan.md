@@ -17,7 +17,7 @@
 - [~] Task: Conductor - User Manual Verification 'Update Sandbox Test Assertions' (Protocol in workflow.md)
 
 ## Phase 3: Refine Test Execution Logic
-- [ ] Task: Align test pipeline invocation with current `AnalysisCoordinator` patterns
+- [~] Task: Align test pipeline invocation with current `AnalysisCoordinator` patterns
     - [ ] Write Tests (identify mismatches in how tests call the pipeline)
     - [ ] Implement Logic Refinement (update test setup/teardown and invocation)
 - [ ] Task: Conductor - User Manual Verification 'Refine Test Execution Logic' (Protocol in workflow.md)
