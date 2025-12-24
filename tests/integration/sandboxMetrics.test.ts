@@ -99,12 +99,21 @@ describe('Sandbox Metrics and Drift Tests', () => {
     const utilsHotspot = hotspots.find(h => h.filePath === 'src/js/utils.js');
 
     expect(mathHotspot).toBeDefined();
-    // Expected ~84.1 based on manual calculation in docs/SANDBOX_EXPECTATIONS.md
-    expect(mathHotspot!.hotspotScore).toBeGreaterThan(50); // Adjusted threshold for first run
+    // Expected > 50 based on activity in math.ts
+    expect(mathHotspot!.hotspotScore).toBeGreaterThan(50);
     expect(mathHotspot!.riskLevel).toBeDefined();
 
     expect(utilsHotspot).toBeDefined();
-    expect(utilsHotspot!.hotspotScore).toBeGreaterThan(40);
+    expect(utilsHotspot!.hotspotScore).toBeGreaterThan(45);
+    expect(utilsHotspot!.riskLevel).toBeDefined();
+  });
+
+  it('should extract correct number of symbols from initial commit', async () => {
+    // Check symbols after first commit
+    // docs/SANDBOX_EXPECTATIONS.md: 25 symbols total
+    // math.ts (5), types.ts (4), utils.js (4), User.php (9), helpers.php (3)
+    const symbolCount = await dbManager.getDatabase().prepare('SELECT COUNT(*) as count FROM symbols WHERE sha = ?').get(commits[0]) as { count: number };
+    expect(symbolCount.count).toBe(25);
   });
 
   it('should detect expected drift between early and late commits', async () => {
