@@ -689,6 +689,10 @@ export class ReportService {
         continue;
       }
       const [, from, to, type] = match;
+      // Skip edges with unknown/unresolved paths
+      if (from.startsWith('unknown:') || to.startsWith('unknown:')) {
+        continue;
+      }
       edges.push({
         from,
         to,

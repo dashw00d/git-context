@@ -6,8 +6,13 @@ export const BlastRadiusStage: React.FC<{ frame: any; onZoomIn: (frame: any) => 
 }) => {
   const [showIncoming, setShowIncoming] = React.useState(true);
   const [showOutgoing, setShowOutgoing] = React.useState(true);
-  const incoming = frame.data?.blastRadius?.incoming || [];
-  const outgoing = frame.data?.blastRadius?.outgoing || [];
+  // Filter out edges with 'unknown' paths (unresolved symbols)
+  const incoming = (frame.data?.blastRadius?.incoming || []).filter(
+    (edge: any) => !edge.from?.startsWith('unknown:')
+  );
+  const outgoing = (frame.data?.blastRadius?.outgoing || []).filter(
+    (edge: any) => !edge.to?.startsWith('unknown:')
+  );
   const center = frame.name;
   const nodes = [
     ...incoming.map((edge: any) => ({ id: edge.from.split(':')[0], direction: 'in' })),

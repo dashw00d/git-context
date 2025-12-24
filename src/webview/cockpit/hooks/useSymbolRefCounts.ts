@@ -107,6 +107,11 @@ export const useSymbolRefCounts = (
       const fromPath = lastColonFrom !== -1 ? fromId.substring(0, lastColonFrom) : fromId;
       const toPath = lastColonTo !== -1 ? toId.substring(0, lastColonTo) : toId;
 
+      // Skip edges with unresolved paths (marked as 'unknown')
+      if (fromPath === 'unknown' || toPath === 'unknown') {
+        return;
+      }
+
       // Normalize edge paths using the same method as target path (browser-compatible)
       const normalizedFrom = fromPath;
       const normalizedTo = toPath;

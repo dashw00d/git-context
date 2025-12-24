@@ -132,6 +132,10 @@ function groupByFolder(references: any[]): Map<string, number> {
     if (refPath) {
       const lastColon = refPath.lastIndexOf(':');
       const filePath = lastColon !== -1 ? refPath.substring(0, lastColon) : refPath;
+      // Skip unknown/unresolved paths
+      if (filePath === 'unknown') {
+        return;
+      }
       const folder = extractFolderName(filePath);
       groups.set(folder, (groups.get(folder) || 0) + 1);
     }

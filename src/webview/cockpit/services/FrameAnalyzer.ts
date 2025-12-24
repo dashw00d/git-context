@@ -297,22 +297,20 @@ export class FrameAnalyzer {
           const fromPath = lastColonFrom !== -1 ? from.substring(0, lastColonFrom) : from;
           const toPath = lastColonTo !== -1 ? to.substring(0, lastColonTo) : to;
 
+          // Skip edges with unresolved paths (marked as 'unknown')
+          if (fromPath === 'unknown' || toPath === 'unknown') {
+            return;
+          }
+
           const normalizedFrom = GitOperations.normalizePath(fromPath);
           const normalizedTo = GitOperations.normalizePath(toPath);
 
+          // Collect edges that involve the target file
           if (normalizedFrom === normalizedTarget) {
             outgoing.push({ from, to, type });
-          } else {
-            logWarn(
-              `[FrameAnalyzer] Tier 2 mismatch (outgoing): ${normalizedFrom} !== ${normalizedTarget}`
-            );
           }
           if (normalizedTo === normalizedTarget) {
             incoming.push({ from, to, type });
-          } else {
-            logWarn(
-              `[FrameAnalyzer] Tier 2 mismatch (incoming): ${normalizedTo} !== ${normalizedTarget}`
-            );
           }
         });
 

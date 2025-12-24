@@ -28805,6 +28805,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         if (isItemFuture(e.sha)) return;
         const fromPath = e.from?.split(":")[0] || e.from;
         const toPath = e.to?.split(":")[0] || e.to;
+        if (fromPath === "unknown" || toPath === "unknown") return;
         if (fromPath === fileId || toPath === fileId) {
           missingEdgesCount++;
         }
@@ -28813,6 +28814,7 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
         if (isItemFuture(e.sha)) return;
         const fromPath = e.from?.split(":")[0] || e.from;
         const toPath = e.to?.split(":")[0] || e.to;
+        if (fromPath === "unknown" || toPath === "unknown") return;
         if (fromPath === fileId || toPath === fileId) {
           zombieEdgesCount++;
         }
@@ -28890,8 +28892,12 @@ Last Modified: ${new Date(metrics.lastModified).toLocaleDateString()}` : node.na
   }) => {
     const [showIncoming, setShowIncoming] = React6.useState(true);
     const [showOutgoing, setShowOutgoing] = React6.useState(true);
-    const incoming = frame.data?.blastRadius?.incoming || [];
-    const outgoing = frame.data?.blastRadius?.outgoing || [];
+    const incoming = (frame.data?.blastRadius?.incoming || []).filter(
+      (edge) => !edge.from?.startsWith("unknown:")
+    );
+    const outgoing = (frame.data?.blastRadius?.outgoing || []).filter(
+      (edge) => !edge.to?.startsWith("unknown:")
+    );
     const center = frame.name;
     const nodes = [
       ...incoming.map((edge) => ({ id: edge.from.split(":")[0], direction: "in" })),
@@ -29815,6 +29821,9 @@ Churn: ${node.score.toFixed(1)}
         const lastColonTo = toId.lastIndexOf(":");
         const fromPath = lastColonFrom !== -1 ? fromId.substring(0, lastColonFrom) : fromId;
         const toPath = lastColonTo !== -1 ? toId.substring(0, lastColonTo) : toId;
+        if (fromPath === "unknown" || toPath === "unknown") {
+          return;
+        }
         const normalizedFrom = fromPath;
         const normalizedTo = toPath;
         if (normalizedFrom === normalizedTarget) {
@@ -31426,6 +31435,9 @@ ${hotspotText}` : hotspotText;
       if (refPath) {
         const lastColon = refPath.lastIndexOf(":");
         const filePath = lastColon !== -1 ? refPath.substring(0, lastColon) : refPath;
+        if (filePath === "unknown") {
+          return;
+        }
         const folder = extractFolderName(filePath);
         groups.set(folder, (groups.get(folder) || 0) + 1);
       }
