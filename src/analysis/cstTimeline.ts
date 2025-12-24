@@ -306,10 +306,11 @@ export class CstTimelineManager {
     fact: HybridFact,
     priorFacts: HybridFact[] | null
   ): Promise<DeltaChange> {
+    const dnaId = await computeHybridDna(fact);
     if (!priorFacts || priorFacts.length === 0) {
       return {
         type: 'added',
-        newDna: await computeHybridDna(fact),
+        newDna: dnaId,
       };
     }
 
@@ -320,7 +321,7 @@ export class CstTimelineManager {
     if (!priorFact) {
       return {
         type: 'added',
-        newDna: await computeHybridDna(fact),
+        newDna: dnaId,
       };
     }
 
@@ -333,7 +334,7 @@ export class CstTimelineManager {
       return {
         type: 'modified',
         oldDna: priorFact.id,
-        newDna: fact.id,
+        newDna: dnaId,
         locationDelta: locationChanged
           ? {
               oldLine: priorFact.location.start.line,
@@ -346,7 +347,7 @@ export class CstTimelineManager {
     return {
       type: 'modified',
       oldDna: priorFact.id,
-      newDna: fact.id,
+      newDna: dnaId,
     };
   }
 

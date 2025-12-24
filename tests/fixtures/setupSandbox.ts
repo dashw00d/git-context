@@ -886,59 +886,65 @@ function writeFiles(files: Record<string, string>, baseDir: string): void {
 }
 
 export function setupSandboxRepo(): { repoPath: string; commits: string[] } {
-  // Clean up existing
-  if (fs.existsSync(SANDBOX_DIR)) {
-    fs.rmSync(SANDBOX_DIR, { recursive: true, force: true });
+  // Use a unique directory for each run to avoid race conditions in parallel tests
+  const uniqueId = Math.random().toString(36).substring(2, 10);
+  const repoPath = path.join(SANDBOX_DIR, `repo-${uniqueId}`);
+
+  // Ensure base SANDBOX_DIR exists
+  if (!fs.existsSync(SANDBOX_DIR)) {
+    fs.mkdirSync(SANDBOX_DIR, { recursive: true });
   }
-  fs.mkdirSync(SANDBOX_DIR, { recursive: true });
+
+  // Create unique repo dir
+  fs.mkdirSync(repoPath, { recursive: true });
 
   // Initialize git repo
-  runGit('init', SANDBOX_DIR);
-  runGit('config user.email "test@test.com"', SANDBOX_DIR);
-  runGit('config user.name "Test User"', SANDBOX_DIR);
+  runGit('init', repoPath);
+  runGit('config user.email "test@test.com"', repoPath);
+  runGit('config user.name "Test User"', repoPath);
 
   const commits: string[] = [];
 
   // Commit 1: Initial structure
-  writeFiles(COMMIT_1_FILES, SANDBOX_DIR);
-  runGit('add .', SANDBOX_DIR);
-  runGit('commit -m "Initial: TS math, JS utils, PHP User class"', SANDBOX_DIR);
-  commits.push(runGit('rev-parse HEAD', SANDBOX_DIR).trim());
+  writeFiles(COMMIT_1_FILES, repoPath);
+  runGit('add .', repoPath);
+  runGit('commit -m "Initial: TS math, JS utils, PHP User class"', repoPath);
+  commits.push(runGit('rev-parse HEAD', repoPath).trim());
 
   // Commit 2: Add components
-  writeFiles(COMMIT_2_FILES, SANDBOX_DIR);
-  runGit('add .', SANDBOX_DIR);
-  runGit('commit -m "Add: Calculator, Logger, UserService"', SANDBOX_DIR);
-  commits.push(runGit('rev-parse HEAD', SANDBOX_DIR).trim());
+  writeFiles(COMMIT_2_FILES, repoPath);
+  runGit('add .', repoPath);
+  runGit('commit -m "Add: Calculator, Logger, UserService"', repoPath);
+  commits.push(runGit('rev-parse HEAD', repoPath).trim());
 
   // Commit 3: Modify signatures
-  writeFiles(COMMIT_3_CHANGES, SANDBOX_DIR);
-  runGit('add .', SANDBOX_DIR);
-  runGit('commit -m "Modify: Add precision to math, lastLogin to User"', SANDBOX_DIR);
-  commits.push(runGit('rev-parse HEAD', SANDBOX_DIR).trim());
+  writeFiles(COMMIT_3_CHANGES, repoPath);
+  runGit('add .', repoPath);
+  runGit('commit -m "Modify: Add precision to math, lastLogin to User"', repoPath);
+  commits.push(runGit('rev-parse HEAD', repoPath).trim());
 
   // Commit 4: Rename functions
-  writeFiles(COMMIT_4_CHANGES, SANDBOX_DIR);
-  runGit('add .', SANDBOX_DIR);
-  runGit('commit -m "Rename: formatNumber -> formatCurrency, add throttle"', SANDBOX_DIR);
-  commits.push(runGit('rev-parse HEAD', SANDBOX_DIR).trim());
+  writeFiles(COMMIT_4_CHANGES, repoPath);
+  runGit('add .', repoPath);
+  runGit('commit -m "Rename: formatNumber -> formatCurrency, add throttle"', repoPath);
+  commits.push(runGit('rev-parse HEAD', repoPath).trim());
 
   // Commit 5: Delete deprecated
-  writeFiles(COMMIT_5_CHANGES, SANDBOX_DIR);
-  runGit('add .', SANDBOX_DIR);
-  runGit('commit -m "Remove: divide(), add safeDivide()"', SANDBOX_DIR);
-  commits.push(runGit('rev-parse HEAD', SANDBOX_DIR).trim());
+  writeFiles(COMMIT_5_CHANGES, repoPath);
+  runGit('add .', repoPath);
+  runGit('commit -m "Remove: divide(), add safeDivide()"', repoPath);
+  commits.push(runGit('rev-parse HEAD', repoPath).trim());
 
   // Commit 6: Cross-file dependencies
-  writeFiles(COMMIT_6_FILES, SANDBOX_DIR);
-  runGit('add .', SANDBOX_DIR);
-  runGit('commit -m "Add: index.ts, api.js, UserController with cross-file deps"', SANDBOX_DIR);
-  commits.push(runGit('rev-parse HEAD', SANDBOX_DIR).trim());
+  writeFiles(COMMIT_6_FILES, repoPath);
+  runGit('add .', repoPath);
+  runGit('commit -m "Add: index.ts, api.js, UserController with cross-file deps"', repoPath);
+  commits.push(runGit('rev-parse HEAD', repoPath).trim());
 
-  console.log('Sandbox repo created at:', SANDBOX_DIR);
+  console.log('Sandbox repo created at:', repoPath);
   console.log('Commits:', commits);
 
-  return { repoPath: SANDBOX_DIR, commits };
+  return { repoPath, commits };
 }
 
 export function getSandboxPath(): string {

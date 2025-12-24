@@ -8,7 +8,7 @@
 - [x] Task: Conductor - User Manual Verification 'Analysis & Data Preparation' (Protocol in workflow.md)
 
 ## Phase 2: Update Sandbox Test Assertions
-- [ ] Task: Update symbol extraction assertions in sandbox tests
+- [~] Task: Update symbol extraction assertions in sandbox tests
     - [ ] Write failing tests (update assertions to new calculated values)
     - [ ] Implement fixes (ensure pipeline output matches expectations)
 - [ ] Task: Update hotspot and drift detection assertions

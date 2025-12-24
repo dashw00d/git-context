@@ -115,6 +115,27 @@ describe('Comprehensive Sandbox Pipeline Tests', () => {
       expect(names).toContain('subtract');
       expect(names).toContain('multiply');
       expect(names).toContain('divide');
+      expect(symbols).toHaveLength(5);
+    });
+
+    it('should extract all symbols from all files at commit 1', async () => {
+      const files = [
+        'src/ts/math.ts',
+        'src/ts/types.ts',
+        'src/js/utils.js',
+        'src/php/User.php',
+        'src/php/helpers.php'
+      ];
+
+      let totalSymbols = 0;
+      for (const file of files) {
+        const content = getGitContent(repoPath, commits[0], file);
+        const symbols = await extractSymbols(content, file);
+        totalSymbols += symbols.length;
+      }
+
+      // Based on docs/SANDBOX_EXPECTATIONS.md
+      expect(totalSymbols).toBe(25);
     });
 
     // Skipped: Tree-sitter parser extracts only function/method/class declarations, not interfaces or type aliases.

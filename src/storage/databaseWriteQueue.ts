@@ -137,15 +137,34 @@ export class DatabaseWriteQueue {
   private isFlushing = false;
 
   private constructor(db?: any) {
-    this.db = db || getDatabase();
+    this.db = db;
     this.startAutoFlush();
   }
 
   static getInstance(db?: any): DatabaseWriteQueue {
     if (!DatabaseWriteQueue.instance) {
       DatabaseWriteQueue.instance = new DatabaseWriteQueue(db);
+    } else if (db && !DatabaseWriteQueue.instance.db) {
+      DatabaseWriteQueue.instance.setDatabase(db);
     }
     return DatabaseWriteQueue.instance;
+  }
+
+  /**
+   * Set the database for the write queue
+   */
+  setDatabase(db: any): void {
+    this.db = db;
+  }
+
+  /**
+   * Get the database, with lazy loading fallback
+   */
+  private getDb(): any {
+    if (!this.db) {
+      this.db = getDatabase();
+    }
+    return this.db;
   }
 
   /**
@@ -183,7 +202,8 @@ export class DatabaseWriteQueue {
     this.isFlushing = true;
 
     try {
-      if (!this.db) {
+      const db = this.getDb();
+      if (!db) {
         logWarn('[DatabaseWriteQueue] Database not initialized');
         return;
       }
@@ -212,7 +232,7 @@ export class DatabaseWriteQueue {
       if (processedCount === 0) return;
 
       // Execute all batches in a single transaction
-      this.db.transaction(() => {
+      db.transaction(() => {
         for (const [key, batch] of batches) {
           try {
             this.executeBatchSync(key, batch);
@@ -437,7 +457,7 @@ export class DatabaseWriteQueue {
           symbolStmt.run([
             op.data.sha,
             op.data.path,
-            s.semanticId || s.id,
+            s.id, // symbol_id is now the DNA hash
             s.id, // dna_id is the DNA hash
             s.name,
             s.kind,

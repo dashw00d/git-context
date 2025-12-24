@@ -22,7 +22,7 @@ export interface SymbolInfo {
   semanticId?: string; // Legacy field, kept for compatibility
   filePath: string; // File path where symbol is located
   name: string;
-  kind: 'function' | 'class' | 'method' | 'const' | 'interface' | 'type' | 'variable';
+  kind: 'function' | 'class' | 'method' | 'const' | 'interface' | 'type' | 'variable' | 'enum' | 'trait';
   signature: string;
   bodyHash?: string;
   location: {
