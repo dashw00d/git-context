@@ -16,11 +16,11 @@
     - [x] Implement fixes (ensure detector logic is correctly exercised)
 - [~] Task: Conductor - User Manual Verification 'Update Sandbox Test Assertions' (Protocol in workflow.md)
 
-## Phase 3: Refine Test Execution Logic
+## Phase 3: Refine Test Execution Logic [checkpoint: a9f8818]
 - [x] Task: Align test pipeline invocation with current `AnalysisCoordinator` patterns cd25c75
-    - [ ] Write Tests (identify mismatches in how tests call the pipeline)
-    - [ ] Implement Logic Refinement (update test setup/teardown and invocation)
-- [ ] Task: Conductor - User Manual Verification 'Refine Test Execution Logic' (Protocol in workflow.md)
+    - [x] Write Tests (identify mismatches in how tests call the pipeline)
+    - [x] Implement Logic Refinement (update test setup/teardown and invocation)
+- [x] Task: Conductor - User Manual Verification 'Refine Test Execution Logic' (Protocol in workflow.md) a9f8818
 
 ## Phase 4: Final Verification
 - [ ] Task: Run full integration suite against mock fixtures
