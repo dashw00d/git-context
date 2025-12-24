@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
 import { setupSandboxRepo, SANDBOX_DIR } from '../fixtures/setupSandbox';
-import { DatabaseManager } from '../../src/storage/database';
+import { getDatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
 import { GitOperations } from '../../src/analysis/git';
 import { CommitIndexer } from '../../src/analysis/commitIndexer';
 import { WorkspaceIndexer } from '../../src/analysis/workspaceIndexer';
@@ -33,9 +33,6 @@ import { EmbeddingIndexer } from '../../src/analysis/embeddingIndexer';
 import { BundleStoryEngine } from '../../src/analysis/bundleStoryEngine';
 import { LlmAnalyst } from '../../src/analysis/llmAnalyst/runner';
 import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
-import { setDatabaseManagerForTesting } from '../../src/storage/database';
-
-const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-steps.db');
 
 describe('Pipeline Steps Verification', () => {
   let repoPath: string;
@@ -57,7 +54,12 @@ describe('Pipeline Steps Verification', () => {
     // Change to sandbox directory - keep it for entire test lifecycle
     process.chdir(repoPath);
 
-    dbManager = new DatabaseManager(TEST_DB_PATH);
+    // Reset singleton to ensure we get a fresh instance for this test's repo directory
+    setDatabaseManagerForTesting(null);
+
+    // Use the default database singleton (created at gitRoot/.git/commit-tracker/...)
+    // This avoids the database mismatch issue where the DatabaseWriteQueue uses a different DB
+    dbManager = getDatabaseManager();
     await dbManager.initialize();
     db = dbManager.getDatabase();
 
@@ -113,14 +115,8 @@ describe('Pipeline Steps Verification', () => {
       // Ignore errors restoring directory
     }
 
-    // Reset singleton
-    setDatabaseManagerForTesting(null);
-
     if (dbManager) {
       dbManager.close();
-    }
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
     }
   });
 

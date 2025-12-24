@@ -13,7 +13,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
 import { setupSandboxRepo, SANDBOX_DIR } from '../fixtures/setupSandbox';
-import { DatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
+import { getDatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
 import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
 import { GitOperations } from '../../src/analysis/git';
 import { CommitIndexer } from '../../src/analysis/commitIndexer';
@@ -30,7 +30,6 @@ import { EmbeddingIndexer } from '../../src/analysis/embeddingIndexer';
 import { BundleStoryEngine } from '../../src/analysis/bundleStoryEngine';
 import { LlmAnalyst } from '../../src/analysis/llmAnalyst/runner';
 
-const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-invalidation.db');
 
 describe('Invalidation Integration', () => {
   let repoPath: string;
@@ -45,11 +44,6 @@ describe('Invalidation Integration', () => {
     // Save original directory for restoration
     originalCwd = process.cwd();
 
-    // Wipe database file if it exists (fresh start every test run)
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
-    }
-
     // Setup sandbox repo
     const result = setupSandboxRepo();
     repoPath = result.repoPath;
@@ -58,17 +52,14 @@ describe('Invalidation Integration', () => {
     // Change to sandbox directory - keep it for entire test lifecycle
     process.chdir(repoPath);
 
-    // Create test database (fresh)
-    dbManager = new DatabaseManager(TEST_DB_PATH);
+    // Reset singleton to ensure we get a fresh instance for this test's repo directory
+    setDatabaseManagerForTesting(null);
+
+    // Use the default database singleton (created at gitRoot/.git/commit-tracker/...)
+    // This avoids the database mismatch issue where the DatabaseWriteQueue uses a different DB
+    dbManager = getDatabaseManager();
     await dbManager.initialize();
     const db = dbManager.getDatabase();
-
-    // Set the singleton to use our test database
-    // This is needed because invalidation service uses getDatabaseManager()
-    setDatabaseManagerForTesting(dbManager);
-
-    // Also set DatabaseWriteQueue to use our test database
-    DatabaseWriteQueue.getInstance(db);
 
     // Initialize git operations
     git = new GitOperations();
@@ -121,15 +112,9 @@ describe('Invalidation Integration', () => {
       // Ignore errors restoring directory
     }
 
-    // Reset singleton
-    setDatabaseManagerForTesting(null);
-
     // Clean up database
     if (dbManager) {
       dbManager.close();
-    }
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
     }
   });
 

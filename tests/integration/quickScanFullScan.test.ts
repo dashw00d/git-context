@@ -30,18 +30,17 @@ import { EmbeddingIndexer } from '../../src/analysis/embeddingIndexer';
 import { BundleStoryEngine } from '../../src/analysis/bundleStoryEngine';
 import { LlmAnalyst } from '../../src/analysis/llmAnalyst/runner';
 
-const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-quickscan-fullscan.db');
-
-describe('Quick Scan vs Full Scan', () => {
-  let repoPath: string;
-  let commits: string[];
-  let dbManager: DatabaseManager;
-  let pipeline: RefactorPipeline;
+let commits: string[];
+let repoPath: string;
+let dbManager: DatabaseManager;
+let db: any;
+let pipeline: RefactorPipeline;
   let workspaceIndexer: WorkspaceIndexer;
   let commitIndexer: CommitIndexer;
   let git: GitOperations;
   let originalCwd: string;
 
+describe('Quick Scan vs Full Scan', () => {
   beforeAll(async () => {
     // Save original directory for restoration
     originalCwd = process.cwd();
@@ -54,16 +53,15 @@ describe('Quick Scan vs Full Scan', () => {
     // Change to sandbox directory - keep it for entire test lifecycle
     process.chdir(repoPath);
 
-    // Create test database
-    dbManager = new DatabaseManager(TEST_DB_PATH);
-    await dbManager.initialize();
-    const db = dbManager.getDatabase();
+    // Reset singleton to ensure we get a fresh instance for this test's repo directory
+    const { getDatabaseManager, setDatabaseManagerForTesting } = await import('../../src/storage/database');
+    setDatabaseManagerForTesting(null);
 
-    // Set the singleton to use our test database
-    // This is needed because some services use getDatabaseManager()
-    const dbModule = await import('../../src/storage/database');
-    (dbModule as any).dbManager = dbManager;
-    DatabaseWriteQueue.getInstance(db);
+    // Use the default database singleton (created at gitRoot/.git/commit-tracker/...)
+    // This avoids the database mismatch issue where the DatabaseWriteQueue uses a different DB
+    dbManager = getDatabaseManager();
+    await dbManager.initialize();
+    db = dbManager.getDatabase();
 
     // Initialize git operations
     git = new GitOperations();
@@ -117,12 +115,9 @@ describe('Quick Scan vs Full Scan', () => {
       // Ignore errors restoring directory
     }
 
-    // Clean up database
+    // Clean up database - close only, don't delete (it's in the sandbox repo)
     if (dbManager) {
       dbManager.close();
-    }
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
     }
   });
 

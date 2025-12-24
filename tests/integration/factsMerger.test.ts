@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
 import { setupSandboxRepo, SANDBOX_DIR } from '../fixtures/setupSandbox';
-import { DatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
+import { getDatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
 import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
 import { GitOperations } from '../../src/analysis/git';
 import { CommitIndexer } from '../../src/analysis/commitIndexer';
@@ -31,7 +31,6 @@ import { LlmAnalyst } from '../../src/analysis/llmAnalyst/runner';
 import { mergeFacts } from '../../src/facts/factsMerger';
 import type { RefactorBundleFacts } from '../../src/facts/types';
 
-const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-factsMerger.db');
 
 describe('Facts Merger Integration', () => {
   let repoPath: string;
@@ -54,14 +53,14 @@ describe('Facts Merger Integration', () => {
     // Change to sandbox directory
     process.chdir(repoPath);
 
-    // Create test database
-    dbManager = new DatabaseManager(TEST_DB_PATH);
+    // Reset singleton to ensure we get a fresh instance for this test's repo directory
+    setDatabaseManagerForTesting(null);
+
+    // Use the default database singleton (created at gitRoot/.git/commit-tracker/...)
+    // This avoids the database mismatch issue where the DatabaseWriteQueue uses a different DB
+    dbManager = getDatabaseManager();
     await dbManager.initialize();
     const db = dbManager.getDatabase();
-
-    // Set the singleton to use our test database
-    setDatabaseManagerForTesting(dbManager);
-    DatabaseWriteQueue.getInstance(db);
 
     // Initialize git operations
     git = new GitOperations();
@@ -115,15 +114,9 @@ describe('Facts Merger Integration', () => {
       // Ignore errors restoring directory
     }
 
-    // Reset singleton
-    setDatabaseManagerForTesting(null);
-
     // Clean up database
     if (dbManager) {
       dbManager.close();
-    }
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
     }
   });
 

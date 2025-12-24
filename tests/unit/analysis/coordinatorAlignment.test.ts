@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
 import { setupSandboxRepo, SANDBOX_DIR } from '../../fixtures/setupSandbox';
-import { DatabaseManager, setDatabaseManagerForTesting } from '../../../src/storage/database';
+import { getDatabaseManager, setDatabaseManagerForTesting } from '../../../src/storage/database';
 import { DatabaseWriteQueue } from '../../../src/storage/databaseWriteQueue';
 import { AnalysisCoordinator, getAnalysisCoordinator } from '../../../src/services/analysisCoordinator';
 import { getStore } from '../../../src/state/store';
@@ -17,7 +17,6 @@ vi.mock('vscode', () => ({
   }
 }));
 
-const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-coordinator.db');
 
 describe('AnalysisCoordinator Alignment', () => {
   let repoPath: string;
@@ -36,12 +35,13 @@ describe('AnalysisCoordinator Alignment', () => {
 
     process.chdir(repoPath);
 
-    dbManager = new DatabaseManager(TEST_DB_PATH);
+    // Reset singleton to ensure we get a fresh instance for this test's repo directory
+    setDatabaseManagerForTesting(null);
+
+    // Use the default database singleton (created at gitRoot/.git/commit-tracker/...)
+    // This avoids the database mismatch issue where the DatabaseWriteQueue uses a different DB
+    dbManager = getDatabaseManager();
     await dbManager.initialize();
-    setDatabaseManagerForTesting(dbManager);
-    
-    // Initialize write queue with test database
-    DatabaseWriteQueue.getInstance().setDatabase(dbManager.getDatabase());
 
     coordinator = getAnalysisCoordinator();
   });
@@ -54,16 +54,15 @@ describe('AnalysisCoordinator Alignment', () => {
     } catch (error) {}
 
     if (dbManager) dbManager.close();
-    if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
   });
 
   it('should successfully run frame analysis through coordinator', async () => {
     // requestFrameAnalysis uses the pipeline and dispatches actions
     const result = await coordinator.requestFrameAnalysis(commits);
-    
+
     expect(result).toBeDefined();
     expect(result.bundleFacts).toBeDefined();
-    
+
     // Verify facts are present (using values confirmed in Phase 2)
     // Working symbols should be around 63 after all 6 commits
     expect(result.bundleFacts?.working?.symbols).toBe(63);
@@ -73,13 +72,13 @@ describe('AnalysisCoordinator Alignment', () => {
     // We can't easily check the real store unless we spy on dispatch
     const store = getStore();
     const spy = vi.spyOn(store, 'dispatch');
-    
+
     await coordinator.requestFrameAnalysis([commits[0]]);
-    
+
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({
       type: 'ANALYSIS_STARTED'
     }));
-    
+
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({
       type: 'ANALYSIS_COMPLETED'
     }));

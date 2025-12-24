@@ -41,7 +41,7 @@ describe('DNA Integration Tests', () => {
       const dna2 = await computeSymbolDNA(symbol, bodyText);
 
       expect(dna1).toBe(dna2);
-      expect(dna1).toHaveLength(16);
+      expect(dna1).toHaveLength(68); // dna: prefix (4) + sha256 hash (64) = 68
     });
 
     it('should produce different DNA for different structure', async () => {
@@ -83,7 +83,7 @@ describe('DNA Integration Tests', () => {
       const dna = await computeSymbolDNA(symbol, bodyText, 'typescript');
 
       expect(dna).toBeTruthy();
-      expect(dna).toHaveLength(16);
+      expect(dna).toHaveLength(68); // dna: prefix (4) + sha256 hash (64) = 68
     });
   });
 

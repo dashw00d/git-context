@@ -97,6 +97,14 @@ export class DatabaseManager {
     console.log(`DatabaseManager initialized with path: ${this.dbPath}`);
   }
 
+  /**
+   * Get the raw SQL.js database instance (for internal use by DatabaseWriteQueue)
+   * This bypasses the proxy wrapper and returns the actual Database object
+   */
+  getRawDatabase(): Database | null {
+    return this.db;
+  }
+
   getDatabase(): any {
     if (!this.db) {
       // Return null instead of throwing - allows callers to check gracefully

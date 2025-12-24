@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
 import { setupSandboxRepo, SANDBOX_DIR } from '../fixtures/setupSandbox';
-import { DatabaseManager } from '../../src/storage/database';
+import { getDatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
 import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
 import { GitOperations } from '../../src/analysis/git';
 import { CommitIndexer } from '../../src/analysis/commitIndexer';
@@ -29,7 +29,6 @@ import { HotspotDetectorV2 } from '../../src/analysis/hotspotDetector';
 import { MovedBlockDetectorV2 } from '../../src/analysis/movedBlockDetector';
 import { LlmAnalyst } from '../../src/analysis/llmAnalyst/runner';
 
-const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-commit-tracker.db');
 
 describe('Full Pipeline Integration', () => {
   let repoPath: string;
@@ -52,15 +51,14 @@ describe('Full Pipeline Integration', () => {
     // This ensures getGitRoot() works correctly throughout the test
     process.chdir(repoPath);
 
-    // Create test database with custom path for isolation
-    // Note: Production uses ensureDatabaseInitialized() + getDatabaseManager(),
-    // but we use custom path for test isolation
-    dbManager = new DatabaseManager(TEST_DB_PATH);
+    // Reset singleton to ensure we get a fresh instance for this test's repo directory
+    setDatabaseManagerForTesting(null);
+
+    // Use the default database singleton (created at gitRoot/.git/commit-tracker/...)
+    // This avoids the database mismatch issue where the DatabaseWriteQueue uses a different DB
+    dbManager = getDatabaseManager();
     await dbManager.initialize();
     const db = dbManager.getDatabase();
-
-    // Ensure DatabaseWriteQueue uses the test database
-    DatabaseWriteQueue.getInstance().setDatabase(db);
 
     // Initialize git operations for sandbox repo
     // GitOperations will use getGitRoot() which now points to repoPath
@@ -118,9 +116,6 @@ describe('Full Pipeline Integration', () => {
     // Clean up database
     if (dbManager) {
       dbManager.close();
-    }
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
     }
   });
 

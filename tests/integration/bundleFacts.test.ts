@@ -12,7 +12,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as path from 'path';
 import * as fs from 'fs';
 import { setupSandboxRepo, SANDBOX_DIR } from '../fixtures/setupSandbox';
-import { DatabaseManager } from '../../src/storage/database';
+import { getDatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
 import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
 import { GitOperations } from '../../src/analysis/git';
 import { CommitIndexer } from '../../src/analysis/commitIndexer';
@@ -29,7 +29,6 @@ import { HotspotDetectorV2 } from '../../src/analysis/hotspotDetector';
 import { MovedBlockDetectorV2 } from '../../src/analysis/movedBlockDetector';
 import { LlmAnalyst } from '../../src/analysis/llmAnalyst/runner';
 
-const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-bundleFacts.db');
 
 describe('BundleFacts Structure Verification', () => {
   let repoPath: string;
@@ -49,7 +48,12 @@ describe('BundleFacts Structure Verification', () => {
     // Change to sandbox directory - keep it for entire test lifecycle
     process.chdir(repoPath);
 
-    dbManager = new DatabaseManager(TEST_DB_PATH);
+    // Reset singleton to ensure we get a fresh instance for this test's repo directory
+    setDatabaseManagerForTesting(null);
+
+    // Use the default database singleton (created at gitRoot/.git/commit-tracker/...)
+    // This avoids the database mismatch issue where the DatabaseWriteQueue uses a different DB
+    dbManager = getDatabaseManager();
     await dbManager.initialize();
     const db = dbManager.getDatabase();
 
@@ -101,9 +105,6 @@ describe('BundleFacts Structure Verification', () => {
 
     if (dbManager) {
       dbManager.close();
-    }
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
     }
   });
 

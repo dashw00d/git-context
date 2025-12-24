@@ -1135,7 +1135,7 @@ export class GitOperations {
           }
 
           unstaged.push({
-            path: filePath,
+            path: GitOperations.normalizePath(filePath),
             status: changeStatus,
           });
         }

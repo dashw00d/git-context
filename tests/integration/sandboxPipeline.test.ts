@@ -23,10 +23,12 @@ import { SymbolInfo } from '../../src/types';
 import { getTreeSitterParser } from '../../src/analysis/tree-sitter';
 import { detectLanguage } from '../../src/utils/config';
 import { getRefactorPipeline } from '../../src/services/pipelineFactory';
-import { DatabaseManager, setDatabaseManagerForTesting } from '../../src/storage/database';
+import {
+  getDatabaseManager,
+  setDatabaseManagerForTesting,
+  type DatabaseManager,
+} from '../../src/storage/database';
 import { DatabaseWriteQueue } from '../../src/storage/databaseWriteQueue';
-
-const TEST_DB_PATH = path.join(SANDBOX_DIR, 'test-pipeline.db');
 
 // Helper to get file content directly from git in sandbox repo
 function getGitContent(repo: string, sha: string, filePath: string): string {
@@ -46,8 +48,16 @@ async function extractSymbols(content: string, filePath: string): Promise<Symbol
   const facts = await parser.extractHybridFacts(content, filePath, language);
 
   const symbolKinds = new Set([
-    'function', 'method', 'class', 'const', 'variable',
-    'interface', 'enum', 'module', 'type', 'type_alias',
+    'function',
+    'method',
+    'class',
+    'const',
+    'variable',
+    'interface',
+    'enum',
+    'module',
+    'type',
+    'type_alias',
   ]);
 
   return facts.filter(f => symbolKinds.has(f.kind)) as SymbolInfo[];
@@ -69,10 +79,13 @@ describe('Comprehensive Sandbox Pipeline Tests', () => {
 
     process.chdir(repoPath);
 
-    dbManager = new DatabaseManager(TEST_DB_PATH);
+    // Reset singleton to ensure we get a fresh instance for this test's repo directory
+    setDatabaseManagerForTesting(null);
+
+    // Use the default database singleton (created at gitRoot/.git/commit-tracker/...)
+    // This avoids the database mismatch issue where the DatabaseWriteQueue uses a different DB
+    dbManager = getDatabaseManager();
     await dbManager.initialize();
-    setDatabaseManagerForTesting(dbManager);
-    DatabaseWriteQueue.getInstance().setDatabase(dbManager.getDatabase());
 
     // Initialize extractor
     dependencyExtractor = new DependencyExtractor();
@@ -86,7 +99,6 @@ describe('Comprehensive Sandbox Pipeline Tests', () => {
     } catch (error) {}
 
     if (dbManager) dbManager.close();
-    if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
   });
 
   describe('Repository Structure Verification', () => {
@@ -145,7 +157,7 @@ describe('Comprehensive Sandbox Pipeline Tests', () => {
         'src/ts/types.ts',
         'src/js/utils.js',
         'src/php/User.php',
-        'src/php/helpers.php'
+        'src/php/helpers.php',
       ];
 
       let totalSymbols = 0;
@@ -334,7 +346,11 @@ describe('Comprehensive Sandbox Pipeline Tests', () => {
       expect(content).toBeTruthy();
 
       const symbols = await extractSymbols(content, 'src/ts/Calculator.ts');
-      const edges = dependencyExtractor.extractDependencies(content, 'src/ts/Calculator.ts', symbols);
+      const edges = dependencyExtractor.extractDependencies(
+        content,
+        'src/ts/Calculator.ts',
+        symbols
+      );
 
       const importEdges = edges.filter(e => e.type === 'imports');
       expect(importEdges.length).toBeGreaterThan(0);
@@ -370,7 +386,11 @@ describe('Comprehensive Sandbox Pipeline Tests', () => {
       expect(content).toBeTruthy();
 
       const symbols = await extractSymbols(content, 'src/php/UserController.php');
-      const edges = dependencyExtractor.extractDependencies(content, 'src/php/UserController.php', symbols);
+      const edges = dependencyExtractor.extractDependencies(
+        content,
+        'src/php/UserController.php',
+        symbols
+      );
 
       const importEdges = edges.filter(e => e.type === 'imports');
       expect(importEdges.length).toBeGreaterThan(0);

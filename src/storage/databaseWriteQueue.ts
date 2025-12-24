@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { normalizeEdgeIdForStorage } from '../utils/edgeNormalization';
 import { logDebug, logInfo, logWarn } from '../utils/logger';
-import { getDatabase } from './database';
+import { getDatabaseManager } from './database';
 import { ANALYSIS_VERSION } from './schema';
 import type { CommitFacts } from '../analysis/commitIndexer';
 import type { MovedBlock } from '../analysis/movedBlockDetector';
@@ -155,6 +155,7 @@ export class DatabaseWriteQueue {
   private readonly FLUSH_INTERVAL_MS = 2000; // Auto-flush every 2s (more frequent checks)
   private db: any;
   private isFlushing = false;
+  private transactionDepth = 0;
 
   private constructor(db?: any) {
     this.db = db;
@@ -164,6 +165,10 @@ export class DatabaseWriteQueue {
   static getInstance(db?: any): DatabaseWriteQueue {
     if (!DatabaseWriteQueue.instance) {
       DatabaseWriteQueue.instance = new DatabaseWriteQueue(db);
+      // If db was provided, ensure we extract raw database
+      if (db) {
+        DatabaseWriteQueue.instance.setDatabase(db);
+      }
     } else if (db && !DatabaseWriteQueue.instance.db) {
       DatabaseWriteQueue.instance.setDatabase(db);
     }
@@ -172,17 +177,31 @@ export class DatabaseWriteQueue {
 
   /**
    * Set the database for the write queue
+   * If db is a proxy wrapper, extracts the raw database instance
    */
   setDatabase(db: any): void {
-    this.db = db;
+    // Always get the raw database from the manager to ensure we have
+    // direct access to SQL.js statements with free() method
+    try {
+      const dbManager = getDatabaseManager();
+      this.db = dbManager.getRawDatabase();
+    } catch {
+      // Fallback: assume db is already raw (for backwards compatibility)
+      this.db = db;
+    }
   }
 
   /**
    * Get the database, with lazy loading fallback
+   * Returns the raw SQL.js database instance (not the proxy wrapper)
    */
   private getDb(): any {
     if (!this.db) {
-      this.db = getDatabase();
+      // Get the raw database instance, not the proxy wrapper
+      // The proxy wrapper's prepare() returns statements that are auto-freed,
+      // but we need to manage statement lifecycle ourselves
+      const dbManager = getDatabaseManager();
+      this.db = dbManager.getRawDatabase();
     }
     return this.db;
   }
@@ -252,27 +271,36 @@ export class DatabaseWriteQueue {
       if (processedCount === 0) return;
 
       // Execute all batches in a single transaction
-      db.transaction(() => {
+      // Use DatabaseManager's transaction method via the proxy database
+      // to handle transaction depth tracking and saving
+      const dbManager = getDatabaseManager();
+      const proxyDb = dbManager.getDatabase();
+
+      if (!proxyDb || !proxyDb.transaction) {
+        logWarn('[DatabaseWriteQueue] Cannot get transaction method, executing without transaction');
+        // Fallback: execute without transaction
         for (const [key, batch] of batches) {
           try {
             this.executeBatchSync(key, batch);
           } catch (error) {
             logWarn(`[DatabaseWriteQueue] Failed to execute batch for ${key}: ${error}`);
-            // We can't easily re-queue inside a transaction without complicating logic
-            // Log error and continue (or re-throw to rollback everything)
-            // For now, we log and proceed to try to save the rest
           }
         }
-      })();
-
-      // Explicitly save after transaction completes
-      // The transaction wrapper saves, but we ensure it happens here too
-      // Get DatabaseManager through getDatabaseManager
-      const { getDatabaseManager } = await import('./database');
-      const dbManager = getDatabaseManager();
-      if (dbManager) {
-        dbManager.save();
-        logDebug('[DatabaseWriteQueue] Explicitly saved database after flush');
+        if (dbManager) {
+          dbManager.save();
+        }
+      } else {
+        // Use proxy database's transaction method
+        proxyDb.transaction(() => {
+          for (const [key, batch] of batches) {
+            try {
+              this.executeBatchSync(key, batch);
+            } catch (error) {
+              logWarn(`[DatabaseWriteQueue] Failed to execute batch for ${key}: ${error}`);
+              // Continue with other batches even if one fails
+            }
+          }
+        })();
       }
 
       // Diagnostic logging

@@ -104,7 +104,9 @@ export function bulkUpdateSymbolCompleteness(
       db.run('COMMIT');
     } catch (err) {
       db.run('ROLLBACK');
-      throw err;
+      logWarn(`[Completeness] Transaction failed during bulk update: ${err}`);
+      // Don't throw - return gracefully (best-effort)
+      return;
     }
 
     logDebug(

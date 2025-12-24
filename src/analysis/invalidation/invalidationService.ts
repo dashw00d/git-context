@@ -6,6 +6,7 @@
 
 import { prepare } from '../../storage/statement-wrapper';
 import { logDebug, logInfo, logWarn } from '../../utils/logger';
+import { GitOperations } from '../git';
 
 /**
  * Options for invalidation operations
@@ -65,6 +66,9 @@ export async function invalidateFileSymbols(
   filePath: string,
   options: InvalidationOptions = {}
 ): Promise<InvalidationResult> {
+  // Normalize path to match how paths are stored in the database
+  const normalizedPath = GitOperations.normalizePath(filePath);
+
   const result: InvalidationResult = {
     symbolsInvalidated: 0,
     edgesInvalidated: 0,
@@ -72,14 +76,14 @@ export async function invalidateFileSymbols(
   };
 
   try {
-    logInfo(`[Invalidation] Invalidating symbols for ${filePath}@${sha.substring(0, 8)}`);
+    logInfo(`[Invalidation] Invalidating symbols for ${normalizedPath}@${sha.substring(0, 8)}`);
 
     if (options.markStale) {
       // Mark as stale instead of deleting
-      result.symbolsInvalidated = await markFileSymbolsStale(sha, filePath);
+      result.symbolsInvalidated = await markFileSymbolsStale(sha, normalizedPath);
     } else {
       // Delete symbols and edges
-      const deleteResult = await deleteFileSymbols(sha, filePath);
+      const deleteResult = await deleteFileSymbols(sha, normalizedPath);
       result.symbolsInvalidated = deleteResult.symbols;
       result.edgesInvalidated = deleteResult.edges;
     }
@@ -90,7 +94,7 @@ export async function invalidateFileSymbols(
 
     // Cascade invalidation if requested
     if (options.cascade) {
-      result.dependentsMarkedStale = await cascadeInvalidation(sha, filePath);
+      result.dependentsMarkedStale = await cascadeInvalidation(sha, normalizedPath);
     }
 
     logDebug(
@@ -291,13 +295,16 @@ export async function invalidateCommit(
  * Check if a file needs re-analysis based on completeness
  */
 export function isFileStale(sha: string, filePath: string): boolean {
+  // Normalize path to match how paths are stored in the database
+  const normalizedPath = GitOperations.normalizePath(filePath);
+
   try {
     const stmt = prepare(`
       SELECT completeness_flags FROM symbols
       WHERE sha = ? AND path = ?
       LIMIT 1
     `);
-    const row = stmt.get(sha, filePath) as { completeness_flags: string } | undefined;
+    const row = stmt.get(sha, normalizedPath) as { completeness_flags: string } | undefined;
     stmt.free?.();
 
     if (!row) {
