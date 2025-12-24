@@ -912,8 +912,8 @@ export class WorkspaceIndexer {
                     signature: s.signature,
                     location: s.location,
                     filePath: filePath,
-                    sha: headSha,  // Add SHA for path+sha ID
-                    complete: false,  // Mark quick scan as incomplete
+                    sha: headSha, // Add SHA for path+sha ID
+                    complete: false, // Mark quick scan as incomplete
                   });
 
                   // Persist if requested
@@ -927,7 +927,7 @@ export class WorkspaceIndexer {
                         path: filePath,
                         symbol: s as any,
                         changeType: 'quick_scan', // Marker for quick scan
-                        isDna: true
+                        isDna: true,
                       },
                     });
 
@@ -939,7 +939,7 @@ export class WorkspaceIndexer {
                         path: filePath,
                         symbol: s as any,
                         changeType: 'quick_scan',
-                        isDna: false
+                        isDna: false,
                       },
                     });
                   }

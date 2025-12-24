@@ -567,7 +567,14 @@ export class CommitIndexer {
     logDebug(`[CommitIndexer] 🕐 Snapshot creation for ${path}: ${Date.now() - snapshotTime}ms`);
 
     const hybridFactsTime = Date.now();
-    await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols, undefined, priority);
+    await this.extractAndSaveHybridFacts(
+      path,
+      sha,
+      currentContent,
+      currentSnapshot.symbols,
+      undefined,
+      priority
+    );
     logDebug(
       `[CommitIndexer] 🕐 extractAndSaveHybridFacts for ${path}: ${Date.now() - hybridFactsTime}ms`
     );
@@ -600,7 +607,14 @@ export class CommitIndexer {
       const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path, plan));
 
       if (parentBlobSha === currentBlobSha) {
-        await this.extractAndSaveHybridFacts(path, sha, currentContent, currentSnapshot.symbols, undefined, priority);
+        await this.extractAndSaveHybridFacts(
+          path,
+          sha,
+          currentContent,
+          currentSnapshot.symbols,
+          undefined,
+          priority
+        );
         return result;
       }
 

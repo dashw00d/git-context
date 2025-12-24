@@ -4,8 +4,8 @@ import { getRefactorPipeline } from './pipelineFactory';
 import { getReportService } from './reportService';
 import type { RefactorPipeline } from '../analysis/refactorPipeline';
 import type { PipelineState } from '../analysis/runner/pipelineTypes';
-import type { CancellationToken } from 'vscode';
 import type { FileChange } from '../types';
+import type { CancellationToken } from 'vscode';
 
 /**
  * AnalysisCoordinator - Single entry point for all analysis requests

@@ -410,7 +410,10 @@ function getIntendedLists(intended: Map<string, IntendedState>): {
   return { present, absent, renamed };
 }
 
-function getWorkingLists(working: WorkingSnapshot, newestSha: string): {
+function getWorkingLists(
+  working: WorkingSnapshot,
+  newestSha: string
+): {
   symbols: any[]; // Full symbol objects for FrameAnalyzer compatibility
   edges: string[];
 } {
@@ -425,8 +428,8 @@ function getWorkingLists(working: WorkingSnapshot, newestSha: string): {
         signature: s.signature || '',
         location: s.loc_post || s.loc_pre || null,
         filePath: s.filePath || filePath || '',
-        sha: newestSha,  // Add SHA (from commit context)
-        complete: true,  // Mark full pipeline as complete
+        sha: newestSha, // Add SHA (from commit context)
+        complete: true, // Mark full pipeline as complete
       });
     }
   }
