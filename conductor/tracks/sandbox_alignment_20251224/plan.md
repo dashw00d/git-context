@@ -1,11 +1,11 @@
 # Track Plan: Align Sandbox Tests with Pipeline
 
-## Phase 1: Analysis & Data Preparation
+## Phase 1: Analysis & Data Preparation [checkpoint: 31be21a]
 - [x] Task: Audit mock fixtures and manually calculate expected metrics (symbols, hotspots, drift) 6215d33
     - [ ] Analyze mock git history in fixtures
     - [ ] Document expected symbol counts per commit
     - [ ] Document expected hotspot and drift values
-- [~] Task: Conductor - User Manual Verification 'Analysis & Data Preparation' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Analysis & Data Preparation' (Protocol in workflow.md)
 
 ## Phase 2: Update Sandbox Test Assertions
 - [ ] Task: Update symbol extraction assertions in sandbox tests
