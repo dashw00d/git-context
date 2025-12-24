@@ -15,14 +15,13 @@ export const CommitShaSchema = z
 
 export const DnaHashSchema = z
   .string()
-  .refine(val => /^dna:[a-f0-9]{64}$/.test(val), { message: 'Invalid DNA hash format' });
+  .refine(val => /^[a-f0-9]{16}$/.test(val), { message: 'Invalid DNA hash format' });
 
 export const SymbolIdSchema = z
   .string()
-  .refine(
-    val => /^dna:[a-f0-9]{64}$/.test(val) || /^symbol:\d+$/.test(val) || /.+:.+:.+/.test(val),
-    { message: 'Invalid symbol ID format' }
-  );
+  .refine(val => /^[a-f0-9]{16}$/.test(val) || /^symbol:\d+$/.test(val) || /.+:.+:.+/.test(val), {
+    message: 'Invalid symbol ID format',
+  });
 
 // ============================================================================
 // IntendedState Schema

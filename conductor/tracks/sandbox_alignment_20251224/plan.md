@@ -23,6 +23,6 @@
 - [x] Task: Conductor - User Manual Verification 'Refine Test Execution Logic' (Protocol in workflow.md) a9f8818
 
 ## Phase 4: Final Verification
-- [ ] Task: Run full integration suite against mock fixtures
+- [~] Task: Run full integration suite against mock fixtures
     - [ ] Execute tests and verify all assertions pass
 - [ ] Task: Conductor - User Manual Verification 'Final Verification' (Protocol in workflow.md)

@@ -20,16 +20,17 @@ export function mergeFacts(
   if (newFacts.evidence) {
     if (!merged.evidence) merged.evidence = {};
 
-    // Merge working.symbols (deduplicate by filePath + sha + ID to prevent cross-file collisions)
+    // Merge working.symbols (deduplicate by filePath + sha + name to prevent cross-file collisions)
+    // Use name instead of id (DNA) because DNA varies between extraction methods (quick scan vs full scan)
     if (newFacts.evidence['working.symbols']) {
       const existingSymbols = (merged.evidence['working.symbols'] as any[]) || [];
       const newSymbols = (newFacts.evidence['working.symbols'] as any[]) || [];
-      // Use filePath:sha:id as the key for path+sha identity
+      // Use filePath:sha:name as the key - name is stable across extraction methods
       const getSymbolKey = (s: any) => {
-        const id = s.id || s.name;
+        const name = s.name || s.id;
         const path = s.filePath || '';
         const sha = s.sha || ''; // Include sha in key for path+sha identity
-        return `${path}:${sha}:${id}`;
+        return `${path}:${sha}:${name}`;
       };
       const symbolMap = new Map(existingSymbols.map(s => [getSymbolKey(s), s]));
 

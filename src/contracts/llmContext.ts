@@ -95,6 +95,7 @@ export interface SymbolContext {
   mod_reason?: ModReason;
   diff_snippet_pre?: string;
   diff_snippet_post?: string;
+  change_type?: ChangeType; // Type of change (added, modified, removed, etc.)
 }
 
 export interface EdgeContext {

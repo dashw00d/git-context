@@ -430,6 +430,7 @@ function getWorkingLists(
         filePath: s.filePath || filePath || '',
         sha: newestSha, // Add SHA (from commit context)
         complete: true, // Mark full pipeline as complete
+        changeType: s.change_type || 'modified', // Use change_type from symbol data, default to 'modified'
       });
     }
   }

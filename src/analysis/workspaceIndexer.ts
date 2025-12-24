@@ -911,7 +911,7 @@ export class WorkspaceIndexer {
                     kind: s.kind,
                     signature: s.signature,
                     location: s.location,
-                    filePath: filePath,
+                    filePath: GitOperations.normalizePath(filePath), // Normalize for consistency with full scan
                     sha: headSha, // Add SHA for path+sha ID
                     complete: false, // Mark quick scan as incomplete
                   });

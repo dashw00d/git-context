@@ -172,16 +172,8 @@ export async function computeHybridDna(
   bodyText?: string,
   language?: string
 ): Promise<string> {
-  if (isCstFact(fact)) {
-    const parts = [
-      fact.kind,
-      fact.name,
-      fact.level !== undefined ? String(fact.level) : '',
-      fact.bodyShape,
-      String(fact.timeline.length),
-    ];
-    return crypto.createHash('sha256').update(parts.join('::')).digest('hex').substring(0, 16);
-  } else {
-    return computeSymbolDNA(fact, bodyText, language);
-  }
+  // Always use computeSymbolDNA for consistent IDs between quick scan and full scan
+  // Previously CST facts used a different algorithm which caused ID mismatches
+  // Cast to SymbolInfo since HybridFact has compatible properties (kind, signature)
+  return computeSymbolDNA(fact as unknown as SymbolInfo, bodyText, language);
 }

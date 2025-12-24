@@ -59,6 +59,9 @@ describe('Full Pipeline Integration', () => {
     await dbManager.initialize();
     const db = dbManager.getDatabase();
 
+    // Ensure DatabaseWriteQueue uses the test database
+    DatabaseWriteQueue.getInstance().setDatabase(db);
+
     // Initialize git operations for sandbox repo
     // GitOperations will use getGitRoot() which now points to repoPath
     git = new GitOperations();
@@ -268,7 +271,7 @@ describe('Full Pipeline Integration', () => {
       // Verify findings structure
       expect(facts.findings).toBeDefined();
       expect(facts.findings.patternDrift).toBeDefined();
-      expect(facts.findings.legacySummary).toBeDefined();
+      expect(facts.findings.legacyAudit).toBeDefined(); // legacyAudit, not legacySummary
     });
 
     it('should handle multiple commits correctly', async () => {

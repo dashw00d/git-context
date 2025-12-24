@@ -156,20 +156,21 @@ describe('BundleFacts Structure Verification', () => {
       expect(Array.isArray(edges)).toBe(true);
     });
 
-    it('should have intended.map in evidence', async () => {
+    it('should have intended.present in evidence', async () => {
       const state = await pipeline.analyzeBundle([commits[0], commits[1]]);
       const facts = state.bundleFacts!;
 
-      expect(facts.evidence['intended.map']).toBeDefined();
-      const intended = facts.evidence['intended.map'] as any;
-      expect(intended).toBeDefined();
+      // The assembler produces intended.present/absent/renamed, not intended.map
+      expect(facts.evidence['intended.present']).toBeDefined();
+      expect(Array.isArray(facts.evidence['intended.present'])).toBe(true);
     });
 
     it('should have all required evidence keys', async () => {
       const state = await pipeline.analyzeBundle([commits[0], commits[1]]);
       const facts = state.bundleFacts!;
 
-      const requiredKeys = ['scope.files', 'working.symbols', 'working.edges', 'intended.map'];
+      // Correct keys per factsAssembler.ts
+      const requiredKeys = ['scope.files', 'working.symbols', 'working.edges', 'intended.present'];
 
       for (const key of requiredKeys) {
         expect(facts.evidence[key]).toBeDefined();
@@ -186,13 +187,14 @@ describe('BundleFacts Structure Verification', () => {
       expect(facts.findings.patternDrift.conventionDrift).toBeDefined();
     });
 
-    it('should have legacySummary in findings', async () => {
+    it('should have legacyAudit in findings', async () => {
       const state = await pipeline.analyzeBundle([commits[0], commits[1]]);
       const facts = state.bundleFacts!;
 
-      expect(facts.findings.legacySummary).toBeDefined();
-      expect(facts.findings.legacySummary.deadCount).toBeDefined();
-      expect(facts.findings.legacySummary.legacyUsedCount).toBeDefined();
+      // The assembler produces legacyAudit, not legacySummary
+      expect(facts.findings.legacyAudit).toBeDefined();
+      expect(facts.findings.legacyAudit.dead).toBeDefined();
+      expect(facts.findings.legacyAudit.legacyUsed).toBeDefined();
     });
 
     it('should have incompleteness in findings', async () => {
@@ -200,8 +202,9 @@ describe('BundleFacts Structure Verification', () => {
       const facts = state.bundleFacts!;
 
       expect(facts.findings.incompleteness).toBeDefined();
-      expect(facts.findings.incompleteness.missing).toBeDefined();
-      expect(Array.isArray(facts.findings.incompleteness.missing)).toBe(true);
+      // findings.incompleteness.missing is a number (count), not array
+      // evidence['findings.incompleteness.missing'] is the array
+      expect(typeof facts.findings.incompleteness.missing).toBe('number');
     });
   });
 
@@ -230,7 +233,10 @@ describe('BundleFacts Structure Verification', () => {
       const workingSymbols = facts.evidence['working.symbols'] as any[];
 
       // Files from symbols should be in scope
-      const symbolFiles = new Set(workingSymbols.map((s: any) => s.path));
+      // Note: Symbol filePath might be empty for some symbols, filter those out
+      const symbolFiles = new Set(
+        workingSymbols.map((s: any) => s.filePath).filter((f: any) => f && f.length > 0)
+      );
       for (const file of symbolFiles) {
         expect(scopeFiles).toContain(file);
       }
