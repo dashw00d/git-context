@@ -55,3 +55,35 @@ export function extractDnaFromEdgeId(edgeId: string): string {
 export function normalizeEdgeIdForStorage(edgeId: string): string {
   return extractDnaFromEdgeId(edgeId);
 }
+
+export type ParsedEdgeId = {
+  filePath: string | null;
+  symbolId: string;
+};
+
+/**
+ * Split an edge endpoint into file path and symbol ID.
+ * Standard format: "filePath:dna:hash" or "filePath:file|module".
+ */
+export function splitEdgeId(edgeId: string): ParsedEdgeId {
+  if (!edgeId) {
+    return { filePath: null, symbolId: edgeId };
+  }
+
+  if (edgeId.startsWith('unknown:')) {
+    return { filePath: 'unknown', symbolId: edgeId.slice('unknown:'.length) };
+  }
+
+  const dnaMarker = ':dna:';
+  const dnaIndex = edgeId.indexOf(dnaMarker);
+  if (dnaIndex !== -1) {
+    return { filePath: edgeId.slice(0, dnaIndex), symbolId: edgeId.slice(dnaIndex + 1) };
+  }
+
+  const lastColon = edgeId.lastIndexOf(':');
+  if (lastColon !== -1) {
+    return { filePath: edgeId.slice(0, lastColon), symbolId: edgeId.slice(lastColon + 1) };
+  }
+
+  return { filePath: null, symbolId: edgeId };
+}

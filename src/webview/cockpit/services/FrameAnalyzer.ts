@@ -6,8 +6,9 @@ import { getTreeSitterParser } from '../../../analysis/tree-sitter';
 import { Tier1DataSchema, Tier2DataSchema, Tier3DataSchema } from '../../../state/schemas';
 import { BundleFactsDTO } from '../../../types/cockpit';
 import { detectLanguage } from '../../../utils/config';
+import { splitEdgeId } from '../../../utils/edgeNormalization';
 import { logDebug, logError, logWarn } from '../../../utils/logger';
-import { normalizeToAbsolute, normalizeToRelative } from '../../../utils/path';
+import { normalizeToAbsolute } from '../../../utils/path';
 
 type Tier1Data = {
   content: string;
@@ -290,15 +291,13 @@ export class FrameAnalyzer {
           const to = match[2];
           const type = match[3];
 
-          // Use lastIndexOf(':') to safely handle Windows paths and composite IDs
-          const lastColonFrom = from.lastIndexOf(':');
-          const lastColonTo = to.lastIndexOf(':');
-
-          const fromPath = lastColonFrom !== -1 ? from.substring(0, lastColonFrom) : from;
-          const toPath = lastColonTo !== -1 ? to.substring(0, lastColonTo) : to;
+          const fromInfo = splitEdgeId(from);
+          const toInfo = splitEdgeId(to);
+          const fromPath = fromInfo.filePath;
+          const toPath = toInfo.filePath;
 
           // Skip edges with unresolved paths (marked as 'unknown')
-          if (fromPath === 'unknown' || toPath === 'unknown') {
+          if (!fromPath || !toPath || fromPath === 'unknown' || toPath === 'unknown') {
             return;
           }
 

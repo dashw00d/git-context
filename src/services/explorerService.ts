@@ -1,6 +1,5 @@
 import { GitOperations } from '../analysis/git';
 import { BundleFactsDTO, ExplorerNode } from '../types/cockpit';
-import { getGitRoot } from '../utils/config';
 import { logInfo } from '../utils/logger';
 
 export class ExplorerService {

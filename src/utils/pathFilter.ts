@@ -21,15 +21,6 @@ export interface PathFilterResult {
   reason?: string;
 }
 
-const DEFAULT_EXCLUDED_PREFIXES = [
-  'out/',
-  'dist/',
-  'node_modules/',
-  '.git/',
-  'build/',
-  'coverage/',
-];
-
 const filterCache = new LRUCache<string, boolean>({
   max: 1000,
   ttl: 3600000,

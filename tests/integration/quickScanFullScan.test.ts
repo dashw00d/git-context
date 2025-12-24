@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { spawnSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { setupSandboxRepo, SANDBOX_DIR } from '../fixtures/setupSandbox';
@@ -39,6 +40,29 @@ let pipeline: RefactorPipeline;
   let commitIndexer: CommitIndexer;
   let git: GitOperations;
   let originalCwd: string;
+
+const resetHeadCache = (): void => {
+  (GitOperations as any).headShaCache = undefined;
+  (GitOperations as any).pendingHeadShaPromise = undefined;
+};
+
+const checkoutCommit = (sha: string): void => {
+  const result = spawnSync('git', ['checkout', '-q', sha], {
+    cwd: repoPath,
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+
+  if (result.error) {
+    throw new Error(`git checkout ${sha} failed: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    const stderr = result.stderr?.toString().trim();
+    throw new Error(`git checkout ${sha} failed: ${stderr || 'unknown error'}`);
+  }
+
+  resetHeadCache();
+};
 
 describe('Quick Scan vs Full Scan', () => {
   beforeAll(async () => {
@@ -128,6 +152,8 @@ describe('Quick Scan vs Full Scan', () => {
       // Use fixture file from sandbox repo
       const testFile = 'src/ts/math.ts';
 
+      checkoutCommit(commits[0]);
+
       // Run quick scan
       const quickScanResults = await workspaceIndexer.quickScanSymbols([testFile], {
         persist: true,
@@ -156,8 +182,7 @@ describe('Quick Scan vs Full Scan', () => {
 
       expect(quickScanDbSymbols.length).toBeGreaterThan(0);
 
-      // Now run full scan through pipeline (uses fixture commits)
-      // Use commit 0 which contains src/ts/math.ts
+      // Now run full scan through pipeline for the same HEAD snapshot
       await pipeline.analyzeBundle([commits[0]]);
       await DatabaseWriteQueue.getInstance().flushAll();
 
@@ -199,6 +224,7 @@ describe('Quick Scan vs Full Scan', () => {
 
     it('should set correct changeType for quick scan', async () => {
       const testFile = 'src/ts/math.ts';
+      checkoutCommit(commits[0]);
       const quickScanResults = await workspaceIndexer.quickScanSymbols([testFile], {
         persist: true,
         priority: false,
@@ -244,6 +270,7 @@ describe('Quick Scan vs Full Scan', () => {
       const testFile = 'src/ts/Calculator.ts';
 
       // Run quick scan
+      checkoutCommit(commits[1]);
       await workspaceIndexer.quickScanSymbols([testFile], {
         persist: true,
         priority: false,
@@ -285,6 +312,7 @@ describe('Quick Scan vs Full Scan', () => {
       const testFile = 'src/ts/math.ts';
 
       // Run quick scan first
+      checkoutCommit(commits[0]);
       await workspaceIndexer.quickScanSymbols([testFile], {
         persist: true,
         priority: false,
@@ -340,6 +368,7 @@ describe('Quick Scan vs Full Scan', () => {
       const testFile = 'src/ts/math.ts';
 
       // Run quick scan
+      checkoutCommit(commits[0]);
       const quickScanResults = await workspaceIndexer.quickScanSymbols([testFile], {
         persist: true,
         priority: false,
@@ -387,6 +416,7 @@ describe('Quick Scan vs Full Scan', () => {
       const testFile = 'src/ts/math.ts';
 
       // Run quick scan
+      checkoutCommit(commits[0]);
       await workspaceIndexer.quickScanSymbols([testFile], {
         persist: true,
         priority: false,
@@ -400,7 +430,7 @@ describe('Quick Scan vs Full Scan', () => {
 
       expect(quickScanSymbols.length).toBeGreaterThan(0);
 
-      // Run full scan (use commit 0 which contains src/ts/math.ts)
+      // Run full scan (use HEAD commit to match quick scan content)
       await pipeline.analyzeBundle([commits[0]]);
       await DatabaseWriteQueue.getInstance().flushAll();
 

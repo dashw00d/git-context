@@ -28,6 +28,7 @@ import { RiskDetector } from '../../src/analysis/heuristics';
 import { HotspotDetectorV2 } from '../../src/analysis/hotspotDetector';
 import { MovedBlockDetectorV2 } from '../../src/analysis/movedBlockDetector';
 import { LlmAnalyst } from '../../src/analysis/llmAnalyst/runner';
+import { splitEdgeId } from '../../src/utils/edgeNormalization';
 
 
 describe('BundleFacts Structure Verification', () => {
@@ -260,6 +261,59 @@ describe('BundleFacts Structure Verification', () => {
         if (edge.to) {
           expect(edge.to).toBeDefined();
         }
+      }
+    });
+
+    it('should format working.edges with path-prefixed DNA ids', async () => {
+      const state = await pipeline.analyzeBundle([commits[0], commits[1]]);
+      const facts = state.bundleFacts!;
+
+      const edges = facts.evidence['working.edges'] as string[];
+      expect(edges.length).toBeGreaterThan(0);
+
+      const invalidEdges: string[] = [];
+
+      for (const edge of edges) {
+        if (typeof edge !== 'string') {
+          invalidEdges.push(`non-string:${JSON.stringify(edge)}`);
+          continue;
+        }
+
+        const match = edge.match(/^(.+?)\s*->\s*(.+?)\s*\((.+)\)$/);
+        if (!match) {
+          invalidEdges.push(`format:${edge}`);
+          continue;
+        }
+
+        const fromInfo = splitEdgeId(match[1]);
+        const toInfo = splitEdgeId(match[2]);
+
+        if (!fromInfo.filePath || !toInfo.filePath) {
+          invalidEdges.push(`missing-path:${edge}`);
+          continue;
+        }
+
+        if (fromInfo.filePath !== 'unknown') {
+          const isSpecial = fromInfo.symbolId === 'file' || fromInfo.symbolId === 'module';
+          const isDna = /^dna:[a-f0-9]{64}$/i.test(fromInfo.symbolId);
+          if (!isSpecial && !isDna) {
+            invalidEdges.push(`from-id:${edge}`);
+          }
+        }
+
+        if (toInfo.filePath !== 'unknown') {
+          const isSpecial = toInfo.symbolId === 'file' || toInfo.symbolId === 'module';
+          const isDna = /^dna:[a-f0-9]{64}$/i.test(toInfo.symbolId);
+          if (!isSpecial && !isDna) {
+            invalidEdges.push(`to-id:${edge}`);
+          }
+        }
+      }
+
+      if (invalidEdges.length > 0) {
+        throw new Error(
+          `Unexpected working.edges entries (first 5): ${invalidEdges.slice(0, 5).join(' | ')}`
+        );
       }
     });
   });

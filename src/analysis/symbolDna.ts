@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import { SymbolInfo } from '../types';
-import { HybridFact, isCstFact } from '../types/cstFacts';
+import { HybridFact } from '../types/cstFacts';
 import { getTreeSitterParser } from './tree-sitter';
 
 /**
@@ -137,7 +137,7 @@ function normalizeSignature(sig: string): string {
 /**
  * Assign DNA IDs to symbols
  * Sets id = DNA hash (replacing any temporary ID)
- * Uses filePath for bodyText lookup if available, otherwise falls back to id
+ * Uses symbol.id to look up per-symbol body text
  */
 export async function assignDNAIds(
   symbols: SymbolInfo[],
@@ -147,9 +147,7 @@ export async function assignDNAIds(
   const results: SymbolInfo[] = [];
 
   for (const symbol of symbols) {
-    // Try to get bodyText using filePath first, then fall back to id
-    const bodyTextKey = symbol.filePath || symbol.id;
-    const bodyText = bodyTexts?.get(bodyTextKey);
+    const bodyText = bodyTexts?.get(symbol.id);
     const bodyHash = bodyText ? computeBodyHash(bodyText) : undefined;
 
     const dnaId = await computeSymbolDNA(symbol, bodyText, language);

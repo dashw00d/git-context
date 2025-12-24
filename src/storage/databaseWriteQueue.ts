@@ -195,14 +195,28 @@ export class DatabaseWriteQueue {
    * Get the database, with lazy loading fallback
    * Returns the raw SQL.js database instance (not the proxy wrapper)
    */
-  private getDb(): any {
-    if (!this.db) {
-      // Get the raw database instance, not the proxy wrapper
-      // The proxy wrapper's prepare() returns statements that are auto-freed,
-      // but we need to manage statement lifecycle ourselves
-      const dbManager = getDatabaseManager();
-      this.db = dbManager.getRawDatabase();
+  private syncDatabase(): void {
+    const dbManager = getDatabaseManager();
+    const rawDb = dbManager.getRawDatabase();
+    if (!rawDb) {
+      this.db = null;
+      return;
     }
+
+    if (this.db && this.db !== rawDb && this.totalPending > 0) {
+      logWarn(
+        `[DatabaseWriteQueue] Database changed with ${this.totalPending} pending writes; dropping queued operations`
+      );
+      this.queues.clear();
+      this.totalPending = 0;
+    }
+
+    this.db = rawDb;
+  }
+
+  private getDb(): any {
+    // Always sync to the current DatabaseManager instance to avoid stale DB pointers
+    this.syncDatabase();
     return this.db;
   }
 
@@ -210,6 +224,7 @@ export class DatabaseWriteQueue {
    * Queue a write operation (non-blocking)
    */
   queue(operation: WriteOperation): void {
+    this.syncDatabase();
     const queueKey = operation.type;
     if (!this.queues.has(queueKey)) {
       this.queues.set(queueKey, []);
@@ -277,7 +292,9 @@ export class DatabaseWriteQueue {
       const proxyDb = dbManager.getDatabase();
 
       if (!proxyDb || !proxyDb.transaction) {
-        logWarn('[DatabaseWriteQueue] Cannot get transaction method, executing without transaction');
+        logWarn(
+          '[DatabaseWriteQueue] Cannot get transaction method, executing without transaction'
+        );
         // Fallback: execute without transaction
         for (const [key, batch] of batches) {
           try {

@@ -201,19 +201,27 @@ export class CommitIndexer {
       // Since indexing is idempotent (INSERT OR REPLACE), it's safe to re-index
       if (this.db) {
         const symbolCount = this.db
-          .prepare('SELECT COUNT(*) as count FROM symbols WHERE sha = ?')
+          .prepare(
+            "SELECT COUNT(*) as count FROM symbols WHERE sha = ? AND change_type != 'quick_scan'"
+          )
           .get([sha]) as { count: number } | null;
+        const quickScanCount = this.db
+          .prepare('SELECT COUNT(*) as count FROM symbols WHERE sha = ? AND change_type = ?')
+          .get([sha, 'quick_scan']) as { count: number } | null;
         const edgeCount = this.db
           .prepare('SELECT COUNT(*) as count FROM edges WHERE sha = ?')
           .get([sha]) as { count: number } | null;
 
         const hasSymbols = symbolCount && symbolCount.count > 0;
-        const hasEdges = edgeCount && edgeCount.count > 0;
-
+        const hasQuickScan = quickScanCount && quickScanCount.count > 0;
         // If we have both symbols and edges, we're good (some commits may have no edges)
         // If we have neither, data is missing - re-index
         // If we have symbols but no edges, that's acceptable (commits can have symbols without edges)
-        if (!hasSymbols) {
+        if (hasQuickScan) {
+          logInfo(
+            `[CommitIndexer] ${sha.substring(0, 8)} has quick_scan symbols (${quickScanCount?.count || 0}), forcing re-index`
+          );
+        } else if (!hasSymbols) {
           logInfo(
             `[CommitIndexer] ${sha.substring(0, 8)} marked as indexed but no symbols found (symbols: ${symbolCount?.count || 0}, edges: ${edgeCount?.count || 0}), forcing re-index`
           );

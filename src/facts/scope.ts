@@ -2,7 +2,6 @@ import { GitOperations } from '../analysis/git';
 import { getGitCacheService } from '../services/gitCacheService';
 import { prepare } from '../storage/statement-wrapper';
 import { FileChange } from '../types';
-import { getGitRoot } from '../utils/config';
 import { logDebug } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
 
@@ -167,8 +166,6 @@ export async function computeScope(
 
   await ensureDatabaseInitialized();
   const git = gitInstance ?? new GitOperations();
-  const gitRoot = getGitRoot();
-
   const scope: ScopeSet = {
     commitFiles: new Set(),
     workingChanged: new Set(),

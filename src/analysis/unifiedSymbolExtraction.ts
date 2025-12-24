@@ -57,7 +57,16 @@ export async function extractSymbolsUnified(
   const symbols = await symbolExtractor.extractSymbolsFromContent(content, filePath);
 
   // Assign DNA IDs (same for both modes)
-  const bodyTexts = new Map([[filePath, content]]);
+  const bodyTexts = new Map<string, string>();
+  for (const symbol of symbols) {
+    const startLine = symbol.location?.start?.line;
+    const endLine = symbol.location?.end?.line;
+    if (!startLine || !endLine) {
+      continue;
+    }
+    const bodyText = symbolExtractor.extractBodyText(content, startLine, endLine);
+    bodyTexts.set(symbol.id, bodyText);
+  }
   const symbolsWithDNA = await assignDNAIds(symbols, bodyTexts, language || undefined);
 
   logDebug(

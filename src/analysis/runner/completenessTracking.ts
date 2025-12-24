@@ -17,7 +17,6 @@ import { logDebug, logWarn } from '../../utils/logger';
  */
 export function getSymbolCompleteness(sha: string, dnaId: string): CompletenessFlags {
   try {
-    const db = getDatabaseManager().getDatabase();
     const stmt = prepare('SELECT completeness_flags FROM symbols WHERE sha = ? AND dna_id = ?');
     const row = stmt.get(sha, dnaId) as { completeness_flags: string } | undefined;
     stmt.free?.();

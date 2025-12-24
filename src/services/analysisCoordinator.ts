@@ -194,9 +194,6 @@ export class AnalysisCoordinator {
     // Resolve SHA if not provided
     const targetSha = sha || (await git.getHeadSha());
 
-    // Get file content
-    const content = await git.safeGetFileContent(targetSha, filePath);
-
     // Create FileChange object for processFile
     const fileChange: FileChange = {
       path: filePath,

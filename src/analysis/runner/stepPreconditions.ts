@@ -3,15 +3,7 @@
  * Maps step IDs to their required state properties and completed dependencies
  */
 
-import {
-  hasIntended,
-  hasWorking,
-  hasScope,
-  hasDrift,
-  hasLegacy,
-  hasCommitFacts,
-  hasPlan,
-} from './pipelineTypeGuards';
+import { hasIntended, hasWorking, hasScope, hasCommitFacts, hasPlan } from './pipelineTypeGuards';
 import type { PipelineState } from './pipelineTypes';
 
 /**
