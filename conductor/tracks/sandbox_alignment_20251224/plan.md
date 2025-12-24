@@ -7,7 +7,7 @@
     - [ ] Document expected hotspot and drift values
 - [x] Task: Conductor - User Manual Verification 'Analysis & Data Preparation' (Protocol in workflow.md)
 
-## Phase 2: Update Sandbox Test Assertions
+## Phase 2: Update Sandbox Test Assertions [checkpoint: 503e7dd]
 - [x] Task: Update symbol extraction assertions in sandbox tests 59b416c
     - [x] Write failing tests (update assertions to new calculated values)
     - [x] Implement fixes (ensure pipeline output matches expectations)
