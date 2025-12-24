@@ -5,7 +5,7 @@
     - [ ] Analyze mock git history in fixtures
     - [ ] Document expected symbol counts per commit
     - [ ] Document expected hotspot and drift values
-- [ ] Task: Conductor - User Manual Verification 'Analysis & Data Preparation' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Analysis & Data Preparation' (Protocol in workflow.md)
 
 ## Phase 2: Update Sandbox Test Assertions
 - [ ] Task: Update symbol extraction assertions in sandbox tests
