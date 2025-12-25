@@ -8,7 +8,7 @@ import { BundleFactsDTO } from '../../../types/cockpit';
 import { detectLanguage } from '../../../utils/config';
 import { splitEdgeId } from '../../../utils/edgeNormalization';
 import { logDebug, logError, logWarn } from '../../../utils/logger';
-import { getPathService } from '../../pathService';
+import { getPathService } from '../../../services/pathService';
 
 type Tier1Data = {
   content: string;
