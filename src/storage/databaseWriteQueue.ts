@@ -252,9 +252,9 @@ export class DatabaseWriteQueue {
         operation.data.filePath = pathService.toRelative(operation.data.filePath);
         break;
       case 'hotspot_snapshot':
-        if (operation.data.entityType === 'file') {
-          operation.data.entityId = pathService.toRelative(operation.data.entityId);
-        }
+        // Always try to normalize path-based IDs, even if they are symbols
+        // DNA hashes will be unaffected as they don't look like paths
+        operation.data.entityId = pathService.toRelative(operation.data.entityId);
         break;
       case 'hybrid_fact':
         operation.data.filePath = pathService.toRelative(operation.data.filePath);

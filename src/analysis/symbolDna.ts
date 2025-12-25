@@ -114,7 +114,8 @@ export function computeBodyHash(bodyText: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 
-  return crypto.createHash('sha256').update(normalized).digest('hex').substring(0, 16);
+  // Use the full hash for maximum collision resistance in massive codebases
+  return crypto.createHash('sha256').update(normalized).digest('hex');
 }
 
 function computeBodyShape(bodyText: string): string {

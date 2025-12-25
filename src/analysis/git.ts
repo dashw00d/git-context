@@ -492,7 +492,7 @@ export class GitOperations {
         let oldPath: string | undefined;
         let status: FileChange['status'] = 'M';
 
-        if (statusChar === 'R' || statusChar === 'C') {
+        if ((statusChar === 'R' || statusChar === 'C') && parts.length > 2) {
           oldPath = parts[1];
           path = parts[2];
           status = statusChar as FileChange['status'];

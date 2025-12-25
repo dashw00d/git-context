@@ -94,12 +94,11 @@ export class FrameAnalyzer {
         const quickSymbols = rawSymbols
           .map(s => {
             if (typeof s === 'string') {
-              // String format: "filePath:name:symbolId"
-              const parts = s.split(':');
-              if (parts.length >= 3) {
-                const symbolId = parts.pop()!;
-                const name = parts.pop()!;
-                const filePath = parts.join(':');
+              // Matches "path/to/file:symbolName:symbolId" handling colons in path.
+              // Note: Assumes symbolName and symbolId don't contain colons themselves.
+              const match = s.match(/^(.*):([^:]+):([^:]+)$/);
+              if (match) {
+                const [, filePath, name, symbolId] = match;
                 return {
                   filePath: normalizePathForMatch(filePath), // Normalize when parsing
                   name,

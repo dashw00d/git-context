@@ -47,19 +47,24 @@ export class PathService {
     // 1. Convert Windows backslashes to forward slashes for consistent processing
     let normalized = p.replace(/\\/g, '/');
     
-    // 2. Prepare root with forward slashes
-    const root = this.gitRoot.replace(/\\/g, '/');
-    
-    // 3. Strip root if it's an absolute path within the project
-    if (normalized.startsWith(root)) {
-      normalized = normalized.substring(root.length);
-    } else if (path.isAbsolute(p)) {
-      // If it's absolute but starts differently (e.g. symlinks or case mismatch on Windows),
-      // use path.relative for a more robust check
+    // 2. Robust absolute path check using path.resolve and path.relative
+    // This handles case-insensitive file systems (Windows) and symlinks
+    if (path.isAbsolute(p)) {
       const absoluteP = path.resolve(p);
-      const relative = path.relative(this.gitRoot, absoluteP);
+      const absoluteRoot = path.resolve(this.gitRoot);
+      const relative = path.relative(absoluteRoot, absoluteP);
+      
+      // On Windows, if absoluteP and absoluteRoot are on different drives, 
+      // path.relative returns the absolute path of absoluteP.
+      // The startsWith check handles paths within the same volume.
       if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
         normalized = relative.replace(/\\/g, '/');
+      }
+    } else {
+      // 3. Prepare root with forward slashes for prefix stripping if resolve failed
+      const root = this.gitRoot.replace(/\\/g, '/');
+      if (normalized.startsWith(root)) {
+        normalized = normalized.substring(root.length);
       }
     }
     
@@ -77,6 +82,8 @@ export class PathService {
    * @returns An absolute path using the current OS separators.
    */
   public toAbsolute(p: string): string {
+    if (path.isAbsolute(p)) return path.normalize(p);
+    
     const posixP = this.normalize(p);
     const posixRoot = this.normalize(this.gitRoot);
 

@@ -265,7 +265,7 @@ export class ContextExporter {
 
     return {
       hotspots: hotspots.map(h => ({
-        symbol_id: h.symbol_id,
+        symbol_id: getPathService().toRelative(h.symbol_id),
         change_count: h.change_count,
         last_changed: h.last_changed,
         risk_score: Math.min(h.change_count / 5, 1.0),
