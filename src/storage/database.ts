@@ -3,8 +3,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import initSqlJs, { Database, Statement } from 'sql.js';
-import { getGitRoot } from '../utils/config';
 import { logInfo } from '../utils/logger';
+import { getPathService } from '../services/pathService';
 import { auditAllModules, migrateDatabase } from './schema';
 import { prepare } from './statement-wrapper';
 
@@ -88,7 +88,7 @@ export class DatabaseManager {
       return;
     }
 
-    const gitRoot = getGitRoot();
+    const gitRoot = getPathService().getRoot();
     if (!gitRoot) {
       throw new Error('Not in a git repository');
     }

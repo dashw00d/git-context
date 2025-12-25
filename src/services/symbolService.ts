@@ -1,6 +1,7 @@
 import { ensureDatabaseInitialized } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
+import { getPathService } from './pathService';
 import { ServiceBase, ServiceConfig } from './base/ServiceBase';
 import type { SymbolInfo } from '../types';
 import type { SymbolHistory, SymbolWithDNA } from './databaseService';
@@ -244,10 +245,11 @@ export class SymbolService extends ServiceBase {
         `);
 
         for (const item of history) {
+          const normalizedPath = getPathService().toRelative(item.file_path);
           stmt.run(
             item.symbol_dna_id,
             item.sha,
-            item.file_path,
+            normalizedPath,
             item.name,
             item.kind,
             item.signature,

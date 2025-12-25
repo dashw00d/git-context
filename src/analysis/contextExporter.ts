@@ -16,6 +16,7 @@ import { prepare } from '../storage/statement-wrapper';
 import { getGitRoot } from '../utils/config';
 import { getDynamicThreshold } from '../utils/edgeThresholds';
 import { logDebug, logError } from '../utils/logger';
+import { getPathService } from '../services/pathService';
 import { DependencyExtractor } from './dependencies';
 import { MermaidGenerator } from './mermaidGenerator';
 
@@ -270,7 +271,7 @@ export class ContextExporter {
         risk_score: Math.min(h.change_count / 5, 1.0),
       })),
       top_changed_files: topChangedFiles.map(f => ({
-        path: f.path,
+        path: getPathService().toRelative(f.path),
         total_changes: f.total_changes,
         last_commit: f.last_commit,
         languages: [],

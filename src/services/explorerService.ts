@@ -1,6 +1,6 @@
-import { GitOperations } from '../analysis/git';
 import { BundleFactsDTO, ExplorerNode } from '../types/cockpit';
 import { logInfo } from '../utils/logger';
+import { getPathService } from './pathService';
 
 export class ExplorerService {
   private static instance: ExplorerService;
@@ -97,7 +97,7 @@ export class ExplorerService {
     map.set('', root);
 
     for (const file of files) {
-      const parts = GitOperations.normalizePath(file).split('/');
+      const parts = getPathService().toRelative(file).split('/');
       let currentPath = '';
 
       for (let i = 0; i < parts.length; i++) {
@@ -153,7 +153,7 @@ export class ExplorerService {
 
       if (!filePath || !symbolId || !symbolName) continue;
 
-      const normalizedPath = GitOperations.normalizePath(filePath);
+      const normalizedPath = getPathService().toRelative(filePath);
       if (!fileSymbols.has(normalizedPath)) {
         fileSymbols.set(normalizedPath, []);
       }
@@ -164,7 +164,7 @@ export class ExplorerService {
 
     const visit = (node: ExplorerNode) => {
       if (node.type === 'file') {
-        const normalizedId = GitOperations.normalizePath(node.id);
+        const normalizedId = getPathService().toRelative(node.id);
         const symbols = fileSymbols.get(normalizedId);
         if (symbols && symbols.length > 0) {
           node.children = symbols.map(s => ({

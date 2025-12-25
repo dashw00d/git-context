@@ -3,6 +3,7 @@ import * as path from 'path';
 import { normalizeEdgeIdForStorage } from '../utils/edgeNormalization';
 import { logDebug, logInfo, logWarn } from '../utils/logger';
 import { getDatabaseManager } from './database';
+import { getPathService } from '../services/pathService';
 import { ANALYSIS_VERSION } from './schema';
 import type { CommitFacts } from '../analysis/commitIndexer';
 import type { MovedBlock } from '../analysis/movedBlockDetector';
@@ -225,6 +226,45 @@ export class DatabaseWriteQueue {
    */
   queue(operation: WriteOperation): void {
     this.syncDatabase();
+
+    // Final Gatekeeper: Normalize all paths before queuing
+    const pathService = getPathService();
+    switch (operation.type) {
+      case 'snapshot':
+        operation.data.filePath = pathService.toRelative(operation.data.filePath);
+        break;
+      case 'structural_diff':
+        operation.data.filePath = pathService.toRelative(operation.data.filePath);
+        break;
+      case 'symbol':
+        operation.data.path = pathService.toRelative(operation.data.path);
+        break;
+      case 'symbol_history':
+        operation.data.filePath = pathService.toRelative(operation.data.filePath);
+        break;
+      case 'file':
+        operation.data.path = pathService.toRelative(operation.data.path);
+        break;
+      case 'symbol_version':
+        operation.data.path = pathService.toRelative(operation.data.path);
+        break;
+      case 'file_hotspot':
+        operation.data.filePath = pathService.toRelative(operation.data.filePath);
+        break;
+      case 'hotspot_snapshot':
+        if (operation.data.entityType === 'file') {
+          operation.data.entityId = pathService.toRelative(operation.data.entityId);
+        }
+        break;
+      case 'hybrid_fact':
+        operation.data.filePath = pathService.toRelative(operation.data.filePath);
+        break;
+      case 'moved_block':
+        operation.data.sourceFile = pathService.toRelative(operation.data.sourceFile);
+        operation.data.destFile = pathService.toRelative(operation.data.destFile);
+        break;
+    }
+
     const queueKey = operation.type;
     if (!this.queues.has(queueKey)) {
       this.queues.set(queueKey, []);
