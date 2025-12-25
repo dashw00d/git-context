@@ -8,7 +8,7 @@ import { BundleFactsDTO } from '../../../types/cockpit';
 import { detectLanguage } from '../../../utils/config';
 import { splitEdgeId } from '../../../utils/edgeNormalization';
 import { logDebug, logError, logWarn } from '../../../utils/logger';
-import { normalizeToAbsolute } from '../../../utils/path';
+import { getPathService } from '../../pathService';
 
 type Tier1Data = {
   content: string;
@@ -58,8 +58,9 @@ export class FrameAnalyzer {
     workspaceRoot: string,
     bundleFacts?: BundleFactsDTO
   ): Promise<Tier1Data & { symbolId?: string }> {
-    const fullPath = normalizeToAbsolute(targetPath, workspaceRoot);
-    const normalizedTargetPath = GitOperations.normalizePath(targetPath);
+    const pathService = getPathService();
+    const fullPath = pathService.toAbsolute(targetPath);
+    const normalizedTargetPath = pathService.toRelative(targetPath);
 
     logDebug(
       `[FrameAnalyzer] Analyzing Tier 1: frameId=${frameId}, targetPath=${targetPath}, workspaceRoot=${workspaceRoot} -> fullPath=${fullPath}`
@@ -82,7 +83,7 @@ export class FrameAnalyzer {
 
       // Use consistent path normalization matching the main pipeline
       const normalizePathForMatch = (p: string) => {
-        return GitOperations.normalizePath(p);
+        return getPathService().toRelative(p);
       };
 
       // First, try to use quick scan symbols from bundleFacts
@@ -275,7 +276,8 @@ export class FrameAnalyzer {
     // We just won't have graph edges or cross-file metrics
 
     // Ensure targetPath is normalized for matching
-    const normalizedTarget = GitOperations.normalizePath(targetPath);
+    const pathService = getPathService();
+    const normalizedTarget = pathService.toRelative(targetPath);
 
     try {
       if (facts) {
@@ -301,8 +303,8 @@ export class FrameAnalyzer {
             return;
           }
 
-          const normalizedFrom = GitOperations.normalizePath(fromPath);
-          const normalizedTo = GitOperations.normalizePath(toPath);
+          const normalizedFrom = pathService.toRelative(fromPath);
+          const normalizedTo = pathService.toRelative(toPath);
 
           // Collect edges that involve the target file
           if (normalizedFrom === normalizedTarget) {

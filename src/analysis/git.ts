@@ -5,7 +5,6 @@ import { CommitInfo, FileChange } from '../types';
 import { withTimeout } from '../utils/async';
 import { getGitRoot } from '../utils/config';
 import { logDebug, logError, logInfo, logWarn } from '../utils/logger';
-import { normalizeToRelative } from '../utils/path';
 import { getPathService } from '../services/pathService';
 
 export class GitOperations {
