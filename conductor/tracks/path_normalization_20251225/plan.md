@@ -20,7 +20,7 @@ This plan implements a centralized `PathService` to resolve the path normalizati
 - [x] Task: Replace manual normalization in `src/services/contextExporter.ts`. f6462d8
 - [x] Task: Conductor - User Manual Verification 'Phase 3: Storage & Service Layer Migration' (Protocol in workflow.md) f6462d8
 
-## Phase 4: Verification & Cleanup
-- [~] Task: Perform a codebase-wide search for `.replace(root` or `path.relative(projectRoot` and replace with `PathService` calls.
-- [ ] Task: Run full integration test suite to ensure symbol lookups and diffing remain functional.
-- [ ] Task: Conductor - User Manual Verification 'Phase 4: Verification & Cleanup' (Protocol in workflow.md)
+## Phase 4: Verification & Cleanup [checkpoint: 69c69b4]
+- [x] Task: Perform a codebase-wide search for `.replace(root` or `path.relative(projectRoot` and replace with `PathService` calls. 69c69b4
+- [x] Task: Run full integration test suite to ensure symbol lookups and diffing remain functional. 69c69b4
+- [x] Task: Conductor - User Manual Verification 'Phase 4: Verification & Cleanup' (Protocol in workflow.md) 69c69b4
