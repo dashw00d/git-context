@@ -8,14 +8,14 @@ This plan implements a centralized `PathService` to resolve the path normalizati
 - [x] Task: Write comprehensive unit tests in `tests/unit/services/pathService.test.ts` covering Windows/POSIX paths, root files, and nested directories. 6bac291
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Foundation & Core Service' (Protocol in workflow.md) 6bac291
 
-## Phase 2: Analysis Layer Migration
-- [~] Task: Integrate `PathService` into `AnalysisCoordinator` and `CommitIndexer`.
-- [ ] Task: Replace manual path normalization in `src/analysis/git.ts` and `src/analysis/unifiedSymbolExtraction.ts`.
-- [ ] Task: Update `CstExtractor` and `CstDiff` to use `PathService` for symbol location reporting.
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Analysis Layer Migration' (Protocol in workflow.md)
+## Phase 2: Analysis Layer Migration [checkpoint: a3ffe8f]
+- [x] Task: Integrate `PathService` into `AnalysisCoordinator` and `CommitIndexer`. a3ffe8f
+- [x] Task: Replace manual path normalization in `src/analysis/git.ts` and `src/analysis/unifiedSymbolExtraction.ts`. a3ffe8f
+- [x] Task: Update `CstExtractor` and `CstDiff` to use `PathService` for symbol location reporting. a3ffe8f
+- [x] Task: Conductor - User Manual Verification 'Phase 2: Analysis Layer Migration' (Protocol in workflow.md) a3ffe8f
 
 ## Phase 3: Storage & Service Layer Migration
-- [ ] Task: Audit `src/storage/database.ts` to ensure `PathService` is used before any path is written to SQLite.
+- [~] Task: Audit `src/storage/database.ts` to ensure `PathService` is used before any path is written to SQLite.
 - [ ] Task: Update `SymbolService` and `CommitService` to normalize query inputs via `PathService`.
 - [ ] Task: Replace manual normalization in `src/services/contextExporter.ts`.
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: Storage & Service Layer Migration' (Protocol in workflow.md)
