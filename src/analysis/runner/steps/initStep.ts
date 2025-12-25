@@ -130,7 +130,9 @@ export function createInitStep(git: GitOperations): PipelineStep {
       const blobsToFetch = new Set<string>();
       for (const [blobSha, usages] of blobUsage) {
         const firstUsage = usages[0];
-        const size = plan.sizes.get(`${firstUsage.sha}:${firstUsage.path}`);
+        // Normalize path for consistent plan data lookup
+        const normalizedPath = GitOperations.normalizePath(firstUsage.path);
+        const size = plan.sizes.get(`${firstUsage.sha}:${normalizedPath}`);
         if (size === undefined || size <= MAX_FILE_SIZE) {
           blobsToFetch.add(blobSha);
         }
@@ -147,7 +149,9 @@ export function createInitStep(git: GitOperations): PipelineStep {
       for (const [blobSha, content] of blobContent) {
         const usages = blobUsage.get(blobSha) || [];
         for (const { sha, path } of usages) {
-          plan.content.set(`${sha}:${path}`, content);
+          // Normalize path for consistent plan data keys
+          const normalizedPath = GitOperations.normalizePath(path);
+          plan.content.set(`${sha}:${normalizedPath}`, content);
         }
         // Queue blob for batch write (non-blocking)
         await cacheService.storeBlob(blobSha, content);
@@ -259,7 +263,9 @@ async function warmIgnoreCache(
           const ignoreMap = await git.areIgnored(chunk);
           for (const [path, isIgnored] of ignoreMap) {
             if (isIgnored) {
-              ignoredSet.add(path);
+              // Normalize path before adding to Set for consistent lookups
+              const normalizedPath = GitOperations.normalizePath(path);
+              ignoredSet.add(normalizedPath);
             }
           }
         } catch (error) {
@@ -304,7 +310,9 @@ async function warmSizes(
           const size = parseInt(parts[2], 10);
           if (!isNaN(size)) {
             const item = items[currentIndex];
-            sizesMap.set(`${item.sha}:${item.path}`, size);
+            // Normalize path for consistent plan data keys
+            const normalizedPath = GitOperations.normalizePath(item.path);
+            sizesMap.set(`${item.sha}:${normalizedPath}`, size);
           }
         }
 

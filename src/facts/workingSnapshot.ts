@@ -263,17 +263,19 @@ export async function getWorkingSnapshot(
           return;
         }
 
-        analyzedPaths.add(filePath);
+        // Normalize path for consistent Set operations (scopePaths should already be normalized, but be defensive)
+        const normalizedPath = GitOperations.normalizePath(filePath);
+        analyzedPaths.add(normalizedPath);
 
         let content: string;
         if (liveOverrides && liveOverrides.has(fullPath)) {
           content = liveOverrides.get(fullPath)!;
-          logInfo(`Using live content for: ${filePath}`);
+          logInfo(`Using live content for: ${normalizedPath}`);
         } else {
           content = fs.readFileSync(fullPath, 'utf8');
         }
 
-        const symbols = await symbolExtractor.extractSymbolsFromContent(content, filePath);
+        const symbols = await symbolExtractor.extractSymbolsFromContent(content, normalizedPath);
 
         // Cache lines for DNA and potentially other uses
         const contentLines = content.split('\n');
@@ -284,8 +286,9 @@ export async function getWorkingSnapshot(
               .slice(symbol.location.start.line - 1, symbol.location.end.line)
               .join('\n');
             // Use a unique key for each symbol's body text within the file
-            // Format: filePath:temporaryId
-            const key = `${symbol.filePath || filePath}:${symbol.id}`;
+            // Format: filePath:temporaryId (use normalized path)
+            const symbolPath = symbol.filePath ? GitOperations.normalizePath(symbol.filePath) : normalizedPath;
+            const key = `${symbolPath}:${symbol.id}`;
             bodyTexts.set(key, bodyText);
           }
         }
@@ -293,15 +296,17 @@ export async function getWorkingSnapshot(
         const symbolsWithDNA = await assignDNAIds(
           symbols,
           bodyTexts,
-          detectLanguage(filePath) || undefined
+          detectLanguage(normalizedPath) || undefined
         );
 
         for (const symbol of symbolsWithDNA) {
           if (!symbol.id) {
-            logWarn(`Invalid symbol: missing DNA ID in ${filePath}: ${symbol.name}`);
+            logWarn(`Invalid symbol: missing DNA ID in ${normalizedPath}: ${symbol.name}`);
             continue;
           }
 
+          // Normalize symbol filePath for consistency
+          const symbolFilePath = symbol.filePath ? GitOperations.normalizePath(symbol.filePath) : normalizedPath;
           const symbolContext: SymbolContext = {
             id: 0,
             symbol_id: symbol.id,
@@ -309,7 +314,7 @@ export async function getWorkingSnapshot(
             kind: symbol.kind,
             signature: symbol.signature,
             dnaId: symbol.id,
-            filePath: symbol.filePath,
+            filePath: symbolFilePath,
             loc_pre: symbol.location
               ? {
                   start: { line: symbol.location.start.line, column: symbol.location.start.column },
@@ -320,15 +325,15 @@ export async function getWorkingSnapshot(
 
           symbolsById.set(symbol.id, symbolContext);
 
-          if (!symbolsByFile.has(filePath)) {
-            symbolsByFile.set(filePath, []);
+          if (!symbolsByFile.has(symbolFilePath)) {
+            symbolsByFile.set(symbolFilePath, []);
           }
-          symbolsByFile.get(filePath)!.push(symbolContext);
+          symbolsByFile.get(symbolFilePath)!.push(symbolContext);
         }
 
         const fileEdges = dependencyExtractor.extractDependencies(
           content,
-          filePath,
+          normalizedPath,
           symbolsWithDNA,
           0,
           contentLines
@@ -358,8 +363,10 @@ export async function getWorkingSnapshot(
       } catch (error) {
         processedFiles++;
         const errorMsg = error instanceof Error ? error.message : String(error);
-        logWarn(`Skipped ${filePath}: ${errorMsg}`);
-        logError(`[WorkingSnapshot] Error processing ${filePath}`, error);
+        // filePath might not be defined if error occurs early, use scopePaths element
+        const errorPath = typeof filePath !== 'undefined' ? GitOperations.normalizePath(filePath) : 'unknown';
+        logWarn(`Skipped ${errorPath}: ${errorMsg}`);
+        logError(`[WorkingSnapshot] Error processing ${errorPath}`, error);
       }
     })
   );

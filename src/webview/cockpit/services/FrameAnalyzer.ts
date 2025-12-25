@@ -413,14 +413,15 @@ export class FrameAnalyzer {
     _content: string,
     _facts: BundleFactsDTO
   ): Promise<Tier3Data> {
-    // Placeholder for AI analysis
+    // Placeholder for AI analysis - return immediately to avoid stalling
+    // This is a synchronous operation, so we can return directly without await
 
-    const result = {
+    const result: Tier3Data = {
       summary: `Analysis not available for ${frameId}`,
       risks: [],
     };
 
-    // Validate schema
+    // Validate schema (synchronous operation)
     const validation = Tier3DataSchema.safeParse(result);
     if (!validation.success) {
       logWarn(
@@ -432,6 +433,7 @@ export class FrameAnalyzer {
       );
     }
 
-    return result;
+    // Return immediately - no async operations
+    return Promise.resolve(result);
   }
 }

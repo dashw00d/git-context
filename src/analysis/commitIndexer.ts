@@ -92,8 +92,10 @@ export class CommitIndexer {
     plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<string> {
     // Try plan data first (synchronous, no lookup overhead)
-    if (plan?.content.has(`${sha}:${path}`)) {
-      return plan.content.get(`${sha}:${path}`)!;
+    // Normalize path for consistent plan data lookup
+    const normalizedPath = GitOperations.normalizePath(path);
+    if (plan?.content.has(`${sha}:${normalizedPath}`)) {
+      return plan.content.get(`${sha}:${normalizedPath}`)!;
     }
     // Fallback to git (will log warning)
     return this.git.safeGetFileContent(sha, path);
@@ -790,7 +792,14 @@ export class CommitIndexer {
       );
     }
 
-    const fileSymbols = result.symbolChanges.filter(c => c.filePath === path).map(c => c.symbol);
+    // Normalize both sides for consistent comparison
+    const normalizedPath = GitOperations.normalizePath(path);
+    const fileSymbols = result.symbolChanges
+      .filter(c => {
+        const normalizedCPath = GitOperations.normalizePath(c.filePath);
+        return normalizedCPath === normalizedPath;
+      })
+      .map(c => c.symbol);
 
     if (fileSymbols.length > 0) {
       result.hotspots.push({ path, symbols: fileSymbols });
@@ -1291,9 +1300,11 @@ export class CommitIndexer {
 
     for (const file of files) {
       const { path } = file;
+      // Normalize path for consistent comparison
+      const normalizedPath = GitOperations.normalizePath(path);
 
       const fileSymbols = Array.from(symbolChanges.values())
-        .filter(change => change.symbol.id.startsWith(`${path}:`))
+        .filter(change => change.symbol.id.startsWith(`${normalizedPath}:`))
         .map(change => change.symbol);
 
       if (fileSymbols.length >= 5) {

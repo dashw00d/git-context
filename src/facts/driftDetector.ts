@@ -6,6 +6,7 @@ import {
   extractImportPaths,
 } from '../analysis/conventionEnhancements';
 import { BaseDetector, DetectorConfig } from '../analysis/detectors/BaseDetector';
+import { GitOperations } from '../analysis/git';
 import { analyzeConventionDrift, detectNamingConvention } from '../analysis/namingConventions';
 import { SymbolContext } from '../contracts/llmContext';
 import { prepare } from '../storage/statement-wrapper';
@@ -291,8 +292,13 @@ export function detectDrift(
 
     // Fallback: if DNA hash lookup fails, try matching by name and path
     if (!found && expected.lastName && expected.lastPath) {
+      // Normalize expected path for consistent comparison
+      const normalizedExpectedPath = GitOperations.normalizePath(expected.lastPath);
       for (const [_, symbol] of working.symbolsById) {
-        if (symbol.name === expected.lastName && symbol.filePath === expected.lastPath) {
+        const normalizedSymbolPath = symbol.filePath
+          ? GitOperations.normalizePath(symbol.filePath)
+          : '';
+        if (symbol.name === expected.lastName && normalizedSymbolPath === normalizedExpectedPath) {
           found = symbol;
           break;
         }
@@ -937,10 +943,12 @@ function detectConventionDrift(working: WorkingSnapshot): {
 
     const symbolsByFile = new Map<string, Array<{ name: string; kind: string; path: string }>>();
     for (const symbol of symbols) {
-      if (!symbolsByFile.has(symbol.path)) {
-        symbolsByFile.set(symbol.path, []);
+      // Normalize path for consistent Map operations
+      const normalizedPath = GitOperations.normalizePath(symbol.path);
+      if (!symbolsByFile.has(normalizedPath)) {
+        symbolsByFile.set(normalizedPath, []);
       }
-      symbolsByFile.get(symbol.path)!.push(symbol);
+      symbolsByFile.get(normalizedPath)!.push(symbol);
     }
 
     const mixedConventionFiles: Array<{

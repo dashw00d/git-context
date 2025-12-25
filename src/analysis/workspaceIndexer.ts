@@ -41,8 +41,10 @@ export class WorkspaceIndexer {
     plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<string> {
     // Try plan data first (synchronous, no lookup overhead)
-    if (plan?.content.has(`${sha}:${path}`)) {
-      return plan.content.get(`${sha}:${path}`)!;
+    // Normalize path for consistent plan data lookup
+    const normalizedPath = GitOperations.normalizePath(path);
+    if (plan?.content.has(`${sha}:${normalizedPath}`)) {
+      return plan.content.get(`${sha}:${normalizedPath}`)!;
     }
     // Fallback to git
     return this.git.safeGetFileContent(sha, path);
@@ -614,7 +616,12 @@ export class WorkspaceIndexer {
       }
 
       const stagedFiles = await this.git.getStagedFiles();
-      const stagedFile = stagedFiles.find(f => f.path === filePath);
+      // Normalize both sides for consistent comparison
+      const normalizedFilePath = GitOperations.normalizePath(filePath);
+      const stagedFile = stagedFiles.find(f => {
+        const normalizedFPath = GitOperations.normalizePath(f.path);
+        return normalizedFPath === normalizedFilePath;
+      });
       if (stagedFile) {
         const stats = await this.git.getFileDiffStats(filePath, true);
         timeline.unshift({
@@ -628,7 +635,11 @@ export class WorkspaceIndexer {
       }
 
       const unstagedFiles = await this.git.getUnstagedFiles();
-      const unstagedFile = unstagedFiles.find(f => f.path === filePath);
+      // normalizedFilePath already defined above
+      const unstagedFile = unstagedFiles.find(f => {
+        const normalizedFPath = GitOperations.normalizePath(f.path);
+        return normalizedFPath === normalizedFilePath;
+      });
       if (unstagedFile) {
         const stats = await this.git.getFileDiffStats(filePath, false);
         timeline.unshift({
@@ -726,13 +737,21 @@ export class WorkspaceIndexer {
     );
 
     const hotspots = await this.git.getHotspots(20);
-    const skeletonSet = new Set(skeleton.files);
+    // Normalize skeleton files for consistent Set operations
+    const skeletonSet = new Set(skeleton.files.map(f => GitOperations.normalizePath(f)));
 
-    const filteredHotspots = hotspots.filter((h: any) => skeletonSet.has(h.path));
+    const filteredHotspots = hotspots.filter((h: any) => {
+      const normalizedHPath = h.path ? GitOperations.normalizePath(h.path) : '';
+      return skeletonSet.has(normalizedHPath);
+    });
 
     if (config?.mode === 'changes') {
       for (const file of skeleton.files) {
-        if (!filteredHotspots.find(h => h.path === file)) {
+        const normalizedFile = GitOperations.normalizePath(file);
+        if (!filteredHotspots.find(h => {
+          const normalizedHPath = h.path ? GitOperations.normalizePath(h.path) : '';
+          return normalizedHPath === normalizedFile;
+        })) {
           filteredHotspots.push({
             path: file,
             count: 0,
@@ -847,6 +866,24 @@ export class WorkspaceIndexer {
             if (!(await filterPath(filePath, { git: this.git, gitRoot, skipSizeCheck: true }))) {
               filesSkipped++;
               return;
+            }
+
+            // Check if file already has full scan symbols (skip quick scan if full scan completed)
+            if (options?.persist && this.db) {
+              // Normalize path for consistent database lookup
+              const normalizedPath = GitOperations.normalizePath(filePath);
+              const fullScanStmt = prepare(`
+                SELECT COUNT(*) as count FROM symbols
+                WHERE sha = ? AND path = ? AND change_type != 'quick_scan'
+              `);
+              const fullScanResult = fullScanStmt.get([headSha, normalizedPath]) as { count: number } | null;
+              if (fullScanResult && fullScanResult.count > 0) {
+                logDebug(
+                  `[WorkspaceIndexer] Skipping quick scan for ${normalizedPath} - already has ${fullScanResult.count} full scan symbols`
+                );
+                filesSkipped++;
+                return;
+              }
             }
 
             const fullPath = path.join(gitRoot, filePath);

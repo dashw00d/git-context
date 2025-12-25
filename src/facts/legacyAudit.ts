@@ -1,4 +1,5 @@
 import { BaseDetector, DetectorConfig } from '../analysis/detectors/BaseDetector';
+import { GitOperations } from '../analysis/git';
 import { SymbolContext } from '../contracts/llmContext';
 import { prepare } from '../storage/statement-wrapper';
 import { logInfo } from '../utils/logger';
@@ -117,6 +118,8 @@ function findEntryPoints(working: WorkingSnapshot, scope: ScopeSet): Set<string>
     if (!isInScope(symbolId, scope)) continue;
 
     const filePath = symbolId.split(':')[0];
+    // Normalize path for consistent Set membership checks
+    const normalizedFilePath = GitOperations.normalizePath(filePath);
     const filePathLower = filePath.toLowerCase();
 
     if (
@@ -129,8 +132,8 @@ function findEntryPoints(working: WorkingSnapshot, scope: ScopeSet): Set<string>
       continue;
     }
 
-    if (filePathLower.includes('controller') && !scope.allPaths.has(filePath)) continue;
-    if (filePathLower.includes('service') && !scope.allPaths.has(filePath)) continue;
+    if (filePathLower.includes('controller') && !scope.allPaths.has(normalizedFilePath)) continue;
+    if (filePathLower.includes('service') && !scope.allPaths.has(normalizedFilePath)) continue;
 
     if (
       /^(get|set|is|has|can)[A-Z]/.test(symbol.name) &&
@@ -178,7 +181,7 @@ function findEntryPoints(working: WorkingSnapshot, scope: ScopeSet): Set<string>
       }
     }
 
-    if (scope.allPaths.has(filePath)) {
+    if (scope.allPaths.has(normalizedFilePath)) {
       if (
         filePathLower.includes('controller') ||
         filePathLower.includes('route') ||
@@ -206,7 +209,9 @@ function findEntryPoints(working: WorkingSnapshot, scope: ScopeSet): Set<string>
 
 function isInScope(symbolId: string, scope: ScopeSet): boolean {
   const filePath = symbolId.split(':')[0];
-  return scope.allPaths.has(filePath);
+  // Normalize path for consistent Set membership checks
+  const normalizedFilePath = GitOperations.normalizePath(filePath);
+  return scope.allPaths.has(normalizedFilePath);
 }
 
 function isLikelyUtilityFunction(symbol: SymbolContext): boolean {

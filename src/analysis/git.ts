@@ -1144,9 +1144,14 @@ export class GitOperations {
       try {
         const untrackedFiles = await this.getSharedUntracked();
         for (const filePath of untrackedFiles) {
-          if (!unstaged.some(f => f.path === filePath)) {
+          // Normalize both sides for consistent comparison
+          const normalizedFilePath = GitOperations.normalizePath(filePath);
+          if (!unstaged.some(f => {
+            const normalizedFPath = GitOperations.normalizePath(f.path);
+            return normalizedFPath === normalizedFilePath;
+          })) {
             unstaged.push({
-              path: GitOperations.normalizePath(filePath),
+              path: normalizedFilePath,
               status: 'U',
             });
           }

@@ -1,3 +1,4 @@
+import { GitOperations } from '../analysis/git';
 import { EdgeContext, SymbolContext } from '../contracts/llmContext';
 import { SymbolDelta, SymbolInfo } from '../types';
 import { logInfo } from '../utils/logger';
@@ -41,12 +42,14 @@ export function convertDeltasToSnapshot(deltas: {
 
     symbolsById.set(symbol.id, ctx);
 
+    // Normalize path for consistent Map/Set operations
     const filePath = symbol.filePath;
-    if (!symbolsByFile.has(filePath)) {
-      symbolsByFile.set(filePath, []);
+    const normalizedPath = filePath ? GitOperations.normalizePath(filePath) : '';
+    if (!symbolsByFile.has(normalizedPath)) {
+      symbolsByFile.set(normalizedPath, []);
     }
-    symbolsByFile.get(filePath)!.push(ctx);
-    analyzedPaths.add(filePath);
+    symbolsByFile.get(normalizedPath)!.push(ctx);
+    analyzedPaths.add(normalizedPath);
   };
 
   for (const symbol of deltas.added) {

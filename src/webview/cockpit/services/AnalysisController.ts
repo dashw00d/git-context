@@ -87,19 +87,50 @@ export class AnalysisController {
   }): Promise<RefactorBundleFacts> {
     const pipeline = await getRefactorPipeline();
 
-    // Perform Quick Scan for symbols
-    let quickSymbols: any[] = [];
+    // Check if full scan has already completed before running quick scan
+    let shouldSkipQuickScan = false;
     try {
-      logInfo(`[AnalysisController] Starting Quick Scan for ${skeleton.files.length} files...`);
-      // Enable persistence for quick scan to populate DB immediately
-      // Use low priority (background workers) for the massive initial scan
-      quickSymbols = await pipeline.workspaceIndexer.quickScanSymbols(skeleton.files, {
-        persist: true,
-        priority: false,
-      });
-      logInfo(`[AnalysisController] Quick Scan complete. Found ${quickSymbols.length} symbols.`);
+      const gitOps = new GitOperations();
+      const headSha = await gitOps.getHeadSha();
+      const { getDatabaseManager } = await import('../../../storage/database');
+      const dbManager = getDatabaseManager();
+      const db = dbManager.getDatabase();
+
+      if (db) {
+        // Check if HEAD has full scan symbols (change_type != 'quick_scan')
+        const fullScanCheck = db
+          .prepare("SELECT COUNT(*) as count FROM symbols WHERE sha = ? AND change_type != 'quick_scan'")
+          .get([headSha]) as { count: number } | null;
+
+        if (fullScanCheck && fullScanCheck.count > 0) {
+          logInfo(
+            `[AnalysisController] Full scan already completed for HEAD (${fullScanCheck.count} symbols found), skipping quick scan`
+          );
+          shouldSkipQuickScan = true;
+        }
+      }
     } catch (e) {
-      logWarn(`[AnalysisController] Quick Scan failed: ${e}`);
+      logDebug(`[AnalysisController] Could not check full scan status: ${e}`);
+      // Continue with quick scan if check fails
+    }
+
+    // Perform Quick Scan for symbols (only if full scan hasn't completed)
+    let quickSymbols: any[] = [];
+    if (!shouldSkipQuickScan) {
+      try {
+        logInfo(`[AnalysisController] Starting Quick Scan for ${skeleton.files.length} files...`);
+        // Enable persistence for quick scan to populate DB immediately
+        // Use low priority (background workers) for the massive initial scan
+        quickSymbols = await pipeline.workspaceIndexer.quickScanSymbols(skeleton.files, {
+          persist: true,
+          priority: false,
+        });
+        logInfo(`[AnalysisController] Quick Scan complete. Found ${quickSymbols.length} symbols.`);
+      } catch (e) {
+        logWarn(`[AnalysisController] Quick Scan failed: ${e}`);
+      }
+    } else {
+      logInfo(`[AnalysisController] Skipping Quick Scan - full scan already completed`);
     }
 
     // Count total commits for optimistic time travel

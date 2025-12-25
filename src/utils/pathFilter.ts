@@ -41,7 +41,8 @@ export async function shouldProcessPath(
     return { shouldProcess: false, reason: 'invalid path' };
   }
 
-  const normalized = filePath.replace(/\\/g, '/');
+  // Use GitOperations.normalizePath() for consistency with rest of codebase
+  const normalized = GitOperations.normalizePath(filePath);
 
   const config = getExtensionConfig();
   const baseExclusions = [
@@ -69,7 +70,7 @@ export async function shouldProcessPath(
     }
   }
 
-  const ext = path.extname(filePath).slice(1).toLowerCase();
+  const ext = path.extname(normalized).slice(1).toLowerCase();
   const allowedExtensions = new Set(getSupportedExtensions());
   if (!ext || !allowedExtensions.has(ext)) {
     return { shouldProcess: false, reason: `extension .${ext} not allowed` };
@@ -83,14 +84,15 @@ export async function shouldProcessPath(
     }
 
     if (options.git) {
-      const cacheKey = `${filePath}:workspace:gitignore`;
+      // Use normalized path in cache key to avoid collisions
+      const cacheKey = `${normalized}:workspace:gitignore`;
       let isIgnored: boolean;
 
       const cached = filterCache.get(cacheKey);
       if (cached !== undefined) {
         isIgnored = cached;
       } else {
-        isIgnored = await options.git.isIgnored(filePath);
+        isIgnored = await options.git.isIgnored(normalized);
         filterCache.set(cacheKey, isIgnored);
       }
 
@@ -106,7 +108,7 @@ export async function shouldProcessPath(
     // If we reach here, the file is NOT in ignoredPaths, so it's not ignored.
     if (options.plan?.ignoredPaths === undefined) {
       // No plan data available - fall back to git check-ignore
-      const cacheKey = `${filePath}:${options.commitSha}:gitignore-commit`;
+      const cacheKey = `${normalized}:${options.commitSha}:gitignore-commit`;
       let isIgnored: boolean;
 
       const cached = filterCache.get(cacheKey);
@@ -114,9 +116,9 @@ export async function shouldProcessPath(
         isIgnored = cached;
       } else {
         if (typeof (options.git as any).isIgnoredAtCommit === 'function') {
-          isIgnored = await (options.git as any).isIgnoredAtCommit(options.commitSha, filePath);
+          isIgnored = await (options.git as any).isIgnoredAtCommit(options.commitSha, normalized);
         } else {
-          isIgnored = await options.git.isIgnored(filePath);
+          isIgnored = await options.git.isIgnored(normalized);
         }
         filterCache.set(cacheKey, isIgnored);
       }
@@ -132,7 +134,7 @@ export async function shouldProcessPath(
   }
 
   const ignoreMatcher = createCustomIgnoreMatcher(config.customIgnorePaths);
-  if (ignoreMatcher(filePath)) {
+  if (ignoreMatcher(normalized)) {
     return { shouldProcess: false, reason: 'matched custom ignore path' };
   }
 
@@ -140,9 +142,9 @@ export async function shouldProcessPath(
     const maxFileSize = config.maxFileSize ?? 102400;
     let fileSize: number | null = null;
 
-    // Try plan data first
-    if (options.commitSha && options.plan?.sizes.has(`${options.commitSha}:${filePath}`)) {
-      fileSize = options.plan.sizes.get(`${options.commitSha}:${filePath}`)!;
+    // Try plan data first - use normalized path
+    if (options.commitSha && options.plan?.sizes.has(`${options.commitSha}:${normalized}`)) {
+      fileSize = options.plan.sizes.get(`${options.commitSha}:${normalized}`)!;
       if (fileSize > maxFileSize) {
         return { shouldProcess: false, reason: `size ${fileSize} > ${maxFileSize} (plan)` };
       }
@@ -150,7 +152,7 @@ export async function shouldProcessPath(
     }
 
     if (options.commitSha && options.git) {
-      const cacheKey = `${filePath}:${options.commitSha}:size`;
+      const cacheKey = `${normalized}:${options.commitSha}:size`;
       const cachedResult = filterCache.get(cacheKey);
 
       if (cachedResult === true) {
@@ -163,14 +165,14 @@ export async function shouldProcessPath(
 
       // Not cached, fetch and cache
       try {
-        fileSize = await options.git.getBlobSize(options.commitSha, filePath);
+        fileSize = await options.git.getBlobSize(options.commitSha, normalized);
         const allowed = fileSize <= maxFileSize;
         filterCache.set(cacheKey, allowed);
       } catch (e) {
         fileSize = null;
       }
     } else if (options.gitRoot) {
-      const cacheKey = `${filePath}:workspace:size`;
+      const cacheKey = `${normalized}:workspace:size`;
       const cachedResult = filterCache.get(cacheKey);
 
       if (cachedResult === true) {
@@ -181,7 +183,7 @@ export async function shouldProcessPath(
 
       // Not cached, fetch and cache
       try {
-        const fullPath = path.join(options.gitRoot, filePath);
+        const fullPath = path.join(options.gitRoot, normalized);
         if (fs.existsSync(fullPath)) {
           const stats = fs.statSync(fullPath);
           fileSize = stats.size;

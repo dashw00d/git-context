@@ -155,9 +155,11 @@ export class MovedBlockDetector {
     for (const symbol of symbols) {
       try {
         const filePath = symbol.filePath;
+        // Normalize path for consistent cache keys
+        const normalizedPath = GitOperations.normalizePath(filePath);
         const targetSha = context === 'deleted' ? await this.getParentSha(commitSha) : commitSha;
 
-        let lines = this.fileLineCache.get(`${targetSha}:${filePath}`);
+        let lines = this.fileLineCache.get(`${targetSha}:${normalizedPath}`);
 
         // Use symbol bodyHash if available to avoid re-hashing
         const normalizedHash = symbol.bodyHash || '';
@@ -165,7 +167,7 @@ export class MovedBlockDetector {
         if (!lines) {
           const fileContent = await this.getFileContent(filePath, targetSha, plan);
           lines = fileContent.split('\n');
-          this.fileLineCache.set(`${targetSha}:${filePath}`, lines);
+          this.fileLineCache.set(`${targetSha}:${normalizedPath}`, lines);
         }
 
         const symbolContent = this.extractSymbolContentViaLines(lines, symbol);
@@ -489,8 +491,10 @@ export class MovedBlockDetector {
     plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<string> {
     // Try plan data first
-    if (plan?.content.has(`${commitSha}:${filePath}`)) {
-      return plan.content.get(`${commitSha}:${filePath}`)!;
+    // Normalize path for consistent plan data lookup
+    const normalizedPath = GitOperations.normalizePath(filePath);
+    if (plan?.content.has(`${commitSha}:${normalizedPath}`)) {
+      return plan.content.get(`${commitSha}:${normalizedPath}`)!;
     }
 
     if (!this.git) {

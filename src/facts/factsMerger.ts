@@ -1,3 +1,4 @@
+import { GitOperations } from '../analysis/git';
 import { RefactorBundleFacts } from '../facts/types';
 import { logDebug } from '../utils/logger';
 
@@ -26,11 +27,13 @@ export function mergeFacts(
       const existingSymbols = (merged.evidence['working.symbols'] as any[]) || [];
       const newSymbols = (newFacts.evidence['working.symbols'] as any[]) || [];
       // Use filePath:sha:name as the key - name is stable across extraction methods
+      // Normalize paths for consistent deduplication
       const getSymbolKey = (s: any) => {
         const name = s.name || s.id;
         const path = s.filePath || '';
+        const normalizedPath = path ? GitOperations.normalizePath(path) : '';
         const sha = s.sha || ''; // Include sha in key for path+sha identity
-        return `${path}:${sha}:${name}`;
+        return `${normalizedPath}:${sha}:${name}`;
       };
       const symbolMap = new Map(existingSymbols.map(s => [getSymbolKey(s), s]));
 
@@ -90,12 +93,20 @@ export function mergeFacts(
       const existingHotspots = merged.evidence.hotspots || [];
       const newHotspots = newFacts.evidence.hotspots || [];
 
-      const hotspotMap = new Map(existingHotspots.map((h: any) => [h.path || h.file_path, h]));
+      // Normalize paths for consistent deduplication
+      const hotspotMap = new Map(
+        existingHotspots.map((h: any) => {
+          const rawPath = h.path || h.file_path || '';
+          const normalizedPath = rawPath ? GitOperations.normalizePath(rawPath) : '';
+          return [normalizedPath, h];
+        })
+      );
 
       for (const h of newHotspots) {
-        const path = h.path || h.file_path;
+        const rawPath = h.path || h.file_path || '';
+        const normalizedPath = rawPath ? GitOperations.normalizePath(rawPath) : '';
         // Use new hotspot if it has a higher score, or if we don't have this path yet
-        const existing = hotspotMap.get(path);
+        const existing = hotspotMap.get(normalizedPath);
         // Handle both HotspotEvidence (score, hotspot_score, count) and drift hotspots (drift_count)
         const newScore = (h as any).drift_count || h.score || h.hotspot_score || h.count || 0;
         const existingScore =
@@ -106,7 +117,7 @@ export function mergeFacts(
           0;
 
         if (!existing || newScore > existingScore) {
-          hotspotMap.set(path, h);
+          hotspotMap.set(normalizedPath, h);
         }
       }
       merged.evidence.hotspots = Array.from(hotspotMap.values());
@@ -114,9 +125,14 @@ export function mergeFacts(
 
     // Merge file scopes (union with normalized paths)
     if (newFacts.evidence['scope.files']) {
-      const existingFiles = new Set(merged.evidence['scope.files'] || []);
+      const existingFiles = new Set(
+        (merged.evidence['scope.files'] || []).map((f: string) =>
+          f ? GitOperations.normalizePath(f) : f
+        )
+      );
       for (const f of newFacts.evidence['scope.files'] || []) {
-        existingFiles.add(f);
+        const normalizedF = f ? GitOperations.normalizePath(f) : f;
+        existingFiles.add(normalizedF);
       }
       merged.evidence['scope.files'] = Array.from(existingFiles);
     }
