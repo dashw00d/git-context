@@ -2,11 +2,11 @@
 
 This plan implements a centralized `PathService` to resolve the path normalization inconsistencies ("whack-a-mole") across the codebase.
 
-## Phase 1: Foundation & Core Service
-- [~] Task: Create `src/services/pathService.ts` with methods for `toRelative(path: string)`, `toAbsolute(path: string)`, and `normalize(path: string)`.
-- [ ] Task: Implement POSIX-style separator enforcement within `PathService`.
-- [ ] Task: Write comprehensive unit tests in `tests/unit/services/pathService.test.ts` covering Windows/POSIX paths, root files, and nested directories.
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Foundation & Core Service' (Protocol in workflow.md)
+## Phase 1: Foundation & Core Service [checkpoint: 6bac291]
+- [x] Task: Create `src/services/pathService.ts` with methods for `toRelative(path: string)`, `toAbsolute(path: string)`, and `normalize(path: string)`. 6bac291
+- [x] Task: Implement POSIX-style separator enforcement within `PathService`. 6bac291
+- [x] Task: Write comprehensive unit tests in `tests/unit/services/pathService.test.ts` covering Windows/POSIX paths, root files, and nested directories. 6bac291
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Foundation & Core Service' (Protocol in workflow.md) 6bac291
 
 ## Phase 2: Analysis Layer Migration
 - [ ] Task: Integrate `PathService` into `AnalysisCoordinator` and `CommitIndexer`.
