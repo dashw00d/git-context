@@ -3,7 +3,7 @@ import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
 import { getCstDiffManager } from './cstDiff';
 import { getDifftasticIntegration } from './difftastic';
-import { GitOperations } from './git';
+import { getPathService } from '../services/pathService';
 import type { CstDiffResult } from './cstDiff';
 
 export interface StructuralDiffMetrics {
@@ -36,7 +36,7 @@ export class StructuralDiffManager {
     currentContent: string
   ): Promise<StructuralDiffMetrics> {
     // Normalize path for consistency
-    const normalizedPath = GitOperations.normalizePath(filePath);
+    const normalizedPath = getPathService().toRelative(filePath);
 
     if (parentBlobSha === currentBlobSha) {
       logDebug(`[StructDiff] Skipping diff for ${normalizedPath} - identical blob SHA`);
@@ -112,7 +112,7 @@ export class StructuralDiffManager {
     filePath: string
   ): StructuralDiffMetrics | null {
     // Normalize path for query consistency
-    const normalizedPath = GitOperations.normalizePath(filePath);
+    const normalizedPath = getPathService().toRelative(filePath);
     const stmt = prepare(`
       SELECT * FROM structural_diffs
       WHERE parent_blob_sha = ? AND current_blob_sha = ? AND file_path = ?

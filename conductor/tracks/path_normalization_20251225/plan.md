@@ -9,7 +9,7 @@ This plan implements a centralized `PathService` to resolve the path normalizati
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Foundation & Core Service' (Protocol in workflow.md) 6bac291
 
 ## Phase 2: Analysis Layer Migration
-- [ ] Task: Integrate `PathService` into `AnalysisCoordinator` and `CommitIndexer`.
+- [~] Task: Integrate `PathService` into `AnalysisCoordinator` and `CommitIndexer`.
 - [ ] Task: Replace manual path normalization in `src/analysis/git.ts` and `src/analysis/unifiedSymbolExtraction.ts`.
 - [ ] Task: Update `CstExtractor` and `CstDiff` to use `PathService` for symbol location reporting.
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Analysis Layer Migration' (Protocol in workflow.md)

@@ -6,6 +6,7 @@ import { withTimeout } from '../utils/async';
 import { getGitRoot } from '../utils/config';
 import { logDebug, logError, logInfo, logWarn } from '../utils/logger';
 import { normalizeToRelative } from '../utils/path';
+import { getPathService } from '../services/pathService';
 
 export class GitOperations {
   private gitRoot: string;
@@ -19,7 +20,7 @@ export class GitOperations {
    * Normalizes a path to be relative, forward-slashed, and without leading slashes.
    */
   public static normalizePath(p: string | undefined): string {
-    return normalizeToRelative(p, getGitRoot());
+    return getPathService().toRelative(p);
   }
   // Pending promise caches to deduplicate concurrent requests
   private static pendingStatusPromise?: Promise<string>;

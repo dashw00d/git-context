@@ -3,8 +3,8 @@ import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { DeltaChange, HybridFact, isCstFact } from '../types/cstFacts';
 import { logDebug, logError } from '../utils/logger';
-import { GitOperations } from './git';
 import { computeHybridDna } from './symbolDna';
+import { getPathService } from '../services/pathService';
 import type { ScopeSet } from '../facts/scope';
 
 /**
@@ -59,7 +59,7 @@ export class CstTimelineManager {
     // Queue all facts for batch write
     const writeQueue = DatabaseWriteQueue.getInstance();
     // Normalize path for consistency
-    const normalizedPath = GitOperations.normalizePath(filePath);
+    const normalizedPath = getPathService().toRelative(filePath);
 
     for (const fact of facts) {
       const dnaId = dnaMap.get(fact.id)!;
@@ -144,11 +144,9 @@ export class CstTimelineManager {
     const db = getDatabase();
     if (!db) return null;
 
-    this.ensureTableExists();
-
     try {
       // Normalize path for query consistency
-      const normalizedPath = GitOperations.normalizePath(filePath);
+      const normalizedPath = getPathService().toRelative(filePath);
       const stmt = prepare(`
         SELECT serialized_fact FROM hybrid_facts
         WHERE file_path = ? AND version = ?
@@ -180,7 +178,7 @@ export class CstTimelineManager {
 
     try {
       // Normalize all paths for query consistency
-      const normalizedPaths = filePaths.map(p => GitOperations.normalizePath(p));
+      const normalizedPaths = filePaths.map(p => getPathService().toRelative(p));
       const placeholders = normalizedPaths.map(() => '?').join(',');
       const stmt = prepare(`
         SELECT file_path, serialized_fact
@@ -245,7 +243,7 @@ export class CstTimelineManager {
 
     try {
       // Normalize path for query consistency
-      const normalizedPath = GitOperations.normalizePath(filePath);
+      const normalizedPath = getPathService().toRelative(filePath);
       const stmt = prepare(`
         SELECT serialized_fact FROM hybrid_facts
         WHERE file_path = ? AND hash = ?

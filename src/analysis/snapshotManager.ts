@@ -5,9 +5,9 @@ import { EdgeInfo, SymbolInfo } from '../types';
 import { detectLanguage, getExtensionConfig } from '../utils/config';
 import { logDebug } from '../utils/logger';
 import { DependencyExtractor } from './dependencies';
-import { GitOperations } from './git';
 import { assignDNAIds } from './symbolDna';
 import { SymbolExtractor } from './symbols';
+import { getPathService } from '../services/pathService';
 
 export interface FileSnapshot {
   blobSha: string;
@@ -89,7 +89,7 @@ export class SnapshotManager {
     content: string
   ): Promise<FileSnapshot> {
     // Normalize path for consistent cache keys
-    const normalizedPath = GitOperations.normalizePath(filePath);
+    const normalizedPath = getPathService().toRelative(filePath);
     const cacheKey = `${blobSha}:${normalizedPath}`;
     this.initCache();
     const lruCached = this.snapshotCache?.get(cacheKey);

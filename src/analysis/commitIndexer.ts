@@ -9,6 +9,7 @@ import { prepare } from '../storage/statement-wrapper';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { shouldProcessPathWithLog } from '../utils/pathFilter';
+import { getPathService } from '../services/pathService';
 import { getCstTimelineManager } from './cstTimeline';
 import { DependencyExtractor } from './dependencies';
 import { GitOperations } from './git';
@@ -93,7 +94,7 @@ export class CommitIndexer {
   ): Promise<string> {
     // Try plan data first (synchronous, no lookup overhead)
     // Normalize path for consistent plan data lookup
-    const normalizedPath = GitOperations.normalizePath(path);
+    const normalizedPath = getPathService().toRelative(path);
     if (plan?.content.has(`${sha}:${normalizedPath}`)) {
       return plan.content.get(`${sha}:${normalizedPath}`)!;
     }
@@ -793,10 +794,10 @@ export class CommitIndexer {
     }
 
     // Normalize both sides for consistent comparison
-    const normalizedPath = GitOperations.normalizePath(path);
+    const normalizedPath = getPathService().toRelative(path);
     const fileSymbols = result.symbolChanges
       .filter(c => {
-        const normalizedCPath = GitOperations.normalizePath(c.filePath);
+        const normalizedCPath = getPathService().toRelative(c.filePath);
         return normalizedCPath === normalizedPath;
       })
       .map(c => c.symbol);
@@ -929,7 +930,7 @@ export class CommitIndexer {
 
     for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
       // Normalize path for consistency with workspace indexer
-      const normalizedPath = GitOperations.normalizePath(filePath);
+      const normalizedPath = getPathService().toRelative(filePath);
 
       // Queue symbol_dna insert
       writeQueue.queue({
@@ -1124,7 +1125,7 @@ export class CommitIndexer {
     for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
       const impactScore = impactScores.get(dnaId) || 0;
       // Normalize path for consistency
-      const normalizedPath = GitOperations.normalizePath(filePath);
+      const normalizedPath = getPathService().toRelative(filePath);
       writeQueue.queue({
         type: 'symbol_history',
         data: { dnaId, sha, filePath: normalizedPath, symbol, impactScore, changeType: type },
@@ -1301,7 +1302,7 @@ export class CommitIndexer {
     for (const file of files) {
       const { path } = file;
       // Normalize path for consistent comparison
-      const normalizedPath = GitOperations.normalizePath(path);
+      const normalizedPath = getPathService().toRelative(path);
 
       const fileSymbols = Array.from(symbolChanges.values())
         .filter(change => change.symbol.id.startsWith(`${normalizedPath}:`))
@@ -1386,7 +1387,7 @@ export class CommitIndexer {
     for (const file of files) {
       const lang = detectLanguage(file.path);
       // Normalize path for consistency
-      const normalizedPath = GitOperations.normalizePath(file.path);
+      const normalizedPath = getPathService().toRelative(file.path);
       writeQueue.queue({
         type: 'file',
         data: {
