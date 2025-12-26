@@ -748,10 +748,12 @@ export class WorkspaceIndexer {
     if (config?.mode === 'changes') {
       for (const file of skeleton.files) {
         const normalizedFile = GitOperations.normalizePath(file);
-        if (!filteredHotspots.find(h => {
-          const normalizedHPath = h.path ? GitOperations.normalizePath(h.path) : '';
-          return normalizedHPath === normalizedFile;
-        })) {
+        if (
+          !filteredHotspots.find(h => {
+            const normalizedHPath = h.path ? GitOperations.normalizePath(h.path) : '';
+            return normalizedHPath === normalizedFile;
+          })
+        ) {
           filteredHotspots.push({
             path: file,
             count: 0,
@@ -876,7 +878,9 @@ export class WorkspaceIndexer {
                 SELECT COUNT(*) as count FROM symbols
                 WHERE sha = ? AND path = ? AND change_type != 'quick_scan'
               `);
-              const fullScanResult = fullScanStmt.get([headSha, normalizedPath]) as { count: number } | null;
+              const fullScanResult = fullScanStmt.get([headSha, normalizedPath]) as {
+                count: number;
+              } | null;
               if (fullScanResult && fullScanResult.count > 0) {
                 logDebug(
                   `[WorkspaceIndexer] Skipping quick scan for ${normalizedPath} - already has ${fullScanResult.count} full scan symbols`

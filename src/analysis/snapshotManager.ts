@@ -1,4 +1,5 @@
 import { LRUCache } from 'lru-cache';
+import { getPathService } from '../services/pathService';
 import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { EdgeInfo, SymbolInfo } from '../types';
@@ -7,7 +8,6 @@ import { logDebug } from '../utils/logger';
 import { DependencyExtractor } from './dependencies';
 import { assignDNAIds } from './symbolDna';
 import { SymbolExtractor } from './symbols';
-import { getPathService } from '../services/pathService';
 
 export interface FileSnapshot {
   blobSha: string;
@@ -121,7 +121,11 @@ export class SnapshotManager {
 
     const symbolsWithDNA = await assignDNAIds(symbols, bodyTexts, language);
 
-    const edges = this.dependencyExtractor.extractDependencies(content, normalizedPath, symbolsWithDNA);
+    const edges = this.dependencyExtractor.extractDependencies(
+      content,
+      normalizedPath,
+      symbolsWithDNA
+    );
 
     const shapeHash = this.computeShapeHash(symbolsWithDNA);
     const bodyHash = this.computeAggregateBodyHash(symbolsWithDNA);

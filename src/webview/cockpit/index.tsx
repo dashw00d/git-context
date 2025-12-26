@@ -104,17 +104,46 @@ const App: React.FC = () => {
         const message = parsed.data as CockpitHostMessage;
 
         if (message.type === 'setData') {
-          // Direct state replacement - no merge
-          setState(() => {
+          // Merge payload into existing state - never reset to defaults
+          // Quick scan should only ADD data, never remove existing state
+          setState(prev => {
+            const payload = message.payload;
             const newState: CockpitState = {
-              ...defaultState,
-              ...message.payload,
-              // Ensure required fields have defaults
-              activeFrame: message.payload.activeFrame || defaultState.activeFrame,
-              history: message.payload.history || [],
-              explorerData: message.payload.explorerData || [],
-              nodeMetrics: message.payload.nodeMetrics || {},
-              liveAnalysis: message.payload.liveAnalysis || defaultState.liveAnalysis,
+              ...prev, // Preserve ALL existing state
+              // Only update fields that are explicitly in the payload
+              ...(payload.bundleFacts !== undefined && { bundleFacts: payload.bundleFacts }),
+              ...(payload.bundleFactsSkeleton !== undefined && {
+                bundleFactsSkeleton: payload.bundleFactsSkeleton,
+              }),
+              ...(payload.bundleSummary !== undefined && { bundleSummary: payload.bundleSummary }),
+              ...(payload.bundleView !== undefined && { bundleView: payload.bundleView }),
+              ...(payload.activeFrame !== undefined && { activeFrame: payload.activeFrame }),
+              ...(payload.history !== undefined && { history: payload.history }),
+              ...(payload.explorerData !== undefined && { explorerData: payload.explorerData }),
+              ...(payload.nodeMetrics !== undefined && { nodeMetrics: payload.nodeMetrics }),
+              ...(payload.isAnalyzing !== undefined && { isAnalyzing: payload.isAnalyzing }),
+              ...(payload.analysisStep !== undefined && { analysisStep: payload.analysisStep }),
+              ...(payload.analysisProgress !== undefined && {
+                analysisProgress: payload.analysisProgress,
+              }),
+              ...(payload.error !== undefined && { error: payload.error }),
+              ...(payload.liveAnalysis !== undefined && { liveAnalysis: payload.liveAnalysis }),
+              ...(payload.repoName !== undefined && { repoName: payload.repoName }),
+              ...(payload.branchName !== undefined && { branchName: payload.branchName }),
+              ...(payload.bundleConfig !== undefined && { bundleConfig: payload.bundleConfig }),
+              ...(payload.lastNCommits !== undefined && { lastNCommits: payload.lastNCommits }),
+              ...(payload.currentCommitIndex !== undefined && {
+                currentCommitIndex: payload.currentCommitIndex,
+              }),
+              ...(payload.llmOutputs !== undefined && { llmOutputs: payload.llmOutputs }),
+              ...(payload.retrievedHistory !== undefined && {
+                retrievedHistory: payload.retrievedHistory,
+              }),
+              ...(payload.commits !== undefined && { commits: payload.commits }),
+              ...(payload.hasMoreCommits !== undefined && {
+                hasMoreCommits: payload.hasMoreCommits,
+              }),
+              ...(payload.headInfo !== undefined && { headInfo: payload.headInfo }),
             };
             return newState;
           });

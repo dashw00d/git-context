@@ -5,6 +5,7 @@ import { GitOperations } from '../../../analysis/git';
 import { RefactorBundleFacts } from '../../../facts/types';
 import { getAnalysisService } from '../../../services/analysisService';
 import { getRefactorPipeline } from '../../../services/pipelineFactory';
+import { getDatabase } from '../../../storage/database';
 import { BundleSummaryDTO } from '../../../types/cockpit';
 import { withTimeout } from '../../../utils/async';
 import { getGitRoot } from '../../../utils/config';
@@ -92,16 +93,14 @@ export class AnalysisController {
     try {
       const gitOps = new GitOperations();
       const headSha = await gitOps.getHeadSha();
-      const { getDatabaseManager } = await import('../../../storage/database');
-      const dbManager = getDatabaseManager();
-      const db = dbManager.getDatabase();
 
-      if (db) {
+      if (getDatabase() !== null) {
         // Check if HEAD has full scan symbols (change_type != 'quick_scan')
-        const fullScanCheck = db
-          .prepare("SELECT COUNT(*) as count FROM symbols WHERE sha = ? AND change_type != 'quick_scan'")
+        const fullScanCheck = getDatabase()
+          ?.prepare(
+            `SELECT COUNT(*) as count FROM symbols WHERE sha = ? AND change_type != 'quick_scan'`
+          )
           .get([headSha]) as { count: number } | null;
-
         if (fullScanCheck && fullScanCheck.count > 0) {
           logInfo(
             `[AnalysisController] Full scan already completed for HEAD (${fullScanCheck.count} symbols found), skipping quick scan`

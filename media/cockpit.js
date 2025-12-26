@@ -33393,16 +33393,45 @@ ${hotspotText}` : hotspotText;
           }
           const message = parsed.data;
           if (message.type === "setData") {
-            setState(() => {
+            setState((prev) => {
+              const payload = message.payload;
               const newState = {
-                ...defaultState,
-                ...message.payload,
-                // Ensure required fields have defaults
-                activeFrame: message.payload.activeFrame || defaultState.activeFrame,
-                history: message.payload.history || [],
-                explorerData: message.payload.explorerData || [],
-                nodeMetrics: message.payload.nodeMetrics || {},
-                liveAnalysis: message.payload.liveAnalysis || defaultState.liveAnalysis
+                ...prev,
+                // Preserve ALL existing state
+                // Only update fields that are explicitly in the payload
+                ...payload.bundleFacts !== void 0 && { bundleFacts: payload.bundleFacts },
+                ...payload.bundleFactsSkeleton !== void 0 && {
+                  bundleFactsSkeleton: payload.bundleFactsSkeleton
+                },
+                ...payload.bundleSummary !== void 0 && { bundleSummary: payload.bundleSummary },
+                ...payload.bundleView !== void 0 && { bundleView: payload.bundleView },
+                ...payload.activeFrame !== void 0 && { activeFrame: payload.activeFrame },
+                ...payload.history !== void 0 && { history: payload.history },
+                ...payload.explorerData !== void 0 && { explorerData: payload.explorerData },
+                ...payload.nodeMetrics !== void 0 && { nodeMetrics: payload.nodeMetrics },
+                ...payload.isAnalyzing !== void 0 && { isAnalyzing: payload.isAnalyzing },
+                ...payload.analysisStep !== void 0 && { analysisStep: payload.analysisStep },
+                ...payload.analysisProgress !== void 0 && {
+                  analysisProgress: payload.analysisProgress
+                },
+                ...payload.error !== void 0 && { error: payload.error },
+                ...payload.liveAnalysis !== void 0 && { liveAnalysis: payload.liveAnalysis },
+                ...payload.repoName !== void 0 && { repoName: payload.repoName },
+                ...payload.branchName !== void 0 && { branchName: payload.branchName },
+                ...payload.bundleConfig !== void 0 && { bundleConfig: payload.bundleConfig },
+                ...payload.lastNCommits !== void 0 && { lastNCommits: payload.lastNCommits },
+                ...payload.currentCommitIndex !== void 0 && {
+                  currentCommitIndex: payload.currentCommitIndex
+                },
+                ...payload.llmOutputs !== void 0 && { llmOutputs: payload.llmOutputs },
+                ...payload.retrievedHistory !== void 0 && {
+                  retrievedHistory: payload.retrievedHistory
+                },
+                ...payload.commits !== void 0 && { commits: payload.commits },
+                ...payload.hasMoreCommits !== void 0 && {
+                  hasMoreCommits: payload.hasMoreCommits
+                },
+                ...payload.headInfo !== void 0 && { headInfo: payload.headInfo }
               };
               return newState;
             });

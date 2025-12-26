@@ -141,7 +141,10 @@ async function computeBlastRadiusNeighbors(
 
       const depthWeight = 1.0 / (depth + 1);
       const weightedConfidence = confidence * depthWeight;
-      neighborFiles.set(normalizedPath, (neighborFiles.get(normalizedPath) || 0) + weightedConfidence);
+      neighborFiles.set(
+        normalizedPath,
+        (neighborFiles.get(normalizedPath) || 0) + weightedConfidence
+      );
 
       if (depth < maxDepth) {
         queue.push({ symbolId: neighborId, depth: depth + 1 });

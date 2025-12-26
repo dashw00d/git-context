@@ -3,12 +3,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { GitOperations } from '../../../analysis/git';
 import { getTreeSitterParser } from '../../../analysis/tree-sitter';
+import { getPathService } from '../../../services/pathService';
 import { Tier1DataSchema, Tier2DataSchema, Tier3DataSchema } from '../../../state/schemas';
 import { BundleFactsDTO } from '../../../types/cockpit';
 import { detectLanguage } from '../../../utils/config';
 import { splitEdgeId } from '../../../utils/edgeNormalization';
 import { logDebug, logError, logWarn } from '../../../utils/logger';
-import { getPathService } from '../../../services/pathService';
 
 type Tier1Data = {
   content: string;
