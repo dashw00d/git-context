@@ -112,7 +112,7 @@ describe('stateUpdaters', () => {
       activeBundleProvider as unknown as ActiveBundleProvider
     );
 
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     const calls = (commitsProvider.exportCommitsDto as any).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
@@ -129,7 +129,7 @@ describe('stateUpdaters', () => {
       activeBundleProvider as unknown as ActiveBundleProvider
     );
 
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     const calls = (commitsProvider.exportCommitsDto as any).mock.calls;
     expect(calls.length).toBeGreaterThan(0);

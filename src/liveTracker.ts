@@ -245,8 +245,13 @@ export class LiveDiffTracker extends EventEmitter {
     );
 
     const relativePath = vscode.workspace.asRelativePath(doc.uri, false);
+    // Normalize both sides for consistent comparison
+    const normalizedRelativePath = GitOperations.normalizePath(relativePath);
     const stagedFiles = await this.git.getStagedFiles();
-    const isStaged = stagedFiles.some(f => f.path === relativePath);
+    const isStaged = stagedFiles.some(f => {
+      const normalizedFPath = GitOperations.normalizePath(f.path);
+      return normalizedFPath === normalizedRelativePath;
+    });
     const mode = isStaged ? 'staged' : 'unstaged';
 
     this.emit('changesUpdated', {

@@ -4,8 +4,8 @@ import simpleGit, { SimpleGit } from 'simple-git';
 import { CommitInfo, FileChange } from '../types';
 import { withTimeout } from '../utils/async';
 import { getGitRoot } from '../utils/config';
-import { logDebug, logError, logWarn } from '../utils/logger';
-import { normalizeToRelative } from '../utils/path';
+import { logDebug, logError, logInfo, logWarn } from '../utils/logger';
+import { getPathService } from '../services/pathService';
 
 export class GitOperations {
   private gitRoot: string;
@@ -19,7 +19,7 @@ export class GitOperations {
    * Normalizes a path to be relative, forward-slashed, and without leading slashes.
    */
   public static normalizePath(p: string | undefined): string {
-    return normalizeToRelative(p, getGitRoot());
+    return getPathService().toRelative(p);
   }
   // Pending promise caches to deduplicate concurrent requests
   private static pendingStatusPromise?: Promise<string>;
@@ -379,49 +379,84 @@ export class GitOperations {
   async getFileChanges(sha: string): Promise<FileChange[]> {
     try {
       let output: string;
-      try {
-        // Use raw format to get blob SHAs
-        output = await withTimeout(
-          this.git.raw(['diff-tree', '-r', '--no-commit-id', sha]),
-          30000,
-          'Git diff-tree'
-        );
-      } catch (e) {
-        // Check if this is a merge commit by getting commit info
-        const commitInfo = await this.getCommitInfo(sha);
-        const parents = commitInfo.parent ? commitInfo.parent.split(' ') : [];
 
+      // FIRST: Check if this is the first commit (no parent) BEFORE trying diff-tree
+      // For first commit, git diff-tree -r --no-commit-id <sha> returns empty output
+      // instead of throwing an error, so we need to check parent count first
+      const commitInfo = await this.getCommitInfo(sha);
+      const parents = commitInfo.parent ? commitInfo.parent.split(' ') : [];
+      logDebug(
+        `[GitOperations] getFileChanges: commit ${sha.substring(0, 8)} has ${parents.length} parent(s)`
+      );
+
+      try {
+        if (parents.length === 0) {
+          // First commit (no parent): compare against empty tree
+          logDebug(
+            `[GitOperations] getFileChanges: first commit (no parent), comparing against empty tree`
+          );
+          output = await withTimeout(
+            this.git.raw([
+              'diff-tree',
+              '-r',
+              '--no-commit-id',
+              '4b825dc642cb6eb9a060e54bf8d69288fbee4904', // Empty tree SHA
+              sha,
+            ]),
+            30000,
+            'Git diff-tree empty fallback'
+          );
+          logDebug(
+            `[GitOperations] getFileChanges: empty tree diff succeeded, output length: ${output.length}`
+          );
+        } else if (parents.length > 1) {
+          // Merge commit: compare against first parent
+          logDebug(`[GitOperations] getFileChanges: merge commit, comparing against first parent`);
+          output = await withTimeout(
+            this.git.raw([
+              'diff-tree',
+              '-r',
+              '--no-commit-id',
+              `${sha}^1`, // First parent
+              sha,
+            ]),
+            30000,
+            'Git diff-tree merge commit'
+          );
+        } else {
+          // Single-parent commit: use normal diff-tree
+          logDebug(`[GitOperations] getFileChanges: trying diff-tree for ${sha.substring(0, 8)}`);
+          output = await withTimeout(
+            this.git.raw(['diff-tree', '-r', '--no-commit-id', sha]),
+            30000,
+            'Git diff-tree'
+          );
+          logDebug(
+            `[GitOperations] getFileChanges: diff-tree succeeded, output length: ${output.length}`
+          );
+        }
+      } catch (e) {
+        logDebug(
+          `[GitOperations] getFileChanges: diff-tree failed for ${sha.substring(0, 8)}, trying fallback: ${e}`
+        );
+        // Fallback: try comparing against parent explicitly
         try {
-          if (parents.length > 1) {
-            // Merge commit: compare against first parent
+          if (parents.length > 0) {
+            logDebug(
+              `[GitOperations] getFileChanges: fallback - comparing against parent ${parents[0].substring(0, 8)}`
+            );
             output = await withTimeout(
-              this.git.raw([
-                'diff-tree',
-                '-r',
-                '--no-commit-id',
-                `${sha}^1`, // First parent
-                sha,
-              ]),
+              this.git.raw(['diff-tree', '-r', '--no-commit-id', parents[0], sha]),
               30000,
-              'Git diff-tree merge commit'
+              'Git diff-tree parent comparison'
             );
           } else {
-            // Single-parent commit: fallback to empty tree (initial commit case)
-            output = await withTimeout(
-              this.git.raw([
-                'diff-tree',
-                '-r',
-                '--no-commit-id',
-                '4b825dc642cb6eb9a060e54bf8d69288fbee4904', // Empty tree SHA
-                sha,
-              ]),
-              30000,
-              'Git diff-tree empty fallback'
-            );
+            logWarn(`[GitOperations] Failed to get file changes for first commit ${sha}: ${e}`);
+            return [];
           }
         } catch (innerError) {
           logWarn(
-            `Failed to get file changes for ${sha} (${parents.length > 1 ? 'merge commit' : 'single commit'}): ${innerError}`
+            `[GitOperations] Failed to get file changes for ${sha} (${parents.length > 1 ? 'merge commit' : parents.length === 0 ? 'first commit' : 'single commit'}): ${innerError}`
           );
           return [];
         }
@@ -429,6 +464,9 @@ export class GitOperations {
 
       const changes: FileChange[] = [];
       const lines = output.split('\n').filter(line => line.trim());
+      logDebug(
+        `[GitOperations] getFileChanges: parsed ${lines.length} lines from diff-tree output`
+      );
 
       for (const line of lines) {
         // Format: :<old-mode> <new-mode> <old-sha> <new-sha> <status>\t<path>
@@ -454,7 +492,7 @@ export class GitOperations {
         let oldPath: string | undefined;
         let status: FileChange['status'] = 'M';
 
-        if (statusChar === 'R' || statusChar === 'C') {
+        if ((statusChar === 'R' || statusChar === 'C') && parts.length > 2) {
           oldPath = parts[1];
           path = parts[2];
           status = statusChar as FileChange['status'];
@@ -472,6 +510,9 @@ export class GitOperations {
         });
       }
 
+      logInfo(
+        `[GitOperations] getFileChanges: returning ${changes.length} file changes for ${sha.substring(0, 8)}`
+      );
       return changes;
     } catch (error: any) {
       logWarn(`Failed to get file changes for ${sha}: ${error}`);
@@ -1094,7 +1135,7 @@ export class GitOperations {
           }
 
           unstaged.push({
-            path: filePath,
+            path: GitOperations.normalizePath(filePath),
             status: changeStatus,
           });
         }
@@ -1103,9 +1144,14 @@ export class GitOperations {
       try {
         const untrackedFiles = await this.getSharedUntracked();
         for (const filePath of untrackedFiles) {
-          if (!unstaged.some(f => f.path === filePath)) {
+          // Normalize both sides for consistent comparison
+          const normalizedFilePath = GitOperations.normalizePath(filePath);
+          if (!unstaged.some(f => {
+            const normalizedFPath = GitOperations.normalizePath(f.path);
+            return normalizedFPath === normalizedFilePath;
+          })) {
             unstaged.push({
-              path: GitOperations.normalizePath(filePath),
+              path: normalizedFilePath,
               status: 'U',
             });
           }

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { GitOperations } from '../analysis/git';
 import { CommitFacts } from '../analysis/commitIndexer';
 import { getCstTimelineManager } from '../analysis/cstTimeline';
 import { WorkspaceFacts } from '../analysis/workspaceIndexer';
@@ -222,15 +223,27 @@ export async function assembleFacts(
 
       'hybrid.unstaged': {
         total: Object.entries(hybridFactsMap)
-          .filter(([path]) => scope.unstagedFiles?.has(path))
+          .filter(([path]) => {
+            const normalizedPath = GitOperations.normalizePath(path);
+            return scope.unstagedFiles?.has(normalizedPath);
+          })
           .reduce((sum, [, facts]) => sum + facts.length, 0),
-        files: Object.keys(hybridFactsMap).filter(path => scope.unstagedFiles?.has(path)),
+        files: Object.keys(hybridFactsMap).filter(path => {
+          const normalizedPath = GitOperations.normalizePath(path);
+          return scope.unstagedFiles?.has(normalizedPath);
+        }),
       },
       'hybrid.staged': {
         total: Object.entries(hybridFactsMap)
-          .filter(([path]) => scope.stagedFiles?.has(path))
+          .filter(([path]) => {
+            const normalizedPath = GitOperations.normalizePath(path);
+            return scope.stagedFiles?.has(normalizedPath);
+          })
           .reduce((sum, [, facts]) => sum + facts.length, 0),
-        files: Object.keys(hybridFactsMap).filter(path => scope.stagedFiles?.has(path)),
+        files: Object.keys(hybridFactsMap).filter(path => {
+          const normalizedPath = GitOperations.normalizePath(path);
+          return scope.stagedFiles?.has(normalizedPath);
+        }),
       },
 
       'intended.present': intendedLists.present,
@@ -430,6 +443,7 @@ function getWorkingLists(
         filePath: s.filePath || filePath || '',
         sha: newestSha, // Add SHA (from commit context)
         complete: true, // Mark full pipeline as complete
+        changeType: s.change_type || 'modified', // Use change_type from symbol data, default to 'modified'
       });
     }
   }

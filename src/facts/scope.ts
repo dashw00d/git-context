@@ -2,7 +2,6 @@ import { GitOperations } from '../analysis/git';
 import { getGitCacheService } from '../services/gitCacheService';
 import { prepare } from '../storage/statement-wrapper';
 import { FileChange } from '../types';
-import { getGitRoot } from '../utils/config';
 import { logDebug } from '../utils/logger';
 import { filterPath } from '../utils/pathFilter';
 
@@ -134,14 +133,21 @@ async function computeBlastRadiusNeighbors(
       if (changedSymbols.has(neighborId)) continue;
 
       const filePath = extractFileFromSymbolId(neighborId, dnaToPathCache);
-      if (filePath && !commitFiles.has(filePath)) {
-        const depthWeight = 1.0 / (depth + 1);
-        const weightedConfidence = confidence * depthWeight;
-        neighborFiles.set(filePath, (neighborFiles.get(filePath) || 0) + weightedConfidence);
+      if (!filePath) continue;
 
-        if (depth < maxDepth) {
-          queue.push({ symbolId: neighborId, depth: depth + 1 });
-        }
+      // Normalize path for consistent Set membership checks
+      const normalizedPath = GitOperations.normalizePath(filePath);
+      if (commitFiles.has(normalizedPath)) continue;
+
+      const depthWeight = 1.0 / (depth + 1);
+      const weightedConfidence = confidence * depthWeight;
+      neighborFiles.set(
+        normalizedPath,
+        (neighborFiles.get(normalizedPath) || 0) + weightedConfidence
+      );
+
+      if (depth < maxDepth) {
+        queue.push({ symbolId: neighborId, depth: depth + 1 });
       }
     }
   }
@@ -167,8 +173,6 @@ export async function computeScope(
 
   await ensureDatabaseInitialized();
   const git = gitInstance ?? new GitOperations();
-  const gitRoot = getGitRoot();
-
   const scope: ScopeSet = {
     commitFiles: new Set(),
     workingChanged: new Set(),
@@ -182,7 +186,11 @@ export async function computeScope(
 
   for (const sha of commitShas) {
     const commitFiles = await cacheService.getCachedFileChanges(sha);
-    commitFiles.forEach(f => scope.commitFiles.add(f.path));
+    commitFiles.forEach(f => {
+      // Normalize path for consistent Set operations
+      const normalizedPath = GitOperations.normalizePath(f.path);
+      scope.commitFiles.add(normalizedPath);
+    });
   }
 
   // Use plan data if available (from initStep) to avoid redundant git calls
@@ -209,19 +217,27 @@ export async function computeScope(
 
     if (includeStaged) {
       stagedFiles.forEach(f => {
-        scope.workingChanged.add(f.path);
-        scope.stagedFiles.add(f.path);
+        // Normalize path for consistent Set operations
+        const normalizedPath = GitOperations.normalizePath(f.path);
+        scope.workingChanged.add(normalizedPath);
+        scope.stagedFiles.add(normalizedPath);
       });
     }
 
     if (includeUnstaged) {
       unstagedFiles.forEach(f => {
-        scope.workingChanged.add(f.path);
-        scope.unstagedFiles.add(f.path);
+        // Normalize path for consistent Set operations
+        const normalizedPath = GitOperations.normalizePath(f.path);
+        scope.workingChanged.add(normalizedPath);
+        scope.unstagedFiles.add(normalizedPath);
       });
     }
   } else {
-    workingChanges.forEach(f => scope.workingChanged.add(f.path));
+    workingChanges.forEach(f => {
+      // Normalize path for consistent Set operations
+      const normalizedPath = GitOperations.normalizePath(f.path);
+      scope.workingChanged.add(normalizedPath);
+    });
   }
 
   if (liveOverridePaths) {
@@ -243,7 +259,11 @@ export async function computeScope(
     20
   );
   logDebug('[computeScope] computeBlastRadiusNeighbors returned');
-  blastRadiusFiles.forEach(f => scope.blastRadius.add(f));
+  blastRadiusFiles.forEach(f => {
+    // Normalize path for consistent Set operations
+    const normalizedPath = GitOperations.normalizePath(f);
+    scope.blastRadius.add(normalizedPath);
+  });
 
   const allPaths = new Set([...scope.commitFiles, ...scope.workingChanged, ...scope.blastRadius]);
 
@@ -253,7 +273,13 @@ export async function computeScope(
   const pathsArray = Array.from(allPaths);
   let ignoreMap: Map<string, boolean>;
   if (plan?.ignoredPaths) {
-    ignoreMap = new Map(pathsArray.map(p => [p, plan.ignoredPaths.has(p)]));
+    // Normalize paths before checking plan.ignoredPaths (which contains normalized paths)
+    ignoreMap = new Map(
+      pathsArray.map(p => {
+        const normalizedPath = GitOperations.normalizePath(p);
+        return [p, plan.ignoredPaths.has(normalizedPath)];
+      })
+    );
     logDebug(`[Scope] Using plan ignoreData for ${pathsArray.length} paths`);
   } else {
     // Fallback to git call (should rarely happen in normal pipeline execution)
@@ -292,10 +318,12 @@ export async function computeScope(
         versionFiles = scope.commitFiles;
       } else {
         const commitFiles = await cacheService.getCachedFileChanges(version);
-        versionFiles = new Set(commitFiles.map(f => f.path));
+        // Normalize paths for consistent Set operations
+        versionFiles = new Set(commitFiles.map(f => GitOperations.normalizePath(f.path)));
       }
 
       for (const filePath of versionFiles) {
+        // filePath is already normalized from above
         if (filteredPaths.has(filePath) && !fileVersionMap.has(filePath)) {
           fileVersionMap.set(filePath, version);
         }
@@ -303,6 +331,7 @@ export async function computeScope(
     }
 
     for (const filePath of scope.blastRadius) {
+      // scope.blastRadius contains normalized paths
       if (filteredPaths.has(filePath) && !fileVersionMap.has(filePath)) {
         const newestVersion = explicitTimeline[0] || 'HEAD';
         fileVersionMap.set(filePath, newestVersion);

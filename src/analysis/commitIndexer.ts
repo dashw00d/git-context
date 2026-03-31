@@ -9,6 +9,7 @@ import { prepare } from '../storage/statement-wrapper';
 import { detectLanguage, getExtensionConfig, isCstOnlyLanguage } from '../utils/config';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { shouldProcessPathWithLog } from '../utils/pathFilter';
+import { getPathService } from '../services/pathService';
 import { getCstTimelineManager } from './cstTimeline';
 import { DependencyExtractor } from './dependencies';
 import { GitOperations } from './git';
@@ -92,8 +93,10 @@ export class CommitIndexer {
     plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<string> {
     // Try plan data first (synchronous, no lookup overhead)
-    if (plan?.content.has(`${sha}:${path}`)) {
-      return plan.content.get(`${sha}:${path}`)!;
+    // Normalize path for consistent plan data lookup
+    const normalizedPath = getPathService().toRelative(path);
+    if (plan?.content.has(`${sha}:${normalizedPath}`)) {
+      return plan.content.get(`${sha}:${normalizedPath}`)!;
     }
     // Fallback to git (will log warning)
     return this.git.safeGetFileContent(sha, path);
@@ -196,9 +199,47 @@ export class CommitIndexer {
     }
 
     if (!opts?.force && this.isIndexed(sha)) {
-      logDebug(`[CommitIndexer] ${sha} already indexed`);
-      this.cacheHits++;
-      return this.loadCommitFacts(sha);
+      // Verify that actual data exists (not just metadata)
+      // If commit is marked as indexed but data doesn't exist, force re-index
+      // Since indexing is idempotent (INSERT OR REPLACE), it's safe to re-index
+      if (this.db) {
+        const symbolCount = this.db
+          .prepare(
+            "SELECT COUNT(*) as count FROM symbols WHERE sha = ? AND change_type != 'quick_scan'"
+          )
+          .get([sha]) as { count: number } | null;
+        const quickScanCount = this.db
+          .prepare('SELECT COUNT(*) as count FROM symbols WHERE sha = ? AND change_type = ?')
+          .get([sha, 'quick_scan']) as { count: number } | null;
+        const edgeCount = this.db
+          .prepare('SELECT COUNT(*) as count FROM edges WHERE sha = ?')
+          .get([sha]) as { count: number } | null;
+
+        const hasSymbols = symbolCount && symbolCount.count > 0;
+        const hasQuickScan = quickScanCount && quickScanCount.count > 0;
+        // If we have both symbols and edges, we're good (some commits may have no edges)
+        // If we have neither, data is missing - re-index
+        // If we have symbols but no edges, that's acceptable (commits can have symbols without edges)
+        if (hasQuickScan) {
+          logInfo(
+            `[CommitIndexer] ${sha.substring(0, 8)} has quick_scan symbols (${quickScanCount?.count || 0}), forcing re-index`
+          );
+        } else if (!hasSymbols) {
+          logInfo(
+            `[CommitIndexer] ${sha.substring(0, 8)} marked as indexed but no symbols found (symbols: ${symbolCount?.count || 0}, edges: ${edgeCount?.count || 0}), forcing re-index`
+          );
+          // Fall through to re-index
+        } else {
+          logDebug(
+            `[CommitIndexer] ${sha} already indexed (${symbolCount?.count || 0} symbols, ${edgeCount?.count || 0} edges)`
+          );
+          this.cacheHits++;
+          return this.loadCommitFacts(sha);
+        }
+      } else {
+        // No database, can't verify - fall through to re-index
+        logDebug(`[CommitIndexer] ${sha} marked as indexed but no DB access, re-indexing`);
+      }
     }
 
     this.cacheMisses++;
@@ -439,14 +480,21 @@ export class CommitIndexer {
     );
 
     this.storeCommitMetadata(commitInfo, facts.filesChanged);
+    this.storeFiles(sha, files);
 
-    logInfo(`[CommitIndexer] Storing ${symbolChanges.size} symbol changes for ${sha}`);
+    logInfo(
+      `[CommitIndexer] Storing ${symbolChanges.size} symbol changes, ${edgesToInsert.length} edges for ${sha.substring(0, 8)}`
+    );
     await this.storeSymbolHistory(sha, symbolChanges, blastRadiusResult.impactScore);
 
     await this.storeSymbols(sha, symbolChanges);
 
     if (!opts?.modules || opts.modules.includes('edges')) {
       await this.storeEdgesBatch(sha, edgesToInsert);
+    } else {
+      logInfo(
+        `[CommitIndexer] Skipping edge storage (modules: ${opts?.modules?.join(', ') || 'all'})`
+      );
     }
 
     const { movedBlocks } = await this.movedBlockDetector.detectMovedBlocks(
@@ -580,6 +628,9 @@ export class CommitIndexer {
     );
 
     if (status === 'A') {
+      logDebug(
+        `[CommitIndexer] Processing added file ${path}@${sha.substring(0, 8)}: ${currentSnapshot.symbols.length} symbols, ${currentSnapshot.edges.length} edges`
+      );
       result.symbolsAdded += currentSnapshot.symbols.length;
       result.edgesAdded += currentSnapshot.edges.length;
 
@@ -603,6 +654,9 @@ export class CommitIndexer {
           isResolved: (edge as any).isResolved !== false ? 1 : 0,
         });
       }
+      logDebug(
+        `[CommitIndexer] Queued ${currentSnapshot.symbols.length} symbols and ${currentSnapshot.edges.length} edges for ${path}@${sha.substring(0, 8)}`
+      );
     } else if (status === 'M' && parentSha) {
       const parentBlobSha = file.oldSha || (await this.getBlobSha(parentSha, path, plan));
 
@@ -739,7 +793,14 @@ export class CommitIndexer {
       );
     }
 
-    const fileSymbols = result.symbolChanges.filter(c => c.filePath === path).map(c => c.symbol);
+    // Normalize both sides for consistent comparison
+    const normalizedPath = getPathService().toRelative(path);
+    const fileSymbols = result.symbolChanges
+      .filter(c => {
+        const normalizedCPath = getPathService().toRelative(c.filePath);
+        return normalizedCPath === normalizedPath;
+      })
+      .map(c => c.symbol);
 
     if (fileSymbols.length > 0) {
       result.hotspots.push({ path, symbols: fileSymbols });
@@ -766,6 +827,23 @@ export class CommitIndexer {
   ): Promise<void> {
     const writeQueue = DatabaseWriteQueue.getInstance();
 
+    // Diagnostic logging
+    const changeTypeCounts = new Map<string, number>();
+    const edgeTypeCounts = new Map<string, number>();
+    for (const edge of edges) {
+      changeTypeCounts.set(edge.changeType, (changeTypeCounts.get(edge.changeType) || 0) + 1);
+      edgeTypeCounts.set(edge.edgeType, (edgeTypeCounts.get(edge.edgeType) || 0) + 1);
+    }
+    logInfo(
+      `[CommitIndexer] storeEdgesBatch called for ${sha.substring(0, 8)}: ${edges.length} edges, ` +
+        `changeTypes: ${Array.from(changeTypeCounts.entries())
+          .map(([t, c]) => `${t}=${c}`)
+          .join(', ')}, ` +
+        `edgeTypes: ${Array.from(edgeTypeCounts.entries())
+          .map(([t, c]) => `${t}=${c}`)
+          .join(', ')}`
+    );
+
     for (const edge of edges) {
       writeQueue.queue({
         type: 'edge',
@@ -780,6 +858,8 @@ export class CommitIndexer {
         },
       });
     }
+
+    logDebug(`[CommitIndexer] Queued ${edges.length} edge operations for ${sha.substring(0, 8)}`);
   }
 
   private async updateHotspotsFromBatch(
@@ -831,19 +911,58 @@ export class CommitIndexer {
   ): Promise<void> {
     const writeQueue = DatabaseWriteQueue.getInstance();
 
-    for (const [_dnaId, { type, symbol, filePath }] of symbolChanges) {
+    // Diagnostic logging
+    const changeTypeCounts = new Map<string, number>();
+    const fileCounts = new Map<string, number>();
+    for (const [_dnaId, { type, filePath }] of symbolChanges) {
+      changeTypeCounts.set(type, (changeTypeCounts.get(type) || 0) + 1);
+      fileCounts.set(filePath, (fileCounts.get(filePath) || 0) + 1);
+    }
+    logInfo(
+      `[CommitIndexer] storeSymbols called for ${sha.substring(0, 8)}: ${symbolChanges.size} symbols, ` +
+        `changeTypes: ${Array.from(changeTypeCounts.entries())
+          .map(([t, c]) => `${t}=${c}`)
+          .join(', ')}, ` +
+        `files: ${Array.from(fileCounts.entries())
+          .map(([f, c]) => `${f}=${c}`)
+          .join(', ')}`
+    );
+
+    for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
+      // Normalize path for consistency with workspace indexer
+      const normalizedPath = getPathService().toRelative(filePath);
+
       // Queue symbol_dna insert
       writeQueue.queue({
         type: 'symbol',
-        data: { sha, path: filePath, symbol, changeType: type, isDna: true },
+        data: { sha, path: normalizedPath, symbol, changeType: type, isDna: true },
       });
 
       // Queue symbols insert
       writeQueue.queue({
         type: 'symbol',
-        data: { sha, path: filePath, symbol, changeType: type, isDna: false },
+        data: { sha, path: normalizedPath, symbol, changeType: type, isDna: false },
+      });
+
+      // Queue symbol_versions insert
+      writeQueue.queue({
+        type: 'symbol_version',
+        data: {
+          dnaId,
+          sha,
+          path: normalizedPath,
+          symbolId: symbol.id || dnaId,
+          name: symbol.name,
+          kind: symbol.kind,
+          signatureHash: symbol.signatureHash || undefined,
+          bodyHash: symbol.bodyHash || undefined,
+        },
       });
     }
+
+    logDebug(
+      `[CommitIndexer] Queued ${symbolChanges.size * 2} symbol operations (${symbolChanges.size} DNA + ${symbolChanges.size} symbols) for ${sha.substring(0, 8)}`
+    );
   }
 
   /**
@@ -1005,9 +1124,11 @@ export class CommitIndexer {
 
     for (const [dnaId, { type, symbol, filePath }] of symbolChanges) {
       const impactScore = impactScores.get(dnaId) || 0;
+      // Normalize path for consistency
+      const normalizedPath = getPathService().toRelative(filePath);
       writeQueue.queue({
         type: 'symbol_history',
-        data: { dnaId, sha, filePath, symbol, impactScore, changeType: type },
+        data: { dnaId, sha, filePath: normalizedPath, symbol, impactScore, changeType: type },
       });
     }
   }
@@ -1147,12 +1268,19 @@ export class CommitIndexer {
     }
 
     if (edgesToInsert.length > 0) {
+      const { normalizeEdgeIdForStorage } = require('../utils/edgeNormalization');
       this.db.transaction(() => {
         for (const edge of edgesToInsert) {
+          // Normalize edge IDs to extract DNA hash from path-prefixed format
+          // Edges from DependencyExtractor are in format "filePath:dna:hash"
+          // Database should store just "dna:hash" to match symbols.dna_id for JOINs
+          const normalizedFrom = normalizeEdgeIdForStorage(edge.from);
+          const normalizedTo = normalizeEdgeIdForStorage(edge.to);
+
           stmt.run([
             edge.sha,
-            edge.from,
-            edge.to,
+            normalizedFrom,
+            normalizedTo,
             edge.changeType,
             edge.edgeType,
             edge.confidence,
@@ -1173,9 +1301,11 @@ export class CommitIndexer {
 
     for (const file of files) {
       const { path } = file;
+      // Normalize path for consistent comparison
+      const normalizedPath = getPathService().toRelative(path);
 
       const fileSymbols = Array.from(symbolChanges.values())
-        .filter(change => change.symbol.id.startsWith(`${path}:`))
+        .filter(change => change.symbol.id.startsWith(`${normalizedPath}:`))
         .map(change => change.symbol);
 
       if (fileSymbols.length >= 5) {
@@ -1249,5 +1379,24 @@ export class CommitIndexer {
       type: 'commit_metadata',
       data: { sha: info.sha, info, filesChanged },
     });
+  }
+
+  private storeFiles(sha: string, files: FileChange[]): void {
+    const writeQueue = DatabaseWriteQueue.getInstance();
+
+    for (const file of files) {
+      const lang = detectLanguage(file.path);
+      // Normalize path for consistency
+      const normalizedPath = getPathService().toRelative(file.path);
+      writeQueue.queue({
+        type: 'file',
+        data: {
+          sha,
+          path: normalizedPath,
+          status: file.status,
+          lang: lang || undefined,
+        },
+      });
+    }
   }
 }

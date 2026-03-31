@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { GitOperations } from '../analysis/git';
 import { analysisActions } from '../state/actionCreators';
 import { getStore } from '../state/store';

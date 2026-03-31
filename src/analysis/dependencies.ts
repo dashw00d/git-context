@@ -18,8 +18,10 @@ export class DependencyExtractor {
     plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<string> {
     // Try plan data first (synchronous, no lookup overhead)
-    if (plan?.content.has(`${sha}:${path}`)) {
-      return plan.content.get(`${sha}:${path}`)!;
+    // Normalize path for consistent plan data lookup
+    const normalizedPath = GitOperations.normalizePath(path);
+    if (plan?.content.has(`${sha}:${normalizedPath}`)) {
+      return plan.content.get(`${sha}:${normalizedPath}`)!;
     }
     // Fallback to git
     return git.safeGetFileContent(sha, path);
@@ -473,16 +475,22 @@ export class DependencyExtractor {
 
     const symbolsByFile = new Map<string, SymbolInfo[]>();
     for (const symbol of [...symbols.added, ...symbols.modified.map(m => m.symbol)]) {
+      // Normalize path for consistent Map operations
       const filePath = symbol.filePath;
-      if (!symbolsByFile.has(filePath)) {
-        symbolsByFile.set(filePath, []);
+      const normalizedPath = GitOperations.normalizePath(filePath);
+      if (!symbolsByFile.has(normalizedPath)) {
+        symbolsByFile.set(normalizedPath, []);
       }
-      symbolsByFile.get(filePath)!.push(symbol);
+      symbolsByFile.get(normalizedPath)!.push(symbol);
     }
 
     for (const [filePath, fileSymbols] of symbolsByFile) {
       try {
-        const isStaged = files.some(f => f.path === filePath && f.status !== 'U');
+        // filePath is already normalized from above
+        const isStaged = files.some(f => {
+          const normalizedFPath = GitOperations.normalizePath(f.path);
+          return normalizedFPath === filePath && f.status !== 'U';
+        });
         const content = isStaged
           ? git.safeGetStagedContent(filePath)
           : git.safeGetWorkingContent(filePath);
@@ -520,31 +528,50 @@ export class DependencyExtractor {
     const previousEdges: EdgeInfo[] = [];
 
     for (const [filePath, content] of fileContents) {
-      const fileSymbols = symbols.added.filter(s => s.filePath === filePath);
+      // Normalize both sides of comparison for consistent matching
+      const normalizedFilePath = GitOperations.normalizePath(filePath);
+      const fileSymbols = symbols.added.filter(s => {
+        const normalizedSymbolPath = GitOperations.normalizePath(s.filePath);
+        return normalizedSymbolPath === normalizedFilePath;
+      });
 
       const modifiedSymbols = symbols.modified
         .map(m => m.symbol)
-        .filter(s => s.filePath === filePath);
+        .filter(s => {
+          const normalizedSymbolPath = GitOperations.normalizePath(s.filePath);
+          return normalizedSymbolPath === normalizedFilePath;
+        });
       const allFileSymbols = [...fileSymbols, ...modifiedSymbols];
 
       const edges = this.extractDependencies(content, filePath, allFileSymbols);
       currentEdges.push(...edges);
     }
 
-    const modifiedFiles = new Set(symbols.modified.map(m => m.symbol.filePath));
+    // Normalize paths in modifiedFiles Set
+    const modifiedFiles = new Set(
+      symbols.modified.map(m => GitOperations.normalizePath(m.symbol.filePath))
+    );
 
     for (const filePath of modifiedFiles) {
       try {
         const commitInfo = await git.getCommitInfo(sha);
         if (commitInfo.parent) {
-          const fileChange = files.find(f => f.path === filePath);
-          const parentPath =
-            fileChange?.status === 'R' && fileChange.oldPath ? fileChange.oldPath : filePath;
+          // Normalize path for file comparison
+          const fileChange = files.find(f => {
+            const normalizedFPath = GitOperations.normalizePath(f.path);
+            return normalizedFPath === filePath;
+          });
+          const parentPath = fileChange?.status === 'R' && fileChange.oldPath
+            ? GitOperations.normalizePath(fileChange.oldPath)
+            : filePath;
 
           const previousContent = await this.getContent(commitInfo.parent, parentPath, git, plan);
 
           const previousFileSymbols = symbols.modified
-            .filter(m => m.symbol.filePath === filePath && m.previousSymbol)
+            .filter(m => {
+              const normalizedSymbolPath = GitOperations.normalizePath(m.symbol.filePath);
+              return normalizedSymbolPath === filePath && m.previousSymbol;
+            })
             .map(m => m.previousSymbol!);
 
           const edges = this.extractDependencies(previousContent, filePath, previousFileSymbols);

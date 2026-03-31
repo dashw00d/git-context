@@ -142,8 +142,8 @@ describe('FrameAnalyzer', () => {
       const facts = {
         evidence: {
           'working.edges': [
-            'src/test.ts: funcA -> src/other.ts: funcB (calls)',
-            'src/caller.ts: funcC -> src/test.ts: funcA (calls)',
+            'src/test.ts:dna:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -> src/other.ts:dna:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb (calls)',
+            'src/caller.ts:dna:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc -> src/test.ts:dna:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (calls)',
           ],
         },
       } as any;
@@ -151,10 +151,14 @@ describe('FrameAnalyzer', () => {
       const result = await analyzer.analyzeTier2('frame1', 'src/test.ts', facts);
 
       expect(result.blastRadius.outgoing).toHaveLength(1);
-      expect(result.blastRadius.outgoing[0].to).toBe('src/other.ts: funcB');
+      expect(result.blastRadius.outgoing[0].to).toBe(
+        'src/other.ts:dna:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+      );
 
       expect(result.blastRadius.incoming).toHaveLength(1);
-      expect(result.blastRadius.incoming[0].from).toBe('src/caller.ts: funcC');
+      expect(result.blastRadius.incoming[0].from).toBe(
+        'src/caller.ts:dna:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+      );
     });
   });
 });

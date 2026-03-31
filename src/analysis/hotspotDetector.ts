@@ -1,4 +1,3 @@
-import * as crypto from 'crypto';
 import { DatabaseService, getDatabaseService } from '../services/databaseService';
 import { getDatabaseManager } from '../storage/database';
 import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
@@ -6,6 +5,7 @@ import { prepare } from '../storage/statement-wrapper';
 import { SymbolInfo } from '../types';
 import { logDebug, logInfo } from '../utils/logger';
 import { BaseDetector, DetectorConfig } from './detectors/BaseDetector';
+import { GitOperations } from './git';
 import type { CommitFacts } from '../analysis/commitIndexer';
 
 export interface HotspotMetrics {
@@ -117,10 +117,12 @@ export class HotspotDetector {
 
     // Queue for batch write
     const writeQueue = DatabaseWriteQueue.getInstance();
+    // Normalize path for consistency
+    const normalizedPath = GitOperations.normalizePath(filePath);
     writeQueue.queue({
       type: 'file_hotspot',
       data: {
-        filePath,
+        filePath: normalizedPath,
         sha,
         symbolChanges,
         author,
@@ -150,14 +152,9 @@ export class HotspotDetector {
 
     const now = new Date().toISOString();
 
-    const cacheKey = this.generateCacheKey(symbols, sha);
-    const cacheHash = crypto.createHash('sha256').update(cacheKey).digest('hex');
-
-    const cached = this.getCachedResult(cacheHash);
-    if (cached) {
-      logDebug(`[HotspotDetector] Cache hit for batch update (${symbols.length} symbols)`);
-      return;
-    }
+    // Removed cache check: hotspot updates are idempotent (INSERT OR REPLACE)
+    // Always compute to ensure correctness rather than trusting metadata flags
+    // If performance becomes an issue, we can add back cache with data verification
 
     const dnaIds = symbols.filter(s => s.id).map(s => s.id);
     if (dnaIds.length === 0) return;
@@ -265,10 +262,8 @@ export class HotspotDetector {
 
     const result = batch(symbols);
     logDebug(
-      `[HotspotDetector] Batch updated ${result.updated} symbols, skipped ${result.skipped} (dedup/cache)`
+      `[HotspotDetector] Batch updated ${result.updated} symbols, skipped ${result.skipped} (dedup)`
     );
-
-    this.setCachedResult(cacheKey, cacheHash, now);
   }
 
   /**
@@ -573,10 +568,12 @@ export class HotspotDetector {
   }
 
   private getFileHotspot(filePath: string): FileHotspot | null {
+    // Normalize path for query consistency
+    const normalizedPath = GitOperations.normalizePath(filePath);
     const stmt = this.dbManager.getDatabase().prepare(`
       SELECT * FROM file_hotspots WHERE file_path = ?
     `);
-    const row = stmt.get(filePath) as any;
+    const row = stmt.get(normalizedPath) as any;
     if (!row) return null;
 
     return {

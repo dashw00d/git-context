@@ -4,6 +4,7 @@ import { prepare } from '../storage/statement-wrapper';
 import { DeltaChange, HybridFact, isCstFact } from '../types/cstFacts';
 import { logDebug, logError } from '../utils/logger';
 import { computeHybridDna } from './symbolDna';
+import { getPathService } from '../services/pathService';
 import type { ScopeSet } from '../facts/scope';
 
 /**
@@ -57,6 +58,8 @@ export class CstTimelineManager {
 
     // Queue all facts for batch write
     const writeQueue = DatabaseWriteQueue.getInstance();
+    // Normalize path for consistency
+    const normalizedPath = getPathService().toRelative(filePath);
 
     for (const fact of facts) {
       const dnaId = dnaMap.get(fact.id)!;
@@ -72,7 +75,7 @@ export class CstTimelineManager {
       writeQueue.queue({
         type: 'hybrid_fact',
         data: {
-          filePath,
+          filePath: normalizedPath,
           version: commitSha,
           fact,
           delta,
@@ -141,16 +144,16 @@ export class CstTimelineManager {
     const db = getDatabase();
     if (!db) return null;
 
-    this.ensureTableExists();
-
     try {
+      // Normalize path for query consistency
+      const normalizedPath = getPathService().toRelative(filePath);
       const stmt = prepare(`
         SELECT serialized_fact FROM hybrid_facts
         WHERE file_path = ? AND version = ?
         ORDER BY created_at DESC
       `);
 
-      const rows = stmt.all([filePath, commitSha]) as any[];
+      const rows = stmt.all([normalizedPath, commitSha]) as any[];
       if (!rows || rows.length === 0) return null;
 
       return rows.map(row => JSON.parse(row.serialized_fact)) as HybridFact[];
@@ -174,7 +177,9 @@ export class CstTimelineManager {
     this.ensureTableExists();
 
     try {
-      const placeholders = filePaths.map(() => '?').join(',');
+      // Normalize all paths for query consistency
+      const normalizedPaths = filePaths.map(p => getPathService().toRelative(p));
+      const placeholders = normalizedPaths.map(() => '?').join(',');
       const stmt = prepare(`
         SELECT file_path, serialized_fact
         FROM hybrid_facts
@@ -182,7 +187,7 @@ export class CstTimelineManager {
         ORDER BY file_path, created_at DESC
       `);
 
-      const rows = stmt.all([...filePaths, version]) as any[];
+      const rows = stmt.all([...normalizedPaths, version]) as any[];
       if (!rows || rows.length === 0) return new Map();
 
       const factsByFile = new Map<string, HybridFact[]>();
@@ -237,13 +242,15 @@ export class CstTimelineManager {
     if (!db) return null;
 
     try {
+      // Normalize path for query consistency
+      const normalizedPath = getPathService().toRelative(filePath);
       const stmt = prepare(`
         SELECT serialized_fact FROM hybrid_facts
         WHERE file_path = ? AND hash = ?
         ORDER BY created_at DESC
       `);
 
-      const rows = stmt.all([filePath, hash]) as any[];
+      const rows = stmt.all([normalizedPath, hash]) as any[];
       if (!rows || rows.length === 0) return null;
 
       return rows.map(row => JSON.parse(row.serialized_fact)) as HybridFact[];
@@ -306,10 +313,11 @@ export class CstTimelineManager {
     fact: HybridFact,
     priorFacts: HybridFact[] | null
   ): Promise<DeltaChange> {
+    const dnaId = await computeHybridDna(fact);
     if (!priorFacts || priorFacts.length === 0) {
       return {
         type: 'added',
-        newDna: await computeHybridDna(fact),
+        newDna: dnaId,
       };
     }
 
@@ -320,7 +328,7 @@ export class CstTimelineManager {
     if (!priorFact) {
       return {
         type: 'added',
-        newDna: await computeHybridDna(fact),
+        newDna: dnaId,
       };
     }
 
@@ -333,7 +341,7 @@ export class CstTimelineManager {
       return {
         type: 'modified',
         oldDna: priorFact.id,
-        newDna: fact.id,
+        newDna: dnaId,
         locationDelta: locationChanged
           ? {
               oldLine: priorFact.location.start.line,
@@ -346,7 +354,7 @@ export class CstTimelineManager {
     return {
       type: 'modified',
       oldDna: priorFact.id,
-      newDna: fact.id,
+      newDna: dnaId,
     };
   }
 

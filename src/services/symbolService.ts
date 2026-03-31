@@ -1,6 +1,7 @@
 import { ensureDatabaseInitialized } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
+import { getPathService } from './pathService';
 import { ServiceBase, ServiceConfig } from './base/ServiceBase';
 import type { SymbolInfo } from '../types';
 import type { SymbolHistory, SymbolWithDNA } from './databaseService';
@@ -34,7 +35,7 @@ export class SymbolService extends ServiceBase {
                  sv.signature_hash, sv.body_hash,
                  ROW_NUMBER() OVER (PARTITION BY sv.dna_id ORDER BY sv.sha DESC) as rn
           FROM symbol_versions sv
-          JOIN symbols s ON sv.sha = s.sha AND sv.dna_id = s.dna_id
+          JOIN symbols s ON sv.sha = s.sha AND sv.dna_id = s.dna_id AND sv.path = s.path
           WHERE sv.dna_id = ?
         `);
 
@@ -146,7 +147,7 @@ export class SymbolService extends ServiceBase {
         const stmt = prepare(`
           SELECT DISTINCT s.*, sv.dna_id as dna
           FROM symbols s
-          JOIN symbol_versions sv ON s.sha = sv.sha AND s.dna_id = sv.dna_id
+          JOIN symbol_versions sv ON s.sha = sv.sha AND s.dna_id = sv.dna_id AND s.path = sv.path
           WHERE s.name LIKE ?
           ORDER BY s.name
           LIMIT ?
@@ -201,7 +202,7 @@ export class SymbolService extends ServiceBase {
         const symbolStmt = prepare(`
           SELECT DISTINCT s.*, sv.dna_id as dna
           FROM symbols s
-          JOIN symbol_versions sv ON s.sha = sv.sha AND s.dna_id = sv.dna_id
+          JOIN symbol_versions sv ON s.sha = sv.sha AND s.dna_id = sv.dna_id AND s.path = sv.path
           WHERE s.sha IN (${placeholders})
           ORDER BY s.name
         `);
@@ -244,10 +245,11 @@ export class SymbolService extends ServiceBase {
         `);
 
         for (const item of history) {
+          const normalizedPath = getPathService().toRelative(item.file_path);
           stmt.run(
             item.symbol_dna_id,
             item.sha,
-            item.file_path,
+            normalizedPath,
             item.name,
             item.kind,
             item.signature,

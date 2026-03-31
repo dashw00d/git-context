@@ -28,7 +28,7 @@ export function createHotspotStep(): PipelineStep {
         SELECT s.symbol_id, s.name, s.kind, s.path, s.change_type, s.signature,
                sv.dna_id, s.sha
         FROM symbols s
-        LEFT JOIN symbol_versions sv ON s.sha = sv.sha AND s.symbol_id = sv.symbol_id AND s.path = sv.path
+        LEFT JOIN symbol_versions sv ON s.sha = sv.sha AND s.dna_id = sv.dna_id AND s.path = sv.path
         WHERE s.sha IN (${placeholders})
       `);
       const allSymbolRows = symbolsStmt.all(...state.selectedCommitShas) as any[];

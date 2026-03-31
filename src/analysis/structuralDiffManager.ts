@@ -3,6 +3,7 @@ import { prepare } from '../storage/statement-wrapper';
 import { logDebug } from '../utils/logger';
 import { getCstDiffManager } from './cstDiff';
 import { getDifftasticIntegration } from './difftastic';
+import { getPathService } from '../services/pathService';
 import type { CstDiffResult } from './cstDiff';
 
 export interface StructuralDiffMetrics {
@@ -34,8 +35,11 @@ export class StructuralDiffManager {
     parentContent: string,
     currentContent: string
   ): Promise<StructuralDiffMetrics> {
+    // Normalize path for consistency
+    const normalizedPath = getPathService().toRelative(filePath);
+
     if (parentBlobSha === currentBlobSha) {
-      logDebug(`[StructDiff] Skipping diff for ${filePath} - identical blob SHA`);
+      logDebug(`[StructDiff] Skipping diff for ${normalizedPath} - identical blob SHA`);
       const emptyDiff: StructuralDiffMetrics = {
         structuralChangeScore: 0,
         controlFlowChanged: false,
@@ -48,12 +52,12 @@ export class StructuralDiffManager {
       // Queue empty diff for batch write
       this.writeQueue.queue({
         type: 'structural_diff',
-        data: { parentBlobSha, currentBlobSha, filePath, metrics: emptyDiff },
+        data: { parentBlobSha, currentBlobSha, filePath: normalizedPath, metrics: emptyDiff },
       });
       return emptyDiff;
     }
 
-    const cached = this.getCachedDiff(parentBlobSha, currentBlobSha, filePath);
+    const cached = this.getCachedDiff(parentBlobSha, currentBlobSha, normalizedPath);
     if (cached) {
       logDebug(
         `[StructDiff] Cache hit for ${filePath} ${parentBlobSha.substring(
@@ -64,18 +68,18 @@ export class StructuralDiffManager {
       return cached;
     }
 
-    logDebug(`[StructDiff] Computing diff for ${filePath}`);
+    logDebug(`[StructDiff] Computing diff for ${normalizedPath}`);
     const difftasticResult = await this.difftastic.runDifftastic(
       parentContent,
       currentContent,
-      filePath,
-      filePath
+      normalizedPath,
+      normalizedPath
     );
 
     const metrics = this.extractMetrics(difftasticResult);
 
     try {
-      const cstResult = await this.computeCstDelta(parentContent, currentContent, filePath);
+      const cstResult = await this.computeCstDelta(parentContent, currentContent, normalizedPath);
       if (cstResult.changedFacts.length > 0) {
         const cstScore = Math.min(cstResult.changedFacts.length * 0.1, 1.0);
         metrics.structuralChangeScore = Math.max(metrics.structuralChangeScore, cstScore);
@@ -87,7 +91,7 @@ export class StructuralDiffManager {
     // Queue diff for batch write
     this.writeQueue.queue({
       type: 'structural_diff',
-      data: { parentBlobSha, currentBlobSha, filePath, metrics },
+      data: { parentBlobSha, currentBlobSha, filePath: normalizedPath, metrics },
     });
 
     return metrics;
@@ -107,11 +111,13 @@ export class StructuralDiffManager {
     currentBlobSha: string,
     filePath: string
   ): StructuralDiffMetrics | null {
+    // Normalize path for query consistency
+    const normalizedPath = getPathService().toRelative(filePath);
     const stmt = prepare(`
       SELECT * FROM structural_diffs
       WHERE parent_blob_sha = ? AND current_blob_sha = ? AND file_path = ?
     `);
-    const row = stmt.get([parentBlobSha, currentBlobSha, filePath]) as any;
+    const row = stmt.get([parentBlobSha, currentBlobSha, normalizedPath]) as any;
     if (!row) return null;
 
     return {

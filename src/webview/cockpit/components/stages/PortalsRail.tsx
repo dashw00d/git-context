@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { FileAnalysisData } from '../../hooks/useFileAnalysisData';
+import { splitEdgeId } from '../../../../utils/edgeNormalization';
 import { LineagePanel } from './LineagePanel';
 
 // Browser-compatible path utilities
@@ -130,8 +131,11 @@ function groupByFolder(references: any[]): Map<string, number> {
     // Extract path from reference (could be "from" or "to" depending on direction)
     const refPath = ref.from || ref.to || '';
     if (refPath) {
-      const lastColon = refPath.lastIndexOf(':');
-      const filePath = lastColon !== -1 ? refPath.substring(0, lastColon) : refPath;
+      const filePath = splitEdgeId(refPath).filePath;
+      // Skip unknown/unresolved paths
+      if (!filePath || filePath === 'unknown') {
+        return;
+      }
       const folder = extractFolderName(filePath);
       groups.set(folder, (groups.get(folder) || 0) + 1);
     }
@@ -162,23 +166,18 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
 
   if (focusedSymbolId && currentFilePath) {
     const normalizedTarget = currentFilePath;
-    // Ensure we handle both local and fully qualified IDs
-    const baseSymbolId = focusedSymbolId.includes(':')
-      ? focusedSymbolId.substring(focusedSymbolId.lastIndexOf(':') + 1)
-      : focusedSymbolId;
+    const focusedSymbol = splitEdgeId(focusedSymbolId).symbolId;
 
     // Filter to only references involving the focused symbol
     filteredIncoming = (blastRadius?.incoming || []).filter(ref => {
       // Parse "to" path and symbol from reference
-      const lastColon = ref.to?.lastIndexOf(':');
-      if (lastColon !== undefined && lastColon !== -1) {
-        const toPath = ref.to.substring(0, lastColon);
-        const toSymbol = ref.to.substring(lastColon + 1);
-        const normalizedPath = toPath;
+      const toInfo = ref.to ? splitEdgeId(ref.to) : null;
+      if (toInfo?.filePath) {
+        const normalizedPath = toInfo.filePath;
 
         return (
           normalizedPath === normalizedTarget &&
-          (toSymbol === baseSymbolId || toSymbol === focusedSymbolId)
+          (toInfo.symbolId === focusedSymbol || toInfo.symbolId === focusedSymbolId)
         );
       }
       return false;
@@ -186,15 +185,13 @@ export const PortalsRail: React.FC<PortalsRailProps> = ({
 
     filteredOutgoing = (blastRadius?.outgoing || []).filter(ref => {
       // Parse "from" path and symbol from reference
-      const lastColon = ref.from?.lastIndexOf(':');
-      if (lastColon !== undefined && lastColon !== -1) {
-        const fromPath = ref.from.substring(0, lastColon);
-        const fromSymbol = ref.from.substring(lastColon + 1);
-        const normalizedPath = fromPath;
+      const fromInfo = ref.from ? splitEdgeId(ref.from) : null;
+      if (fromInfo?.filePath) {
+        const normalizedPath = fromInfo.filePath;
 
         return (
           normalizedPath === normalizedTarget &&
-          (fromSymbol === baseSymbolId || fromSymbol === focusedSymbolId)
+          (fromInfo.symbolId === focusedSymbol || fromInfo.symbolId === focusedSymbolId)
         );
       }
       return false;

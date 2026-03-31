@@ -1,4 +1,5 @@
 import { LRUCache } from 'lru-cache';
+import { getPathService } from '../services/pathService';
 import { DatabaseWriteQueue } from '../storage/databaseWriteQueue';
 import { prepare } from '../storage/statement-wrapper';
 import { EdgeInfo, SymbolInfo } from '../types';
@@ -87,7 +88,9 @@ export class SnapshotManager {
     blobSha: string,
     content: string
   ): Promise<FileSnapshot> {
-    const cacheKey = `${blobSha}:${filePath}`;
+    // Normalize path for consistent cache keys
+    const normalizedPath = getPathService().toRelative(filePath);
+    const cacheKey = `${blobSha}:${normalizedPath}`;
     this.initCache();
     const lruCached = this.snapshotCache?.get(cacheKey);
     if (lruCached) {
@@ -96,9 +99,9 @@ export class SnapshotManager {
       return lruCached;
     }
 
-    const cached = this.getCachedSnapshot(blobSha, filePath);
+    const cached = this.getCachedSnapshot(blobSha, normalizedPath);
     if (cached) {
-      logDebug(`[Snapshot] DB cache hit for ${filePath}@${blobSha.substring(0, 8)}`);
+      logDebug(`[Snapshot] DB cache hit for ${normalizedPath}@${blobSha.substring(0, 8)}`);
       this.cacheHits++;
 
       this.snapshotCache?.set(cacheKey, cached);
@@ -107,25 +110,29 @@ export class SnapshotManager {
 
     this.cacheMisses++;
 
-    logDebug(`[Snapshot] Creating snapshot for ${filePath}@${blobSha.substring(0, 8)}`);
-    const language = this.detectLanguage(filePath);
+    logDebug(`[Snapshot] Creating snapshot for ${normalizedPath}@${blobSha.substring(0, 8)}`);
+    const language = this.detectLanguage(normalizedPath);
 
     const { symbols, bodyTexts } = await this.symbolExtractor.extractSymbolsWithBodies(
       content,
-      filePath,
+      normalizedPath,
       language
     );
 
     const symbolsWithDNA = await assignDNAIds(symbols, bodyTexts, language);
 
-    const edges = this.dependencyExtractor.extractDependencies(content, filePath, symbolsWithDNA);
+    const edges = this.dependencyExtractor.extractDependencies(
+      content,
+      normalizedPath,
+      symbolsWithDNA
+    );
 
     const shapeHash = this.computeShapeHash(symbolsWithDNA);
     const bodyHash = this.computeAggregateBodyHash(symbolsWithDNA);
 
     const snapshot: FileSnapshot = {
       blobSha,
-      filePath,
+      filePath: normalizedPath,
       language,
       symbols: symbolsWithDNA,
       edges,
@@ -138,7 +145,7 @@ export class SnapshotManager {
     // Queue snapshot for batch write
     this.writeQueue.queue({ type: 'snapshot', data: snapshot });
 
-    const lruCacheKey = `${blobSha}:${filePath}`;
+    const lruCacheKey = `${blobSha}:${normalizedPath}`;
     this.snapshotCache?.set(lruCacheKey, snapshot);
 
     return snapshot;
@@ -154,6 +161,7 @@ export class SnapshotManager {
   }
 
   private getCachedSnapshot(blobSha: string, filePath: string): FileSnapshot | null {
+    // filePath is already normalized when this is called
     const stmt = prepare(`
       SELECT * FROM file_snapshots
       WHERE blob_sha = ? AND file_path = ?

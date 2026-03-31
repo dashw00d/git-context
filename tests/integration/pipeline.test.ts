@@ -5,7 +5,7 @@ import { SnapshotManager } from '../../src/analysis/snapshotManager';
 import { StructuralDiffManager } from '../../src/analysis/structuralDiffManager';
 import { configureDNA } from '../../src/analysis/symbolDna';
 import { WorkspaceIndexer } from '../../src/analysis/workspaceIndexer';
-import { DatabaseManager } from '../../src/storage/database';
+import { getDatabaseManager } from '../../src/storage/database';
 
 import { DependencyExtractor } from '../../src/analysis/dependencies';
 import { RiskDetector } from '../../src/analysis/heuristics';
@@ -106,8 +106,8 @@ describe('Pipeline Integration Test', () => {
         get: vi.fn(),
       }),
     };
-    (DatabaseManager as any).getInstance = vi.fn().mockReturnValue({
-      getDb: () => mockDb,
+    (getDatabaseManager as any).mockReturnValue({
+      getRawDatabase: () => mockDb,
     });
 
     mockSymbolExtractor = new SymbolExtractor(mockGit);

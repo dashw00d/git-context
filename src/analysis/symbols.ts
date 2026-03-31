@@ -134,7 +134,7 @@ export class SymbolExtractor {
       }
 
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
-      const bodyTexts = new Map([[file.path, currentContent]]);
+      const bodyTexts = this.buildBodyTextMap(currentSymbols, currentContent);
       const currentSymbolsWithDNA = await assignDNAIds(
         currentSymbols,
         bodyTexts,
@@ -147,7 +147,7 @@ export class SymbolExtractor {
 
       let previousSymbolsWithDNA = previousSymbols;
       if (previousContent) {
-        const bodyTexts = new Map([[file.oldPath || file.path, previousContent]]);
+        const bodyTexts = this.buildBodyTextMap(previousSymbols, previousContent);
         previousSymbolsWithDNA = await assignDNAIds(
           previousSymbols,
           bodyTexts,
@@ -242,7 +242,7 @@ export class SymbolExtractor {
       const headContent = await this.git.safeGetFileContent('HEAD', file.path);
 
       const currentSymbols = await this.extractSymbolsFromContent(currentContent, file.path);
-      const bodyTexts = new Map([[file.path, currentContent]]);
+      const bodyTexts = this.buildBodyTextMap(currentSymbols, currentContent);
       const currentSymbolsWithDNA = await assignDNAIds(
         currentSymbols,
         bodyTexts,
@@ -255,7 +255,7 @@ export class SymbolExtractor {
       let headSymbolsWithDNA = headSymbols;
 
       if (headContent) {
-        const headBodyTexts = new Map([[file.path, headContent]]);
+        const headBodyTexts = this.buildBodyTextMap(headSymbols, headContent);
         headSymbolsWithDNA = await assignDNAIds(
           headSymbols,
           headBodyTexts,
@@ -329,6 +329,12 @@ export class SymbolExtractor {
       return [];
     }
 
+    // TEMP: Skip TypeScript files to test if JS/PHP parsing works
+    // if (language === 'typescript') {
+    //   console.log(`[SymbolExtractor] Skipping TypeScript file ${filePath}`);
+    //   return [];
+    // }
+
     const facts = await this.parser.extractHybridFacts(content, filePath, language);
 
     const symbolKinds = new Set([
@@ -363,25 +369,43 @@ export class SymbolExtractor {
     _language: string
   ): Promise<{ symbols: SymbolInfo[]; bodyTexts: Map<string, string> }> {
     const symbols = await this.extractSymbolsFromContent(content, filePath);
-    const bodyTexts = new Map<string, string>();
-
-    for (const symbol of symbols) {
-      const bodyText = this.extractBodyText(
-        content,
-        symbol.location.start.line,
-        symbol.location.end.line
-      );
-      // Use filePath as key for bodyText lookup (assignDNAIds will use this)
-      const key = symbol.filePath || filePath;
-      bodyTexts.set(key, bodyText);
-    }
+    const bodyTexts = this.buildBodyTextMap(symbols, content);
 
     return { symbols, bodyTexts };
   }
 
-  private extractBodyText(content: string, startLine: number, endLine: number): string {
+  /**
+   * Extract body text for a symbol given line numbers (1-indexed)
+   * Used for DNA computation - must be consistent across quick scan and full scan
+   * @param content - File content
+   * @param startLine - 1-indexed start line (from symbol.location.start.line)
+   * @param endLine - 1-indexed end line (from symbol.location.end.line)
+   * @returns Body text as string
+   */
+  extractBodyText(content: string, startLine: number, endLine: number): string {
     const lines = content.split('\n');
+    // Line numbers are 1-indexed, array is 0-indexed, endLine is inclusive
+    // slice(startLine - 1, endLine) gives lines [startLine-1 .. endLine-1] (endLine exclusive)
+    // But endLine should be inclusive, so we use endLine directly (not endLine-1)
+    // This matches: if symbol spans lines 1-5, we want lines[0..4] which is slice(0, 5)
     return lines.slice(startLine - 1, endLine).join('\n');
+  }
+
+  private buildBodyTextMap(symbols: SymbolInfo[], content: string): Map<string, string> {
+    const bodyTexts = new Map<string, string>();
+
+    for (const symbol of symbols) {
+      const startLine = symbol.location?.start?.line;
+      const endLine = symbol.location?.end?.line;
+      if (!startLine || !endLine) {
+        continue;
+      }
+
+      const bodyText = this.extractBodyText(content, startLine, endLine);
+      bodyTexts.set(symbol.id, bodyText);
+    }
+
+    return bodyTexts;
   }
 
   /**
@@ -506,7 +530,7 @@ export class SymbolExtractor {
           const headContent = await this.git.safeGetFileContent('HEAD', file.path);
 
           const stagedSymbols = await this.extractSymbolsFromContent(stagedContent, file.path);
-          const bodyTexts = new Map([[file.path, stagedContent]]);
+          const bodyTexts = this.buildBodyTextMap(stagedSymbols, stagedContent);
           const stagedSymbolsWithDNA = await assignDNAIds(
             stagedSymbols,
             bodyTexts,
@@ -519,7 +543,7 @@ export class SymbolExtractor {
           let headSymbolsWithDNA = headSymbols;
 
           if (headContent) {
-            const headBodyTexts = new Map([[file.path, headContent]]);
+            const headBodyTexts = this.buildBodyTextMap(headSymbols, headContent);
             headSymbolsWithDNA = await assignDNAIds(
               headSymbols,
               headBodyTexts,

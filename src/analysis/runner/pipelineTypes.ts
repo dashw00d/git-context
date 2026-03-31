@@ -152,4 +152,10 @@ export interface PipelineConfig {
   maxRetries?: number;
   enableCacheStats?: boolean;
   cacheTTL?: number;
+  /** Enable verification of preconditions/postconditions (default: true in dev) */
+  enableVerification?: boolean;
+  /** Throw on verification failures instead of warning (default: false) */
+  strictVerification?: boolean;
+  /** Enable cross-step invariant verification (default: true) */
+  verifyInvariants?: boolean;
 }

@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS files (
   path TEXT NOT NULL,
   status TEXT NOT NULL,
   lang TEXT,
+  completeness_flags TEXT DEFAULT '{}',
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
   UNIQUE(sha, path)
 );
@@ -76,9 +77,10 @@ CREATE TABLE IF NOT EXISTS symbols (
   confidence REAL DEFAULT 1.0,
   naming_convention TEXT,
   convention_confidence REAL,
+  completeness_flags TEXT DEFAULT '{}',
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
   FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE,
-  UNIQUE(sha, dna_id)
+  UNIQUE(sha, path, dna_id)
 );
 
 -- Dependency edges between symbols
@@ -253,7 +255,7 @@ CREATE TABLE IF NOT EXISTS symbol_versions (
   signature_hash TEXT,
   body_hash TEXT,
   FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE,
-  UNIQUE(sha, path, symbol_id)
+  UNIQUE(sha, path, dna_id)
 );
 
 -- DNA matching decision log for debugging
@@ -285,7 +287,7 @@ CREATE INDEX IF NOT EXISTS idx_symbols_path ON symbols(path);
 CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
 CREATE INDEX IF NOT EXISTS idx_symbols_symbol_id ON symbols(symbol_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_convention ON symbols(naming_convention);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_sha_dna_id ON symbols(sha, dna_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_sha_path_dna_id ON symbols(sha, path, dna_id);
 
 -- Edge queries
 CREATE INDEX IF NOT EXISTS idx_edges_sha ON edges(sha);
@@ -315,7 +317,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_fingerprint ON reports(fingerprint
 CREATE INDEX IF NOT EXISTS idx_symbol_dna_dna_id ON symbol_dna(dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_versions_dna ON symbol_versions(dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_versions_sha ON symbol_versions(sha);
-CREATE INDEX IF NOT EXISTS idx_symbol_versions_lookup ON symbol_versions(sha, path, symbol_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_symbol_versions_sha_path_dna_id ON symbol_versions(sha, path, dna_id);
 
 -- === SYMBOL HISTORY TABLE ===
 
@@ -542,6 +544,7 @@ CREATE TABLE IF NOT EXISTS files (
   path TEXT NOT NULL,
   status TEXT NOT NULL,
   lang TEXT,
+  completeness_flags TEXT DEFAULT '{}',
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
   UNIQUE(sha, path)
 );
@@ -598,9 +601,10 @@ CREATE INDEX IF NOT EXISTS idx_squash_mappings_squash ON squash_mappings(squash_
   confidence REAL DEFAULT 1.0,
   naming_convention TEXT,
   convention_confidence REAL,
+  completeness_flags TEXT DEFAULT '{}',
   FOREIGN KEY (sha) REFERENCES commits_metadata(sha) ON DELETE CASCADE,
   FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE,
-  UNIQUE(sha, dna_id)
+  UNIQUE(sha, path, dna_id)
 );
 CREATE TABLE IF NOT EXISTS symbol_dna (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -620,7 +624,7 @@ CREATE TABLE IF NOT EXISTS symbol_versions (
   signature_hash TEXT,
   body_hash TEXT,
   FOREIGN KEY (dna_id) REFERENCES symbol_dna(dna_id) ON DELETE CASCADE,
-  UNIQUE(sha, dna_id)
+  UNIQUE(sha, path, dna_id)
 );
 CREATE TABLE IF NOT EXISTS symbol_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -652,17 +656,31 @@ CREATE INDEX IF NOT EXISTS idx_symbols_path ON symbols(path);
 CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
 CREATE INDEX IF NOT EXISTS idx_symbols_symbol_id ON symbols(symbol_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_convention ON symbols(naming_convention);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_sha_dna_id ON symbols(sha, dna_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_symbols_sha_path_dna_id ON symbols(sha, path, dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_dna_dna_id ON symbol_dna(dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_versions_dna ON symbol_versions(dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_versions_sha ON symbol_versions(sha);
-CREATE INDEX IF NOT EXISTS idx_symbol_versions_lookup ON symbol_versions(sha, dna_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_symbol_versions_sha_path_dna_id ON symbol_versions(sha, path, dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_history_dna ON symbol_history(symbol_dna_id);
 CREATE INDEX IF NOT EXISTS idx_symbol_history_sha ON symbol_history(sha);
 CREATE INDEX IF NOT EXISTS idx_symbol_history_dna_sha ON symbol_history(symbol_dna_id, sha);
 CREATE INDEX IF NOT EXISTS idx_dna_decision_log_sha ON dna_decision_log(sha);`,
-    migrations: [],
-    currentVersion: 1,
+    migrations: [
+      {
+        name: 'add_path_to_symbol_constraints',
+        sql: `
+          -- Drop old tables and indexes - schema will recreate with correct constraints
+          -- This is safe for test databases which only contain test data
+          DROP TABLE IF EXISTS symbols;
+          DROP TABLE IF EXISTS symbol_versions;
+          DROP INDEX IF EXISTS idx_symbols_sha_dna_id;
+          DROP INDEX IF EXISTS idx_symbol_versions_lookup;
+        `,
+        safe: false,
+        requiresReindex: true,
+      },
+    ],
+    currentVersion: 2,
   },
 
   // Edges Module: edges, renames, import_conventions
@@ -1028,10 +1046,7 @@ export function migrateDatabase(db: any): string[] {
 
       // If current version < target, apply schema and migrations
       if (currentVer < mod.currentVersion) {
-        // Exec module schema (idempotent CREATE IF NOT EXISTS)
-        db.exec(mod.schema);
-
-        // Apply missing migrations
+        // Apply missing migrations first (they may drop tables)
         for (let v = currentVer + 1; v <= mod.currentVersion; v++) {
           const migIndex = v - 1;
           if (migIndex >= mod.migrations.length) {
@@ -1100,6 +1115,12 @@ export function migrateDatabase(db: any): string[] {
             }
           }
         }
+
+        // Exec module schema after migrations (recreates any dropped tables)
+        db.exec(mod.schema);
+      } else {
+        // Already at target version, just ensure schema is up to date
+        db.exec(mod.schema);
       }
     } catch (e: any) {
       gaps.push(`${modName} failed: ${truncateError(e.message)}`);

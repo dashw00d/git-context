@@ -1,6 +1,7 @@
 import { ensureDatabaseInitialized } from '../storage/database';
 import { prepare } from '../storage/statement-wrapper';
 import { logError } from '../utils/logger';
+import { getPathService } from './pathService';
 
 /**
  * Centralized service for all commit-related database operations.

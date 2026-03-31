@@ -3,8 +3,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import initSqlJs, { Database, Statement } from 'sql.js';
-import { getGitRoot } from '../utils/config';
 import { logInfo } from '../utils/logger';
+import { getPathService } from '../services/pathService';
 import { auditAllModules, migrateDatabase } from './schema';
 import { prepare } from './statement-wrapper';
 
@@ -88,13 +88,21 @@ export class DatabaseManager {
       return;
     }
 
-    const gitRoot = getGitRoot();
+    const gitRoot = getPathService().getRoot();
     if (!gitRoot) {
       throw new Error('Not in a git repository');
     }
 
     this.dbPath = path.join(gitRoot, '.git', 'commit-tracker', 'commit_tracker.db');
     console.log(`DatabaseManager initialized with path: ${this.dbPath}`);
+  }
+
+  /**
+   * Get the raw SQL.js database instance (for internal use by DatabaseWriteQueue)
+   * This bypasses the proxy wrapper and returns the actual Database object
+   */
+  getRawDatabase(): Database | null {
+    return this.db;
   }
 
   getDatabase(): any {
@@ -405,6 +413,14 @@ export function getDatabaseManager(): DatabaseManager {
     dbManager = new DatabaseManager();
   }
   return dbManager;
+}
+
+/**
+ * Test helper: Set the database manager singleton
+ * This should only be used in tests to inject a custom database manager
+ */
+export function setDatabaseManagerForTesting(manager: DatabaseManager | null): void {
+  dbManager = manager;
 }
 
 // Helper to ensure initialization with retry logic

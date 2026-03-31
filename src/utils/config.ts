@@ -1,6 +1,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { GitOperations } from '../analysis/git';
 import { ExtensionConfig } from '../types';
 import { logError, logInfo } from './logger';
 import {
@@ -90,7 +91,7 @@ export function createCustomIgnoreMatcher(
   ig.add(cleanedPatterns);
 
   return (filePath: string): boolean => {
-    const normalizedPath = filePath.replace(/\\/g, '/').replace(/^\/+/, '');
+    const normalizedPath = GitOperations.normalizePath(filePath);
     return ig.ignores(normalizedPath);
   };
 }

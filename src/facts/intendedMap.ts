@@ -23,7 +23,7 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
 
   for (const sha of orderedShas) {
     const symbolsStmt = prepare(`
-      SELECT symbol_id, name, path, signature, change_type, mod_reason
+      SELECT symbol_id, dna_id, name, path, signature, change_type, mod_reason
       FROM symbols WHERE sha = ?
     `);
     const symbols = symbolsStmt.all(sha) as any[];
@@ -35,7 +35,8 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
     const renames = renamesStmt.all(sha) as any[];
 
     for (const symbol of symbols) {
-      const key = symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
+      const key =
+        symbol.dna_id || symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
 
       if (symbol.change_type === 'added') {
         intended.set(key, {
@@ -88,7 +89,8 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
 
     for (const symbol of symbols) {
       if (symbol.change_type === 'removed') {
-        const key = symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
+        const key =
+          symbol.dna_id || symbol.symbol_id || `${symbol.path}:${symbol.kind}:${symbol.name}`;
 
         if (renamedOldIds.has(key)) {
           continue;
@@ -96,6 +98,8 @@ export async function buildIntendedMap(commitShas: string[]): Promise<Map<string
 
         intended.set(key, {
           expect: 'absent',
+          lastName: symbol.name,
+          lastPath: symbol.path,
           lastSha: sha,
         });
       }

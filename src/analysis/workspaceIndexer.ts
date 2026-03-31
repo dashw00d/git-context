@@ -41,8 +41,10 @@ export class WorkspaceIndexer {
     plan?: import('./runner/pipelineTypes').PlanData
   ): Promise<string> {
     // Try plan data first (synchronous, no lookup overhead)
-    if (plan?.content.has(`${sha}:${path}`)) {
-      return plan.content.get(`${sha}:${path}`)!;
+    // Normalize path for consistent plan data lookup
+    const normalizedPath = GitOperations.normalizePath(path);
+    if (plan?.content.has(`${sha}:${normalizedPath}`)) {
+      return plan.content.get(`${sha}:${normalizedPath}`)!;
     }
     // Fallback to git
     return this.git.safeGetFileContent(sha, path);
@@ -100,11 +102,9 @@ export class WorkspaceIndexer {
 
     const workspaceHash = await this.computeWorkspaceHash(filteredFiles);
 
-    const cached = this.getCachedWorkspace(headSha, workspaceHash);
-    if (cached) {
-      logDebug(`[WorkspaceIndexer] Cache hit for ${mode} workspace`);
-      return cached;
-    }
+    // Removed cache check: workspace analysis is idempotent and we want to verify actual state
+    // rather than trusting metadata. Always recompute to ensure correctness.
+    // If performance becomes an issue, we can add back cache with data verification.
 
     let totalAdded = 0;
     let totalModified = 0;
@@ -616,7 +616,12 @@ export class WorkspaceIndexer {
       }
 
       const stagedFiles = await this.git.getStagedFiles();
-      const stagedFile = stagedFiles.find(f => f.path === filePath);
+      // Normalize both sides for consistent comparison
+      const normalizedFilePath = GitOperations.normalizePath(filePath);
+      const stagedFile = stagedFiles.find(f => {
+        const normalizedFPath = GitOperations.normalizePath(f.path);
+        return normalizedFPath === normalizedFilePath;
+      });
       if (stagedFile) {
         const stats = await this.git.getFileDiffStats(filePath, true);
         timeline.unshift({
@@ -630,7 +635,11 @@ export class WorkspaceIndexer {
       }
 
       const unstagedFiles = await this.git.getUnstagedFiles();
-      const unstagedFile = unstagedFiles.find(f => f.path === filePath);
+      // normalizedFilePath already defined above
+      const unstagedFile = unstagedFiles.find(f => {
+        const normalizedFPath = GitOperations.normalizePath(f.path);
+        return normalizedFPath === normalizedFilePath;
+      });
       if (unstagedFile) {
         const stats = await this.git.getFileDiffStats(filePath, false);
         timeline.unshift({
@@ -728,13 +737,23 @@ export class WorkspaceIndexer {
     );
 
     const hotspots = await this.git.getHotspots(20);
-    const skeletonSet = new Set(skeleton.files);
+    // Normalize skeleton files for consistent Set operations
+    const skeletonSet = new Set(skeleton.files.map(f => GitOperations.normalizePath(f)));
 
-    const filteredHotspots = hotspots.filter((h: any) => skeletonSet.has(h.path));
+    const filteredHotspots = hotspots.filter((h: any) => {
+      const normalizedHPath = h.path ? GitOperations.normalizePath(h.path) : '';
+      return skeletonSet.has(normalizedHPath);
+    });
 
     if (config?.mode === 'changes') {
       for (const file of skeleton.files) {
-        if (!filteredHotspots.find(h => h.path === file)) {
+        const normalizedFile = GitOperations.normalizePath(file);
+        if (
+          !filteredHotspots.find(h => {
+            const normalizedHPath = h.path ? GitOperations.normalizePath(h.path) : '';
+            return normalizedHPath === normalizedFile;
+          })
+        ) {
           filteredHotspots.push({
             path: file,
             count: 0,
@@ -851,6 +870,26 @@ export class WorkspaceIndexer {
               return;
             }
 
+            // Check if file already has full scan symbols (skip quick scan if full scan completed)
+            if (options?.persist && this.db) {
+              // Normalize path for consistent database lookup
+              const normalizedPath = GitOperations.normalizePath(filePath);
+              const fullScanStmt = prepare(`
+                SELECT COUNT(*) as count FROM symbols
+                WHERE sha = ? AND path = ? AND change_type != 'quick_scan'
+              `);
+              const fullScanResult = fullScanStmt.get([headSha, normalizedPath]) as {
+                count: number;
+              } | null;
+              if (fullScanResult && fullScanResult.count > 0) {
+                logDebug(
+                  `[WorkspaceIndexer] Skipping quick scan for ${normalizedPath} - already has ${fullScanResult.count} full scan symbols`
+                );
+                filesSkipped++;
+                return;
+              }
+            }
+
             const fullPath = path.join(gitRoot, filePath);
             const content = fs.readFileSync(fullPath, 'utf8');
             const language = detectLanguage(filePath);
@@ -890,12 +929,16 @@ export class WorkspaceIndexer {
                   if (options?.persist) {
                     try {
                       // Extract body text if location is available
+                      // Use same extraction logic as SymbolExtractor.extractBodyText for consistency
                       let bodyText = undefined;
                       if (s.location && s.location.start && s.location.end) {
+                        // Location line numbers are 1-indexed (as per SymbolInfo interface)
+                        // Use same logic as SymbolExtractor.extractBodyText: slice(startLine - 1, endLine)
+                        // This ensures DNA IDs match between quick scan and full scan
                         const lines = content.split('\n');
-                        const startLine = Math.max(0, s.location.start.line - 1);
-                        const endLine = Math.min(lines.length, s.location.end.line);
-                        bodyText = lines.slice(startLine, endLine).join('\n');
+                        bodyText = lines
+                          .slice(s.location.start.line - 1, s.location.end.line)
+                          .join('\n');
                       }
 
                       dnaId = await computeHybridDna(s as any, bodyText, language);
@@ -905,13 +948,16 @@ export class WorkspaceIndexer {
                     }
                   }
 
+                  // Normalize path for consistency with full scan
+                  const normalizedPath = GitOperations.normalizePath(filePath);
+
                   results.push({
                     id: s.id,
                     name: s.name,
                     kind: s.kind,
                     signature: s.signature,
                     location: s.location,
-                    filePath: filePath,
+                    filePath: normalizedPath,
                     sha: headSha, // Add SHA for path+sha ID
                     complete: false, // Mark quick scan as incomplete
                   });
@@ -924,7 +970,7 @@ export class WorkspaceIndexer {
                       type: 'symbol',
                       data: {
                         sha: headSha,
-                        path: filePath,
+                        path: normalizedPath, // Use normalized path for database consistency
                         symbol: s as any,
                         changeType: 'quick_scan', // Marker for quick scan
                         isDna: true,
@@ -936,7 +982,7 @@ export class WorkspaceIndexer {
                       type: 'symbol',
                       data: {
                         sha: headSha,
-                        path: filePath,
+                        path: normalizedPath, // Use normalized path for database consistency
                         symbol: s as any,
                         changeType: 'quick_scan',
                         isDna: false,

@@ -81,27 +81,48 @@ export class ReportService {
           await pipeline.indexCommits(commitShas);
           commitShas.forEach(s => tempAnalyzed.add(s));
         } else {
-          logInfo(`[ReportService] Cache hit for ${fingerprint}`);
+          // Verify underlying commit data still exists in database
+          // If commits are missing, the cached report is stale
+          const commitShas = shas.filter(s => !isWorkspaceSha(s));
+          const { getDatabaseService } = await import('./databaseService');
+          const dbService = getDatabaseService();
+          let allCommitsExist = true;
 
-          const summary = {
-            id: cachedReport.id,
-            commitCount: cachedReport.commitShas.length,
-            fileCount: facts.scope.files,
-            symbolCount: facts.working.symbols,
-            createdAt: cachedReport.createdAt.toISOString(),
-            debtScore: 0,
-          };
+          for (const sha of commitShas) {
+            if (!(await dbService.isAnalyzed(sha))) {
+              logInfo(
+                `[ReportService] Cached report references commit ${sha.substring(0, 8)} that no longer exists, forcing reanalysis`
+              );
+              allCommitsExist = false;
+              break;
+            }
+          }
 
-          getStore().dispatch({
-            type: 'ANALYSIS_COMPLETED',
-            payload: {
-              facts,
-              summary,
-              reportId: cachedReport.id,
-              history: undefined,
-            },
-          });
-          return cachedReport.id;
+          if (!allCommitsExist) {
+            // Fall through to regenerate report
+          } else {
+            logInfo(`[ReportService] Cache hit for ${fingerprint}`);
+
+            const summary = {
+              id: cachedReport.id,
+              commitCount: cachedReport.commitShas.length,
+              fileCount: facts.scope.files,
+              symbolCount: facts.working.symbols,
+              createdAt: cachedReport.createdAt.toISOString(),
+              debtScore: 0,
+            };
+
+            getStore().dispatch({
+              type: 'ANALYSIS_COMPLETED',
+              payload: {
+                facts,
+                summary,
+                reportId: cachedReport.id,
+                history: undefined,
+              },
+            });
+            return cachedReport.id;
+          }
         }
       }
     }
@@ -689,6 +710,10 @@ export class ReportService {
         continue;
       }
       const [, from, to, type] = match;
+      // Skip edges with unknown/unresolved paths
+      if (from.startsWith('unknown:') || to.startsWith('unknown:')) {
+        continue;
+      }
       edges.push({
         from,
         to,

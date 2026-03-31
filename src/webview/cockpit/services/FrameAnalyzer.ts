@@ -3,11 +3,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { GitOperations } from '../../../analysis/git';
 import { getTreeSitterParser } from '../../../analysis/tree-sitter';
+import { getPathService } from '../../../services/pathService';
 import { Tier1DataSchema, Tier2DataSchema, Tier3DataSchema } from '../../../state/schemas';
 import { BundleFactsDTO } from '../../../types/cockpit';
 import { detectLanguage } from '../../../utils/config';
+import { splitEdgeId } from '../../../utils/edgeNormalization';
 import { logDebug, logError, logWarn } from '../../../utils/logger';
-import { normalizeToAbsolute, normalizeToRelative } from '../../../utils/path';
 
 type Tier1Data = {
   content: string;
@@ -57,8 +58,9 @@ export class FrameAnalyzer {
     workspaceRoot: string,
     bundleFacts?: BundleFactsDTO
   ): Promise<Tier1Data & { symbolId?: string }> {
-    const fullPath = normalizeToAbsolute(targetPath, workspaceRoot);
-    const normalizedTargetPath = GitOperations.normalizePath(targetPath);
+    const pathService = getPathService();
+    const fullPath = pathService.toAbsolute(targetPath);
+    const normalizedTargetPath = pathService.toRelative(targetPath);
 
     logDebug(
       `[FrameAnalyzer] Analyzing Tier 1: frameId=${frameId}, targetPath=${targetPath}, workspaceRoot=${workspaceRoot} -> fullPath=${fullPath}`
@@ -81,7 +83,7 @@ export class FrameAnalyzer {
 
       // Use consistent path normalization matching the main pipeline
       const normalizePathForMatch = (p: string) => {
-        return GitOperations.normalizePath(p);
+        return getPathService().toRelative(p);
       };
 
       // First, try to use quick scan symbols from bundleFacts
@@ -92,12 +94,11 @@ export class FrameAnalyzer {
         const quickSymbols = rawSymbols
           .map(s => {
             if (typeof s === 'string') {
-              // String format: "filePath:name:symbolId"
-              const parts = s.split(':');
-              if (parts.length >= 3) {
-                const symbolId = parts.pop()!;
-                const name = parts.pop()!;
-                const filePath = parts.join(':');
+              // Matches "path/to/file:symbolName:symbolId" handling colons in path.
+              // Note: Assumes symbolName and symbolId don't contain colons themselves.
+              const match = s.match(/^(.*):([^:]+):([^:]+)$/);
+              if (match) {
+                const [, filePath, name, symbolId] = match;
                 return {
                   filePath: normalizePathForMatch(filePath), // Normalize when parsing
                   name,
@@ -274,7 +275,8 @@ export class FrameAnalyzer {
     // We just won't have graph edges or cross-file metrics
 
     // Ensure targetPath is normalized for matching
-    const normalizedTarget = GitOperations.normalizePath(targetPath);
+    const pathService = getPathService();
+    const normalizedTarget = pathService.toRelative(targetPath);
 
     try {
       if (facts) {
@@ -290,29 +292,25 @@ export class FrameAnalyzer {
           const to = match[2];
           const type = match[3];
 
-          // Use lastIndexOf(':') to safely handle Windows paths and composite IDs
-          const lastColonFrom = from.lastIndexOf(':');
-          const lastColonTo = to.lastIndexOf(':');
+          const fromInfo = splitEdgeId(from);
+          const toInfo = splitEdgeId(to);
+          const fromPath = fromInfo.filePath;
+          const toPath = toInfo.filePath;
 
-          const fromPath = lastColonFrom !== -1 ? from.substring(0, lastColonFrom) : from;
-          const toPath = lastColonTo !== -1 ? to.substring(0, lastColonTo) : to;
+          // Skip edges with unresolved paths (marked as 'unknown')
+          if (!fromPath || !toPath || fromPath === 'unknown' || toPath === 'unknown') {
+            return;
+          }
 
-          const normalizedFrom = GitOperations.normalizePath(fromPath);
-          const normalizedTo = GitOperations.normalizePath(toPath);
+          const normalizedFrom = pathService.toRelative(fromPath);
+          const normalizedTo = pathService.toRelative(toPath);
 
+          // Collect edges that involve the target file
           if (normalizedFrom === normalizedTarget) {
             outgoing.push({ from, to, type });
-          } else {
-            logWarn(
-              `[FrameAnalyzer] Tier 2 mismatch (outgoing): ${normalizedFrom} !== ${normalizedTarget}`
-            );
           }
           if (normalizedTo === normalizedTarget) {
             incoming.push({ from, to, type });
-          } else {
-            logWarn(
-              `[FrameAnalyzer] Tier 2 mismatch (incoming): ${normalizedTo} !== ${normalizedTarget}`
-            );
           }
         });
 
@@ -416,14 +414,15 @@ export class FrameAnalyzer {
     _content: string,
     _facts: BundleFactsDTO
   ): Promise<Tier3Data> {
-    // Placeholder for AI analysis
+    // Placeholder for AI analysis - return immediately to avoid stalling
+    // This is a synchronous operation, so we can return directly without await
 
-    const result = {
+    const result: Tier3Data = {
       summary: `Analysis not available for ${frameId}`,
       risks: [],
     };
 
-    // Validate schema
+    // Validate schema (synchronous operation)
     const validation = Tier3DataSchema.safeParse(result);
     if (!validation.success) {
       logWarn(
@@ -435,6 +434,7 @@ export class FrameAnalyzer {
       );
     }
 
-    return result;
+    // Return immediately - no async operations
+    return Promise.resolve(result);
   }
 }

@@ -385,22 +385,24 @@ export class GitCacheService {
     const blobsToFetch = new Map<string, { commitSha: string; filePath: string }[]>();
 
     for (const path of paths) {
-      const key = `${sha}:${path}`;
+      // Normalize path for consistent cache keys
+      const normalizedPath = GitOperations.normalizePath(path);
+      const key = `${sha}:${normalizedPath}`;
       if (this.contentCache.has(key)) continue;
 
-      const entry = treeMap.get(path);
+      const entry = treeMap.get(normalizedPath);
       if (!entry || entry.type !== 'blob') continue;
 
       // Check if blob is already in cache
       if (this.blobCache.has(entry.sha)) {
-        this.setContentByPath(sha, path, this.blobCache.get(entry.sha)!);
+        this.setContentByPath(sha, normalizedPath, this.blobCache.get(entry.sha)!);
         continue;
       }
 
       if (!blobsToFetch.has(entry.sha)) {
         blobsToFetch.set(entry.sha, []);
       }
-      blobsToFetch.get(entry.sha)!.push({ commitSha: sha, filePath: path });
+      blobsToFetch.get(entry.sha)!.push({ commitSha: sha, filePath: normalizedPath });
     }
 
     if (blobsToFetch.size === 0) return;
@@ -423,7 +425,9 @@ export class GitCacheService {
    * Map a blob content to a specific commit/path
    */
   setContentByPath(commitSha: string, filePath: string, content: string): void {
-    const key = `${commitSha}:${filePath}`;
+    // Normalize path for consistent cache keys
+    const normalizedPath = GitOperations.normalizePath(filePath);
+    const key = `${commitSha}:${normalizedPath}`;
     this.contentCache.set(key, content);
     this.sizeCache.set(key, content.length);
   }
@@ -646,7 +650,9 @@ export class GitCacheService {
   }
 
   getContent(sha: string, path: string): string | undefined {
-    const key = `${sha}:${path}`;
+    // Normalize path for consistent cache lookups
+    const normalizedPath = GitOperations.normalizePath(path);
+    const key = `${sha}:${normalizedPath}`;
     const content = this.contentCache.get(key);
 
     if (content !== undefined) {
@@ -659,11 +665,15 @@ export class GitCacheService {
   }
 
   isContentCached(sha: string, path: string): boolean {
-    return this.contentCache.has(`${sha}:${path}`);
+    // Normalize path for consistent cache lookups
+    const normalizedPath = GitOperations.normalizePath(path);
+    return this.contentCache.has(`${sha}:${normalizedPath}`);
   }
 
   getSize(sha: string, path: string): number | undefined {
-    const key = `${sha}:${path}`;
+    // Normalize path for consistent cache lookups
+    const normalizedPath = GitOperations.normalizePath(path);
+    const key = `${sha}:${normalizedPath}`;
     if (this.sizeCache.has(key)) {
       return this.sizeCache.get(key);
     }

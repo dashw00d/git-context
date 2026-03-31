@@ -119,8 +119,18 @@ export class DatabaseService extends ServiceBase {
   async isAnalyzed(sha: string): Promise<boolean> {
     try {
       await ensureDatabaseInitialized();
-      const result = prepare('SELECT 1 FROM commits_analysis WHERE sha = ? LIMIT 1').get(sha);
-      return !!result;
+      // Verify actual data exists, not just metadata
+      // Check that commit is marked complete AND has symbols
+      const analysisResult = prepare(
+        'SELECT status FROM commits_analysis WHERE sha = ? AND status = ? LIMIT 1'
+      ).get(sha, 'complete');
+      if (!analysisResult) {
+        return false;
+      }
+
+      // Verify symbols actually exist (commit is useless without symbols)
+      const symbolResult = prepare('SELECT 1 FROM symbols WHERE sha = ? LIMIT 1').get(sha);
+      return !!symbolResult;
     } catch (error) {
       logError(`Failed to check if commit ${sha} is analyzed`, error);
       return false;
@@ -222,7 +232,7 @@ export class DatabaseService extends ServiceBase {
         const stmt = prepare(`
           SELECT s.*, sv.dna_id as dna
           FROM symbol_versions sv
-          JOIN symbols s ON sv.sha = s.sha AND sv.dna_id = s.dna_id
+          JOIN symbols s ON sv.sha = s.sha AND sv.dna_id = s.dna_id AND sv.path = s.path
           WHERE sv.dna_id = ?
         `);
         const results = stmt.all(dnaHash) as any[];

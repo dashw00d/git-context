@@ -288,6 +288,8 @@ export const useFileAnalysisData = (
 
       const fromPath = e.from?.split(':')[0] || e.from;
       const toPath = e.to?.split(':')[0] || e.to;
+      // Skip edges with unresolved paths
+      if (fromPath === 'unknown' || toPath === 'unknown') return;
       if (fromPath === fileId || toPath === fileId) {
         missingEdgesCount++;
       }
@@ -297,6 +299,8 @@ export const useFileAnalysisData = (
 
       const fromPath = e.from?.split(':')[0] || e.from;
       const toPath = e.to?.split(':')[0] || e.to;
+      // Skip edges with unresolved paths
+      if (fromPath === 'unknown' || toPath === 'unknown') return;
       if (fromPath === fileId || toPath === fileId) {
         zombieEdgesCount++;
       }

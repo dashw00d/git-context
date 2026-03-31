@@ -185,8 +185,12 @@ export class AnalysisCoordinator {
     const { logInfo, logDebug } = await import('../utils/logger');
     const { GitOperations } = await import('../analysis/git');
     const { DatabaseWriteQueue } = await import('../storage/databaseWriteQueue');
+    const { getPathService } = await import('./pathService');
 
-    logInfo(`[AnalysisCoordinator] Requesting priority file analysis for ${filePath}`);
+    const pathService = getPathService();
+    const normalizedPath = pathService.toRelative(filePath);
+
+    logInfo(`[AnalysisCoordinator] Requesting priority file analysis for ${normalizedPath} (original: ${filePath})`);
 
     const pipeline = await this.getPipeline();
     const git = new GitOperations();
@@ -194,14 +198,11 @@ export class AnalysisCoordinator {
     // Resolve SHA if not provided
     const targetSha = sha || (await git.getHeadSha());
 
-    // Get file content
-    const content = await git.safeGetFileContent(targetSha, filePath);
-
     // Create FileChange object for processFile
     const fileChange: FileChange = {
-      path: filePath,
+      path: normalizedPath,
       status: 'M', // Assume modified for click analysis
-      newSha: await git.getBlobSha(targetSha, filePath),
+      newSha: await git.getBlobSha(targetSha, normalizedPath),
       oldSha: undefined,
     };
 
@@ -217,7 +218,7 @@ export class AnalysisCoordinator {
     // Flush writes to ensure persistence
     await DatabaseWriteQueue.getInstance().flushAll();
 
-    logDebug(`[AnalysisCoordinator] Priority file analysis complete for ${filePath}`);
+    logDebug(`[AnalysisCoordinator] Priority file analysis complete for ${normalizedPath}`);
   }
 }
 

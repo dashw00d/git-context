@@ -25,5 +25,10 @@ export default defineConfig({
       ['tests/integration/**', 'node'],
     ],
     setupFiles: ['./tests/setup.ts'],
+    poolOptions: {
+      threads: {
+        singleThread: true,
+      },
+    },
   },
 });

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getExtensionConfig } from '../utils/config';
 import { logWarn } from '../utils/logger';
+import { getPathService } from '../services/pathService';
 
 export interface DifftasticResult {
   highlights: string[];
@@ -49,7 +50,7 @@ export class DifftasticIntegration {
     }
 
     const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    const workspaceRoot = path.join(__dirname, '..', '..');
+    const workspaceRoot = getPathService().getRoot();
 
     const commonPaths = [
       path.join(homeDir, 'bin', 'difftastic'),

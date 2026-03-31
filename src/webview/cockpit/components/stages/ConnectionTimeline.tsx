@@ -33,11 +33,16 @@ export const ConnectionTimeline: React.FC<ConnectionTimelineProps> = ({
   orderedCommits = [],
   currentCommitIndex,
 }) => {
-  // Group edges by creation time
+  // Group edges by creation time (filter out unknown paths first)
   const edgesByTime = React.useMemo(() => {
     const groups = new Map<number, EdgeInfo[]>();
 
-    edges.forEach(edge => {
+    // Filter out edges with unknown paths
+    const validEdges = edges.filter(
+      edge => !edge.from?.startsWith('unknown:') && !edge.to?.startsWith('unknown:')
+    );
+
+    validEdges.forEach(edge => {
       if (!edge.createdAt) {
         // Unknown time - put in a special group
         const unknownGroup = groups.get(-1) || [];

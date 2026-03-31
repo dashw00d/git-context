@@ -88,16 +88,26 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
         };
       }
     }
-    if (node.type === 'class_declaration') {
+    if (
+      node.type === 'class_declaration' ||
+      node.type === 'interface_declaration' ||
+      node.type === 'trait_declaration'
+    ) {
       const nameNode = node.childForFieldName('name');
       if (nameNode) {
         const name = nameNode.text;
+        const kind: SymbolInfo['kind'] =
+          node.type === 'class_declaration'
+            ? 'class'
+            : node.type === 'interface_declaration'
+              ? 'interface'
+              : 'trait';
         return {
-          id: `class_${name}`, // Temporary ID, will be replaced by DNA
+          id: `${kind}_${name}`, // Temporary ID, will be replaced by DNA
           filePath,
           name,
-          kind: 'class',
-          signature: `class ${name}`,
+          kind,
+          signature: `${kind} ${name}`,
           location: {
             start: { line: node.startPosition.row + 1, column: node.startPosition.column },
             end: { line: node.endPosition.row + 1, column: node.endPosition.column },
@@ -123,16 +133,26 @@ function extractSymbolFromNode(node: any, filePath: string, language: string): S
         };
       }
     }
-    if (node.type === 'class_declaration') {
+    if (
+      node.type === 'class_declaration' ||
+      node.type === 'interface_declaration' ||
+      node.type === 'type_alias_declaration' ||
+      node.type === 'enum_declaration'
+    ) {
       const nameNode = node.childForFieldName('name');
       if (nameNode) {
         const name = nameNode.text;
+        let kind: SymbolInfo['kind'] = 'class';
+        if (node.type === 'interface_declaration') kind = 'interface';
+        if (node.type === 'type_alias_declaration') kind = 'type';
+        if (node.type === 'enum_declaration') kind = 'enum';
+
         return {
-          id: `class_${name}`, // Temporary ID, will be replaced by DNA
+          id: `${kind}_${name}`, // Temporary ID, will be replaced by DNA
           filePath,
           name,
-          kind: 'class',
-          signature: `class ${name}`,
+          kind,
+          signature: node.text.split('{')[0].split('=')[0].trim(),
           location: {
             start: { line: node.startPosition.row + 1, column: node.startPosition.column },
             end: { line: node.endPosition.row + 1, column: node.endPosition.column },
@@ -338,6 +358,9 @@ parentPort?.on('message', async (msg: WorkerMessage) => {
 
     const parser = parsers.get(msg.languageId);
     if (!parser) {
+      logWarn(
+        `[ParserWorker] No parser for ${msg.languageId}. Available parsers: ${Array.from(parsers.keys()).join(', ')}`
+      );
       parentPort?.postMessage({
         type: 'result',
         id: msg.id,
